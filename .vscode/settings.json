@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "*.thin": "typescript",
+        "type_traits": "c",
+        "types.h": "c",
+        "stdarg.h": "c"
+    }
+}

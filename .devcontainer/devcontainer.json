@@ -1,0 +1,36 @@
+{
+	"name": "UbuntuDev",
+	"dockerComposeFile": "./docker-compose.yml",
+	"appPort": [
+		8000,
+		8001,
+		8002,
+		8003
+	],
+	"service": "devel",
+	"runArgs": [
+		"--memory=16g"
+	],
+	"shutdownAction": "stopCompose",
+	"workspaceFolder": "/workspace",
+	"settings": {
+		"workbench.colorTheme": "Atom One Dark",
+		"workbench.iconTheme": "material-icon-theme",
+		"terminal.integrated.defaultProfile.linux": "zsh"
+	},
+	"extensions": [
+		"ms-vscode.cpptools",
+		"ms-vscode.cmake-tools",
+		"humao.rest-client",
+		"svelte.svelte-vscode",
+		"fivethree.vscode-svelte-snippets",
+		"twxs.cmake",
+		"wesbos.theme-cobalt2",
+		"ms-azuretools.vscode-docker",
+		"akamud.vscode-theme-onedark",
+		"pkief.material-icon-theme",
+		"jeff-hykin.better-cpp-syntax",
+		"cweijan.vscode-database-client2",
+		"xaver.clang-format"
+	]
+}

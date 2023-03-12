@@ -1,0 +1,19 @@
+version: '3.3'
+
+services:
+    devel:
+        build: 
+            context: .
+            dockerfile: ./Dockerfile
+        volumes: 
+            - ..:/workspace:cached
+        networks:
+            - build-net
+        mem_limit: 16g
+        ports:
+            - "8100-8109:8100-8109"
+        command: /bin/sh -c "while sleep 1000; do :; done"
+
+networks:
+    build-net:
+        driver: bridge
