@@ -9,6 +9,7 @@
  * sums, and HM-style polymorphism. Types should always be created via a `TypeTable` object.
  */
 
+// clang-format off
 #define PRIM_TYPE_LIST(f) \
     f(Bool, "bool")       \
     f(Char, "char")       \
@@ -22,3 +23,10 @@
     f(U64,  "u64")        \
     f(F32,  "f32")        \
     f(F64,  "f64")
+
+typedef enum {
+#define f(name, ...) prt##name,
+    PRIM_TYPE_LIST(f)
+#undef f
+} PrtId;
+// clang-format on

@@ -5,6 +5,8 @@
 #include <core/log.h>
 #include <lang/types.h>
 
+// clang-format off
+
 #define SYMBOL_LIST(f)              \
     f(LParen, "(")                  \
     f(RParen, ")")                  \
@@ -103,6 +105,8 @@ typedef enum {
 #undef f
 } TokenTag;
 
+// clang-format on
+
 typedef struct {
     TokenTag tag;
     union {
@@ -113,7 +117,7 @@ typedef struct {
     FileLoc fileLoc;
 } Token;
 
-static inline const char* token_tag_to_str(TokenTag tag) {
+static inline const char *token_tag_to_str(TokenTag tag) {
     switch (tag) {
 #define f(name, str) case tok##name: return str;
 #define g(name, str) case tok##name: return "'"str"'";
@@ -121,7 +125,7 @@ static inline const char* token_tag_to_str(TokenTag tag) {
         KEYWORD_LIST(g)
         SPECIAL_TOKEN_LIST(f)
 #undef f
-    default:
-        return NULL;
+        default:
+            return NULL;
     }
 }

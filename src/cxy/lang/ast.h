@@ -7,6 +7,8 @@
 #include "core/mempool.h"
 #include "lang/types.h"
 
+// clang-format off
+
 #define AST_ARITH_EXPR_LIST(f)                     \
     f(Add, 3, Plus, "+", "add")                    \
     f(Sub, 3, Minus,"-", "sub")                   \
@@ -78,6 +80,8 @@ typedef enum {
 #undef f
 } Operator;
 
+// clang-format on
+
 typedef enum {
     astError,
     astImplicitCast,
@@ -89,9 +93,7 @@ typedef enum {
     astArrayType,
     astPointerType,
     astFuncType,
-#define f(name, ...) ast##name,
-    PRIM_TYPE_LIST(f)
-#undef f
+    astPrimitiveType,
     /* Literals */
     astBoolLit,
     astCharLit,
@@ -99,10 +101,12 @@ typedef enum {
     astFloatLit,
     astStringLit,
     /* Declarations */
+    astFuncParam,
     astFuncDecl,
     astConstDecl,
     astVarDecl,
     astTypeDecl,
+    astUnionDecl,
     astEnumOption,
     astEnumDecl,
     astStructField,
@@ -118,6 +122,7 @@ typedef enum {
     astCallExpr,
     astClosureExpr,
     astArrayExpr,
+    astIndexExpr,
     astTupleExpr,
     astFieldExpr,
     astStructExpr,
@@ -136,7 +141,7 @@ typedef enum {
     COUNT
 } AstTag;
 
-typedef  struct AstNode {
+typedef struct AstNode {
     AstTag tag;
     FileLoc loc;
     const Type *type;
@@ -171,7 +176,7 @@ typedef  struct AstNode {
 
         struct {
             const char *name;
-            struct AstNode *value;
+            struct AstNode *values;
         } attr;
 
         struct {
@@ -190,6 +195,10 @@ typedef  struct AstNode {
         } funcType;
 
         struct {
+            PrtId id;
+        } primitiveType;
+
+        struct {
             struct AstNode *pointed;
             bool isConst;
         } pointerType;
@@ -204,8 +213,13 @@ typedef  struct AstNode {
         } memberExpr;
 
         struct {
+            struct AstNode *target;
+            struct AstNode *index;
+        } indexExpr;
+
+        struct {
             const char *name;
-            struct AstNode* constraints;
+            struct AstNode *constraints;
         } genericParam;
 
         struct {
@@ -222,13 +236,19 @@ typedef  struct AstNode {
 
         struct {
             const char *name;
-            bool isPublic: 1;
-            bool isAsync: 1;
+            bool isPublic : 1;
+            bool isAsync : 1;
             struct AstNode *genericParams;
             struct AstNode *params;
             struct AstNode *returnType;
             struct AstNode *body;
         } funcDecl;
+
+        struct {
+            bool isVariadic;
+            const char *name;
+            struct AstNode *type;
+        } funcParam;
 
         struct {
             bool isPublic;
@@ -238,30 +258,45 @@ typedef  struct AstNode {
         } constDecl, varDecl;
 
         struct {
+            bool isPublic;
+            bool isOpaque;
+            const char *name;
+            struct AstNode *genericParams;
+            struct AstNode *aliased;
+        } typeDecl;
+
+        struct {
+            bool isPublic;
+            const char *name;
+            struct AstNode *genericParams;
+            struct AstNode *members;
+        } unionDecl;
+
+        struct {
             const char *name;
             struct AstNode *value;
         } enumOption;
 
         struct {
             const char *name;
-            bool isPublic: 1;
-            bool isOpaque: 1;
+            bool isPublic : 1;
+            bool isOpaque : 1;
             struct AstNode *base;
             struct AstNode *options;
         } enumDecl;
 
         struct {
             const char *name;
-            u64  index;
+            u64 index;
             struct AstNode *type;
             struct AstNode *value;
         } structField;
 
         struct {
             const char *name;
-            bool isPublic: 1;
-            bool isOpaque: 1;
-            bool isTupleLike: 1;
+            bool isPublic : 1;
+            bool isOpaque : 1;
+            bool isTupleLike : 1;
             struct AstNode *base;
             struct AstNode *genericParams;
             struct AstNode *fields;
@@ -341,6 +376,7 @@ typedef  struct AstNode {
         struct {
             struct AstNode *var;
             struct AstNode *range;
+            struct AstNode *body;
         } forStmt;
 
         struct {
@@ -356,39 +392,73 @@ typedef  struct AstNode {
         struct {
             struct AstNode *match;
             struct AstNode *body;
-        };
+        } caseStmt;
     };
 } AstNode;
 
 typedef struct AstVisitor {
     void *context;
-    void(*visitors[COUNT])(struct AstVisitor*, AstNode *node);
+
+    void (*visitors[COUNT])(struct AstVisitor *, AstNode *node);
 } AstVisitor;
 
+typedef struct ConstAstVisitor {
+    void *context;
+
+    void (*visitors[COUNT])(struct ConstAstVisitor *, const AstNode *node);
+} ConstAstVisitor;
+
+// clang-format off
+#define getConstAstVisitorContext(V) ((ConstAstVisitor *)(V))->context
+#define makeConstAstVisitor(C, ...) (ConstAstVisitor){.context = (C), .visitors = __VA_ARGS__}
+// clang-format on
+
+void astVisit(AstVisitor *visitor, AstNode *node);
+
+void astConstVisit(ConstAstVisitor *visitor, const AstNode *node);
+
 AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *node);
+
 AstNode *copyAstNode(AstNode *dst, const AstNode *src, FileLoc *fileLoc);
+
 void printAst(FormatState *state, const AstNode *node);
-void astVisit(AstVisitor *visitor,  AstNode *node);
+
 bool isTuple(const AstNode *node);
-bool isAssignExpr(const AstNode *node);
+
 bool isAssignableExpr(const AstNode *node);
+
 bool isPublicDecl(const AstNode *node);
+
 bool isOpaqueDecl(const AstNode *node);
 
 u64 countAstNodes(const AstNode *node);
+
 AstNode *getLastAstNode(AstNode *node);
+
 AstNode *getParentScopeWithTage(AstNode *node);
+
 const AstNode *getLastAstNodeConst(const AstNode *node);
+
 const AstNode *getParentScopeWithTageConst(const AstNode *node);
+
 void insertAstNodeAfter(AstNode *before, AstNode *after);
 
 Operator assignOpToBinaryOp(Operator op);
-const char *getPrimitiveTypeName(AstTag tag);
+
+const char *getPrimitiveTypeName(PrtId tag);
+
 const char *getUnaryOpString(Operator op);
+
 const char *getBinaryOpString(Operator op);
+
+const char *getAssignOpString(Operator op);
+
 const char *getBinaryOpFuncName(Operator op);
+
 const char *getDeclKeyword(AstTag tag);
+
 const char *getDeclName(const AstNode *node);
 
 int getMaxBinaryOpPrecedence(void);
+
 int getBinaryOpPrecedence(Operator op);
