@@ -237,6 +237,7 @@ typedef struct AstNode {
         struct {
             const char *name;
             bool isPublic : 1;
+            bool isOpaque : 1;
             bool isAsync : 1;
             struct AstNode *genericParams;
             struct AstNode *params;
@@ -267,6 +268,7 @@ typedef struct AstNode {
 
         struct {
             bool isPublic;
+            bool isOpaque;
             const char *name;
             struct AstNode *genericParams;
             struct AstNode *members;
@@ -435,15 +437,13 @@ u64 countAstNodes(const AstNode *node);
 
 AstNode *getLastAstNode(AstNode *node);
 
-AstNode *getParentScopeWithTage(AstNode *node);
+AstNode *getParentScopeWithTag(AstNode *node, AstTag tag);
 
 const AstNode *getLastAstNodeConst(const AstNode *node);
 
-const AstNode *getParentScopeWithTageConst(const AstNode *node);
+const AstNode *getParentScopeWithTagConst(const AstNode *node, AstTag tag);
 
 void insertAstNodeAfter(AstNode *before, AstNode *after);
-
-Operator assignOpToBinaryOp(Operator op);
 
 const char *getPrimitiveTypeName(PrtId tag);
 

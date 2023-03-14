@@ -13,7 +13,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 if (NOT CMAKE_BUILD_TYPE)
     # default build type is Debug
     set(CMAKE_BUILD_TYPE Debug)
-endif()
+endif ()
 
 set(CMAKE_C_FLAGS_DEBUG "-g")
 
@@ -27,29 +27,30 @@ option(ENABLE_TESTS "Enable CMake tests" ON)
 include_directories(src/cxy)
 
 set(CXY_CORE_SOURCES
-    src/cxy/core/array.c
-    src/cxy/core/format.c
-    src/cxy/core/hash.c
-    src/cxy/core/htable.c
-    src/cxy/core/log.c
-    src/cxy/core/mempool.c
-    src/cxy/core/strpool.c
-    src/cxy/core/utils.c)
+        src/cxy/core/array.c
+        src/cxy/core/format.c
+        src/cxy/core/hash.c
+        src/cxy/core/htable.c
+        src/cxy/core/log.c
+        src/cxy/core/mempool.c
+        src/cxy/core/strpool.c
+        src/cxy/core/utils.c)
 
 set(CXY_LANG_SOURCES
         src/cxy/lang/ast.c
-        src/cxy/lang/lexer.c)
+        src/cxy/lang/lexer.c
+        src/cxy/lang/parser.c)
 
 set(CXY_DRIVER_SOURCES
-    src/cxy/driver/driver.c
-    src/cxy/driver/options.c)
+        src/cxy/driver/driver.c
+        src/cxy/driver/options.c)
 
 add_executable(cxy
-    src/cxy/driver/main.c
-    ${CXY_CORE_SOURCES}
-    ${CXY_LANG_SOURCES}
-    ${CXY_DRIVER_SOURCES})
+        src/cxy/driver/main.c
+        ${CXY_CORE_SOURCES}
+        ${CXY_LANG_SOURCES}
+        ${CXY_DRIVER_SOURCES})
 
 target_compile_definitions(cxy PRIVATE
-    -DCXY_VERSION="\""${CXY_VERSION}"\"")
+        -DCXY_VERSION="\"${CXY_VERSION}\"")
 

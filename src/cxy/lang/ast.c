@@ -84,6 +84,7 @@ static void printUnaryExpr(ConstAstVisitor *visitor, const AstNode *expr)
     switch (op) {
 #define f(name, ...) case op##name:
         AST_PREFIX_EXPR_LIST(f)
+#undef f
         printAstWithDelim(
             visitor, getUnaryOpString(op), "", expr->unaryExpr.operand);
         break;
@@ -91,6 +92,7 @@ static void printUnaryExpr(ConstAstVisitor *visitor, const AstNode *expr)
 
 #define f(name, ...) case op##name:
         AST_POSTFIX_EXPR_LIST(f)
+#undef f
         printAstWithDelim(
             visitor, "", getUnaryOpString(op), expr->unaryExpr.operand);
         break;
@@ -218,7 +220,6 @@ static void printArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printIndexExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
     if (node->indexExpr.target)
         astConstVisit(visitor, node->indexExpr.target);
     printAstWithDelim(visitor, "[", "]", node->indexExpr.index);
@@ -746,52 +747,225 @@ bool isTuple(const AstNode *node)
     return true;
 }
 
-bool isAssignableExpr(const AstNode *node)
+bool isAssignableExpr(attr(unused) const AstNode *node)
 {
     csAssert(node->type, "expression must have been type-checked first");
-    if (node->tag == astUnaryExpr && node->unaryExpr.op == opDeref)
-        return isNonConstPtrType(expr->unaryExpr.operand->type);
-    else if (expr->tag == AST_MEMBER_EXPR)
-        return isAssignableExpr(expr->memberExpr.left);
-    else if (expr->tag == AST_PATH) {
-        return expr->path.declSite->tag == AST_IDENT_PATTERN &&
-               !expr->path.declSite->identPattern.isConst;
-    }
     return false;
 }
 
-bool isPublicDecl(const AstNode *node);
+bool isPublicDecl(const AstNode *node)
+{
+    switch (node->tag) {
+    case astVarDecl:
+    case astConstDecl:
+        return node->varDecl.isPublic;
+    case astFuncDecl:
+        return node->funcDecl.isPublic;
+    case astTypeDecl:
+        return node->typeDecl.isPublic;
+    case astEnumDecl:
+        return node->enumDecl.isPublic;
+    case astUnionDecl:
+        return node->unionDecl.isPublic;
+    case astStructDecl:
+        return node->structDecl.isPublic;
+    default:
+        return false;
+    }
+}
 
-bool isOpaqueDecl(const AstNode *node);
+bool isOpaqueDecl(const AstNode *node)
+{
+    switch (node->tag) {
+    case astFuncDecl:
+        return node->funcDecl.isOpaque;
+    case astTypeDecl:
+        return node->typeDecl.isOpaque;
+    case astEnumDecl:
+        return node->enumDecl.isOpaque;
+    case astUnionDecl:
+        return node->unionDecl.isOpaque;
+    case astStructDecl:
+        return node->structDecl.isOpaque;
+    default:
+        return false;
+    }
+}
 
-u64 countAstNodes(const AstNode *node);
+u64 countAstNodes(const AstNode *node)
+{
+    u64 len = 0;
+    for (; node; node = node->next)
+        len++;
+    return len;
+}
 
-AstNode *getLastAstNode(AstNode *node);
+AstNode *getLastAstNode(AstNode *node)
+{
+    while (node->next)
+        node = node->next;
+    return node;
+}
 
-AstNode *getParentScopeWithTage(AstNode *node);
+AstNode *getParentScopeWithTag(AstNode *node, AstTag tag)
+{
+    AstNode *parentScope = node->parentScope;
+    while (parentScope && parentScope->tag != tag)
+        parentScope = parentScope->parentScope;
+    return parentScope;
+}
 
-const AstNode *getLastAstNodeConst(const AstNode *node);
+const AstNode *getLastAstNodeConst(const AstNode *node)
+{
+    while (node->next)
+        node = node->next;
+    return node;
+}
 
-const AstNode *getParentScopeWithTageConst(const AstNode *node);
+const AstNode *getParentScopeWithTagConst(const AstNode *node, AstTag tag)
+{
+    const AstNode *parentScope = node->parentScope;
+    while (parentScope && parentScope->tag != tag)
+        parentScope = parentScope->parentScope;
+    return parentScope;
+}
 
-void insertAstNodeAfter(AstNode *before, AstNode *after);
+void insertAstNodeAfter(AstNode *before, AstNode *after)
+{
+    getLastAstNode(after)->next = before->next;
+    before->next = after;
+}
 
-Operator assignOpToBinaryOp(Operator op);
+const char *getPrimitiveTypeName(PrtId tag)
+{
+    switch (tag) {
+#define f(name, str)                                                           \
+    case prt##name:                                                            \
+        return str;
+        PRIM_TYPE_LIST(f)
+#undef f
+    default:
+        csAssert0(false);
+    }
+}
 
-const char *getPrimitiveTypeName(PrtId tag);
+const char *getUnaryOpString(Operator op)
+{
+    switch (op) {
+#define f(name, _, str)                                                        \
+    case op##name:                                                             \
+        return str;
+        AST_UNARY_EXPR_LIST(f)
+#undef f
+    default:
+        csAssert0(false);
+    }
+}
 
-const char *getUnaryOpString(Operator op);
+const char *getBinaryOpString(Operator op)
+{
+    switch (op) {
+#define f(name, p, t, s, ...)                                                  \
+    case op##name:                                                             \
+        return s;
+        AST_BINARY_EXPR_LIST(f)
+#undef f
+    default:
+        csAssert0(false);
+    }
+}
 
-const char *getBinaryOpString(Operator op);
+const char *getAssignOpString(Operator op)
+{
+    switch (op) {
+#define f(name, p, t, s, ...)                                                  \
+    case op##name:                                                             \
+        return s "=";
+        AST_ASSIGN_EXPR_LIST(f)
+#undef f
+    default:
+        csAssert0(false);
+    }
+}
 
-const char *getAssignOpString(Operator op);
+const char *getBinaryOpFuncName(Operator op)
+{
+    switch (op) {
+#define f(name, p, t, s, fn)                                                   \
+    case op##name:                                                             \
+        return fn;
+        // NOLINTBEGIN
+        AST_BINARY_EXPR_LIST(f)
+        // NOLINTEND
+#undef f
+    default:
+        csAssert0(false);
+    }
+}
 
-const char *getBinaryOpFuncName(Operator op);
+const char *getDeclKeyword(AstTag tag)
+{
+    switch (tag) {
+    case astFuncDecl:
+        return "func";
+    case astTypeDecl:
+    case astUnionDecl:
+        return "type";
+    case astEnumDecl:
+        return "enum";
+    case astStructDecl:
+        return "struct";
+    default:
+        return false;
+    }
+}
 
-const char *getDeclKeyword(AstTag tag);
+const char *getDeclName(const AstNode *node)
+{
+    switch (node->tag) {
+    case astFuncDecl:
+        return node->funcDecl.name;
+    case astTypeDecl:
+        return node->typeDecl.name;
+    case astEnumDecl:
+        return node->enumDecl.name;
+    case astUnionDecl:
+        return node->unionDecl.name;
+    case astStructDecl:
+        return node->structDecl.name;
+    default:
+        return false;
+    }
+}
 
-const char *getDeclName(const AstNode *node);
+int getMaxBinaryOpPrecedence(void)
+{
+    static int maxPrecedence = -1;
+    if (maxPrecedence < 1) {
+        const int precedenceList[] = {
+#define f(n, prec, ...) prec,
+            AST_BINARY_EXPR_LIST(f)
+#undef f
+        };
+        for (int i = 0; i < (sizeof(precedenceList) / sizeof(int)); i++) {
+            maxPrecedence = MAX(maxPrecedence, precedenceList[i]);
+        }
+    }
 
-int getMaxBinaryOpPrecedence(void);
+    return maxPrecedence;
+}
 
-int getBinaryOpPrecedence(Operator op);
+int getBinaryOpPrecedence(Operator op)
+{
+    switch (op) {
+#define f(name, prec, ...)                                                     \
+    case op##name:                                                             \
+        return prec;
+        // NOLINTBEGIN
+        AST_BINARY_EXPR_LIST(f);
+        // NOLINTEND
+#undef f
+    default:
+        csAssert0(false);
+    }
+}
