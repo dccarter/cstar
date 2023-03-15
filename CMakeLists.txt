@@ -28,6 +28,7 @@ include_directories(src/cxy)
 
 set(CXY_CORE_SOURCES
         src/cxy/core/array.c
+        src/cxy/core/e4c.c
         src/cxy/core/format.c
         src/cxy/core/hash.c
         src/cxy/core/htable.c
@@ -39,7 +40,8 @@ set(CXY_CORE_SOURCES
 set(CXY_LANG_SOURCES
         src/cxy/lang/ast.c
         src/cxy/lang/lexer.c
-        src/cxy/lang/parser.c)
+        src/cxy/lang/parser.c
+        src/cxy/lang/types.c)
 
 set(CXY_DRIVER_SOURCES
         src/cxy/driver/driver.c
@@ -52,5 +54,5 @@ add_executable(cxy
         ${CXY_DRIVER_SOURCES})
 
 target_compile_definitions(cxy PRIVATE
-        -DCXY_VERSION="\"${CXY_VERSION}\"")
+        -DCXY_VERSION="${CXY_VERSION}")
 

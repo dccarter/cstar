@@ -246,6 +246,12 @@ static void printMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
     astConstVisit(visitor, node->memberExpr.member);
 }
 
+static void printNullLiteral(ConstAstVisitor *visitor, const AstNode *node)
+{
+    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    printKeyword(context->state, "null");
+}
+
 static void printBoolLiteral(ConstAstVisitor *visitor, const AstNode *node)
 {
     const AstPrintContext *context = getConstAstVisitorContext(visitor);
@@ -364,9 +370,8 @@ static void printPathElement(ConstAstVisitor *visitor, const AstNode *node)
 {
     const AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state, "{s}", (FormatArg[]){{.s = node->pathElement.name}});
-    if (node->pathElement.genericArgs)
-        printManyAstsWithDelim(
-            visitor, "[", ",", "]", node->pathElement.genericArgs);
+    if (node->pathElement.args)
+        printManyAstsWithDelim(visitor, "[", ",", "]", node->pathElement.args);
 }
 
 static void printPath(ConstAstVisitor *visitor, const AstNode *node)
@@ -692,6 +697,7 @@ void printAst(FormatState *state, const AstNode *node)
         [astPointerType] = printPointerType,
         [astFuncType] = printFuncType,
         [astPrimitiveType] = printPrimitiveType,
+        [astNullLit] = printNullLiteral,
         [astBoolLit] = printBoolLiteral,
         [astCharLit] = printCharLiteral,
         [astIntegerLit] = printIntLiteral,
@@ -967,5 +973,57 @@ int getBinaryOpPrecedence(Operator op)
 #undef f
     default:
         csAssert0(false);
+    }
+}
+
+bool isAssignmentOperator(TokenTag tag)
+{
+    switch (tag) {
+#define f(O, P, T, ...)                                                        \
+    case tok##T:                                                               \
+        AST_ASSIGN_EXPR_LIST(f)
+        return true;
+#undef f
+    default:
+        return false;
+    }
+}
+
+Operator tokenToUnaryOperator(TokenTag tag)
+{
+    switch (tag) {
+#define f(O, T, ...)                                                           \
+    case tok##T:                                                               \
+        return op##O;
+        AST_POSTFIX_EXPR_LIST(f);
+#undef f
+    default:
+        csAssert(false, "expecting unary operator");
+    }
+}
+
+Operator tokenToBinaryOperator(TokenTag tag)
+{
+    switch (tag) {
+#define f(O, P, T, ...)                                                        \
+    case tok##T:                                                               \
+        return op##O;
+        AST_BINARY_EXPR_LIST(f);
+#undef f
+    default:
+        csAssert(false, "expecting binary operator");
+    }
+}
+
+Operator tokenToAssignmentOperator(TokenTag tag)
+{
+    switch (tag) {
+#define f(O, P, T, ...)                                                        \
+    case tok##T:                                                               \
+        return op##O;
+        AST_ASSIGN_EXPR_LIST(f);
+#undef f
+    default:
+        csAssert(false, "expecting binary operator");
     }
 }

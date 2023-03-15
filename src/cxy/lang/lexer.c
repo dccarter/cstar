@@ -136,18 +136,14 @@ static Token makeToken(Lexer *lexer, const FilePos *begin, TokenTag tag)
     };
 }
 
-static Token makeIntLiteral(Lexer *lexer,
-                            const FilePos *begin,
-                            uintmax_t iVal)
+static Token makeIntLiteral(Lexer *lexer, const FilePos *begin, uintmax_t iVal)
 {
     Token token = makeToken(lexer, begin, tokIntLiteral);
     token.iVal = iVal;
     return token;
 }
 
-static Token makeFloatLiteral(Lexer *lexer,
-                              const FilePos *begin,
-                              double fVal)
+static Token makeFloatLiteral(Lexer *lexer, const FilePos *begin, double fVal)
 {
     Token token = makeToken(lexer, begin, tokFloatLiteral);
     token.fVal = fVal;
@@ -213,6 +209,10 @@ Token advanceLexer(Lexer *lexer)
             return makeToken(lexer, &begin, tokSemicolon);
         if (acceptChar(lexer, '#'))
             return makeToken(lexer, &begin, tokHash);
+        if (acceptChar(lexer, '@'))
+            return makeToken(lexer, &begin, tokAt);
+        if (acceptChar(lexer, '?'))
+            return makeToken(lexer, &begin, tokQuestion);
         if (acceptChar(lexer, '}')) {
             if (lexer->flags & lxContinueStringExpr)
                 goto lexerLexString;
@@ -222,12 +222,12 @@ Token advanceLexer(Lexer *lexer)
         if (acceptChar(lexer, '!')) {
             if (acceptChar(lexer, '='))
                 return makeToken(lexer, &begin, tokNotEqual);
-            return makeToken(lexer, &begin, tokBang);
+            return makeToken(lexer, &begin, tokLNot);
         }
 
         if (acceptChar(lexer, '+')) {
             if (acceptChar(lexer, '+'))
-                return makeToken(lexer, &begin, tokPlusplus);
+                return makeToken(lexer, &begin, tokPlusPlus);
             if (acceptChar(lexer, '='))
                 return makeToken(lexer, &begin, tokPlusEqual);
             return makeToken(lexer, &begin, tokPlus);
@@ -364,8 +364,9 @@ Token advanceLexer(Lexer *lexer)
         if (acceptChar(lexer, '\'')) {
             const char *ptr = getCurPtr(lexer);
             size_t charCount = 0;
-            for (; getCurChar(lexer) != '\'' && getCurChar(lexer) != '\n'; charCount++) {
-                if (getCurChar(lexer)=='\\')
+            for (; getCurChar(lexer) != '\'' && getCurChar(lexer) != '\n';
+                 charCount++) {
+                if (getCurChar(lexer) == '\\')
                     skipChar(lexer);
                 skipChar(lexer);
             }

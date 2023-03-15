@@ -5,6 +5,7 @@
 #include "core/format.h"
 #include "core/log.h"
 #include "core/mempool.h"
+#include "lang/token.h"
 #include "lang/types.h"
 
 // clang-format off
@@ -45,6 +46,7 @@
     AST_LOGIC_EXPR_LIST(f)
 
 #define AST_ASSIGN_EXPR_LIST(f)          \
+    f(Assign, 0, Assign, "",  "assign")  \
     AST_ARITH_EXPR_LIST(f)               \
     AST_BIT_EXPR_LIST(f)                 \
     AST_SHIFT_EXPR_LIST(f)
@@ -63,8 +65,8 @@
     f(Delete, Delete,"delete")          \
 
 #define AST_POSTFIX_EXPR_LIST(f)        \
-    f(PostDec, Minus, "--")             \
-    f(PostInc, Plus,  "++")
+    f(PostDec, MinusMinus, "--")        \
+    f(PostInc, PlusPlus,  "++")
 
 #define AST_UNARY_EXPR_LIST(f)                                                 \
     AST_PREFIX_EXPR_LIST(f)                                                    \
@@ -76,6 +78,7 @@ typedef enum {
     AST_UNARY_EXPR_LIST(f)
 #undef f
 #define f(name, ...) op##name##Equal,
+    opAssign,
     AST_ASSIGN_EXPR_LIST(f)
 #undef f
 } Operator;
@@ -95,6 +98,7 @@ typedef enum {
     astFuncType,
     astPrimitiveType,
     /* Literals */
+    astNullLit,
     astBoolLit,
     astCharLit,
     astIntegerLit,
@@ -112,6 +116,7 @@ typedef enum {
     astStructField,
     astStructDecl,
     /* Expressions */
+    astGroupExpr,
     astUnaryExpr,
     astBinaryExpr,
     astAssignExpr,
@@ -120,6 +125,7 @@ typedef enum {
     astStringExpr,
     astTypedExpr,
     astCallExpr,
+    astMacroCallExpr,
     astClosureExpr,
     astArrayExpr,
     astIndexExpr,
@@ -224,7 +230,7 @@ typedef struct AstNode {
 
         struct {
             const char *name;
-            struct AstNode *genericArgs;
+            struct AstNode *args;
             u64 index;
             bool isType;
         } pathElement;
@@ -249,6 +255,7 @@ typedef struct AstNode {
             bool isVariadic;
             const char *name;
             struct AstNode *type;
+            struct AstNode *def;
         } funcParam;
 
         struct {
@@ -312,6 +319,7 @@ typedef struct AstNode {
 
         struct {
             Operator op;
+            bool isPrefix;
             struct AstNode *operand;
         } unaryExpr;
 
@@ -337,7 +345,7 @@ typedef struct AstNode {
         struct {
             struct AstNode *callee;
             struct AstNode *args;
-        } callExpr;
+        } callExpr, macroCallExpr;
 
         struct {
             bool isAsync;
@@ -360,7 +368,7 @@ typedef struct AstNode {
 
         struct {
             struct AstNode *expr;
-        } exprStmt;
+        } exprStmt, groupExpr;
 
         struct {
             struct AstNode *loop;
@@ -462,3 +470,7 @@ const char *getDeclName(const AstNode *node);
 int getMaxBinaryOpPrecedence(void);
 
 int getBinaryOpPrecedence(Operator op);
+
+Operator tokenToUnaryOperator(TokenTag tag);
+Operator tokenToBinaryOperator(TokenTag tag);
+Operator tokenToAssignmentOperator(TokenTag tag);

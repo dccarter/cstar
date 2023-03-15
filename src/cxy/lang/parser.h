@@ -22,8 +22,8 @@ typedef struct AstNode AstNode;
 
 typedef struct {
     Lexer *lexer;
+    Log *L;
     MemPool *memPool;
-    FilePos prevEnd;
     Token ahead[TOKEN_BUFFER];
 } Parser;
 

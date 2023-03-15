@@ -1,8 +1,8 @@
 // credits: https://github.com/madmann91/fu/blob/master/src/fu/lang/token.h
 #pragma once
 
-#include <core/utils.h>
 #include <core/log.h>
+#include <core/utils.h>
 #include <lang/types.h>
 
 // clang-format off
@@ -14,11 +14,14 @@
     f(RBracket, "]")                \
     f(LBrace, "{")                  \
     f(RBrace, "}")                  \
+    f(At,   "@")                    \
     f(Hash, "#")                    \
-    f(Bang, "!")                    \
+    f(LNot, "!")                    \
+    f(BNot, "~")                    \
     f(Dot, ".")                     \
     f(DotDot, "..")                 \
     f(Elipsis, "...")               \
+    f(Question, "?")                \
     f(Comma, ",")                   \
     f(Colon, ":")                   \
     f(Semicolon, ";")               \
@@ -45,7 +48,7 @@
     f(BOr, "|")                     \
     f(LAnd, "&&")                   \
     f(LOr, "||")                    \
-    f(Plusplus, "++")               \
+    f(PlusPlus, "++")               \
     f(MinusMinus, "--")             \
     f(PlusEqual, "+=")              \
     f(MinusEqual, "-=")             \
@@ -59,6 +62,7 @@
 #define KEYWORD_LIST(f)             \
     f(True, "true")                 \
     f(False, "false")               \
+    f(Null,  "null")                \
     f(If, "if")                     \
     f(Else, "else")                 \
     f(Match, "match")               \
@@ -117,15 +121,24 @@ typedef struct {
     FileLoc fileLoc;
 } Token;
 
-static inline const char *token_tag_to_str(TokenTag tag) {
+static inline const char *token_tag_to_str(TokenTag tag)
+{
     switch (tag) {
-#define f(name, str) case tok##name: return str;
-#define g(name, str) case tok##name: return "'"str"'";
+#define f(name, str)                                                           \
+    case tok##name:                                                            \
+        return str;
+#define g(name, str)                                                           \
+    case tok##name:                                                            \
+        return "'" str "'";
         SYMBOL_LIST(g)
         KEYWORD_LIST(g)
         SPECIAL_TOKEN_LIST(f)
 #undef f
-        default:
-            return NULL;
+    default:
+        return NULL;
     }
 }
+
+bool isPrimitiveType(TokenTag tag);
+bool isAssignmentOperator(TokenTag tag);
+PrtId tokenToPrimitiveTypeId(TokenTag tag);

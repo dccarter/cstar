@@ -125,7 +125,7 @@
         __builtin_unreachable();                                               \
     } while (0)
 #else
-#define unreachable(...) assert(!"Unreachable code reached");
+#define unreachable(...) csAssert(false, "Unreachable code reached");
 #endif
 
 #define attr(A, ...) CynPST(cyn_, A)(__VA_ARGS__)
