@@ -334,9 +334,9 @@ static void printFuncType(ConstAstVisitor *visitor, const AstNode *node)
 {
     const AstPrintContext *context = getConstAstVisitorContext(visitor);
     printKeyword(context->state, "func");
-    printManyAstsWithinParen(visitor, node->funcType.paramTypes);
+    printManyAstsWithinParen(visitor, node->funcType.params);
     format(context->state, " -> ", NULL);
-    astConstVisit(visitor, node->funcType.returnType);
+    astConstVisit(visitor, node->funcType.ret);
 }
 
 static void printFuncParam(ConstAstVisitor *visitor, const AstNode *node)

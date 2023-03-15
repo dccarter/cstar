@@ -91,6 +91,7 @@ typedef enum {
     astAttr,
     astPathElem,
     astPath,
+    astGenericParam,
     /* Types */
     astTupleType,
     astArrayType,
@@ -195,9 +196,10 @@ typedef struct AstNode {
         } arrayType;
 
         struct {
+            bool isAsync;
             struct AstNode *genericParams;
-            struct AstNode *paramTypes;
-            struct AstNode *returnType;
+            struct AstNode *params;
+            struct AstNode *ret;
         } funcType;
 
         struct {

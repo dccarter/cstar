@@ -52,16 +52,6 @@ static inline const char *getTokenString(Parser *P, const Token *tok)
     return name;
 }
 
-Parser makeParser(Lexer *lexer, MemPool *pool)
-{
-    Parser parser = {.lexer = lexer, .L = lexer->log, .memPool = pool};
-    parser.ahead[0] = (Token){.tag = tokEoF};
-    for (u32 i = 0; i < LOOK_AHEAD; i++)
-        parser.ahead[i] = advanceLexer(lexer);
-
-    return parser;
-}
-
 static inline Token *current(Parser *parser) { return &parser->ahead[1]; }
 
 static inline Token *previous(Parser *parser) { return &parser->ahead[0]; }
@@ -495,6 +485,85 @@ static AstNode *tuple(
     return create(P, &start.fileLoc.begin, args, strict);
 }
 
+static AstNode *parseTupleType(Parser *P)
+{
+    Token tok = *consume0(P, tokLParen);
+    AstNode *elems =
+        parseAtLeastOne(P, "tuple members", tokRParen, tokComma, parseType);
+    consume0(P, tokRParen);
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astTupleType, .tupleType = {.args = elems}});
+}
+
+static AstNode *parseGenericParam(Parser *P)
+{
+    AstNodeList constraints = {NULL};
+    Token tok = *consume0(P, tokIdent);
+    if (match(P, tokColon)) {
+        do {
+            listAddAstNode(&constraints, parsePath(P));
+            if (!match(P, tokBOr))
+                break;
+        } while (!isEoF(P));
+    }
+
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astGenericParam,
+                   .genericParam = {.name = getTokenString(P, &tok),
+                                    .constraints = constraints.first}});
+}
+
+static AstNode *parseFuncParam(Parser *P)
+{
+    Token tok = *current(P);
+    bool isVariadic = match(P, tokElipsis) != NULL;
+    const char *name = getTokenString(P, consume0(P, tokIdent));
+    consume0(P, tokColon);
+    AstNode *type = parseType(P), *value = NULL;
+    if (match(P, tokAssign)) {
+        value = expression(P, true);
+    }
+
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astFuncParam,
+                                 .funcParam = {.isVariadic = isVariadic,
+                                               .name = name,
+                                               .def = value}});
+}
+
+// async func(a: T, ...b:T[]) -> T;
+static AstNode *parseFuncType(Parser *P)
+{
+    AstNode *gParams = NULL, *params = NULL, *ret = NULL;
+    Token tok = *current(P);
+    bool isAsync = match(P, tokAsync) != NULL;
+    consume0(P, tokFunc);
+    if (match(P, tokLBracket)) {
+        gParams = parseMany(P, tokRBracket, tokComma, parseGenericParam);
+        consume0(P, tokRBracket);
+    }
+
+    consume0(P, tokLParen);
+    params = parseMany(P, tokRParen, tokComma, parseFuncParam);
+    consume0(P, tokRParen);
+
+    consume0(P, tokThinArrow);
+    ret = parseType(P);
+
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astFuncType,
+                                 .funcType = {.isAsync = isAsync,
+                                              .genericParams = gParams,
+                                              .params = params,
+                                              .ret = ret}});
+}
+
 static AstNode *createTupleOrGroupExpression(Parser *P,
                                              const FilePos *begin,
                                              AstNode *node,
@@ -754,3 +823,38 @@ static void synchronizeUntil(Parser *P, TokenTag tag)
     while (!check(P, tag, tokEoF))
         advance(P);
 }
+
+Parser makeParser(Lexer *lexer, MemPool *pool)
+{
+    Parser parser = {.lexer = lexer, .L = lexer->log, .memPool = pool};
+    parser.ahead[0] = (Token){.tag = tokEoF};
+    for (u32 i = 0; i < LOOK_AHEAD; i++)
+        parser.ahead[i] = advanceLexer(lexer);
+
+    return parser;
+}
+
+AstNode *parseType(Parser *P)
+{
+    AstNode *node = NULL;
+    Token tok = *current(P);
+    if (isPrimitiveType(tok.tag)) {
+        node = primitive(P);
+    }
+    else {
+        switch (tok.tag) {
+        case tokIdent:
+            node = parsePath(P);
+            break;
+        case tokLParen:
+            node = parseTupleType(P);
+            break;
+        case tokAsync:
+        case tokFunc:
+            node = parseFuncType(P);
+            break;
+        }
+    }
+}
+
+AstNode *parseProgram(Parser *) {}
