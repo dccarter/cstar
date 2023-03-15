@@ -28,6 +28,8 @@ static void synchronize(Parser *P);
 static void synchronizeUntil(Parser *P, TokenTag tag);
 static AstNode *expression(Parser *P, bool allowStructs);
 static AstNode *statement(Parser *P);
+static AstNode *parseType(Parser *P);
+
 static AstNode *primary(Parser *P, bool allowStructs);
 static AstNode *macroExpression(Parser *P, AstNode *callee);
 static AstNode *callExpression(Parser *P, AstNode *callee);
@@ -62,7 +64,7 @@ static inline Token *advance(Parser *parser)
         parser->ahead[0] = parser->ahead[1];
         parser->ahead[1] = parser->ahead[2];
         parser->ahead[2] = parser->ahead[3];
-        parser->ahead[2] = advanceLexer(parser->lexer);
+        parser->ahead[3] = advanceLexer(parser->lexer);
     }
 
     return previous(parser);
@@ -533,7 +535,8 @@ static AstNode *parseFuncParam(Parser *P)
                       &(AstNode){.tag = astFuncParam,
                                  .funcParam = {.isVariadic = isVariadic,
                                                .name = name,
-                                               .def = value}});
+                                               .def = value,
+                                               .type = type}});
 }
 
 // async func(a: T, ...b:T[]) -> T;
@@ -576,6 +579,19 @@ static AstNode *createTupleOrGroupExpression(Parser *P,
 
     return newAstNode(
         P, begin, &(AstNode){.tag = astTupleExpr, .tupleExpr.args = node});
+}
+
+static AstNode *parsePointerType(Parser *P)
+{
+    Token tok = *consume0(P, tokBAnd);
+    bool isConst = match(P, tokConst) != NULL;
+    AstNode *pointed = parseType(P);
+
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astPointerType,
+                   .pointerType = {.isConst = isConst, .pointed = pointed}});
 }
 
 static inline AstNode *expressionWithoutStructs(Parser *P)
@@ -785,16 +801,102 @@ static AstNode *attribute(Parser *P)
 {
     Token tok = *consume0(P, tokIdent);
     const char *name = getTokenString(P, &tok);
-    AstNodeList params = {NULL};
+    AstNodeList args = {NULL};
     if (match(P, tokLParen) && !isEoF(P)) {
-        while (!check(P, tokRParen)) {
-            const char *pname = getTokenString(P, consume0(P, tokIdent));
+        while (!check(P, tokRParen, tokEoF)) {
+            AstNode *value = NULL;
+            Token start = *consume0(P, tokIdent);
+            const char *pname = getTokenString(P, &start);
             consume0(P, tokColon);
+            switch (current(P)->tag) {
+            case tokTrue:
+            case tokFalse:
+                value = parseBool(P);
+                break;
+            case tokCharLiteral:
+                value = parseChar(P);
+                break;
+            case tokIntLiteral:
+                value = parseInteger(P);
+                break;
+            case tokFloatLiteral:
+                value = parseFloat(P);
+                break;
+            case tokStringLiteral:
+                value = parseString(P);
+                break;
+            default:
+                reportUnexpectedToken(P, "string/float/int/char/bool literal");
+            }
+
+            listAddAstNode(
+                &args,
+                newAstNode(
+                    P,
+                    &start.fileLoc.begin,
+                    &(AstNode){.tag = astFieldExpr,
+                               .fieldExpr = {.name = pname, .value = value}}));
+
+            match(P, tokComma);
         }
+        consume0(P, tokLParen);
     }
+
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astAttr, .attr = {.name = name, .args = args.first}});
 }
 
-static AstNode *statement(Parser *P) { return NULL; }
+static AstNode *attributes(Parser *P)
+{
+    Token tok = *consume0(P, tokAt);
+    AstNode *attrs;
+    if (match(P, tokLBracket)) {
+        attrs =
+            parseAtLeastOne(P, "attribute", tokRBracket, tokComma, attribute);
+
+        consume0(P, tokRParen);
+    }
+    else {
+        attrs = attribute(P);
+    }
+
+    return attrs;
+}
+
+static AstNode *statement(Parser *P)
+{
+    switch (current(P)->tag) {
+    case tokIf:
+        return ifStatement(P);
+    case tokFor:
+        return forStatement(P);
+    case tokSwitch:
+        return switchStatement(P);
+    case tokWhile:
+        return whileStatement(P);
+    case tokDefer:
+        return deferStatement(P);
+    case tokReturn:
+        return returnStatement(P);
+    case tokBreak:
+    case tokContinue:
+        return continueStatement(P);
+    case tokVar:
+    case tokConst:
+        return variable(P);
+    case tokFunc:
+        return funcDecl(P);
+    default: {
+        AstNode *expr = expression(P, false);
+        return newAstNode(
+            P,
+            &expr->loc.begin,
+            &(AstNode){.tag = astExprStmt, .exprStmt = {.expr = expr}});
+    }
+    }
+}
 
 static void synchronize(Parser *P)
 {
@@ -828,13 +930,13 @@ Parser makeParser(Lexer *lexer, MemPool *pool)
 {
     Parser parser = {.lexer = lexer, .L = lexer->log, .memPool = pool};
     parser.ahead[0] = (Token){.tag = tokEoF};
-    for (u32 i = 0; i < LOOK_AHEAD; i++)
+    for (u32 i = 1; i < TOKEN_BUFFER; i++)
         parser.ahead[i] = advanceLexer(lexer);
 
     return parser;
 }
 
-AstNode *parseType(Parser *P)
+static AstNode *parseType(Parser *P)
 {
     AstNode *node = NULL;
     Token tok = *current(P);
@@ -853,8 +955,29 @@ AstNode *parseType(Parser *P)
         case tokFunc:
             node = parseFuncType(P);
             break;
+        case tokBAnd:
+            node = parsePointerType(P);
+            break;
+        default:
+            reportUnexpectedToken(P, "a type");
+            break;
         }
     }
+
+    while (match(P, tokLBracket)) {
+        AstNode *size = NULL;
+        if (!check(P, tokRBracket)) {
+            size = expression(P, false);
+        }
+        consume0(P, tokRBracket);
+        node = newAstNode(
+            P,
+            &node->loc.begin,
+            &(AstNode){.tag = astArrayType,
+                       .arrayType = {.elementType = node, .size = size}});
+    }
+
+    return node;
 }
 
 AstNode *parseProgram(Parser *) {}

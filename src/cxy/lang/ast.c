@@ -229,7 +229,7 @@ static void printFieldExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     const AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state, "{s}: ", (FormatArg[]){{.s = node->fieldExpr.name}});
-    astConstVisit(visitor, node->fieldExpr.val);
+    astConstVisit(visitor, node->fieldExpr.value);
 }
 
 static void printStructExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -362,8 +362,8 @@ static void printAttribute(ConstAstVisitor *visitor, const AstNode *node)
 {
     const AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state, "{s}", (FormatArg[]){{.s = node->attr.name}});
-    if (node->attr.values)
-        printManyAstsWithinParen(visitor, node->attr.values);
+    if (node->attr.args)
+        printManyAstsWithinParen(visitor, node->attr.args);
 }
 
 static void printPathElement(ConstAstVisitor *visitor, const AstNode *node)

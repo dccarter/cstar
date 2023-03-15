@@ -183,7 +183,7 @@ typedef struct AstNode {
 
         struct {
             const char *name;
-            struct AstNode *values;
+            struct AstNode *args;
         } attr;
 
         struct {
@@ -360,7 +360,7 @@ typedef struct AstNode {
         struct {
             const char *name;
             u64 index;
-            struct AstNode *val;
+            struct AstNode *value;
         } fieldExpr;
 
         struct {

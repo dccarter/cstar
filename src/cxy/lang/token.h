@@ -85,6 +85,9 @@
     f(Delete, "delete")             \
     f(Async,  "async")              \
     f(Await,  "await")              \
+    f(Switch, "switch")             \
+    f(Case, "case")                 \
+    f(Defer, "defer")               \
     PRIM_TYPE_LIST(f)
 
 #define SPECIAL_TOKEN_LIST(f)                   \

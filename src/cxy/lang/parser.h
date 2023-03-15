@@ -28,9 +28,4 @@ typedef struct {
 } Parser;
 
 Parser makeParser(Lexer *, MemPool *);
-
-AstNode *parseStmt(Parser *);
-AstNode *parseDecl(Parser *);
-AstNode *parseExpr(Parser *);
-AstNode *parseType(Parser *);
 AstNode *parseProgram(Parser *);
