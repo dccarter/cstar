@@ -34,6 +34,8 @@ static AstNode *primary(Parser *P, bool allowStructs);
 static AstNode *macroExpression(Parser *P, AstNode *callee);
 static AstNode *callExpression(Parser *P, AstNode *callee);
 static AstNode *parsePath(Parser *P);
+static AstNode *variable(Parser *P);
+static AstNode *funcDecl(Parser *P);
 
 static void listAddAstNode(AstNodeList *list, AstNode *node)
 {
@@ -863,6 +865,46 @@ static AstNode *attributes(Parser *P)
     }
 
     return attrs;
+}
+
+static AstNode *ifStatement(Parser *P)
+{
+
+}
+
+static AstNode *forStatement(Parser *P)
+{
+
+}
+
+static AstNode *whileStatement(Parser *P)
+{
+
+}
+
+static AstNode *caseStatement(Parser *P)
+{
+
+}
+
+static AstNode *switchStatement(Parser *P)
+{
+
+}
+
+static AstNode *deferStatement(Parser *P)
+{
+
+}
+
+static AstNode *returnStatement(Parser *P)
+{
+
+}
+
+static AstNode *continueStatement(Parser *P)
+{
+
 }
 
 static AstNode *statement(Parser *P)
