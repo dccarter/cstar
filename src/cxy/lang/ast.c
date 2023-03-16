@@ -59,7 +59,7 @@ static inline void printManyAstsWithinBlock(ConstAstVisitor *visitor,
 static inline void printManyAstsWithinParen(ConstAstVisitor *visitor,
                                             const AstNode *node)
 {
-    if (isTuple(node))
+    if (node && isTuple(node))
         astConstVisit(visitor, node);
     else
         printManyAstsWithDelim(visitor, "(", ", ", ")", node);
@@ -85,13 +85,20 @@ static void printGroupExpr(ConstAstVisitor *visitor, const AstNode *expr)
 static void printUnaryExpr(ConstAstVisitor *visitor, const AstNode *expr)
 {
     csAssert0(expr && expr->tag == astUnaryExpr);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     const Operator op = expr->unaryExpr.op;
     switch (op) {
 #define f(name, ...) case op##name:
         AST_PREFIX_EXPR_LIST(f)
 #undef f
-        printAstWithDelim(
-            visitor, getUnaryOpString(op), "", expr->unaryExpr.operand);
+        if (isPrefixOpKeyword(op)) {
+            printKeyword(context->state, getUnaryOpString(op));
+            format(context->state, " ", NULL);
+            astConstVisit(visitor, expr->unaryExpr.operand);
+        }
+        else
+            printAstWithDelim(
+                visitor, getUnaryOpString(op), "", expr->unaryExpr.operand);
         break;
 #undef f
 
@@ -185,11 +192,13 @@ static void printTypedExpr(ConstAstVisitor *visitor, const AstNode *expr)
 
 static void printCallExpr(ConstAstVisitor *visitor, const AstNode *expr)
 {
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     if (expr->callExpr.callee->tag == astClosureExpr)
         printAstWithDelim(visitor, "(", ")", expr->callExpr.callee);
     else
         astConstVisit(visitor, expr->callExpr.callee);
-
+    if (expr->tag == astMacroCallExpr)
+        format(context->state, "!", NULL);
     printManyAstsWithinParen(visitor, expr->callExpr.args);
 }
 
@@ -234,7 +243,7 @@ static void printFieldExpr(ConstAstVisitor *visitor, const AstNode *node)
 static void printStructExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     astConstVisit(visitor, node->structExpr.left);
-    printManyAstsWithinBlock(visitor, ",", node->structExpr.fields, false);
+    printManyAstsWithinBlock(visitor, ", ", node->structExpr.fields, false);
 }
 
 static void printMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -544,12 +553,12 @@ static void printStructDecl(ConstAstVisitor *visitor, const AstNode *node)
         astConstVisit(visitor, node->structDecl.base);
     }
 
-    if (node->structDecl.fields) {
+    if (node->structDecl.members) {
         if (node->structDecl.isTupleLike)
-            printManyAstsWithinParen(visitor, node->structDecl.fields);
+            printManyAstsWithinParen(visitor, node->structDecl.members);
         else
             printManyAstsWithinBlock(
-                visitor, ";", node->structDecl.fields, true);
+                visitor, ";", node->structDecl.members, true);
     }
 }
 
@@ -589,9 +598,9 @@ static void printIfStmt(ConstAstVisitor *visitor, const AstNode *node)
     astConstVisit(visitor, node->ifStmt.cond);
     format(context->state, ")", NULL);
     if (node->ifStmt.body->tag != astBlockStmt) {
-        format(context->state, " {{\n{>}", NULL);
+        format(context->state, " {{{>}\n", NULL);
         astConstVisit(visitor, node->ifStmt.body);
-        format(context->state, " {>}}", NULL);
+        format(context->state, "{<}\n}", NULL);
     }
     else {
         format(context->state, " ", NULL);
@@ -599,7 +608,7 @@ static void printIfStmt(ConstAstVisitor *visitor, const AstNode *node)
     }
 
     if (node->ifStmt.otherwise) {
-        printKeyword(context->state, "else");
+        printKeyword(context->state, " else");
         format(context->state, " ", NULL);
         astConstVisit(visitor, node->ifStmt.otherwise);
     }
@@ -632,29 +641,39 @@ static void printWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
     format(context->state, " (", NULL);
     astConstVisit(visitor, node->whileStmt.cond);
     format(context->state, ")", NULL);
-    if (node->whileStmt.body->tag != astBlockStmt) {
-        format(context->state, " {{\n{>}", NULL);
-        astConstVisit(visitor, node->whileStmt.body);
-        format(context->state, " {>}}", NULL);
+    if (node->whileStmt.body) {
+        if (node->whileStmt.body->tag != astBlockStmt) {
+            format(context->state, " {{{>}\n", NULL);
+            astConstVisit(visitor, node->whileStmt.body);
+            format(context->state, " {<}\n}", NULL);
+        }
+        else {
+            format(context->state, " ", NULL);
+            astConstVisit(visitor, node->whileStmt.body);
+        }
     }
     else {
-        format(context->state, " ", NULL);
-        astConstVisit(visitor, node->whileStmt.body);
+        format(context->state, ";", NULL);
     }
 }
 
 static void printCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
-    printKeyword(context->state, "case");
-    format(context->state, " ", NULL);
-    astConstVisit(visitor, node->caseStmt.match);
+    if (node->caseStmt.isDefault) {
+        printKeyword(context->state, "default");
+    }
+    else {
+        printKeyword(context->state, "case");
+        format(context->state, " ", NULL);
+        astConstVisit(visitor, node->caseStmt.match);
+    }
     format(context->state, ":", NULL);
     if (node->caseStmt.body) {
         if (node->caseStmt.body->tag != astBlockStmt) {
-            format(context->state, " {{\n{>}", NULL);
+            format(context->state, " {{{>}\n", NULL);
             astConstVisit(visitor, node->caseStmt.body);
-            format(context->state, " {>}}", NULL);
+            format(context->state, " {<}\n}", NULL);
         }
         else {
             format(context->state, " ", NULL);
@@ -670,7 +689,7 @@ static void printSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
     format(context->state, "(", NULL);
     astConstVisit(visitor, node->switchStmt.cond);
     format(context->state, ") ", NULL);
-    printManyAstsWithinBlock(visitor, "", node->switchStmt.cases, true);
+    printManyAstsWithinBlock(visitor, "\n", node->switchStmt.cases, true);
 }
 
 AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *init)
@@ -700,18 +719,11 @@ void astConstVisit(ConstAstVisitor *visitor, const AstNode *node)
     if (visitor->visitors[node->tag]) {
         visitor->visitors[node->tag](visitor, node);
     }
-    else {
-        switch (node->tag) {
-        default:
-            break;
-        }
-    }
 }
 
 void printAst(FormatState *state, const AstNode *node)
 {
     AstPrintContext context = {.state = state};
-
     // clang-format off
     ConstAstVisitor visitor = makeConstAstVisitor(&context, {
         [astError] = printError,
@@ -751,6 +763,7 @@ void printAst(FormatState *state, const AstNode *node)
         [astStringExpr] = printStringExpr,
         [astTypedExpr] = printTypedExpr,
         [astCallExpr] = printCallExpr,
+        [astMacroCallExpr] = printCallExpr,
         [astClosureExpr] = printClosureExpr,
         [astArrayExpr] = printArrayExpr,
         [astIndexExpr] = printIndexExpr,
@@ -1026,7 +1039,7 @@ Operator tokenToUnaryOperator(TokenTag tag)
 #define f(O, T, ...)                                                           \
     case tok##T:                                                               \
         return op##O;
-        AST_POSTFIX_EXPR_LIST(f);
+        AST_PREFIX_EXPR_LIST(f);
 #undef f
     default:
         csAssert(false, "expecting unary operator");
@@ -1056,5 +1069,18 @@ Operator tokenToAssignmentOperator(TokenTag tag)
 #undef f
     default:
         csAssert(false, "expecting binary operator");
+    }
+}
+
+bool isPrefixOpKeyword(Operator op)
+{
+    switch (op) {
+#define f(O, T, ...)                                                           \
+    case op##O:                                                                \
+        return isKeyword(tok##T);
+        AST_PREFIX_EXPR_LIST(f)
+#undef f
+    default:
+        return false;
     }
 }

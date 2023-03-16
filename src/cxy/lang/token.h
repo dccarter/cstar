@@ -146,3 +146,4 @@ static inline const char *token_tag_to_str(TokenTag tag)
 bool isPrimitiveType(TokenTag tag);
 bool isAssignmentOperator(TokenTag tag);
 PrtId tokenToPrimitiveTypeId(TokenTag tag);
+bool isKeyword(TokenTag tag);

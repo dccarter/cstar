@@ -95,6 +95,7 @@ static void skipChar(Lexer *lexer)
 static bool acceptChar(Lexer *lexer, char c)
 {
     if (!isEofReached(lexer)) {
+        const char x = getCurChar(lexer);
         if (getCurChar(lexer) == c) {
             skipChar(lexer);
             return true;
@@ -444,7 +445,8 @@ Token advanceLexer(Lexer *lexer)
                 skipChar(lexer);
 
             bool hasDot = false;
-            if (acceptChar(lexer, '.')) {
+            if (getCurChar(lexer) == '.' && peekNextChar(lexer) != '.') {
+                skipChar(lexer);
                 hasDot = true;
                 // Parse fractional part
                 while (isdigit(getCurChar(lexer)))
@@ -466,5 +468,17 @@ Token advanceLexer(Lexer *lexer)
 
         skipChar(lexer);
         return makeInvalidToken(lexer, &begin, "invalid token");
+    }
+}
+
+bool isKeyword(TokenTag tag)
+{
+    switch (tag) {
+#define f(T, ...) case tok##T:
+        KEYWORD_LIST(f)
+#undef f
+        return true;
+    default:
+        return false;
     }
 }

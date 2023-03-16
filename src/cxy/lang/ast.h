@@ -39,6 +39,7 @@
     f(LOr,  11, LOr,  "||", NULL)
 
 #define AST_BINARY_EXPR_LIST(f)           \
+    f(Range, 13,DotDot, "..", "range")    \
     AST_ARITH_EXPR_LIST(f)                \
     AST_BIT_EXPR_LIST(f)                  \
     AST_SHIFT_EXPR_LIST(f)                \
@@ -59,7 +60,7 @@
     f(Deref,  Mult, "*")                \
     f(Minus,  Minus, "-")               \
     f(Plus,   Plus, "+")                \
-    f(Not,    Bang, "!")                \
+    f(Not,    LNot, "!")                \
     f(New,    New,  "new")              \
     f(Await,  Await, "await")           \
     f(Delete, Delete,"delete")          \
@@ -318,7 +319,7 @@ typedef struct AstNode {
             bool isTupleLike : 1;
             struct AstNode *base;
             struct AstNode *genericParams;
-            struct AstNode *fields;
+            struct AstNode *members;
         } structDecl;
 
         struct {
@@ -485,3 +486,4 @@ int getBinaryOpPrecedence(Operator op);
 Operator tokenToUnaryOperator(TokenTag tag);
 Operator tokenToBinaryOperator(TokenTag tag);
 Operator tokenToAssignmentOperator(TokenTag tag);
+bool isPrefixOpKeyword(Operator op);

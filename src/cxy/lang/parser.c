@@ -120,7 +120,7 @@ static Token *consume(Parser *parser, TokenTag id, cstring msg, FormatArg *args)
 {
     Token *tok = check(parser, id);
     if (tok == NULL) {
-        const Token *curr = peek(parser, 0);
+        const Token *curr = current(parser);
         parserError(parser, &curr->fileLoc, msg, args);
     }
 
@@ -328,17 +328,9 @@ static AstNode *postfix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 {
     switch (current(P)->tag) {
-    case tokPlusPlus:
-    case tokMinusMinus:
-    case tokPlus:
-    case tokMinus:
-    case tokLNot:
-    case tokBNot:
-    case tokBAnd:
-    case tokLAnd:
-    case tokMult:
-    case tokAwait:
-    case tokDelete:
+#define f(O, T, ...) case tok##T:
+        AST_PREFIX_EXPR_LIST(f)
+#undef f
         break;
     default:
         return postfix(P, parsePrimary);
@@ -722,13 +714,14 @@ static AstNode *fieldExpr(Parser *P)
 {
     Token tok = *consume0(P, tokIdent);
     const char *name = getTokenString(P, &tok, false);
+    consume0(P, tokColon);
+
     AstNode *value = expression(P, true);
 
-    return newAstNode(
-        P,
-        &tok.fileLoc.begin,
-        &(AstNode){.tag = astStructField,
-                   .structField = {.name = name, .value = value}});
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astFieldExpr,
+                                 .fieldExpr = {.name = name, .value = value}});
 }
 
 static AstNode *structExpr(Parser *P,
@@ -788,7 +781,7 @@ static AstNode *primary(Parser *P, bool allowStructs)
 static AstNode *expression(Parser *P, bool allowStructs)
 {
     AstNode *expr = ternary(P, primary);
-    if (match(P, tokColon)) {
+    if (!P->inCase && match(P, tokColon)) {
         AstNode *type = parseType(P);
         return newAstNode(
             P,
@@ -1042,7 +1035,9 @@ static AstNode *caseStatement(Parser *P)
     Token tok = *current(P);
     AstNode *match = NULL, *body = NULL;
     if (match(P, tokCase)) {
+        P->inCase = true;
         match = expression(P, false);
+        P->inCase = false;
     }
     else {
         consume(
@@ -1051,7 +1046,8 @@ static AstNode *caseStatement(Parser *P)
     }
 
     consume0(P, tokColon);
-    body = statement(P);
+    if (!check(P, tokCase))
+        body = statement(P);
 
     return newAstNode(P,
                       &tok.fileLoc.begin,
@@ -1119,6 +1115,7 @@ static AstNode *continueStatement(Parser *P)
     if (tok == NULL) {
         reportUnexpectedToken(P, "continue/break");
     }
+    match(P, tokSemicolon);
     return newAstNode(P,
                       &tok->fileLoc.begin,
                       &(AstNode){.tag = tok->tag == tokContinue
@@ -1149,12 +1146,16 @@ static AstNode *statement(Parser *P)
         return variable(P, false, false, false, false);
     case tokFunc:
         return funcDecl(P, false, false);
+    case tokLBrace:
+        return block(P);
     default: {
         AstNode *expr = expression(P, false);
-        return newAstNode(
+        expr = newAstNode(
             P,
             &expr->loc.begin,
             &(AstNode){.tag = astExprStmt, .exprStmt = {.expr = expr}});
+        match(P, tokSemicolon);
+        return expr;
     }
     }
 }

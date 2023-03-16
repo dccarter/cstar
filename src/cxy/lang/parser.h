@@ -24,6 +24,7 @@ typedef struct {
     Lexer *lexer;
     Log *L;
     MemPool *memPool;
+    bool inCase : 1;
     Token ahead[TOKEN_BUFFER];
 } Parser;
 

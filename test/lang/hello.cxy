@@ -1,5 +1,11 @@
 
-func main(args: string[]) : i32 {
-    println("Hello World\n");
-    return stdc.EXIT_SUCCESS;
+macro User(name) : type {
+    return `
+    struct #{name} {
+        constexpr name: string = #{'"'name'"'}
+    }
+    `
 }
+
+// prefer this to generics
+type Carter = User!(Carter)
