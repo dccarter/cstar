@@ -34,8 +34,9 @@ static AstNode *primary(Parser *P, bool allowStructs);
 static AstNode *macroExpression(Parser *P, AstNode *callee);
 static AstNode *callExpression(Parser *P, AstNode *callee);
 static AstNode *parsePath(Parser *P);
-static AstNode *variable(Parser *P);
-static AstNode *funcDecl(Parser *P);
+static AstNode *variable(
+    Parser *P, bool isPublic, bool isExport, bool isExpression, bool woInit);
+static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative);
 
 static void listAddAstNode(AstNodeList *list, AstNode *node)
 {
@@ -46,10 +47,10 @@ static void listAddAstNode(AstNodeList *list, AstNode *node)
     list->last = node;
 }
 
-static inline const char *getTokenString(Parser *P, const Token *tok)
+static inline const char *getTokenString(Parser *P, const Token *tok, bool trim)
 {
-    size_t start = tok->fileLoc.begin.byteOffset;
-    size_t size = tok->fileLoc.end.byteOffset - start;
+    size_t start = tok->fileLoc.begin.byteOffset + trim;
+    size_t size = tok->fileLoc.end.byteOffset - trim - start;
     char *name = allocFromMemPool(P->memPool, size + 1);
     memcpy(name, &P->lexer->fileData[start], size);
     name[size] = 0;
@@ -99,7 +100,7 @@ static Token *parserMatch(Parser *parser, TokenTag tags[], u32 count)
 ({ TokenTag LineVAR(tags)[] = { __VA_ARGS__, tokEoF }; parserCheck((P), LineVAR(tags), sizeof__(LineVAR(tags))-1); })
 
 #define match(P, ...) \
-({ TokenTag LineVAR(mtags)[] = { __VA_ARGS__, tokEoF }; parserCheck((P), LineVAR(mtags), sizeof__(LineVAR(mtags))-1); })
+({ TokenTag LineVAR(mtags)[] = { __VA_ARGS__, tokEoF }; parserMatch((P), LineVAR(mtags), sizeof__(LineVAR(mtags))-1); })
 
 // clang-format on
 
@@ -123,8 +124,7 @@ static Token *consume(Parser *parser, TokenTag id, cstring msg, FormatArg *args)
         parserError(parser, &curr->fileLoc, msg, args);
     }
 
-    advance(parser);
-    return tok;
+    return advance(parser);
 }
 
 static Token *consume0(Parser *parser, TokenTag id)
@@ -219,7 +219,7 @@ static inline AstNode *parseChar(Parser *P)
     return newAstNode(
         P,
         &tok->fileLoc.begin,
-        &(AstNode){.tag = astCharLit, .charLiteral.value = 0 /*TODO*/});
+        &(AstNode){.tag = astCharLit, .charLiteral.value = tok->cVal});
 }
 
 static inline AstNode *parseInteger(Parser *P)
@@ -247,7 +247,17 @@ static inline AstNode *parseString(Parser *P)
         P,
         &tok.fileLoc.begin,
         &(AstNode){.tag = astStringLit,
-                   .stringLiteral.value = getTokenString(P, &tok)});
+                   .stringLiteral.value = getTokenString(P, &tok, true)});
+}
+
+static inline AstNode *parseIdentifier(Parser *P)
+{
+    const Token tok = *consume0(P, tokIdent);
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astIdentifier,
+                   .ident.value = getTokenString(P, &tok, false)});
 }
 
 static inline AstNode *primitive(Parser *P)
@@ -283,7 +293,7 @@ static AstNode *member(Parser *P, const FilePos *begin, AstNode *operand)
 static AstNode *postfix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 {
     AstNode *operand = parsePrimary(P, true);
-    while (!isEoF(P)) {
+    while (true) {
         switch (current(P)->tag) {
         case tokPlusPlus:
         case tokMinusMinus:
@@ -353,6 +363,9 @@ static AstNode *binary(Parser *P,
     while (!isEoF(P)) {
         const Token tok = *current(P);
         Operator op = tokenToBinaryOperator(tok.tag);
+        if (op == opInvalid)
+            break;
+
         int nextPrecedence = getBinaryOpPrecedence(op);
         if (nextPrecedence > prec)
             break;
@@ -405,7 +418,7 @@ static AstNode *ternary(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
             &cond->loc.begin,
             &(AstNode){
                 .tag = astTernaryExpr,
-                .ternaryExpr = {.cond = cond, .ifTrue = lhs, .ifFalse = rhs}});
+                .ternaryExpr = {.cond = cond, .body = lhs, .otherwise = rhs}});
     }
 
     return cond;
@@ -437,7 +450,7 @@ static AstNode *functionParam(Parser *P)
 {
     Token tok = *current(P);
     bool isVariadic = match(P, tokElipsis) != NULL;
-    const char *name = getTokenString(P, consume0(P, tokIdent));
+    const char *name = getTokenString(P, consume0(P, tokIdent), false);
     consume0(P, tokColon);
     AstNode *type = parseType(P), *def = NULL;
     if (match(P, tokEqual)) {
@@ -456,10 +469,10 @@ static AstNode *functionParam(Parser *P)
 static AstNode *closure(Parser *P)
 {
     AstNode *ret = NULL, *body = NULL;
-
+    bool isAsync = match(P, tokAsync) != NULL;
     Token tok = *consume0(P, tokLParen);
     AstNode *params = parseMany(P, tokRParen, tokComma, functionParam);
-    consume0(P, tokLParen);
+    consume0(P, tokRParen);
 
     if (match(P, tokColon)) {
         ret = parseType(P);
@@ -467,12 +480,13 @@ static AstNode *closure(Parser *P)
     consume0(P, tokFatArrow);
 
     body = expression(P, true);
-    return newAstNode(
-        P,
-        &tok.fileLoc.begin,
-        &(AstNode){
-            .tag = astClosureExpr,
-            .closureExpr = {.params = params, .ret = ret, .body = body}});
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astClosureExpr,
+                                 .closureExpr = {.isAsync = isAsync,
+                                                 .params = params,
+                                                 .ret = ret,
+                                                 .body = body}});
 }
 
 static AstNode *tuple(
@@ -517,28 +531,8 @@ static AstNode *parseGenericParam(Parser *P)
         P,
         &tok.fileLoc.begin,
         &(AstNode){.tag = astGenericParam,
-                   .genericParam = {.name = getTokenString(P, &tok),
+                   .genericParam = {.name = getTokenString(P, &tok, false),
                                     .constraints = constraints.first}});
-}
-
-static AstNode *parseFuncParam(Parser *P)
-{
-    Token tok = *current(P);
-    bool isVariadic = match(P, tokElipsis) != NULL;
-    const char *name = getTokenString(P, consume0(P, tokIdent));
-    consume0(P, tokColon);
-    AstNode *type = parseType(P), *value = NULL;
-    if (match(P, tokAssign)) {
-        value = expression(P, true);
-    }
-
-    return newAstNode(P,
-                      &tok.fileLoc.begin,
-                      &(AstNode){.tag = astFuncParam,
-                                 .funcParam = {.isVariadic = isVariadic,
-                                               .name = name,
-                                               .def = value,
-                                               .type = type}});
 }
 
 // async func(a: T, ...b:T[]) -> T;
@@ -554,7 +548,7 @@ static AstNode *parseFuncType(Parser *P)
     }
 
     consume0(P, tokLParen);
-    params = parseMany(P, tokRParen, tokComma, parseFuncParam);
+    params = parseMany(P, tokRParen, tokComma, functionParam);
     consume0(P, tokRParen);
 
     consume0(P, tokThinArrow);
@@ -661,7 +655,7 @@ static AstNode *block(Parser *P)
             break;
         })
     }
-    consume0(P, tokRBracket);
+    consume0(P, tokRBrace);
 
     return newAstNode(
         P,
@@ -682,14 +676,21 @@ static AstNode *array(Parser *P)
         &(AstNode){.tag = astArrayExpr, .arrayExpr = {.elements = elems}});
 }
 
+static AstNode *parseTypeOrIndex(Parser *P)
+{
+    if (check(P, tokIntLiteral))
+        return parseInteger(P);
+    return parseType(P);
+}
+
 static AstNode *pathElement(Parser *P)
 {
     AstNode *args = NULL;
     Token tok = *consume0(P, tokIdent);
-    const char *name = getTokenString(P, &tok);
+    const char *name = getTokenString(P, &tok, false);
 
     if (match(P, tokLBracket)) {
-        args = parseMany(P, tokRBracket, tokComma, parseType);
+        args = parseMany(P, tokRBracket, tokComma, parseTypeOrIndex);
         consume0(P, tokRBracket);
     }
 
@@ -709,7 +710,7 @@ static AstNode *parsePath(Parser *P)
         if (!check(P, tokDot) || peek(P, 1)->tag != tokIdent)
             break;
         consume0(P, tokDot);
-    } while (isEoF(P));
+    } while (!isEoF(P));
 
     return newAstNode(
         P,
@@ -720,7 +721,7 @@ static AstNode *parsePath(Parser *P)
 static AstNode *fieldExpr(Parser *P)
 {
     Token tok = *consume0(P, tokIdent);
-    const char *name = getTokenString(P, &tok);
+    const char *name = getTokenString(P, &tok, false);
     AstNode *value = expression(P, true);
 
     return newAstNode(
@@ -802,13 +803,13 @@ static AstNode *expression(Parser *P, bool allowStructs)
 static AstNode *attribute(Parser *P)
 {
     Token tok = *consume0(P, tokIdent);
-    const char *name = getTokenString(P, &tok);
+    const char *name = getTokenString(P, &tok, false);
     AstNodeList args = {NULL};
     if (match(P, tokLParen) && !isEoF(P)) {
         while (!check(P, tokRParen, tokEoF)) {
             AstNode *value = NULL;
             Token start = *consume0(P, tokIdent);
-            const char *pname = getTokenString(P, &start);
+            const char *pname = getTokenString(P, &start, false);
             consume0(P, tokColon);
             switch (current(P)->tag) {
             case tokTrue:
@@ -867,44 +868,262 @@ static AstNode *attributes(Parser *P)
     return attrs;
 }
 
+static AstNode *variable(
+    Parser *P, bool isPublic, bool isExport, bool isExpression, bool woInit)
+{
+    Token tok = *current(P);
+    if (!match(P, tokConst, tokVar))
+        reportUnexpectedToken(P, "var/const to start variable declaration");
+
+    AstNode *names = NULL, *type = NULL, *init = NULL;
+    if (match(P, tokLParen)) {
+        names = parseAtLeastOne(
+            P, "variable names", tokRParen, tokComma, parseIdentifier);
+        consume0(P, tokRParen);
+    }
+    else {
+        names = parseIdentifier(P);
+    }
+
+    if (!isExpression && (match(P, tokColon) != NULL))
+        type = parseType(P);
+
+    if (!woInit) {
+        if (tok.tag == tokConst)
+            consume0(P, tokAssign);
+        if (isExpression || tok.tag == tokConst || match(P, tokAssign))
+            init = expression(P, true);
+    }
+
+    if (!(isExpression || woInit)) {
+        if (init && init->tag == astClosureExpr)
+            match(P, tokSemicolon);
+        else
+            consume(P,
+                    tokSemicolon,
+                    "';', semicolon required after non-expression variable "
+                    "declaration",
+                    NULL);
+    }
+
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = tok.tag == tokConst ? astConstDecl : astVarDecl,
+                   .varDecl = {.isPublic = isPublic,
+                               .isExport = isExport,
+                               .names = names,
+                               .type = type,
+                               .init = init}});
+}
+
+static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative)
+{
+    AstNode *gParams = NULL, *params = NULL, *ret = NULL, *body = NULL;
+    Token tok = *current(P);
+    bool isAsync = match(P, tokAsync) != NULL;
+    consume0(P, tokFunc);
+    cstring name = getTokenString(P, consume0(P, tokIdent), false);
+
+    if (match(P, tokLBracket)) {
+        if (isNative)
+            reportUnexpectedToken(
+                P, "a '(', native functions cannot have generic parameters");
+
+        gParams = parseAtLeastOne(
+            P, "generic params", tokRBracket, tokComma, parseGenericParam);
+        consume0(P, tokRBracket);
+    }
+
+    consume0(P, tokLParen);
+    params = parseMany(P, tokRParen, tokComma, functionParam);
+    consume0(P, tokRParen);
+
+    if (match(P, tokColon))
+        ret = parseType(P);
+    else if (isNative)
+        reportUnexpectedToken(P, "colon before native function return type");
+
+    if (!isNative) {
+        if (match(P, tokFatArrow)) {
+            body = expression(P, true);
+            consume0(P, tokSemicolon);
+        }
+        else {
+            body = block(P);
+        }
+    }
+    else {
+        consume(P,
+                tokSemicolon,
+                "';', native function declaration must be terminated with a "
+                "semicolon",
+                NULL);
+    }
+
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astFuncDecl,
+                                 .funcDecl = {.isPublic = isPublic,
+                                              .isNative = isNative,
+                                              .name = name,
+                                              .genericParams = gParams,
+                                              .params = params,
+                                              .ret = ret,
+                                              .body = body}});
+}
+
 static AstNode *ifStatement(Parser *P)
 {
+    AstNode *ifElse = NULL, *cond = NULL, *body = NULL;
+    Token tok = *consume0(P, tokIf);
+    consume0(P, tokLParen);
+    if (check(P, tokConst, tokVar)) {
+        cond = variable(P, false, false, true, false);
+    }
+    else {
+        cond = expression(P, true);
+    }
+    consume0(P, tokRParen);
 
+    body = statement(P);
+    if (match(P, tokElse)) {
+        ifElse = statement(P);
+    }
+
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){
+            .tag = astIfStmt,
+            .ifStmt = {.cond = cond, .body = body, .otherwise = ifElse}});
 }
 
 static AstNode *forStatement(Parser *P)
 {
+    AstNode *body = NULL;
+    Token tok = *consume0(P, tokFor);
 
+    consume0(P, tokLParen);
+    AstNode *var = variable(P, false, false, true, true);
+    consume0(P, tokColon);
+    AstNode *range = expression(P, true);
+    consume0(P, tokRParen);
+    if (!match(P, tokSemicolon))
+        body = statement(P);
+
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astForStmt,
+                   .forStmt = {.var = var, .range = range, .body = body}});
 }
 
 static AstNode *whileStatement(Parser *P)
 {
+    AstNode *body = NULL;
+    Token tok = *consume0(P, tokWhile);
 
+    consume0(P, tokLParen);
+    AstNode *cond = expression(P, true);
+    consume0(P, tokRParen);
+    if (!match(P, tokSemicolon))
+        body = statement(P);
+
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astWhileStmt,
+                                 .whileStmt = {.cond = cond, .body = body}});
 }
 
 static AstNode *caseStatement(Parser *P)
 {
+    bool isDefault = false;
+    Token tok = *current(P);
+    AstNode *match = NULL, *body = NULL;
+    if (match(P, tokCase)) {
+        match = expression(P, false);
+    }
+    else {
+        consume(
+            P, tokDefault, "expecting a 'default' or a 'case' statement", NULL);
+        isDefault = true;
+    }
 
+    consume0(P, tokColon);
+    body = statement(P);
+
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astCaseStmt,
+                                 .caseStmt = {.match = match,
+                                              .body = body,
+                                              .isDefault = isDefault}});
 }
 
 static AstNode *switchStatement(Parser *P)
 {
+    AstNodeList cases = {NULL};
+    Token tok = *consume0(P, tokSwitch);
 
+    consume0(P, tokLParen);
+    AstNode *cond = expression(P, false);
+    consume0(P, tokRParen);
+
+    consume0(P, tokLBrace);
+    while (!check(P, tokRBrace, tokEoF)) {
+        listAddAstNode(&cases, caseStatement(P));
+    }
+    consume0(P, tokRBrace);
+
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astSwitchStmt,
+                   .switchStmt = {.cond = cond, .cases = cases.first}});
 }
 
 static AstNode *deferStatement(Parser *P)
 {
+    AstNode *expr = NULL;
+    Token tok = *consume0(P, tokDefer);
+    bool isBlock = check(P, tokLBrace) != NULL;
+    expr = expression(P, true);
+    if (!isBlock)
+        consume0(P, tokSemicolon);
 
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astDeferStmt, .deferStmt = {.expr = expr}});
 }
 
 static AstNode *returnStatement(Parser *P)
 {
+    AstNode *expr = NULL;
+    Token tok = *consume0(P, tokReturn);
+    if (!check(P, tokSemicolon)) {
+        expr = expression(P, true);
+    }
+    consume0(P, tokSemicolon);
 
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astReturnStmt, .returnStmt = {.expr = expr}});
 }
 
 static AstNode *continueStatement(Parser *P)
 {
-
+    Token *tok = match(P, tokBreak, tokContinue);
+    if (tok == NULL) {
+        reportUnexpectedToken(P, "continue/break");
+    }
+    return newAstNode(P,
+                      &tok->fileLoc.begin,
+                      &(AstNode){.tag = tok->tag == tokContinue
+                                            ? astContinueStmt
+                                            : astBreakStmt});
 }
 
 static AstNode *statement(Parser *P)
@@ -927,9 +1146,9 @@ static AstNode *statement(Parser *P)
         return continueStatement(P);
     case tokVar:
     case tokConst:
-        return variable(P);
+        return variable(P, false, false, false, false);
     case tokFunc:
-        return funcDecl(P);
+        return funcDecl(P, false, false);
     default: {
         AstNode *expr = expression(P, false);
         return newAstNode(
@@ -1022,4 +1241,4 @@ static AstNode *parseType(Parser *P)
     return node;
 }
 
-AstNode *parseProgram(Parser *) {}
+AstNode *parseProgram(Parser *P) { return statement(P); }

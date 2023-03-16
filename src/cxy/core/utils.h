@@ -235,6 +235,6 @@ static inline unsigned ilog2(uintmax_t i)
     return p;
 }
 
-size_t convertEscapeSeq(const char *str, size_t n, char *res);
+size_t convertEscapeSeq(const char *str, size_t n, u32 *res);
 bool isColorSupported(FILE *);
 char *readFile(const char *fileName, size_t *file_size);

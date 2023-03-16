@@ -59,9 +59,9 @@ static void writeStr(FormatState *state, const char *s)
 }
 
 static const char *formatArg(FormatState *state,
-                              const char *ptr,
-                              size_t *index,
-                              const FormatArg *args)
+                             const char *ptr,
+                             size_t *index,
+                             const FormatArg *args)
 {
     const FormatArg *arg = &args[(*index)++];
     char *bufPtr = reserveBuf(state, MAX_FORMAT_CHARS);
@@ -136,6 +136,9 @@ static const char *formatArg(FormatState *state,
             assert(false && "invalid floating-point format string");
         }
         break;
+    case 'c':
+        printUtf8(state, arg->c);
+        break;
     case 's':
         if (*ptr == 'l') {
             ptr++;
@@ -151,7 +154,7 @@ static const char *formatArg(FormatState *state,
         n = snprintf(bufPtr, MAX_FORMAT_CHARS, "%p", arg->p);
         break;
     case 't':
-        //printType(state, arg->t);
+        // printType(state, arg->t);
         break;
     default:
         assert(false && "unknown formatting command");
@@ -301,6 +304,36 @@ void printWithStyle(FormatState *state, const char *str, FormatStyle style)
 void printKeyword(FormatState *state, const char *keyword)
 {
     printWithStyle(state, keyword, keywordStyle);
+}
+
+void printUtf8(FormatState *state, uint32_t chr)
+{
+    if (chr < 0x80) {
+        writeChar(state, (char)chr);
+    }
+    else if (chr < 0x800) {
+        char c[] = {
+            (char)(0xC0 | (chr >> 6)), (char)(0x80 | (chr & 0x3F)), '\0'};
+        writeStr(state, c);
+    }
+    else if (chr < 0x10000) {
+        char c[] = {(char)(0xE0 | (chr >> 12)),
+                    (char)(0x80 | ((chr >> 6) & 0x3F)),
+                    (char)(0x80 | (chr & 0x3F)),
+                    '\0'};
+        writeStr(state, c);
+    }
+    else if (chr < 0x200000) {
+        char c[] = {(char)(0xF0 | (chr >> 18)),
+                    (char)(0x80 | ((chr >> 12) & 0x3F)),
+                    (char)(0x80 | ((chr >> 6) & 0x3F)),
+                    (char)(0x80 | (chr & 0x3F)),
+                    '\0'};
+        writeStr(state, c);
+    }
+    else {
+        unreachable("!!!invalid UCS character: \\U%08x", chr);
+    }
 }
 
 void writeFormatState(FormatState *state, FILE *file)

@@ -11,7 +11,7 @@ static inline void printManyAsts(ConstAstVisitor *visitor,
                                  const char *sep,
                                  const AstNode *nodes)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     for (const AstNode *node = nodes; node; node = node->next) {
         astConstVisit(visitor, node);
         if (node->next)
@@ -25,7 +25,7 @@ static inline void printManyAstsWithDelim(ConstAstVisitor *visitor,
                                           const char *close,
                                           const AstNode *nodes)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state, open, NULL);
     printManyAsts(visitor, sep, nodes);
     format(context->state, close, NULL);
@@ -36,7 +36,7 @@ static inline void printAstWithDelim(ConstAstVisitor *visitor,
                                      const char *close,
                                      const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state, open, NULL);
     astConstVisit(visitor, node);
     format(context->state, close, NULL);
@@ -47,7 +47,7 @@ static inline void printManyAstsWithinBlock(ConstAstVisitor *visitor,
                                             const AstNode *nodes,
                                             bool newLine)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     if (!nodes)
         format(context->state, "{{}", NULL);
     else if (!newLine && !nodes->next)
@@ -62,7 +62,7 @@ static inline void printManyAstsWithinParen(ConstAstVisitor *visitor,
     if (isTuple(node))
         astConstVisit(visitor, node);
     else
-        printAstWithDelim(visitor, "(", ")", node);
+        printManyAstsWithDelim(visitor, "(", ", ", ")", node);
 }
 
 static inline void printOperand(ConstAstVisitor *visitor,
@@ -75,6 +75,11 @@ static inline void printOperand(ConstAstVisitor *visitor,
     }
     else
         astConstVisit(visitor, operand);
+}
+
+static void printGroupExpr(ConstAstVisitor *visitor, const AstNode *expr)
+{
+    printAstWithDelim(visitor, "(", ")", expr->groupExpr.expr);
 }
 
 static void printUnaryExpr(ConstAstVisitor *visitor, const AstNode *expr)
@@ -105,7 +110,7 @@ static void printBinaryExpr(ConstAstVisitor *visitor, const AstNode *expr)
 {
     csAssert0(expr && expr->tag == astBinaryExpr);
 
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     int prec = getBinaryOpPrecedence(expr->binaryExpr.op);
 
     printOperand(visitor, expr->binaryExpr.lhs, prec);
@@ -119,7 +124,7 @@ static void printAssignExpr(ConstAstVisitor *visitor, const AstNode *expr)
 {
     csAssert0(expr && expr->tag == astAssignExpr);
 
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     astConstVisit(visitor, expr->assignExpr.lhs);
     format(context->state,
            " {s} ",
@@ -129,12 +134,12 @@ static void printAssignExpr(ConstAstVisitor *visitor, const AstNode *expr)
 
 static void printTernaryExpr(ConstAstVisitor *visitor, const AstNode *expr)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     astConstVisit(visitor, expr->ternaryExpr.cond);
     format(context->state, "? ", NULL);
-    astConstVisit(visitor, expr->ternaryExpr.ifTrue);
+    astConstVisit(visitor, expr->ternaryExpr.body);
     format(context->state, " : ", NULL);
-    astConstVisit(visitor, expr->ternaryExpr.ifFalse);
+    astConstVisit(visitor, expr->ternaryExpr.otherwise);
 }
 
 static void printStmtExpr(ConstAstVisitor *visitor, const AstNode *expr)
@@ -144,7 +149,7 @@ static void printStmtExpr(ConstAstVisitor *visitor, const AstNode *expr)
 
 static void printStringExpr(ConstAstVisitor *visitor, const AstNode *expr)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state,
            "{$}f\"{$}",
            (FormatArg[]){{.style = literalStyle}, {.style = resetStyle}});
@@ -166,14 +171,13 @@ static void printStringExpr(ConstAstVisitor *visitor, const AstNode *expr)
     }
 
     format(context->state,
-           "{$}{s}{$}",
-           (FormatArg[]){
-               {.style = literalStyle}, {.s = "\""}, {.style = resetStyle}});
+           "{$}\"{$}",
+           (FormatArg[]){{.style = literalStyle}, {.style = resetStyle}});
 }
 
 static void printTypedExpr(ConstAstVisitor *visitor, const AstNode *expr)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     astConstVisit(visitor, expr->typedExpr.expr);
     format(context->state, " : ", NULL);
     astConstVisit(visitor, expr->typedExpr.type);
@@ -191,13 +195,10 @@ static void printCallExpr(ConstAstVisitor *visitor, const AstNode *expr)
 
 static void printClosureExpr(ConstAstVisitor *visitor, const AstNode *expr)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
-    if (expr->closureExpr.isAsync) {
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
+    if (expr->closureExpr.isAsync)
         printKeyword(context->state, "async");
-        format(context->state, " ", NULL);
-    }
 
-    printKeyword(context->state, "func");
     printManyAstsWithinParen(visitor, expr->closureExpr.params);
 
     if (expr->closureExpr.ret) {
@@ -206,9 +207,7 @@ static void printClosureExpr(ConstAstVisitor *visitor, const AstNode *expr)
     }
 
     if (expr->closureExpr.body) {
-        if (expr->closureExpr.body->tag == astExprStmt)
-            format(context->state, " =>", NULL);
-        format(context->state, " ", NULL);
+        format(context->state, " => ", NULL);
         astConstVisit(visitor, expr->closureExpr.body);
     }
 }
@@ -227,7 +226,7 @@ static void printIndexExpr(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printFieldExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state, "{s}: ", (FormatArg[]){{.s = node->fieldExpr.name}});
     astConstVisit(visitor, node->fieldExpr.value);
 }
@@ -240,29 +239,35 @@ static void printStructExpr(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     astConstVisit(visitor, node->memberExpr.target);
     format(context->state, ".", NULL);
     astConstVisit(visitor, node->memberExpr.member);
 }
 
+static void printIdentifier(ConstAstVisitor *visitor, const AstNode *node)
+{
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
+    format(context->state, "{s}", (FormatArg[]){{.s = node->ident.value}});
+}
+
 static void printNullLiteral(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     printKeyword(context->state, "null");
 }
 
 static void printBoolLiteral(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     printKeyword(context->state, node->boolLiteral.value ? "true" : "false");
 }
 
 static void printCharLiteral(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state,
-           "{$}{c}{$}",
+           "{$}'{c}'{$}",
            (FormatArg[]){{.style = literalStyle},
                          {.u32 = node->charLiteral.value},
                          {.style = resetStyle}});
@@ -270,18 +275,18 @@ static void printCharLiteral(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printIntLiteral(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state,
            "{$}{s}{u}{$}",
            (FormatArg[]){{.style = literalStyle},
                          {.s = node->intLiteral.hasMinus ? "-" : ""},
-                         {.u32 = node->intLiteral.value},
+                         {.u = node->intLiteral.value},
                          {.style = resetStyle}});
 }
 
 static void printFloatLiteral(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state,
            "{$}{f64}{$}",
            (FormatArg[]){{.style = literalStyle},
@@ -291,9 +296,9 @@ static void printFloatLiteral(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printStringLiteral(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state,
-           "{$}{s}{$}",
+           "{$}\"{s}\"{$}",
            (FormatArg[]){{.style = literalStyle},
                          {.s = node->stringLiteral.value},
                          {.style = resetStyle}});
@@ -301,7 +306,7 @@ static void printStringLiteral(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printPrimitiveType(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     printKeyword(context->state, getPrimitiveTypeName(node->primitiveType.id));
 }
 
@@ -312,16 +317,17 @@ static void printTupleType(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printArrayType(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     astConstVisit(visitor, node->arrayType.elementType);
     format(context->state, "[", NULL);
-    astConstVisit(visitor, node->arrayType.size);
+    if (node->arrayType.size != NULL)
+        astConstVisit(visitor, node->arrayType.size);
     format(context->state, "]", NULL);
 }
 
 static void printPointerType(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state, "&", NULL);
     if (node->pointerType.isConst) {
         printKeyword(context->state, "const");
@@ -332,7 +338,11 @@ static void printPointerType(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printFuncType(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
+    if (node->funcType.isAsync) {
+        printKeyword(context->state, "async");
+        format(context->state, " ", NULL);
+    }
     printKeyword(context->state, "func");
     printManyAstsWithinParen(visitor, node->funcType.params);
     format(context->state, " -> ", NULL);
@@ -341,7 +351,7 @@ static void printFuncType(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printFuncParam(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     if (node->funcParam.isVariadic)
         format(context->state, "...", NULL);
 
@@ -352,7 +362,7 @@ static void printFuncParam(ConstAstVisitor *visitor, const AstNode *node)
 static void printError(ConstAstVisitor *visitor,
                        attr(unused) const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state,
            "{$}<error>{$}",
            (FormatArg[]){{.style = errorStyle}, {.style = resetStyle}});
@@ -360,15 +370,27 @@ static void printError(ConstAstVisitor *visitor,
 
 static void printAttribute(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state, "{s}", (FormatArg[]){{.s = node->attr.name}});
     if (node->attr.args)
         printManyAstsWithinParen(visitor, node->attr.args);
 }
 
+static void printGenericParam(ConstAstVisitor *visitor, const AstNode *node)
+{
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
+    format(
+        context->state, "{s}", (FormatArg[]){{.s = node->genericParam.name}});
+    if (node->genericParam.constraints) {
+        format(context->state, ": ", NULL);
+        printManyAstsWithDelim(
+            visitor, "", "|", "", node->genericParam.constraints);
+    }
+}
+
 static void printPathElement(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state, "{s}", (FormatArg[]){{.s = node->pathElement.name}});
     if (node->pathElement.args)
         printManyAstsWithDelim(visitor, "[", ",", "]", node->pathElement.args);
@@ -381,7 +403,7 @@ static void printPath(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     if (node->funcDecl.isAsync) {
         printKeyword(context->state, "async");
         format(context->state, " ", NULL);
@@ -395,10 +417,11 @@ static void printFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
     }
     printManyAstsWithinParen(visitor, node->funcDecl.params);
 
-    if (node->funcDecl.returnType) {
+    if (node->funcDecl.ret) {
         format(context->state, " : ", NULL);
-        astConstVisit(visitor, node->funcDecl.returnType);
+        astConstVisit(visitor, node->funcDecl.ret);
     }
+    format(context->state, " ", NULL);
 
     if (node->funcDecl.body) {
         if (node->funcDecl.body->tag == astExprStmt)
@@ -409,14 +432,18 @@ static void printFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     if (node->tag == astVarDecl)
         printKeyword(context->state, "var");
     else
         printKeyword(context->state, "const");
     format(context->state, " ", NULL);
 
-    astConstVisit(visitor, node->varDecl.name);
+    if (node->varDecl.names->next)
+        printManyAstsWithinParen(visitor, node->varDecl.names);
+    else
+        astConstVisit(visitor, node->varDecl.names);
+
     if (node->varDecl.type) {
         format(context->state, " : ", NULL);
         astConstVisit(visitor, node->varDecl.type);
@@ -430,7 +457,7 @@ static void printVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
 
     printKeyword(context->state, "type");
     format(context->state, " {s}", (FormatArg[]){{.s = node->typeDecl.name}});
@@ -447,7 +474,7 @@ static void printTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
 
     printKeyword(context->state, "type");
     format(context->state, " {s}", (FormatArg[]){{.s = node->unionDecl.name}});
@@ -464,7 +491,7 @@ static void printUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printEnumDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
 
     printKeyword(context->state, "enum");
     format(context->state, " {s}", (FormatArg[]){{.s = node->enumDecl.name}});
@@ -481,7 +508,7 @@ static void printEnumDecl(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printEnumOption(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state, " {s}", (FormatArg[]){{.s = node->enumOption.name}});
     if (node->enumOption.value) {
         format(context->state, " = ", NULL);
@@ -491,7 +518,7 @@ static void printEnumOption(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printStructField(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(
         context->state, " {s}: ", (FormatArg[]){{.s = node->structField.name}});
     astConstVisit(visitor, node->structField.type);
@@ -503,7 +530,7 @@ static void printStructField(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printStructDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
 
     printKeyword(context->state, "struct");
     format(context->state, " {s}", (FormatArg[]){{.s = node->structDecl.name}});
@@ -534,14 +561,14 @@ static void printExprStmt(ConstAstVisitor *visitor, const AstNode *node)
 static void printBreakContinueStmt(ConstAstVisitor *visitor,
                                    const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     printKeyword(context->state,
                  node->tag == astBreakStmt ? "break" : "continue");
 }
 
 static void printReturnStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     printKeyword(context->state, "return");
     if (node->returnStmt.expr) {
         format(context->state, " ", NULL);
@@ -551,36 +578,36 @@ static void printReturnStmt(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printBlockStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
-    printManyAstsWithinBlock(visitor, ";", node->blockStmt.stmts, true);
+    printManyAstsWithinBlock(visitor, ";\n", node->blockStmt.stmts, true);
 }
 
 static void printIfStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     printKeyword(context->state, "if");
     format(context->state, " (", NULL);
     astConstVisit(visitor, node->ifStmt.cond);
     format(context->state, ")", NULL);
-    if (node->ifStmt.ifTrue->tag != astBlockStmt) {
+    if (node->ifStmt.body->tag != astBlockStmt) {
         format(context->state, " {{\n{>}", NULL);
-        astConstVisit(visitor, node->ifStmt.ifTrue);
+        astConstVisit(visitor, node->ifStmt.body);
         format(context->state, " {>}}", NULL);
     }
     else {
         format(context->state, " ", NULL);
-        astConstVisit(visitor, node->ifStmt.ifTrue);
+        astConstVisit(visitor, node->ifStmt.body);
     }
 
-    if (node->ifStmt.ifFalse) {
+    if (node->ifStmt.otherwise) {
         printKeyword(context->state, "else");
         format(context->state, " ", NULL);
-        astConstVisit(visitor, node->ifStmt.ifFalse);
+        astConstVisit(visitor, node->ifStmt.otherwise);
     }
 }
 
 static void printForStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     printKeyword(context->state, "for");
     format(context->state, " (", NULL);
     astConstVisit(visitor, node->forStmt.var);
@@ -600,7 +627,7 @@ static void printForStmt(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     printKeyword(context->state, "while");
     format(context->state, " (", NULL);
     astConstVisit(visitor, node->whileStmt.cond);
@@ -618,7 +645,7 @@ static void printWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     printKeyword(context->state, "case");
     format(context->state, " ", NULL);
     astConstVisit(visitor, node->caseStmt.match);
@@ -638,7 +665,7 @@ static void printCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
-    const AstPrintContext *context = getConstAstVisitorContext(visitor);
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
     printKeyword(context->state, "switch");
     format(context->state, "(", NULL);
     astConstVisit(visitor, node->switchStmt.cond);
@@ -692,6 +719,8 @@ void printAst(FormatState *state, const AstNode *node)
         [astAttr] = printAttribute,
         [astPathElem] = printPathElement,
         [astPath] = printPath,
+        [astGenericParam] = printGenericParam,
+        [astIdentifier] = printIdentifier,
         [astTupleType] = printTupleType,
         [astArrayType] = printArrayType,
         [astPointerType] = printPointerType,
@@ -713,6 +742,7 @@ void printAst(FormatState *state, const AstNode *node)
         [astEnumDecl] = printEnumDecl,
         [astStructField] = printStructField,
         [astStructDecl] = printStructDecl,
+        [astGroupExpr] = printGroupExpr,
         [astUnaryExpr] = printUnaryExpr,
         [astBinaryExpr] = printBinaryExpr,
         [astAssignExpr] = printAssignExpr,
@@ -784,7 +814,7 @@ bool isOpaqueDecl(const AstNode *node)
 {
     switch (node->tag) {
     case astFuncDecl:
-        return node->funcDecl.isOpaque;
+        return node->funcDecl.isNative;
     case astTypeDecl:
         return node->typeDecl.isOpaque;
     case astEnumDecl:
@@ -956,6 +986,7 @@ int getMaxBinaryOpPrecedence(void)
         for (int i = 0; i < (sizeof(precedenceList) / sizeof(int)); i++) {
             maxPrecedence = MAX(maxPrecedence, precedenceList[i]);
         }
+        maxPrecedence += 1;
     }
 
     return maxPrecedence;
@@ -972,7 +1003,7 @@ int getBinaryOpPrecedence(Operator op)
         // NOLINTEND
 #undef f
     default:
-        csAssert0(false);
+        return getMaxBinaryOpPrecedence();
     }
 }
 
@@ -1011,7 +1042,7 @@ Operator tokenToBinaryOperator(TokenTag tag)
         AST_BINARY_EXPR_LIST(f);
 #undef f
     default:
-        csAssert(false, "expecting binary operator");
+        return opInvalid;
     }
 }
 

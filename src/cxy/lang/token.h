@@ -87,6 +87,7 @@
     f(Await,  "await")              \
     f(Switch, "switch")             \
     f(Case, "case")                 \
+    f(Default, "default")           \
     f(Defer, "defer")               \
     PRIM_TYPE_LIST(f)
 
@@ -119,7 +120,7 @@ typedef struct {
     union {
         uintmax_t iVal;
         double fVal;
-        char cVal;
+        u32 cVal;
     };
     FileLoc fileLoc;
 } Token;

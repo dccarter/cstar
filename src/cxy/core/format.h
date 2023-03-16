@@ -40,6 +40,7 @@ typedef union {
     bool b;
     const void *p;
     const char *s;
+    uint32_t c;
     uint8_t u8;
     uint16_t u16;
     uint32_t u32;
@@ -78,5 +79,5 @@ void format(FormatState *, const char *format_str, const FormatArg *args);
 
 void printWithStyle(FormatState *, const char *, FormatStyle);
 void printKeyword(FormatState *, const char *);
-
+void printUtf8(FormatState *state, uint32_t);
 void writeFormatState(FormatState *, FILE *);

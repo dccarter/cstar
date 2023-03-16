@@ -366,15 +366,17 @@ Token advanceLexer(Lexer *lexer)
             size_t charCount = 0;
             for (; getCurChar(lexer) != '\'' && getCurChar(lexer) != '\n';
                  charCount++) {
-                if (getCurChar(lexer) == '\\')
+                if (getCurChar(lexer) == '\\') {
                     skipChar(lexer);
+                    charCount++;
+                }
                 skipChar(lexer);
             }
 
             Token token = makeToken(lexer, &begin, tokCharLiteral);
             if (!acceptChar(lexer, '\'') ||
-                convertEscapeSeq(ptr, getCurPtr(lexer) - ptr, &token.cVal) !=
-                    charCount)
+                convertEscapeSeq(
+                    ptr, getCurPtr(lexer) - ptr - 1, &token.cVal) != charCount)
                 return makeInvalidToken(
                     lexer, &begin, "invalid character literal");
             return token;

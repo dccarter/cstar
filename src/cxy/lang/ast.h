@@ -81,6 +81,7 @@ typedef enum {
     opAssign,
     AST_ASSIGN_EXPR_LIST(f)
 #undef f
+    opInvalid
 } Operator;
 
 // clang-format on
@@ -92,6 +93,7 @@ typedef enum {
     astPathElem,
     astPath,
     astGenericParam,
+    astIdentifier,
     /* Types */
     astTupleType,
     astArrayType,
@@ -138,6 +140,7 @@ typedef enum {
     astExprStmt,
     astBreakStmt,
     astContinueStmt,
+    astDeferStmt,
     astReturnStmt,
     astBlockStmt,
     astIfStmt,
@@ -159,6 +162,10 @@ typedef struct AstNode {
         struct {
             struct AstNode *expr;
         } implicitCast;
+
+        struct {
+            cstring value;
+        } ident;
 
         struct {
             bool value;
@@ -245,11 +252,11 @@ typedef struct AstNode {
         struct {
             const char *name;
             bool isPublic : 1;
-            bool isOpaque : 1;
+            bool isNative : 1;
             bool isAsync : 1;
             struct AstNode *genericParams;
             struct AstNode *params;
-            struct AstNode *returnType;
+            struct AstNode *ret;
             struct AstNode *body;
         } funcDecl;
 
@@ -261,8 +268,9 @@ typedef struct AstNode {
         } funcParam;
 
         struct {
-            bool isPublic;
-            struct AstNode *name;
+            bool isPublic : 1;
+            bool isExport : 1;
+            struct AstNode *names;
             struct AstNode *type;
             struct AstNode *init;
         } constDecl, varDecl;
@@ -327,8 +335,8 @@ typedef struct AstNode {
 
         struct {
             struct AstNode *cond;
-            struct AstNode *ifTrue;
-            struct AstNode *ifFalse;
+            struct AstNode *body;
+            struct AstNode *otherwise;
         } ternaryExpr, ifStmt;
 
         struct {
@@ -370,7 +378,7 @@ typedef struct AstNode {
 
         struct {
             struct AstNode *expr;
-        } exprStmt, groupExpr;
+        } exprStmt, deferStmt, groupExpr;
 
         struct {
             struct AstNode *loop;
@@ -402,6 +410,7 @@ typedef struct AstNode {
         } switchStmt;
 
         struct {
+            bool isDefault;
             struct AstNode *match;
             struct AstNode *body;
         } caseStmt;
