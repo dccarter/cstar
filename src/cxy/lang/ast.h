@@ -82,6 +82,9 @@ typedef enum {
     opAssign,
     AST_ASSIGN_EXPR_LIST(f)
 #undef f
+    opCallOverload,
+    opIndexOverload,
+    opIndexAssignOverload,
     opInvalid
 } Operator;
 
@@ -260,6 +263,7 @@ typedef struct AstNode {
             bool isPublic : 1;
             bool isNative : 1;
             bool isAsync : 1;
+            Operator operatorOverload;
             struct AstNode *genericParams;
             struct AstNode *params;
             struct AstNode *ret;

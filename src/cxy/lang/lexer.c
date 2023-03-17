@@ -187,8 +187,9 @@ Token advanceLexer(Lexer *lexer)
             return makeToken(lexer, &begin, tokLParen);
         if (acceptChar(lexer, ')'))
             return makeToken(lexer, &begin, tokRParen);
-        if (acceptChar(lexer, '['))
+        if (acceptChar(lexer, '[')) {
             return makeToken(lexer, &begin, tokLBracket);
+        }
         if (acceptChar(lexer, ']'))
             return makeToken(lexer, &begin, tokRBracket);
         if (acceptChar(lexer, '{'))
@@ -210,7 +211,7 @@ Token advanceLexer(Lexer *lexer)
             return makeToken(lexer, &begin, tokSemicolon);
         if (acceptChar(lexer, '#')) {
             if (acceptChar(lexer, '{'))
-                return makeToken(lexer, &begin, tokSubsitutue);
+                return makeToken(lexer, &begin, tokSubstitutue);
             return makeToken(lexer, &begin, tokHash);
         }
         if (acceptChar(lexer, '`'))

@@ -78,6 +78,18 @@ static inline void printOperand(ConstAstVisitor *visitor,
         astConstVisit(visitor, operand);
 }
 
+static void printAttributes(ConstAstVisitor *visitor, const AstNode *node)
+{
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
+    if (node) {
+        format(context->state, "@", NULL);
+        if (node->next)
+            printManyAstsWithDelim(visitor, "[", ", ", "]", node);
+        else
+            astConstVisit(visitor, node);
+    }
+}
+
 static void printGroupExpr(ConstAstVisitor *visitor, const AstNode *expr)
 {
     printAstWithDelim(visitor, "(", ")", expr->groupExpr.expr);
@@ -362,6 +374,11 @@ static void printFuncType(ConstAstVisitor *visitor, const AstNode *node)
 static void printFuncParam(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
+    if (node->attrs) {
+        printAttributes(visitor, node->attrs);
+        format(context->state, " ", NULL);
+    }
+
     if (node->funcParam.isVariadic)
         format(context->state, "...", NULL);
 
@@ -427,6 +444,11 @@ static void printPath(ConstAstVisitor *visitor, const AstNode *node)
 static void printFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
+    if (node->attrs) {
+        printAttributes(visitor, node->attrs);
+        format(context->state, "\n", NULL);
+    }
+
     if (context->isWithinStruct && !node->funcDecl.isPublic)
         format(context->state, "- ", NULL);
 
@@ -450,7 +472,7 @@ static void printFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
     format(context->state, " ", NULL);
 
     if (node->funcDecl.body) {
-        if (node->funcDecl.body->tag == astExprStmt)
+        if (node->funcDecl.body->tag != astBlockStmt)
             format(context->state, " => ", NULL);
         astConstVisit(visitor, node->funcDecl.body);
     }
@@ -461,21 +483,22 @@ static void printMacroDecl(ConstAstVisitor *visitor, const AstNode *node)
     AstPrintContext *context = getConstAstVisitorContext(visitor);
 
     printKeyword(context->state, "macro");
-    format(context->state, " {s}", (FormatArg[]){{.s = node->funcDecl.name}});
-    printManyAstsWithinParen(visitor, node->funcDecl.params);
+    format(context->state, " {s}", (FormatArg[]){{.s = node->macroDecl.name}});
+    printManyAstsWithinParen(visitor, node->macroDecl.params);
 
-    if (node->funcDecl.ret) {
+    if (node->macroDecl.ret) {
         format(context->state, " : ", NULL);
-        astConstVisit(visitor, node->funcDecl.ret);
+        astConstVisit(visitor, node->macroDecl.ret);
     }
 
     format(context->state, " ", NULL);
-    astConstVisit(visitor, node->funcDecl.body);
+    astConstVisit(visitor, node->macroDecl.body);
 }
 
 static void printVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
+
     if (node->tag == astVarDecl)
         printKeyword(context->state, "var");
     else
@@ -501,6 +524,11 @@ static void printVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
 static void printTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
+    if (node->attrs) {
+        printAttributes(visitor, node->attrs);
+        format(context->state, "\n", NULL);
+    }
+
     if (context->isWithinStruct && !node->typeDecl.isPublic)
         format(context->state, "- ", NULL);
 
@@ -520,6 +548,11 @@ static void printTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
 static void printUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
+    if (node->attrs) {
+        printAttributes(visitor, node->attrs);
+        format(context->state, "\n", NULL);
+    }
+
     if (context->isWithinStruct && !node->unionDecl.isPublic)
         format(context->state, "- ", NULL);
 
@@ -539,6 +572,11 @@ static void printUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
 static void printEnumDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
+    if (node->attrs) {
+        printAttributes(visitor, node->attrs);
+        format(context->state, "\n", NULL);
+    }
+
     if (context->isWithinStruct && !node->enumDecl.isPublic)
         format(context->state, "- ", NULL);
 
@@ -558,6 +596,11 @@ static void printEnumDecl(ConstAstVisitor *visitor, const AstNode *node)
 static void printEnumOption(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
+    if (node->attrs) {
+        printAttributes(visitor, node->attrs);
+        format(context->state, "\n", NULL);
+    }
+
     format(context->state, " {s}", (FormatArg[]){{.s = node->enumOption.name}});
     if (node->enumOption.value) {
         format(context->state, " = ", NULL);
@@ -568,6 +611,11 @@ static void printEnumOption(ConstAstVisitor *visitor, const AstNode *node)
 static void printStructField(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
+    if (node->attrs) {
+        printAttributes(visitor, node->attrs);
+        format(context->state, "\n", NULL);
+    }
+
     if (node->structField.isPrivate)
         format(context->state, "- ", NULL);
 
@@ -583,6 +631,11 @@ static void printStructField(ConstAstVisitor *visitor, const AstNode *node)
 static void printStructDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
+    if (node->attrs) {
+        printAttributes(visitor, node->attrs);
+        format(context->state, "\n", NULL);
+    }
+
     if (context->isWithinStruct && !node->structDecl.isPublic)
         format(context->state, "- ", NULL);
     context->isWithinStruct++;
@@ -632,7 +685,7 @@ static void printReturnStmt(ConstAstVisitor *visitor, const AstNode *node)
 
 static void printBlockStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
-    printManyAstsWithinBlock(visitor, ";\n", node->blockStmt.stmts, true);
+    printManyAstsWithinBlock(visitor, "\n", node->blockStmt.stmts, true);
 }
 
 static void printIfStmt(ConstAstVisitor *visitor, const AstNode *node)

@@ -41,6 +41,7 @@ static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative);
 static AstNode *aliasDecl(Parser *P, bool isPublic, bool isNative);
 static AstNode *enumDecl(Parser *P, bool isPublic);
 static AstNode *structDecl(Parser *P, bool isPublic);
+static AstNode *attributes(Parser *P);
 
 static void listAddAstNode(AstNodeList *list, AstNode *node)
 {
@@ -124,8 +125,8 @@ static Token *consume(Parser *parser, TokenTag id, cstring msg, FormatArg *args)
 {
     Token *tok = check(parser, id);
     if (tok == NULL) {
-        const Token *curr = current(parser);
-        parserError(parser, &curr->fileLoc, msg, args);
+        const Token curr = *current(parser);
+        parserError(parser, &curr.fileLoc, msg, args);
     }
 
     return advance(parser);
@@ -444,7 +445,11 @@ static inline bool maybeClosure(Parser *P)
 
 static AstNode *functionParam(Parser *P)
 {
+    AstNode *attrs = NULL;
     Token tok = *current(P);
+    if (check(P, tokAt))
+        attrs = attributes(P);
+
     bool isVariadic = match(P, tokElipsis) != NULL;
     const char *name = getTokenString(P, consume0(P, tokIdent), false);
     consume0(P, tokColon);
@@ -456,6 +461,7 @@ static AstNode *functionParam(Parser *P)
     return newAstNode(P,
                       &tok.fileLoc.begin,
                       &(AstNode){.tag = astFuncParam,
+                                 .attrs = attrs,
                                  .funcParam = {.isVariadic = isVariadic,
                                                .name = name,
                                                .type = type,
@@ -857,7 +863,7 @@ static AstNode *attributes(Parser *P)
         attrs =
             parseAtLeastOne(P, "attribute", tokRBracket, tokComma, attribute);
 
-        consume0(P, tokRParen);
+        consume0(P, tokRBracket);
     }
     else {
         attrs = attribute(P);
@@ -941,13 +947,62 @@ static AstNode *macroDecl(Parser *P, bool isPublic)
                                                .body = body}});
 }
 
+typedef Pair(Operator, cstring) OperatorOverload;
+static OperatorOverload operatorOverload(Parser *P)
+{
+    OperatorOverload op = {};
+    consume0(P, tokQuote);
+    if (match(P, tokLBracket)) {
+        consume0(P, tokRBracket);
+        if (match(P, tokAssign)) {
+            op = (OperatorOverload){.f = opIndexAssignOverload, .s = "`[]=`"};
+        }
+        else {
+            op = (OperatorOverload){.f = opIndexOverload, .s = "`[]`"};
+        }
+    }
+    else {
+        switch (current(P)->tag) {
+        case tokNew:
+            op = (OperatorOverload){.f = opNew, .s = "`new`"};
+            break;
+        case tokDelete:
+            op = (OperatorOverload){.f = opDelete, .s = "`delete`"};
+            break;
+
+#define f(O, P, T, S, ...)                                                     \
+    case tok##T:                                                               \
+        op = (OperatorOverload){.f = op##O, .s = "`" S "`"};                   \
+        break;
+
+            AST_BINARY_EXPR_LIST(f);
+
+#undef f
+        default:
+            reportUnexpectedToken(P, "a binary operator to overload");
+        }
+        advance(P);
+    }
+    consume0(P, tokQuote);
+    return op;
+}
+
 static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative)
 {
     AstNode *gParams = NULL, *params = NULL, *ret = NULL, *body = NULL;
     Token tok = *current(P);
     bool isAsync = match(P, tokAsync) != NULL;
     consume0(P, tokFunc);
-    cstring name = getTokenString(P, consume0(P, tokIdent), false);
+    cstring name = NULL;
+    Operator op = opInvalid;
+    if (check(P, tokQuote)) {
+        OperatorOverload overload = operatorOverload(P);
+        op = overload.f;
+        name = overload.s;
+    }
+    else {
+        name = getTokenString(P, consume0(P, tokIdent), false);
+    }
 
     if (match(P, tokLBracket)) {
         if (isNative)
@@ -991,6 +1046,7 @@ static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative)
                                  .funcDecl = {.isPublic = isPublic,
                                               .isNative = isNative,
                                               .name = name,
+                                              .operatorOverload = op,
                                               .genericParams = gParams,
                                               .params = params,
                                               .ret = ret,
@@ -1132,7 +1188,7 @@ static AstNode *returnStatement(Parser *P)
     if (!check(P, tokSemicolon)) {
         expr = expression(P, true);
     }
-    consume0(P, tokSemicolon);
+    match(P, tokSemicolon);
 
     return newAstNode(
         P,
@@ -1468,7 +1524,7 @@ static void synchronize(Parser *P)
         case tokFunc:
         case tokAt:
         case tokEoF:
-            break;
+            return;
         default:
             advance(P);
         }

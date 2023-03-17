@@ -1,16 +1,43 @@
-@grpc
-struct BankAccount {
-    type Command = Deposit|Withdraw
+/*
+ * A simple bank
+ */
 
-    - balance: f32 = 0.0
+@[json]
+struct Account {
+    @[json]
+    - balance: f32 = 0
 
-    @grpc(enable: true)
-    func deposit(amount: f32) {
-        this.balance += amount;
+    func deposit(amount: f32) => balance += amount;
+
+    func withdraw(amount: f32) {
+        assert(balance >= amount)
+        balance -= amount
+        return balance
     }
+
+    func `new`() {}
+    func `delete`() {}
+    func `[]`(index: u32) {}
+    func `[]=`(index: u32, value: f32) {}
+    func `..`(index: u32) : Iterator {}
+    func `<<`[T: isNumber](a: T) { }
 }
 
-func main(args: string) {
-    var account = new BankAccount();
-    account.deposit(3000);
+struct Bank {
+    - type Accounts = map[string, Account]
+    - accounts: Accounts
+
+    func create(name: string, balance: f32) : &const Account {
+        assert(accounts.find(name) == null)
+        return &accounts.emplace(name, balance).1
+    }
+
+    func close(name: string) : f32 {
+        if (const account = accounts.find(name)) {
+            const balance = account.getBalance();
+            account.erase(name)
+            return balance
+        }
+        return 0
+    }
 }

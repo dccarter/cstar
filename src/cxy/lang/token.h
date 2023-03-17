@@ -59,7 +59,10 @@
     f(BXorEqual, "^=")              \
     f(BOrEqual, "|=")               \
     f(Quote,    "`")                \
-    f(Subsitutue,     "#{")         \
+    f(Substitutue,     "#{")        \
+    f(CallOverride,    "()")        \
+    f(IndexOverride,   "[]")        \
+    f(IndexAssignOvd,  "[]=")       \
 
 #define KEYWORD_LIST(f)             \
     f(True, "true")                 \
