@@ -38,6 +38,10 @@ static AstNode *variable(
     Parser *P, bool isPublic, bool isExport, bool isExpression, bool woInit);
 static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative);
 
+static AstNode *aliasDecl(Parser *P, bool isPublic, bool isNative);
+static AstNode *enumDecl(Parser *P, bool isPublic);
+static AstNode *structDecl(Parser *P, bool isPublic);
+
 static void listAddAstNode(AstNodeList *list, AstNode *node)
 {
     if (!list->last)
@@ -768,11 +772,11 @@ static AstNode *primary(Parser *P, bool allowStructs)
         if (allowStructs && check(P, tokLBrace))
             return structExpr(P, path, fieldExpr);
         return path;
+    }
     case tokAsync:
         return closure(P);
     default:
         reportUnexpectedToken(P, "a primary expression");
-    }
     }
 
     unreachable("UNREACHABLE");
@@ -804,6 +808,7 @@ static AstNode *attribute(Parser *P)
             Token start = *consume0(P, tokIdent);
             const char *pname = getTokenString(P, &start, false);
             consume0(P, tokColon);
+
             switch (current(P)->tag) {
             case tokTrue:
             case tokFalse:
@@ -835,7 +840,7 @@ static AstNode *attribute(Parser *P)
 
             match(P, tokComma);
         }
-        consume0(P, tokLParen);
+        consume0(P, tokRParen);
     }
 
     return newAstNode(
@@ -862,7 +867,7 @@ static AstNode *attributes(Parser *P)
 }
 
 static AstNode *variable(
-    Parser *P, bool isPublic, bool isExport, bool isExpression, bool woInit)
+    Parser *P, bool isPublic, bool isNative, bool isExpression, bool woInit)
 {
     Token tok = *current(P);
     if (!match(P, tokConst, tokVar))
@@ -881,14 +886,14 @@ static AstNode *variable(
     if (!isExpression && (match(P, tokColon) != NULL))
         type = parseType(P);
 
-    if (!woInit) {
+    if (!isNative && !woInit) {
         if (tok.tag == tokConst)
             consume0(P, tokAssign);
         if (isExpression || tok.tag == tokConst || match(P, tokAssign))
             init = expression(P, true);
     }
 
-    if (!(isExpression || woInit)) {
+    if (!(isExpression || woInit || isNative)) {
         if (init && init->tag == astClosureExpr)
             match(P, tokSemicolon);
         else
@@ -904,10 +909,36 @@ static AstNode *variable(
         &tok.fileLoc.begin,
         &(AstNode){.tag = tok.tag == tokConst ? astConstDecl : astVarDecl,
                    .varDecl = {.isPublic = isPublic,
-                               .isExport = isExport,
+                               .isNative = isNative,
                                .names = names,
                                .type = type,
                                .init = init}});
+}
+
+static AstNode *macroDecl(Parser *P, bool isPublic)
+{
+    AstNode *params = NULL, *body = NULL, *ret = NULL;
+    Token tok = *current(P);
+    consume0(P, tokMacro);
+    cstring name = getTokenString(P, consume0(P, tokIdent), false);
+
+    consume0(P, tokLParen);
+    params = parseMany(P, tokRParen, tokComma, functionParam);
+    consume0(P, tokRParen);
+
+    if (match(P, tokColon))
+        ret = parseType(P);
+
+    body = block(P);
+
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astMacroDecl,
+                                 .macroDecl = {.isPublic = isPublic,
+                                               .name = name,
+                                               .params = params,
+                                               .ret = ret,
+                                               .body = body}});
 }
 
 static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative)
@@ -1160,44 +1191,6 @@ static AstNode *statement(Parser *P)
     }
 }
 
-static void synchronize(Parser *P)
-{
-    // skip current problematic token
-    advance(P);
-    while (!match(P, tokSemicolon, tokEoF)) {
-        switch (current(P)->tag) {
-        case tokType:
-        case tokStruct:
-        case tokEnum:
-        case tokVar:
-        case tokConst:
-        case tokAsync:
-        case tokFunc:
-        case tokAt:
-        case tokEoF:
-            break;
-        default:
-            advance(P);
-        }
-    }
-}
-
-static void synchronizeUntil(Parser *P, TokenTag tag)
-{
-    while (!check(P, tag, tokEoF))
-        advance(P);
-}
-
-Parser makeParser(Lexer *lexer, MemPool *pool)
-{
-    Parser parser = {.lexer = lexer, .L = lexer->log, .memPool = pool};
-    parser.ahead[0] = (Token){.tag = tokEoF};
-    for (u32 i = 1; i < TOKEN_BUFFER; i++)
-        parser.ahead[i] = advanceLexer(lexer);
-
-    return parser;
-}
-
 static AstNode *parseType(Parser *P)
 {
     AstNode *node = NULL;
@@ -1242,4 +1235,275 @@ static AstNode *parseType(Parser *P)
     return node;
 }
 
-AstNode *parseProgram(Parser *P) { return statement(P); }
+static AstNode *parseStructField(Parser *P, bool isPrivate)
+{
+    AstNode *type = NULL, *value = NULL;
+    Token tok = *consume0(P, tokIdent);
+    cstring name = getTokenString(P, &tok, false);
+    if (match(P, tokColon)) {
+        type = parseType(P);
+    }
+
+    if (type == NULL || check(P, tokAssign)) {
+        consume0(P, tokAssign);
+        value = expression(P, false);
+    }
+
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astStructField,
+                                 .structField = {.isPrivate = isPrivate,
+                                                 .name = name,
+                                                 .type = type,
+                                                 .value = value}});
+}
+
+static AstNode *parseStructMember(Parser *P)
+{
+    AstNode *member = NULL, *attrs = NULL;
+    Token tok = *current(P);
+
+    if (check(P, tokAt))
+        attrs = attributes(P);
+
+    bool isPrivate = match(P, tokMinus);
+
+    switch (current(P)->tag) {
+    case tokIdent:
+        member = parseStructField(P, isPrivate);
+        break;
+    case tokFunc:
+    case tokAsync:
+        member = funcDecl(P, !isPrivate, false);
+        break;
+    case tokMacro:
+        if (attrs)
+            parserError(P,
+                        &tok.fileLoc,
+                        "attributes cannot be attached to macro declarations",
+                        NULL);
+        member = macroDecl(P, !isPrivate);
+        break;
+    case tokType:
+        member = aliasDecl(P, !isPrivate, false);
+        break;
+    case tokStruct:
+        member = structDecl(P, !isPrivate);
+        break;
+    default:
+        reportUnexpectedToken(P, "struct member");
+    }
+
+    member->attrs = attrs;
+    return member;
+}
+
+static AstNode *structDecl(Parser *P, bool isPublic)
+{
+    AstNode *base = NULL, *gParams = NULL;
+    AstNodeList members = {NULL};
+    Token tok = *consume0(P, tokStruct);
+    cstring name = getTokenString(P, consume0(P, tokIdent), false);
+
+    if (match(P, tokLBracket)) {
+        gParams = parseAtLeastOne(
+            P, "generic type params", tokRBracket, tokComma, parseGenericParam);
+        consume0(P, tokRBracket);
+    }
+
+    if (match(P, tokColon))
+        base = parseType(P);
+
+    consume0(P, tokLBrace);
+    while (!check(P, tokRBrace, tokEoF)) {
+        listAddAstNode(&members, parseStructMember(P));
+    }
+    consume0(P, tokRBrace);
+
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astStructDecl,
+                                 .structDecl = {.isPublic = isPublic,
+                                                .name = name,
+                                                .base = base,
+                                                .genericParams = gParams,
+                                                .members = members.first}});
+}
+
+static AstNode *enumOption(Parser *P)
+{
+    AstNode *value = NULL;
+    Token tok = *current(P);
+    cstring name = getTokenString(P, &tok, false);
+    if (match(P, tokAssign)) {
+        value = expression(P, false);
+    }
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astEnumOption,
+                                 .enumOption = {.name = name, .value = value}});
+}
+
+static AstNode *enumDecl(Parser *P, bool isPublic)
+{
+    AstNode *base = NULL, *options = NULL;
+    Token tok = *current(P);
+    cstring name = getTokenString(P, consume0(P, tokIdent), false);
+
+    if (match(P, tokColon)) {
+        base = parseType(P);
+    }
+    consume0(P, tokLBrace);
+    options =
+        parseAtLeastOne(P, "enum options", tokRBrace, tokComma, enumOption);
+    consume0(P, tokRBrace);
+
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astEnumDecl,
+                   .enumDecl = {.isPublic = true, .options = options}});
+}
+
+static AstNode *aliasDecl(Parser *P, bool isPublic, bool isNative)
+{
+    AstNode *alias = {NULL};
+    Token tok = *consume0(P, tokType);
+    cstring name = getTokenString(P, consume0(P, tokIdent), false);
+    if (!isNative) {
+        consume0(P, tokAssign);
+        AstNodeList members = {NULL};
+        do {
+            listAddAstNode(&members, parseType(P));
+        } while (match(P, tokBOr));
+        alias = members.first;
+    }
+    else {
+        consume0(P, tokComma);
+    }
+    if (alias && alias->next) {
+        return newAstNode(P,
+                          &tok.fileLoc.begin,
+                          &(AstNode){.tag = astUnionDecl,
+                                     .unionDecl = {.isPublic = isPublic,
+                                                   .name = name,
+                                                   .members = alias}});
+    }
+    else {
+        return newAstNode(P,
+                          &tok.fileLoc.begin,
+                          &(AstNode){.tag = astTypeDecl,
+                                     .typeDecl = {.isPublic = isPublic,
+                                                  .isNative = isNative,
+                                                  .name = name,
+                                                  .aliased = alias}});
+    }
+}
+
+static AstNode *declaration(Parser *P)
+{
+    Token tok = *current(P);
+    AstNode *attrs = NULL, *decl = NULL;
+    if (check(P, tokAt))
+        attrs = attributes(P);
+    bool isPublic = match(P, tokPub) != NULL;
+
+#define isNative isPublic ? match(P, tokNative) != NULL : false
+
+    switch (current(P)->tag) {
+    case tokStruct:
+        decl = structDecl(P, isPublic);
+        break;
+    case tokEnum:
+        decl = enumDecl(P, isPublic);
+        break;
+    case tokType:
+        decl = aliasDecl(P, isPublic, isNative);
+        break;
+    case tokVar:
+    case tokConst:
+        decl = variable(P, isPublic, isNative, false, false);
+        break;
+    case tokFunc:
+    case tokAsync:
+        decl = funcDecl(P, isPublic, isNative);
+        break;
+    case tokMacro:
+        if (attrs)
+            parserError(P,
+                        &tok.fileLoc,
+                        "attributes cannot be attached to macro declarations",
+                        NULL);
+        decl = macroDecl(P, isPublic);
+        break;
+    case tokNative:
+        parserError(P,
+                    &current(P)->fileLoc,
+                    "native can only be used on top level struct, function or "
+                    "variable declarations",
+                    NULL);
+        break;
+    default:
+        reportUnexpectedToken(P, "a declaration");
+    }
+
+#undef isNative
+
+    decl->attrs = attrs;
+    return decl;
+}
+
+static void synchronize(Parser *P)
+{
+    // skip current problematic token
+    advance(P);
+    while (!match(P, tokSemicolon, tokEoF)) {
+        switch (current(P)->tag) {
+        case tokType:
+        case tokStruct:
+        case tokEnum:
+        case tokVar:
+        case tokConst:
+        case tokAsync:
+        case tokFunc:
+        case tokAt:
+        case tokEoF:
+            break;
+        default:
+            advance(P);
+        }
+    }
+}
+
+static void synchronizeUntil(Parser *P, TokenTag tag)
+{
+    while (!check(P, tag, tokEoF))
+        advance(P);
+}
+
+Parser makeParser(Lexer *lexer, MemPool *pool)
+{
+    Parser parser = {.lexer = lexer, .L = lexer->log, .memPool = pool};
+    parser.ahead[0] = (Token){.tag = tokEoF};
+    for (u32 i = 1; i < TOKEN_BUFFER; i++)
+        parser.ahead[i] = advanceLexer(lexer);
+
+    return parser;
+}
+
+AstNode *parseProgram(Parser *P)
+{
+    Token tok = *current(P);
+
+    AstNodeList decls = {NULL};
+    while (!isEoF(P)) {
+        E4C_TRY_BLOCK({
+            listAddAstNode(&decls, declaration(P));
+        } E4C_CATCH(ParserException) { synchronize(P); })
+    }
+
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astProgram, .program = {.decls = decls.first}});
+}

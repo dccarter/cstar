@@ -89,6 +89,7 @@ typedef enum {
 
 typedef enum {
     astError,
+    astProgram,
     astImplicitCast,
     astAttr,
     astPathElem,
@@ -111,6 +112,7 @@ typedef enum {
     /* Declarations */
     astFuncParam,
     astFuncDecl,
+    astMacroDecl,
     astConstDecl,
     astVarDecl,
     astTypeDecl,
@@ -160,6 +162,9 @@ typedef struct AstNode {
     struct AstNode *next;
     struct AstNode *attrs;
     union {
+        struct {
+            struct AstNode *decls;
+        } program;
         struct {
             struct AstNode *expr;
         } implicitCast;
@@ -262,6 +267,14 @@ typedef struct AstNode {
         } funcDecl;
 
         struct {
+            const char *name;
+            bool isPublic;
+            struct AstNode *params;
+            struct AstNode *ret;
+            struct AstNode *body;
+        } macroDecl;
+
+        struct {
             bool isVariadic;
             const char *name;
             struct AstNode *type;
@@ -270,7 +283,7 @@ typedef struct AstNode {
 
         struct {
             bool isPublic : 1;
-            bool isExport : 1;
+            bool isNative : 1;
             struct AstNode *names;
             struct AstNode *type;
             struct AstNode *init;
@@ -278,7 +291,7 @@ typedef struct AstNode {
 
         struct {
             bool isPublic;
-            bool isOpaque;
+            bool isNative;
             const char *name;
             struct AstNode *genericParams;
             struct AstNode *aliased;
@@ -286,7 +299,6 @@ typedef struct AstNode {
 
         struct {
             bool isPublic;
-            bool isOpaque;
             const char *name;
             struct AstNode *genericParams;
             struct AstNode *members;
@@ -300,13 +312,13 @@ typedef struct AstNode {
         struct {
             const char *name;
             bool isPublic : 1;
-            bool isOpaque : 1;
             struct AstNode *base;
             struct AstNode *options;
         } enumDecl;
 
         struct {
             const char *name;
+            bool isPrivate;
             u64 index;
             struct AstNode *type;
             struct AstNode *value;
@@ -315,8 +327,6 @@ typedef struct AstNode {
         struct {
             const char *name;
             bool isPublic : 1;
-            bool isOpaque : 1;
-            bool isTupleLike : 1;
             struct AstNode *base;
             struct AstNode *genericParams;
             struct AstNode *members;
@@ -451,7 +461,7 @@ bool isAssignableExpr(const AstNode *node);
 
 bool isPublicDecl(const AstNode *node);
 
-bool isOpaqueDecl(const AstNode *node);
+bool isNative(const AstNode *node);
 
 u64 countAstNodes(const AstNode *node);
 

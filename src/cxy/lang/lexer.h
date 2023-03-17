@@ -16,7 +16,6 @@ enum {
     lxEnterStringExpr = BIT(0),
     lxContinueStringExpr = BIT(1),
     lxExitStringExpr = BIT(2)
-
 };
 
 typedef struct Lexer {

@@ -1,11 +1,16 @@
+@grpc
+struct BankAccount {
+    type Command = Deposit|Withdraw
 
-macro User(name) : type {
-    return `
-    struct #{name} {
-        constexpr name: string = #{'"'name'"'}
+    - balance: f32 = 0.0
+
+    @grpc(enable: true)
+    func deposit(amount: f32) {
+        this.balance += amount;
     }
-    `
 }
 
-// prefer this to generics
-type Carter = User!(Carter)
+func main(args: string) {
+    var account = new BankAccount();
+    account.deposit(3000);
+}

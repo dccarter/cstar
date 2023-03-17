@@ -57,7 +57,9 @@
     f(ModEqual, "%=")               \
     f(BAndEqual, "&=")              \
     f(BXorEqual, "^=")              \
-    f(BorEqual, "|=")
+    f(BOrEqual, "|=")               \
+    f(Quote,    "`")                \
+    f(Subsitutue,     "#{")         \
 
 #define KEYWORD_LIST(f)             \
     f(True, "true")                 \
@@ -89,6 +91,7 @@
     f(Case, "case")                 \
     f(Default, "default")           \
     f(Defer, "defer")               \
+    f(Macro, "macro")               \
     PRIM_TYPE_LIST(f)
 
 #define SPECIAL_TOKEN_LIST(f)                   \
@@ -111,6 +114,7 @@ typedef enum {
 #define f(name, str) tok##name,
     TOKEN_LIST(f)
 #undef f
+    tokAssignEqual = tokAssign
 } TokenTag;
 
 // clang-format on
@@ -144,6 +148,7 @@ static inline const char *token_tag_to_str(TokenTag tag)
 }
 
 bool isPrimitiveType(TokenTag tag);
+bool isPrimitiveIntegerType(TokenTag tag);
 bool isAssignmentOperator(TokenTag tag);
 PrtId tokenToPrimitiveTypeId(TokenTag tag);
 bool isKeyword(TokenTag tag);

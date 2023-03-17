@@ -208,8 +208,13 @@ Token advanceLexer(Lexer *lexer)
             return makeToken(lexer, &begin, tokColon);
         if (acceptChar(lexer, ';'))
             return makeToken(lexer, &begin, tokSemicolon);
-        if (acceptChar(lexer, '#'))
+        if (acceptChar(lexer, '#')) {
+            if (acceptChar(lexer, '{'))
+                return makeToken(lexer, &begin, tokSubsitutue);
             return makeToken(lexer, &begin, tokHash);
+        }
+        if (acceptChar(lexer, '`'))
+            return makeToken(lexer, &begin, tokQuote);
         if (acceptChar(lexer, '@'))
             return makeToken(lexer, &begin, tokAt);
         if (acceptChar(lexer, '?'))
@@ -268,7 +273,7 @@ Token advanceLexer(Lexer *lexer)
             if (acceptChar(lexer, '|'))
                 return makeToken(lexer, &begin, tokLOr);
             if (acceptChar(lexer, '='))
-                return makeToken(lexer, &begin, tokBorEqual);
+                return makeToken(lexer, &begin, tokBOrEqual);
             return makeToken(lexer, &begin, tokBOr);
         }
 

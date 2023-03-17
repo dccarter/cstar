@@ -5,6 +5,7 @@
 
 typedef struct {
     FormatState *state;
+    u32 isWithinStruct;
 } AstPrintContext;
 
 static inline void printManyAsts(ConstAstVisitor *visitor,
@@ -377,6 +378,19 @@ static void printError(ConstAstVisitor *visitor,
            (FormatArg[]){{.style = errorStyle}, {.style = resetStyle}});
 }
 
+static void printProgram(ConstAstVisitor *visitor, const AstNode *node)
+{
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
+    format(context->state,
+           "{$}/*\n"
+           "* Generated from {s}\n"
+           "*/{$}\n\n",
+           (FormatArg[]){{.style = commentStyle},
+                         {.s = node->loc.fileName},
+                         {.style = resetStyle}});
+    printManyAstsWithDelim(visitor, "", "\n\n", "", node->program.decls);
+}
+
 static void printAttribute(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
@@ -413,6 +427,9 @@ static void printPath(ConstAstVisitor *visitor, const AstNode *node)
 static void printFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
+    if (context->isWithinStruct && !node->funcDecl.isPublic)
+        format(context->state, "- ", NULL);
+
     if (node->funcDecl.isAsync) {
         printKeyword(context->state, "async");
         format(context->state, " ", NULL);
@@ -437,6 +454,23 @@ static void printFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
             format(context->state, " => ", NULL);
         astConstVisit(visitor, node->funcDecl.body);
     }
+}
+
+static void printMacroDecl(ConstAstVisitor *visitor, const AstNode *node)
+{
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
+
+    printKeyword(context->state, "macro");
+    format(context->state, " {s}", (FormatArg[]){{.s = node->funcDecl.name}});
+    printManyAstsWithinParen(visitor, node->funcDecl.params);
+
+    if (node->funcDecl.ret) {
+        format(context->state, " : ", NULL);
+        astConstVisit(visitor, node->funcDecl.ret);
+    }
+
+    format(context->state, " ", NULL);
+    astConstVisit(visitor, node->funcDecl.body);
 }
 
 static void printVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
@@ -467,6 +501,8 @@ static void printVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
 static void printTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
+    if (context->isWithinStruct && !node->typeDecl.isPublic)
+        format(context->state, "- ", NULL);
 
     printKeyword(context->state, "type");
     format(context->state, " {s}", (FormatArg[]){{.s = node->typeDecl.name}});
@@ -484,15 +520,17 @@ static void printTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
 static void printUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
+    if (context->isWithinStruct && !node->unionDecl.isPublic)
+        format(context->state, "- ", NULL);
 
     printKeyword(context->state, "type");
     format(context->state, " {s}", (FormatArg[]){{.s = node->unionDecl.name}});
-    if (node->typeDecl.genericParams) {
+    if (node->unionDecl.genericParams) {
         printManyAstsWithDelim(
             visitor, "[", ",", "]", node->unionDecl.genericParams);
     }
 
-    if (node->typeDecl.aliased) {
+    if (node->unionDecl.members) {
         format(context->state, " = ", NULL);
         printManyAstsWithDelim(visitor, "", " | ", "", node->unionDecl.members);
     }
@@ -501,6 +539,8 @@ static void printUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
 static void printEnumDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
+    if (context->isWithinStruct && !node->enumDecl.isPublic)
+        format(context->state, "- ", NULL);
 
     printKeyword(context->state, "enum");
     format(context->state, " {s}", (FormatArg[]){{.s = node->enumDecl.name}});
@@ -528,8 +568,11 @@ static void printEnumOption(ConstAstVisitor *visitor, const AstNode *node)
 static void printStructField(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
+    if (node->structField.isPrivate)
+        format(context->state, "- ", NULL);
+
     format(
-        context->state, " {s}: ", (FormatArg[]){{.s = node->structField.name}});
+        context->state, "{s}: ", (FormatArg[]){{.s = node->structField.name}});
     astConstVisit(visitor, node->structField.type);
     if (node->structField.value) {
         format(context->state, " = ", NULL);
@@ -540,6 +583,9 @@ static void printStructField(ConstAstVisitor *visitor, const AstNode *node)
 static void printStructDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
+    if (context->isWithinStruct && !node->structDecl.isPublic)
+        format(context->state, "- ", NULL);
+    context->isWithinStruct++;
 
     printKeyword(context->state, "struct");
     format(context->state, " {s}", (FormatArg[]){{.s = node->structDecl.name}});
@@ -552,14 +598,13 @@ static void printStructDecl(ConstAstVisitor *visitor, const AstNode *node)
         format(context->state, " : ", NULL);
         astConstVisit(visitor, node->structDecl.base);
     }
+    format(context->state, " ", NULL);
 
     if (node->structDecl.members) {
-        if (node->structDecl.isTupleLike)
-            printManyAstsWithinParen(visitor, node->structDecl.members);
-        else
-            printManyAstsWithinBlock(
-                visitor, ";", node->structDecl.members, true);
+        printManyAstsWithinBlock(visitor, "\n", node->structDecl.members, true);
     }
+
+    context->isWithinStruct--;
 }
 
 static void printExprStmt(ConstAstVisitor *visitor, const AstNode *node)
@@ -727,6 +772,7 @@ void printAst(FormatState *state, const AstNode *node)
     // clang-format off
     ConstAstVisitor visitor = makeConstAstVisitor(&context, {
         [astError] = printError,
+        [astProgram] = printProgram,
         [astImplicitCast] = printError,
         [astAttr] = printAttribute,
         [astPathElem] = printPathElement,
@@ -746,6 +792,7 @@ void printAst(FormatState *state, const AstNode *node)
         [astStringLit] = printStringLiteral,
         [astFuncParam] = printFuncParam,
         [astFuncDecl] = printFuncDecl,
+        [astMacroDecl] = printMacroDecl,
         [astConstDecl] = printVariableDecl,
         [astVarDecl] = printVariableDecl,
         [astTypeDecl] = printTypeDecl,
@@ -782,6 +829,7 @@ void printAst(FormatState *state, const AstNode *node)
         [astSwitchStmt] = printSwitchStmt,
         [astCaseStmt] = printCaseStmt,
     });
+
     // clang-format on
 
     astConstVisit(&visitor, node);
@@ -823,19 +871,13 @@ bool isPublicDecl(const AstNode *node)
     }
 }
 
-bool isOpaqueDecl(const AstNode *node)
+bool isNative(const AstNode *node)
 {
     switch (node->tag) {
     case astFuncDecl:
         return node->funcDecl.isNative;
     case astTypeDecl:
-        return node->typeDecl.isOpaque;
-    case astEnumDecl:
-        return node->enumDecl.isOpaque;
-    case astUnionDecl:
-        return node->unionDecl.isOpaque;
-    case astStructDecl:
-        return node->structDecl.isOpaque;
+        return node->typeDecl.isNative;
     default:
         return false;
     }
@@ -1023,11 +1065,10 @@ int getBinaryOpPrecedence(Operator op)
 bool isAssignmentOperator(TokenTag tag)
 {
     switch (tag) {
-#define f(O, P, T, ...)                                                        \
-    case tok##T:                                                               \
+#define f(O, P, T, ...) case tok##T##Equal:
         AST_ASSIGN_EXPR_LIST(f)
-        return true;
 #undef f
+        return true;
     default:
         return false;
     }
@@ -1063,7 +1104,7 @@ Operator tokenToAssignmentOperator(TokenTag tag)
 {
     switch (tag) {
 #define f(O, P, T, ...)                                                        \
-    case tok##T:                                                               \
+    case tok##T##Equal:                                                        \
         return op##O;
         AST_ASSIGN_EXPR_LIST(f);
 #undef f
