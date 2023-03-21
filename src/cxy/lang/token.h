@@ -60,6 +60,7 @@
     f(BOrEqual, "|=")               \
     f(Quote,    "`")                \
     f(Substitutue,     "#{")        \
+    f(IndexExpr,       ".[")        \
     f(CallOverride,    "()")        \
     f(IndexOverride,   "[]")        \
     f(IndexAssignOvd,  "[]=")       \

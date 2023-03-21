@@ -238,7 +238,7 @@ typedef struct AstNode {
 
         struct {
             struct AstNode *target;
-            struct AstNode *index;
+            struct AstNode *indices;
         } indexExpr;
 
         struct {

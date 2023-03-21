@@ -1,6 +1,9 @@
 /*
  * A simple bank
  */
+//interface Iterator[T] {
+//    func next() : T
+//}
 
 @[json]
 struct Account {
@@ -14,16 +17,20 @@ struct Account {
         balance -= amount
         return balance
     }
-
-    func `new`() {}
-    func `delete`() {}
-    func `[]`(index: u32) {}
-    func `[]=`(index: u32, value: f32) {}
-    func `..`(index: u32) : Iterator {}
-    func `<<`[T: isNumber](a: T) { }
 }
 
 struct Bank {
+    struct iterator : Iterator[&const Account] {
+        - accounts: &const Account
+        - index: u32 = 0
+
+        func next(): &const Account {
+            if(index < accounts.size())
+                return accounts.[index++]
+            return null
+        }
+    }
+
     - type Accounts = map[string, Account]
     - accounts: Accounts
 
@@ -39,5 +46,15 @@ struct Bank {
             return balance
         }
         return 0
+    }
+
+    func `[]`(name: string) => accounts.get(name);
+    func `..`() => iterator{accounts: accounts};
+}
+
+func main() {
+    var bank = new Bank();
+    for (const account: bank) {
+        println(account.getBalance())
     }
 }

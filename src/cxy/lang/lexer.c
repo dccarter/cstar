@@ -201,6 +201,10 @@ Token advanceLexer(Lexer *lexer)
                 }
                 return makeToken(lexer, &begin, tokDotDot);
             }
+            if (acceptChar(lexer, '[')) {
+                return makeToken(lexer, &begin, tokIndexExpr);
+            }
+
             return makeToken(lexer, &begin, tokDot);
         }
         if (acceptChar(lexer, ','))
@@ -451,7 +455,8 @@ Token advanceLexer(Lexer *lexer)
                 skipChar(lexer);
 
             bool hasDot = false;
-            if (getCurChar(lexer) == '.' && peekNextChar(lexer) != '.') {
+            if (getCurChar(lexer) == '.' && peekNextChar(lexer) != '.' &&
+                peekNextChar(lexer) != '[') {
                 skipChar(lexer);
                 hasDot = true;
                 // Parse fractional part

@@ -80,7 +80,7 @@ static inline Token *advance(Parser *parser)
 
 static inline Token *peek(Parser *parser, u32 index)
 {
-    csAssert(index <= 2, "index out of bounds");
+    csAssert(index <= 2, "indices out of bounds");
     return &parser->ahead[1 + index];
 }
 
@@ -279,6 +279,16 @@ static inline AstNode *primitive(Parser *P)
                    .primitiveType.id = tokenToPrimitiveTypeId(tok.tag)});
 }
 
+static inline AstNode *expressionWithoutStructs(Parser *P)
+{
+    return expression(P, false);
+}
+
+static inline AstNode *expressionWithStructs(Parser *P)
+{
+    return expression(P, true);
+}
+
 static AstNode *member(Parser *P, const FilePos *begin, AstNode *operand)
 {
     AstNode *member;
@@ -295,6 +305,23 @@ static AstNode *member(Parser *P, const FilePos *begin, AstNode *operand)
                    .memberExpr = {.target = operand, .member = member}});
 }
 
+static AstNode *indexExpr(Parser *P, AstNode *operand)
+{
+    Token tok = *consume0(P, tokIndexExpr);
+    AstNode *indices = parseAtLeastOne(P,
+                                       "indices expressions",
+                                       tokRBracket,
+                                       tokComma,
+                                       expressionWithoutStructs);
+    consume0(P, tokRBracket);
+
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astIndexExpr,
+                   .indexExpr = {.target = operand, .indices = indices}});
+}
+
 static AstNode *postfix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 {
     AstNode *operand = parsePrimary(P, true);
@@ -306,6 +333,10 @@ static AstNode *postfix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
         case tokDot: {
             const Token tok = *advance(P);
             operand = member(P, &tok.fileLoc.begin, operand);
+            continue;
+        }
+        case tokIndexExpr: {
+            operand = indexExpr(P, operand);
             continue;
         }
         case tokLNot:
@@ -590,16 +621,6 @@ static AstNode *parsePointerType(Parser *P)
         &tok.fileLoc.begin,
         &(AstNode){.tag = astPointerType,
                    .pointerType = {.isConst = isConst, .pointed = pointed}});
-}
-
-static inline AstNode *expressionWithoutStructs(Parser *P)
-{
-    return expression(P, false);
-}
-
-static inline AstNode *expressionWithStructs(Parser *P)
-{
-    return expression(P, true);
 }
 
 static AstNode *parenExpr(Parser *P, bool strict)

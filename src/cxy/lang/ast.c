@@ -100,10 +100,7 @@ static void printUnaryExpr(ConstAstVisitor *visitor, const AstNode *expr)
     csAssert0(expr && expr->tag == astUnaryExpr);
     AstPrintContext *context = getConstAstVisitorContext(visitor);
     const Operator op = expr->unaryExpr.op;
-    switch (op) {
-#define f(name, ...) case op##name:
-        AST_PREFIX_EXPR_LIST(f)
-#undef f
+    if (expr->unaryExpr.isPrefix) {
         if (isPrefixOpKeyword(op)) {
             printKeyword(context->state, getUnaryOpString(op));
             format(context->state, " ", NULL);
@@ -112,17 +109,10 @@ static void printUnaryExpr(ConstAstVisitor *visitor, const AstNode *expr)
         else
             printAstWithDelim(
                 visitor, getUnaryOpString(op), "", expr->unaryExpr.operand);
-        break;
-#undef f
-
-#define f(name, ...) case op##name:
-        AST_POSTFIX_EXPR_LIST(f)
-#undef f
+    }
+    else {
         printAstWithDelim(
             visitor, "", getUnaryOpString(op), expr->unaryExpr.operand);
-        break;
-    default:
-        csAssert(false, "operator is not unary");
     }
 }
 
@@ -243,7 +233,7 @@ static void printIndexExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     if (node->indexExpr.target)
         astConstVisit(visitor, node->indexExpr.target);
-    printAstWithDelim(visitor, "[", "]", node->indexExpr.index);
+    printManyAstsWithDelim(visitor, ".[", ", ", "]", node->indexExpr.indices);
 }
 
 static void printFieldExpr(ConstAstVisitor *visitor, const AstNode *node)
