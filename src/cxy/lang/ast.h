@@ -168,6 +168,7 @@ typedef struct AstNode {
         struct {
             struct AstNode *decls;
         } program;
+
         struct {
             struct AstNode *expr;
         } implicitCast;
@@ -208,7 +209,7 @@ typedef struct AstNode {
 
         struct {
             struct AstNode *elementType;
-            struct AstNode *size;
+            struct AstNode *dims;
         } arrayType;
 
         struct {
@@ -397,7 +398,7 @@ typedef struct AstNode {
 
         struct {
             struct AstNode *loop;
-        } breakExpr, continueExpr;
+        } breakStmt, continueStmt;
 
         struct {
             struct AstNode *func;
@@ -447,6 +448,8 @@ typedef struct ConstAstVisitor {
 // clang-format off
 #define getConstAstVisitorContext(V) ((ConstAstVisitor *)(V))->context
 #define makeConstAstVisitor(C, ...) (ConstAstVisitor){.context = (C), .visitors = __VA_ARGS__}
+#define getAstVisitorContext(V) ((AstVisitor *)(V))->context
+#define makeAstVisitor(C, ...) (AstVisitor){.context = (C), .visitors = __VA_ARGS__}
 // clang-format on
 
 void astVisit(AstVisitor *visitor, AstNode *node);
@@ -501,3 +504,18 @@ Operator tokenToUnaryOperator(TokenTag tag);
 Operator tokenToBinaryOperator(TokenTag tag);
 Operator tokenToAssignmentOperator(TokenTag tag);
 bool isPrefixOpKeyword(Operator op);
+
+const Type *isBinaryOperatorSupported(TypeTable *table,
+                                      const Type *lhs,
+                                      const Type *rhs,
+                                      Operator op);
+const Type *isAssignmentOperationSupported(TypeTable *table,
+                                           const Type *lhs,
+                                           const Type *rhs,
+                                           Operator op);
+const Type *isPrefixOperatorSupported(TypeTable *table,
+                                      const Type *expr,
+                                      Operator op);
+const Type *isPostfixOperatorSupported(TypeTable *table,
+                                       const Type *expr,
+                                       Operator op);

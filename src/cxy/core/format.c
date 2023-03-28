@@ -153,9 +153,15 @@ static const char *formatArg(FormatState *state,
     case 'p':
         n = snprintf(bufPtr, MAX_FORMAT_CHARS, "%p", arg->p);
         break;
-    case 't':
-        // printType(state, arg->t);
+    case 't': {
+        u64 count = 1;
+        if (*ptr == 'l') {
+            ptr++;
+            count = args[(*index)++].len;
+        }
+        // printType(state, arg->t, count);
         break;
+    }
     default:
         assert(false && "unknown formatting command");
         break;

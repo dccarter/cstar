@@ -226,7 +226,7 @@ static void printClosureExpr(ConstAstVisitor *visitor, const AstNode *expr)
 
 static void printArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    printManyAstsWithDelim(visitor, "[", ",", "]", node->arrayExpr.elements);
+    printManyAstsWithDelim(visitor, "[", ", ", "]", node->arrayExpr.elements);
 }
 
 static void printIndexExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -330,10 +330,12 @@ static void printTupleType(ConstAstVisitor *visitor, const AstNode *node)
 static void printArrayType(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
-    astConstVisit(visitor, node->arrayType.elementType);
     format(context->state, "[", NULL);
-    if (node->arrayType.size != NULL)
-        astConstVisit(visitor, node->arrayType.size);
+    astConstVisit(visitor, node->arrayType.elementType);
+    if (node->arrayType.dims != NULL) {
+        format(context->state, ", ", NULL);
+        printManyAsts(visitor, ", ", node->arrayType.dims);
+    }
     format(context->state, "]", NULL);
 }
 

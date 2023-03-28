@@ -41,7 +41,9 @@ set(CXY_LANG_SOURCES
         src/cxy/lang/ast.c
         src/cxy/lang/lexer.c
         src/cxy/lang/parser.c
-        src/cxy/lang/types.c)
+        src/cxy/lang/check.c
+        src/cxy/lang/types.c
+        src/cxy/lang/typetable.c)
 
 set(CXY_DRIVER_SOURCES
         src/cxy/driver/driver.c

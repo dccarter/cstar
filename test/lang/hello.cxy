@@ -53,8 +53,8 @@ struct Bank {
 }
 
 func main() {
-    var bank = new Bank();
-    for (const account: bank) {
-        println(account.getBalance())
+    var banks = [new Bank(), new Bank()];
+    for (const bank: banks) {
+        println(account.["default"].getBalance())
     }
 }

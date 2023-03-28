@@ -296,7 +296,7 @@ static AstNode *member(Parser *P, const FilePos *begin, AstNode *operand)
     if (check(P, tokIntLiteral))
         member = parseInteger(P);
     else
-        member = parsePath(P);
+        member = parseIdentifier(P);
 
     return newAstNode(
         P,
@@ -546,6 +546,23 @@ static AstNode *parseTupleType(Parser *P)
         P,
         &tok.fileLoc.begin,
         &(AstNode){.tag = astTupleType, .tupleType = {.args = elems}});
+}
+
+static AstNode *parseArrayType(Parser *P)
+{
+    AstNode *type = NULL, *dims = NULL;
+    Token tok = *consume0(P, tokLBracket);
+    type = parseType(P);
+    if (match(P, tokComma)) {
+        dims = parseAtLeastOne(
+            P, "array index", tokRBracket, tokComma, expressionWithoutStructs);
+    }
+    consume0(P, tokRBracket);
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astArrayType,
+                   .arrayType = {.elementType = type, .dims = dims}});
 }
 
 static AstNode *parseGenericParam(Parser *P)
@@ -1270,46 +1287,28 @@ static AstNode *statement(Parser *P)
 
 static AstNode *parseType(Parser *P)
 {
-    AstNode *node = NULL;
     Token tok = *current(P);
     if (isPrimitiveType(tok.tag)) {
-        node = primitive(P);
+        return primitive(P);
     }
     else {
         switch (tok.tag) {
         case tokIdent:
-            node = parsePath(P);
-            break;
+            return parsePath(P);
         case tokLParen:
-            node = parseTupleType(P);
-            break;
+            return parseTupleType(P);
+        case tokLBracket:
+            return parseArrayType(P);
         case tokAsync:
         case tokFunc:
-            node = parseFuncType(P);
-            break;
+            return parseFuncType(P);
         case tokBAnd:
-            node = parsePointerType(P);
-            break;
+            return parsePointerType(P);
         default:
             reportUnexpectedToken(P, "a type");
             break;
         }
     }
-
-    while (match(P, tokLBracket)) {
-        AstNode *size = NULL;
-        if (!check(P, tokRBracket)) {
-            size = expression(P, false);
-        }
-        consume0(P, tokRBracket);
-        node = newAstNode(
-            P,
-            &node->loc.begin,
-            &(AstNode){.tag = astArrayType,
-                       .arrayType = {.elementType = node, .size = size}});
-    }
-
-    return node;
 }
 
 static AstNode *parseStructField(Parser *P, bool isPrivate)
@@ -1444,7 +1443,7 @@ static AstNode *enumDecl(Parser *P, bool isPublic)
 
 static AstNode *aliasDecl(Parser *P, bool isPublic, bool isNative)
 {
-    AstNode *alias = {NULL};
+    AstNode *alias = NULL;
     Token tok = *consume0(P, tokType);
     cstring name = getTokenString(P, consume0(P, tokIdent), false);
     if (!isNative) {
