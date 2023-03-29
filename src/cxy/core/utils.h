@@ -220,9 +220,9 @@ attr(noreturn) attr(format, printf, 1, 2) void cynAbort(const char *fmt, ...);
     __typeof__((P).s) B = LineVAR(uPp).s
 
 #define make(T, ...) ((T){__VA_ARGS__})
-#define New(A, T, ...)                                                         \
+#define New(P, T, ...)                                                         \
     ({                                                                         \
-        T *LineVAR(aNa) = Allocator_alloc(A, sizeof(T));                       \
+        T *LineVAR(aNa) = allocFromMemPool((P), sizeof(T));                    \
         *LineVAR(aNa) = make(T, __VA_ARGS__);                                  \
         LineVAR(aNa);                                                          \
     })

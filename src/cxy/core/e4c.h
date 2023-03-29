@@ -28,7 +28,7 @@
 #define E4C_DEBUG_INFO NULL, 0
 #endif
 
-/* Represents an exception type */
+/* Represents an exception key */
 struct e4c_exception_type {
     const char *name;
     const char *default_message;
@@ -44,7 +44,7 @@ struct e4c_exception_type {
 E4C_DECLARE_EXCEPTION(RuntimeException);
 E4C_DECLARE_EXCEPTION(NullPointerException);
 
-/* Represents an instance of an exception type */
+/* Represents an instance of an exception key */
 struct e4c_exception {
     char message[E4C_MESSAGE_SIZE];
     const char *file;
@@ -55,7 +55,7 @@ struct e4c_exception {
 /* Retrieve current thrown exception */
 #define E4C_EXCEPTION e4c.err
 
-/* Returns whether current exception is of a given type */
+/* Returns whether current exception is of a given key */
 #define E4C_IS_INSTANCE_OF(t)                                                  \
     (E4C_EXCEPTION.type == &t || e4c_extends(E4C_EXCEPTION.type, &t))
 
@@ -76,7 +76,6 @@ struct e4c_exception {
                 __VA_ARGS__                                                    \
         }                                                                      \
     }
-
 
 #define E4C_THROW(type, message) e4c_throw(&type, E4C_DEBUG_INFO, message)
 

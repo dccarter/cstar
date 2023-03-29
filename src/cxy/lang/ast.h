@@ -436,15 +436,19 @@ typedef struct AstVisitor {
     void *context;
 
     void (*visitors[COUNT])(struct AstVisitor *, AstNode *node);
+    void (*fallback)(struct AstVisitor *, AstNode *);
 } AstVisitor;
 
 typedef struct ConstAstVisitor {
     void *context;
 
     void (*visitors[COUNT])(struct ConstAstVisitor *, const AstNode *node);
+    void (*fallback)(struct ConstAstVisitor *, const AstNode *);
 } ConstAstVisitor;
 
 // clang-format off
+#define getAstVisitorContext(V) ((AstVisitor *)(V))->context
+#define makeAstVisitor(C, ...) (AstVisitor){.context = (C), .visitors = __VA_ARGS__}
 #define getConstAstVisitorContext(V) ((ConstAstVisitor *)(V))->context
 #define makeConstAstVisitor(C, ...) (ConstAstVisitor){.context = (C), .visitors = __VA_ARGS__}
 // clang-format on

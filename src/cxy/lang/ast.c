@@ -522,7 +522,7 @@ static void printTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
     if (context->isWithinStruct && !node->typeDecl.isPublic)
         format(context->state, "- ", NULL);
 
-    printKeyword(context->state, "type");
+    printKeyword(context->state, "key");
     format(context->state, " {s}", (FormatArg[]){{.s = node->typeDecl.name}});
     if (node->typeDecl.genericParams) {
         printManyAstsWithDelim(
@@ -546,7 +546,7 @@ static void printUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
     if (context->isWithinStruct && !node->unionDecl.isPublic)
         format(context->state, "- ", NULL);
 
-    printKeyword(context->state, "type");
+    printKeyword(context->state, "key");
     format(context->state, " {s}", (FormatArg[]){{.s = node->unionDecl.name}});
     if (node->unionDecl.genericParams) {
         printManyAstsWithDelim(
@@ -800,12 +800,18 @@ void astVisit(AstVisitor *visitor, AstNode *node)
     if (visitor->visitors[node->tag]) {
         visitor->visitors[node->tag](visitor, node);
     }
+    else if (visitor->fallback) {
+        visitor->fallback(visitor, node);
+    }
 }
 
 void astConstVisit(ConstAstVisitor *visitor, const AstNode *node)
 {
     if (visitor->visitors[node->tag]) {
         visitor->visitors[node->tag](visitor, node);
+    }
+    else if (visitor->fallback) {
+        visitor->fallback(visitor, node);
     }
 }
 
@@ -889,7 +895,7 @@ bool isTuple(const AstNode *node)
 
 bool isAssignableExpr(attr(unused) const AstNode *node)
 {
-    csAssert(node->type, "expression must have been type-checked first");
+    csAssert(node->type, "expression must have been key-checked first");
     return false;
 }
 
@@ -1044,7 +1050,7 @@ const char *getDeclKeyword(AstTag tag)
         return "func";
     case astTypeDecl:
     case astUnionDecl:
-        return "type";
+        return "key";
     case astEnumDecl:
         return "enum";
     case astStructDecl:

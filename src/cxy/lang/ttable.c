@@ -1,0 +1,283 @@
+//
+// Created by Carter on 2023-03-22.
+//
+
+#include "ttable.h"
+#include "ast.h"
+
+#include <core/alloc.h>
+#include <core/htable.h>
+#include <core/mempool.h>
+#include <core/strpool.h>
+
+#include <memory.h>
+
+typedef struct TypeTable {
+    HashTable types;
+    MemPool *memPool;
+    StrPool strPool;
+    u64 typeCount;
+    const Type *autoType;
+    const Type *voidType;
+    const Type *nullType;
+    const Type *errorType;
+    const Type *stringType;
+    const Type *primitiveTypes[prtCOUNT];
+} TypeTable;
+
+const Type *autoType;
+const Type *voidType;
+const Type *nullType;
+const Type *errorType;
+const Type *primitiveTypes[prtCOUNT];
+
+static HashCode hasTypes(HashCode hash, const Type **types, u64 count)
+{
+    for (u64 i = 0; i < count; i++)
+        hash = hashUint64(hash, types[i]->tag);
+    return hash;
+}
+
+static HashCode hashType(HashCode hash, const Type *type)
+{
+    hash = hashUint32(hash, type->tag);
+    switch (type->tag) {
+    case typAuto:
+    case typNull:
+    case typVoid:
+    case typError:
+        break;
+    case typPrimitive:
+        hash = hashUint32(hash, type->primitive.id);
+        break;
+    case typString:
+        break;
+    case typPointer:
+        hash = hashUint8(hash, type->pointer.isConst);
+        hash = hashType(hash, type->pointer.pointed);
+        break;
+    case typArray:
+        hash = hashType(hash, type->array.elementType);
+        hash = hashUint64(hash, type->array.size);
+        break;
+    case typMap:
+        hash = hashType(hash, type->map.key);
+        hash = hashType(hash, type->map.value);
+        break;
+    case typAlias:
+        hash = hashType(hash, type->alias.aliased);
+        break;
+    case typUnion:
+    case typTuple:
+        hash = hasTypes(hash, type->tuple.members, type->tuple.count);
+        break;
+    case typFunc:
+        hash = hashUint8(hash, type->func.isVariadic);
+        hash = hasTypes(hash, type->func.params, type->func.paramsCount);
+        hash = hashType(hash, type->func.retType);
+        break;
+    default:
+        csAssert0("invalid type");
+    }
+
+    return hash;
+}
+
+static bool compareTypes(const Type *left, const Type *right);
+
+static bool compareManyTypes(const Type **left, const Type **right, u64 count)
+{
+    for (u64 i = 0; i < count; i++) {
+        if (!compareTypes(left[i], right[i]))
+            return false;
+    }
+    return true;
+}
+
+static bool compareTypes(const Type *left, const Type *right)
+{
+    if (left->tag != right->tag)
+        return false;
+    switch (left->tag) {
+    case typAuto:
+    case typError:
+    case typVoid:
+    case typNull:
+        break;
+    case typPrimitive:
+        return left->primitive.id == right->primitive.id;
+    case typPointer:
+        return (left->pointer.isConst == right->pointer.isConst) &&
+               compareTypes(left->pointer.pointed, right->pointer.pointed);
+    case typArray:
+        return (left->array.size == right->array.size) &&
+               compareTypes(left->array.elementType, right->array.elementType);
+    case typMap:
+        return compareTypes(left->map.key, right->map.key) &&
+               compareTypes(left->map.value, right->map.value);
+    case typAlias:
+        return compareTypes(left->alias.aliased, right->alias.aliased);
+    case typTuple:
+    case typUnion:
+        return (left->tUnion.count == right->tUnion.count) &&
+               compareManyTypes(left->tUnion.members,
+                                right->tUnion.members,
+                                left->tUnion.count);
+    case typFunc:
+        return (left->func.isVariadic == right->func.isVariadic) &&
+               (left->func.paramsCount == right->func.paramsCount) &&
+               compareTypes(left->func.retType, right->func.retType) &&
+               compareManyTypes(left->func.params,
+                                right->func.params,
+                                right->func.paramsCount);
+    default:
+        csAssert0("invalid type");
+    }
+
+    return true;
+}
+
+static const Type **copyTypes(TypeTable *table, const Type **types, u64 count)
+{
+    const Type **dest =
+        allocFromMemPool(table->memPool, sizeof(Type *) * count);
+    memcpy(dest, types, sizeof(Type *) * count);
+    return dest;
+}
+
+static bool compareTypesWrapper(const void *left, const void *right)
+{
+    return compareTypes(*(const Type **)left, *(const Type **)right);
+}
+
+static const Type *getOrInsertType(TypeTable *table, const Type *type)
+{
+    u32 hash = hashType(hashInit(), type);
+    const Type *found = findInHashTable(&table->types, //
+                                        &type,
+                                        hash,
+                                        sizeof(Type *),
+                                        compareTypesWrapper);
+    if (found)
+        return found;
+
+    Type *newType = New(table->memPool, Type);
+    memcpy(newType, type, sizeof(Type));
+
+    if (!insertInHashTable(
+            &table->types, newType, hash, sizeof(Type *), compareTypesWrapper))
+        csAssert0("failing to insert in type table");
+
+    return newType;
+}
+
+TypeTable *newTypeTable(MemPool *pool)
+{
+    TypeTable *table = mallocOrDie(sizeof(TypeTable));
+    table->types = newHashTable(sizeof(Type *));
+    table->strPool = newStrPool(pool);
+    table->memPool = pool;
+    table->typeCount = 0;
+    for (u64 i = 0; i < prtCOUNT; i++)
+        table->primitiveTypes[i] = getOrInsertType(
+            table, &make(Type, .tag = typPrimitive, .primitive.id = i));
+
+    table->errorType = getOrInsertType(table, &make(Type, .tag = typError));
+    table->autoType = getOrInsertType(table, &make(Type, .tag = typAuto));
+    table->voidType = getOrInsertType(table, &make(Type, .tag = typVoid));
+    table->nullType = getOrInsertType(table, &make(Type, .tag = typNull));
+    table->stringType = getOrInsertType(table, &make(Type, .tag = typString));
+
+    return table;
+}
+
+void freeTypeTable(TypeTable *table)
+{
+    freeHashTable(&table->types);
+    freeStrPool(&table->strPool);
+    free(table);
+}
+
+const Type *resolveType(TypeTable *table, const Type *type)
+{
+    while (true) {
+        switch (type->tag) {
+        case typAlias:
+            type = resolveType(table, type->alias.aliased);
+            break;
+        default:
+            return type;
+        }
+    }
+}
+
+const Type *makeErrorType(TypeTable *table) { return table->errorType; }
+
+const Type *makeAutoType(TypeTable *table) { return table->autoType; }
+
+const Type *makeVoidType(TypeTable *table) { return table->voidType; }
+
+const Type *makeNullType(TypeTable *table) { return table->nullType; }
+
+const Type *makeStringType(TypeTable *table) { return table->stringType; }
+
+const Type *makePrimitiveType(TypeTable *table, PrtId id)
+{
+    csAssert(id != prtCOUNT, "");
+    return table->primitiveTypes[id];
+}
+
+const Type *makeArrayType(TypeTable *table, const Type *elementType, u64 size)
+{
+    Type type = make(Type,
+                     .tag = typArray,
+                     .array = {.elementType = elementType, .size = size});
+
+    return getOrInsertType(table, &type);
+}
+
+const Type *makeMapType(TypeTable *table, const Type *key, const Type *value)
+{
+    Type type = make(Type, .tag = typMap, .map = {.key = key, .value = value});
+
+    return getOrInsertType(table, &type);
+}
+
+const Type *makeAliasType(TypeTable *table, const Type *aliased)
+{
+    Type type = make(Type, .tag = typAlias, .alias = {.aliased = aliased});
+
+    return getOrInsertType(table, &type);
+}
+
+const Type *makeUnionType(TypeTable *table, const Type **members, u64 count)
+{
+    Type type = make(
+        Type, .tag = typUnion, .tUnion = {.members = members, .count = count});
+
+    return getOrInsertType(table, &type);
+}
+
+const Type *makeTupleType(TypeTable *table, const Type **members, u64 count)
+{
+    Type type = make(
+        Type, .tag = typTuple, .tuple = {.members = members, .count = count});
+
+    return getOrInsertType(table, &type);
+}
+
+const Type *makeFuncType(TypeTable *table,
+                         bool isVariadic,
+                         const Type *retType,
+                         const Type **params,
+                         u64 paramsCount)
+{
+    Type type = make(Type,
+                     .tag = typFunc,
+                     .func = {.isVariadic = isVariadic,
+                              .retType = retType,
+                              .paramsCount = paramsCount,
+                              .params = params});
+
+    return getOrInsertType(table, &type);
+}

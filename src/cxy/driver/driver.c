@@ -6,6 +6,8 @@
 #include "lang/ast.h"
 #include "lang/lexer.h"
 #include "lang/parser.h"
+#include "lang/tcheck.h"
+#include "lang/ttable.h"
 
 static AstNode *parseFile(const char *fileName, MemPool *memPool, Log *log)
 {
@@ -34,7 +36,13 @@ bool compileFile(const char *fileName, const Options *options, Log *log)
     MemPool memPool = newMemPool();
     AstNode *program = parseFile(fileName, &memPool, log);
 
-    if (options->printAst) {
+    if (!options->noTypeCheck && log->errorCount == 0) {
+        TypeTable *table = newTypeTable(&memPool);
+        typeCheck(program, log, &memPool, table);
+        freeTypeTable(table);
+    }
+
+    if (options->printAst && log->errorCount == 0) {
         FormatState state = newFormatState(
             "    ", log->state->ignoreStyle || !isColorSupported(stdout));
         printAst(&state, program);

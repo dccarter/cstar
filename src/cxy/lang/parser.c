@@ -269,7 +269,7 @@ static inline AstNode *primitive(Parser *P)
 {
     const Token tok = *current(P);
     if (!isPrimitiveType(tok.tag)) {
-        reportUnexpectedToken(P, "a primitive type");
+        reportUnexpectedToken(P, "a primitive key");
     }
     advance(P);
     return newAstNode(
@@ -727,7 +727,7 @@ static AstNode *parsePath(Parser *P)
 {
     AstNodeList parts = {NULL};
     Token tok = *current(P);
-
+    
     do {
         listAddAstNode(&parts, pathElement(P));
         if (!check(P, tokDot) || peek(P, 1)->tag != tokIdent)
@@ -1042,7 +1042,7 @@ static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative)
     if (match(P, tokColon))
         ret = parseType(P);
     else if (isNative)
-        reportUnexpectedToken(P, "colon before native function return type");
+        reportUnexpectedToken(P, "colon before native function return key");
 
     if (!isNative) {
         if (match(P, tokFatArrow)) {
@@ -1291,7 +1291,7 @@ static AstNode *parseType(Parser *P)
             node = parsePointerType(P);
             break;
         default:
-            reportUnexpectedToken(P, "a type");
+            reportUnexpectedToken(P, "a key");
             break;
         }
     }
@@ -1384,7 +1384,7 @@ static AstNode *structDecl(Parser *P, bool isPublic)
 
     if (match(P, tokLBracket)) {
         gParams = parseAtLeastOne(
-            P, "generic type params", tokRBracket, tokComma, parseGenericParam);
+            P, "generic key params", tokRBracket, tokComma, parseGenericParam);
         consume0(P, tokRBracket);
     }
 

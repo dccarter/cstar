@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 if (NOT CMAKE_BUILD_TYPE)
-    # default build type is Debug
+    # default build key is Debug
     set(CMAKE_BUILD_TYPE Debug)
 endif ()
 
@@ -41,6 +41,8 @@ set(CXY_LANG_SOURCES
         src/cxy/lang/ast.c
         src/cxy/lang/lexer.c
         src/cxy/lang/parser.c
+        src/cxy/lang/tcheck.c
+        src/cxy/lang/ttable.c
         src/cxy/lang/types.c)
 
 set(CXY_DRIVER_SOURCES

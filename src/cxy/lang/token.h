@@ -81,7 +81,7 @@
     f(Func, "func")                 \
     f(Var, "var")                   \
     f(Const, "const")               \
-    f(Type, "type")                 \
+    f(Type, "key")                 \
     f(Native, "native")             \
     f(Struct, "struct")             \
     f(Enum, "enum")                 \
