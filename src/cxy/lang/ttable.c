@@ -236,6 +236,15 @@ const Type *makeArrayType(TypeTable *table, const Type *elementType, u64 size)
     return getOrInsertType(table, &type);
 }
 
+const Type *makePointerType(TypeTable *table, const Type *pointed, bool isConst)
+{
+    Type type = make(Type,
+                     .tag = typPointer,
+                     .pointer = {.pointed = pointed, .isConst = isConst});
+
+    return getOrInsertType(table, &type);
+}
+
 const Type *makeMapType(TypeTable *table, const Type *key, const Type *value)
 {
     Type type = make(Type, .tag = typMap, .map = {.key = key, .value = value});

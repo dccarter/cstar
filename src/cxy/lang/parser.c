@@ -269,7 +269,7 @@ static inline AstNode *primitive(Parser *P)
 {
     const Token tok = *current(P);
     if (!isPrimitiveType(tok.tag)) {
-        reportUnexpectedToken(P, "a primitive key");
+        reportUnexpectedToken(P, "a primitive type");
     }
     advance(P);
     return newAstNode(
@@ -296,7 +296,7 @@ static AstNode *member(Parser *P, const FilePos *begin, AstNode *operand)
     if (check(P, tokIntLiteral))
         member = parseInteger(P);
     else
-        member = parsePath(P);
+        member = parseIdentifier(P);
 
     return newAstNode(
         P,
@@ -548,6 +548,23 @@ static AstNode *parseTupleType(Parser *P)
         &(AstNode){.tag = astTupleType, .tupleType = {.args = elems}});
 }
 
+static AstNode *parseArrayType(Parser *P)
+{
+    AstNode *type = NULL, *dims = NULL;
+    Token tok = *consume0(P, tokLBracket);
+    type = parseType(P);
+    if (match(P, tokComma)) {
+        dims = parseAtLeastOne(
+            P, "array index", tokRBracket, tokComma, expressionWithoutStructs);
+    }
+    consume0(P, tokRBracket);
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astArrayType,
+                   .arrayType = {.elementType = type, .dims = dims}});
+}
+
 static AstNode *parseGenericParam(Parser *P)
 {
     AstNodeList constraints = {NULL};
@@ -727,7 +744,7 @@ static AstNode *parsePath(Parser *P)
 {
     AstNodeList parts = {NULL};
     Token tok = *current(P);
-    
+
     do {
         listAddAstNode(&parts, pathElement(P));
         if (!check(P, tokDot) || peek(P, 1)->tag != tokIdent)
@@ -1042,7 +1059,7 @@ static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative)
     if (match(P, tokColon))
         ret = parseType(P);
     else if (isNative)
-        reportUnexpectedToken(P, "colon before native function return key");
+        reportUnexpectedToken(P, "colon before native function return type");
 
     if (!isNative) {
         if (match(P, tokFatArrow)) {
@@ -1270,46 +1287,28 @@ static AstNode *statement(Parser *P)
 
 static AstNode *parseType(Parser *P)
 {
-    AstNode *node = NULL;
     Token tok = *current(P);
     if (isPrimitiveType(tok.tag)) {
-        node = primitive(P);
+        return primitive(P);
     }
     else {
         switch (tok.tag) {
         case tokIdent:
-            node = parsePath(P);
-            break;
+            return parsePath(P);
         case tokLParen:
-            node = parseTupleType(P);
-            break;
+            return parseTupleType(P);
+        case tokLBracket:
+            return parseArrayType(P);
         case tokAsync:
         case tokFunc:
-            node = parseFuncType(P);
-            break;
+            return parseFuncType(P);
         case tokBAnd:
-            node = parsePointerType(P);
-            break;
+            return parsePointerType(P);
         default:
-            reportUnexpectedToken(P, "a key");
+            reportUnexpectedToken(P, "a type");
             break;
         }
     }
-
-    while (match(P, tokLBracket)) {
-        AstNode *size = NULL;
-        if (!check(P, tokRBracket)) {
-            size = expression(P, false);
-        }
-        consume0(P, tokRBracket);
-        node = newAstNode(
-            P,
-            &node->loc.begin,
-            &(AstNode){.tag = astArrayType,
-                       .arrayType = {.elementType = node, .size = size}});
-    }
-
-    return node;
 }
 
 static AstNode *parseStructField(Parser *P, bool isPrivate)
@@ -1384,7 +1383,7 @@ static AstNode *structDecl(Parser *P, bool isPublic)
 
     if (match(P, tokLBracket)) {
         gParams = parseAtLeastOne(
-            P, "generic key params", tokRBracket, tokComma, parseGenericParam);
+            P, "generic type params", tokRBracket, tokComma, parseGenericParam);
         consume0(P, tokRBracket);
     }
 
@@ -1444,7 +1443,7 @@ static AstNode *enumDecl(Parser *P, bool isPublic)
 
 static AstNode *aliasDecl(Parser *P, bool isPublic, bool isNative)
 {
-    AstNode *alias = {NULL};
+    AstNode *alias = NULL;
     Token tok = *consume0(P, tokType);
     cstring name = getTokenString(P, consume0(P, tokIdent), false);
     if (!isNative) {

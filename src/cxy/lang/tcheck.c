@@ -30,6 +30,8 @@ typedef struct {
     } env;
 } CheckerContext;
 
+static const Type *sError;
+
 static inline bool compareSymbols(const void *lhs, const void *rhs)
 {
     return !strcmp(((const Symbol *)lhs)->name, ((const Symbol *)rhs)->name);
@@ -276,15 +278,61 @@ static void checkStringExpr(AstVisitor *visitor, AstNode *node)
     checkMany(visitor, node->stringExpr.parts);
     const AstNode *part = node->stringExpr.parts;
     for (; part; part = part->next) {
-        if (part->type == makeErrorType(ctx->typeTable)) {
-            node->type = makeErrorType(ctx->typeTable);
+        if (part->type == sError) {
+            node->type = sError;
         }
     }
 
     node->type = makeStringType(ctx->typeTable);
 }
 
-static void checkFuncDecl(AstVisitor *visitor, AstNode *node) {}
+static void checkFuncParam(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    defineSymbol(ctx, node->funcParam.name, node);
+    node->type = evalType(visitor, node->funcParam.type);
+    if (node->funcParam.def) {
+        const Type *def = evalType(visitor, node->funcParam.def);
+        if (isTypeAssignableFrom(ctx->typeTable, node->type, def)) {
+            logError(ctx->L,
+                     &node->funcParam.def->loc,
+                     "parameter default value type '{t}' not compatible with "
+                     "parameter type '{t}",
+                     (FormatArg[]){{.t = def}, {.t = node->type}});
+        }
+    }
+}
+
+static void checkFuncDecl(AstVisitor *visitor, AstNode *node)
+{
+    const Type *ret, **params;
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    u64 paramsCount = countAstNodes(node->funcDecl.params);
+    AstNode *param = node->funcDecl.params;
+    u64 i = 0;
+    bool isVariadic = false;
+
+    defineSymbol(ctx, node->funcDecl.name, node);
+
+    pushScope(ctx, node);
+    params = allocFromMemPool(ctx->pool, sizeof(Type *) * paramsCount);
+    for (; param; param = param->next) {
+        param->parentScope = node;
+        params[i] = evalType(visitor, param);
+        isVariadic = param->funcParam.isVariadic;
+    }
+
+    if (node->funcDecl.ret)
+        evalType(visitor, node->funcDecl.ret);
+
+    node->funcDecl.body->parentScope = node;
+    ret = evalType(visitor, node->funcDecl.body);
+
+    node->type =
+        makeFuncType(ctx->typeTable, isVariadic, ret, params, paramsCount);
+
+    popScope(ctx);
+}
 
 static void checkVarDecl(AstVisitor *visitor, AstNode *node)
 {
@@ -313,7 +361,7 @@ static void checkIdentifier(AstVisitor *visitor, AstNode *node)
     CheckerContext *ctx = getAstVisitorContext(visitor);
     AstNode *symbol = findSymbol(ctx, node->ident.value, &node->loc);
     if (symbol == NULL)
-        node->type = makeErrorType(ctx->typeTable);
+        node->type = sError;
     else
         node->type = symbol->type;
 }
@@ -323,7 +371,7 @@ static void checkPathElement(AstVisitor *visitor, AstNode *node)
     CheckerContext *ctx = getAstVisitorContext(visitor);
     AstNode *symbol = findSymbol(ctx, node->pathElement.name, &node->loc);
     if (symbol == NULL)
-        node->type = makeErrorType(ctx->typeTable);
+        node->type = sError;
     else
         node->type = symbol->type;
 }
@@ -350,7 +398,7 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
         node->type = left;
     }
     else {
-        node->type = makeErrorType(ctx->typeTable);
+        node->type = sError;
     }
 }
 
@@ -362,10 +410,83 @@ static void checkUnary(AstVisitor *visitor, AstNode *node)
     node->type = operand;
 }
 
+static void checkBlock(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    AstNode *stmt = node->blockStmt.stmts;
+
+    for (; stmt; stmt = stmt->next) {
+        stmt->parentScope = node;
+        const Type *type = evalType(visitor, stmt);
+        if (stmt->tag == astReturnStmt) {
+            node->type = type;
+        }
+    }
+
+    if (node->type == NULL) {
+        node->type = makeVoidType(ctx->typeTable);
+    }
+}
+
+static void checkReturn(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    AstNode *func = findEnclosingFunc(ctx, &node->loc);
+    node->type = node->returnStmt.expr
+                     ? evalType(visitor, node->returnStmt.expr)
+                     : makeVoidType(ctx->typeTable);
+    const Type *ret =
+        func && func->funcDecl.ret ? func->funcDecl.ret->type : NULL;
+
+    if (ret && !isTypeAssignableFrom(ctx->typeTable, ret, node->type)) {
+        logError(ctx->L,
+                 &node->returnStmt.expr->loc,
+                 "return value of type '{t}' incompatible with function return "
+                 "type '{t}",
+                 (FormatArg[]){{.t = node->type}, {.t = ret}});
+    }
+    else {
+        AstNode *block = getParentScopeWithTag(node, astBlockStmt);
+        if (block && block->type &&
+            !isTypeAssignableFrom(ctx->typeTable, block->type, node->type)) {
+            logError(ctx->L,
+                     &node->returnStmt.expr->loc,
+                     "inconsistent return types in auto function, '{t}' not "
+                     "compatible with '{t}'",
+                     (FormatArg[]){{.t = node->type}, {.t = block->type}});
+        }
+    }
+}
+
 static void checkPrimitiveType(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     node->type = makePrimitiveType(ctx->typeTable, node->primitiveType.id);
+}
+
+static void checkPointerType(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    node->type = makePointerType(ctx->typeTable,
+                                 evalType(visitor, node->pointerType.pointed),
+                                 node->pointerType.isConst);
+}
+
+static void checkArrayType(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    const Type *element = evalType(visitor, node->arrayType.elementType);
+    // TODO const evaluate dimensions
+    node->type = makeArrayType(ctx->typeTable, element, 0);
+}
+
+static void checkTypeDecl(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    defineSymbol(ctx, node->typeDecl.name, node);
+
+    node->type = makeAliasType(ctx->typeTable,
+                               evalType(visitor, node->typeDecl.aliased));
 }
 
 void typeCheck(AstNode *program, Log *L, MemPool *pool, TypeTable *typeTable)
@@ -388,16 +509,24 @@ void typeCheck(AstNode *program, Log *L, MemPool *pool, TypeTable *typeTable)
         [astFloatLit] = checkLiterals,
         [astStringLit] = checkLiterals,
         [astStringExpr] = checkStringExpr,
+        [astFuncParam] = checkFuncParam,
         [astFuncDecl] = checkFuncDecl,
         [astVarDecl] = checkVarDecl,
         [astConstDecl] = checkVarDecl,
         [astIdentifier] = checkIdentifier,
         [astBinaryExpr] = checkBinary,
         [astUnaryExpr] = checkUnary,
-        [astPrimitiveType] = checkPrimitiveType
+        [astBlockStmt] = checkBlock,
+        [astReturnStmt] = checkReturn,
+        [astPrimitiveType] = checkPrimitiveType,
+        [astArrayType] = checkArrayType,
+        [astPointerType] = checkPointerType,
+        [astTypeDecl] = checkTypeDecl
     },
     .fallback = checkFallback);
     // clang-format off
+
+    sError = makeErrorType(context.typeTable);
 
     astVisit(&visitor, program);
 }

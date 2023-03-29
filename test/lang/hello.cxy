@@ -2,4 +2,9 @@
  * Simplicity
  */
 
-const name : u64 = 100;
+type string = [u8]
+
+func main(args: [string]) {
+    const a = 100;
+    const b = f"'${arg.[0]}' a is ${a}";
+}

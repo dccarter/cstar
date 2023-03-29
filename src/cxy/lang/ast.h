@@ -208,7 +208,7 @@ typedef struct AstNode {
 
         struct {
             struct AstNode *elementType;
-            struct AstNode *size;
+            struct AstNode *dims;
         } arrayType;
 
         struct {

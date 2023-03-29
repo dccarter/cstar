@@ -330,10 +330,10 @@ static void printTupleType(ConstAstVisitor *visitor, const AstNode *node)
 static void printArrayType(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
-    astConstVisit(visitor, node->arrayType.elementType);
     format(context->state, "[", NULL);
-    if (node->arrayType.size != NULL)
-        astConstVisit(visitor, node->arrayType.size);
+    astConstVisit(visitor, node->arrayType.elementType);
+    if (node->arrayType.dims != NULL)
+        printManyAstsWithDelim(visitor, "", ", ", "", node->arrayType.dims);
     format(context->state, "]", NULL);
 }
 
@@ -522,7 +522,7 @@ static void printTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
     if (context->isWithinStruct && !node->typeDecl.isPublic)
         format(context->state, "- ", NULL);
 
-    printKeyword(context->state, "key");
+    printKeyword(context->state, "type");
     format(context->state, " {s}", (FormatArg[]){{.s = node->typeDecl.name}});
     if (node->typeDecl.genericParams) {
         printManyAstsWithDelim(
@@ -546,7 +546,7 @@ static void printUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
     if (context->isWithinStruct && !node->unionDecl.isPublic)
         format(context->state, "- ", NULL);
 
-    printKeyword(context->state, "key");
+    printKeyword(context->state, "type");
     format(context->state, " {s}", (FormatArg[]){{.s = node->unionDecl.name}});
     if (node->unionDecl.genericParams) {
         printManyAstsWithDelim(
@@ -1050,7 +1050,7 @@ const char *getDeclKeyword(AstTag tag)
         return "func";
     case astTypeDecl:
     case astUnionDecl:
-        return "key";
+        return "type";
     case astEnumDecl:
         return "enum";
     case astStructDecl:
