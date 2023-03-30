@@ -7,6 +7,18 @@
 
 #include "token.h"
 
+static void printManyTypes(FormatState *state,
+                           const Type **types,
+                           u64 count,
+                           cstring sep)
+{
+    for (int i = 0; i < count; i++) {
+        if (i != 0)
+            format(state, "{s}", (FormatArg[]){{.s = sep}});
+        printType(state, types[i]);
+    }
+}
+
 bool isPrimitiveType(TokenTag tag)
 {
     switch (tag) {
@@ -127,5 +139,75 @@ bool isFloatType(TypeTable *table, const Type *type)
 #undef f
     default:
         return false;
+    }
+}
+
+void printType(FormatState *state, const Type *type)
+{
+    switch (type->tag) {
+    case typPrimitive:
+        switch (type->primitive.id) {
+#define f(I, str)                                                              \
+    case prt##I:                                                               \
+        printKeyword(state, str);                                              \
+        return;
+            PRIM_TYPE_LIST(f)
+#undef f
+        default:
+            unreachable("");
+        }
+    case typError:
+        printWithStyle(state, "<error>", errorStyle);
+        break;
+    case typVoid:
+        printKeyword(state, "void");
+        break;
+    case typAuto:
+        printKeyword(state, "auto");
+        break;
+    case typNull:
+        printKeyword(state, "null");
+        break;
+    case typString:
+        printKeyword(state, "string");
+        break;
+    case typPointer:
+        format(state, "&", NULL);
+        printType(state, type->pointer.pointed);
+        break;
+    case typArray:
+        format(state, "[", NULL);
+        printType(state, type->array.elementType);
+        for (u64 i = 0; i < type->array.arity; i++) {
+            if (i == 0)
+                format(state,
+                       "{u64}",
+                       (FormatArg[]){{.u64 = type->array.indexes[i]}});
+            else
+                format(state,
+                       ", {u64}",
+                       (FormatArg[]){{.u64 = type->array.indexes[i]}});
+        }
+        format(state, "]", NULL);
+        break;
+    case typMap:
+        format(state, "{[", NULL);
+        printType(state, type->map.key);
+        format(state, "]: ", NULL);
+        printType(state, type->map.value);
+        format(state, "}", NULL);
+        break;
+    case typAlias:
+    case typUnion:
+        printKeyword(state, "type");
+        format(state, " {s}", (FormatArg[]){{.s = type->name}});
+        break;
+    case typTuple:
+        format(state, "(", NULL);
+        printManyTypes(state, type->tuple.members, type->tuple.count, ", ");
+        format(state, ")", NULL);
+        break;
+    default:
+        unreachable("TODO");
     }
 }

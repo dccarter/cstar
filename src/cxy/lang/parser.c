@@ -80,7 +80,7 @@ static inline Token *advance(Parser *parser)
 
 static inline Token *peek(Parser *parser, u32 index)
 {
-    csAssert(index <= 2, "indices out of bounds");
+    csAssert(index <= 2, "indexes out of bounds");
     return &parser->ahead[1 + index];
 }
 
@@ -309,7 +309,7 @@ static AstNode *indexExpr(Parser *P, AstNode *operand)
 {
     Token tok = *consume0(P, tokIndexExpr);
     AstNode *indices = parseAtLeastOne(P,
-                                       "indices expressions",
+                                       "indexes expressions",
                                        tokRBracket,
                                        tokComma,
                                        expressionWithoutStructs);
@@ -1309,6 +1309,7 @@ static AstNode *parseType(Parser *P)
             break;
         }
     }
+    unreachable("");
 }
 
 static AstNode *parseStructField(Parser *P, bool isPrivate)

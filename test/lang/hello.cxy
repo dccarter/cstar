@@ -5,6 +5,8 @@
 type string = [u8]
 
 func main(args: [string]) {
-    const a = 100;
-    const b = f"'${arg.[0]}' a is ${a}";
+    const a = (100, true);
+    const c : (u16, bool) = a;
+    const d = a.0 + 10;
+    const b = f"'${args.[0]}' a is ${a}";
 }

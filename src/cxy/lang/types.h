@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "core/format.h"
 #include "core/utils.h"
 #include <stdbool.h>
 
@@ -84,6 +85,7 @@ typedef struct EnumOption {
 typedef struct Type {
     TTag tag;
     u64 size;
+    cstring name;
 
     struct {
         PrtId id;
@@ -95,7 +97,8 @@ typedef struct Type {
     } pointer;
 
     struct {
-        u64 size;
+        const u64 *indexes;
+        u64 arity;
         const Type *elementType;
     } array;
 
@@ -111,7 +114,12 @@ typedef struct Type {
     struct {
         u64 count;
         const Type **members;
-    } tuple, tUnion;
+    } tUnion;
+
+    struct {
+        u64 count;
+        const Type **members;
+    } tuple;
 
     struct {
         bool isVariadic : 1;
@@ -138,3 +146,5 @@ bool isIntegerType(TypeTable *table, const Type *type);
 bool isSignedType(TypeTable *table, const Type *type);
 bool isUnsignedType(TypeTable *table, const Type *type);
 bool isFloatType(TypeTable *table, const Type *type);
+
+void printType(FormatState *state, const Type *type);

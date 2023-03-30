@@ -12,6 +12,8 @@
 
 #include <memory.h>
 
+typedef Pair(bool, const Type *) GetOrInset;
+
 typedef struct TypeTable {
     HashTable types;
     MemPool *memPool;
@@ -58,7 +60,8 @@ static HashCode hashType(HashCode hash, const Type *type)
         break;
     case typArray:
         hash = hashType(hash, type->array.elementType);
-        hash = hashUint64(hash, type->array.size);
+        for (u64 i = 0; i < type->array.arity; i++)
+            hash = hashUint64(hash, type->array.indexes[i]);
         break;
     case typMap:
         hash = hashType(hash, type->map.key);
@@ -110,8 +113,14 @@ static bool compareTypes(const Type *left, const Type *right)
         return (left->pointer.isConst == right->pointer.isConst) &&
                compareTypes(left->pointer.pointed, right->pointer.pointed);
     case typArray:
-        return (left->array.size == right->array.size) &&
-               compareTypes(left->array.elementType, right->array.elementType);
+        if ((left->array.arity == right->array.arity) &&
+            compareTypes(left->array.elementType, right->array.elementType)) {
+            for (u64 i = 0; i < left->array.arity; i++)
+                if (left->array.indexes[i] != right->array.indexes[i])
+                    return false;
+            return true;
+        }
+        return false;
     case typMap:
         return compareTypes(left->map.key, right->map.key) &&
                compareTypes(left->map.value, right->map.value);
@@ -147,19 +156,19 @@ static const Type **copyTypes(TypeTable *table, const Type **types, u64 count)
 
 static bool compareTypesWrapper(const void *left, const void *right)
 {
-    return compareTypes(*(const Type **)left, *(const Type **)right);
+    return compareTypes((const Type *)left, (const Type *)right);
 }
 
-static const Type *getOrInsertType(TypeTable *table, const Type *type)
+static GetOrInset getOrInsertType(TypeTable *table, const Type *type)
 {
     u32 hash = hashType(hashInit(), type);
     const Type *found = findInHashTable(&table->types, //
-                                        &type,
+                                        type,
                                         hash,
                                         sizeof(Type *),
                                         compareTypesWrapper);
     if (found)
-        return found;
+        return (GetOrInset){true, found};
 
     Type *newType = New(table->memPool, Type);
     memcpy(newType, type, sizeof(Type));
@@ -168,7 +177,7 @@ static const Type *getOrInsertType(TypeTable *table, const Type *type)
             &table->types, newType, hash, sizeof(Type *), compareTypesWrapper))
         csAssert0("failing to insert in type table");
 
-    return newType;
+    return (GetOrInset){false, newType};
 }
 
 TypeTable *newTypeTable(MemPool *pool)
@@ -179,14 +188,19 @@ TypeTable *newTypeTable(MemPool *pool)
     table->memPool = pool;
     table->typeCount = 0;
     for (u64 i = 0; i < prtCOUNT; i++)
-        table->primitiveTypes[i] = getOrInsertType(
-            table, &make(Type, .tag = typPrimitive, .primitive.id = i));
+        table->primitiveTypes[i] =
+            getOrInsertType(table,
+                            &make(Type,
+                                  .tag = typPrimitive,
+                                  .name = getPrimitiveTypeName(i),
+                                  .primitive.id = i))
+                .s;
 
-    table->errorType = getOrInsertType(table, &make(Type, .tag = typError));
-    table->autoType = getOrInsertType(table, &make(Type, .tag = typAuto));
-    table->voidType = getOrInsertType(table, &make(Type, .tag = typVoid));
-    table->nullType = getOrInsertType(table, &make(Type, .tag = typNull));
-    table->stringType = getOrInsertType(table, &make(Type, .tag = typString));
+    table->errorType = getOrInsertType(table, &make(Type, .tag = typError)).s;
+    table->autoType = getOrInsertType(table, &make(Type, .tag = typAuto)).s;
+    table->voidType = getOrInsertType(table, &make(Type, .tag = typVoid)).s;
+    table->nullType = getOrInsertType(table, &make(Type, .tag = typNull)).s;
+    table->stringType = getOrInsertType(table, &make(Type, .tag = typString)).s;
 
     return table;
 }
@@ -227,13 +241,26 @@ const Type *makePrimitiveType(TypeTable *table, PrtId id)
     return table->primitiveTypes[id];
 }
 
-const Type *makeArrayType(TypeTable *table, const Type *elementType, u64 size)
+const Type *makeArrayType(TypeTable *table,
+                          const Type *elementType,
+                          const u64 *indexes,
+                          u64 indexCount)
 {
     Type type = make(Type,
                      .tag = typArray,
-                     .array = {.elementType = elementType, .size = size});
+                     .array = {.elementType = elementType,
+                               .indexes = indexes,
+                               .arity = indexCount});
 
-    return getOrInsertType(table, &type);
+    GetOrInset ret = getOrInsertType(table, &type);
+    if (!ret.f) {
+        ((Type *)ret.s)->array.indexes =
+            allocFromMemPool(table->memPool, indexCount * sizeof(u64));
+        memcpy(
+            ((u64 *)ret.s->array.indexes), indexes, sizeof(u64) * indexCount);
+    }
+
+    return ret.s;
 }
 
 const Type *makePointerType(TypeTable *table, const Type *pointed, bool isConst)
@@ -242,21 +269,21 @@ const Type *makePointerType(TypeTable *table, const Type *pointed, bool isConst)
                      .tag = typPointer,
                      .pointer = {.pointed = pointed, .isConst = isConst});
 
-    return getOrInsertType(table, &type);
+    return getOrInsertType(table, &type).s;
 }
 
 const Type *makeMapType(TypeTable *table, const Type *key, const Type *value)
 {
     Type type = make(Type, .tag = typMap, .map = {.key = key, .value = value});
 
-    return getOrInsertType(table, &type);
+    return getOrInsertType(table, &type).s;
 }
 
 const Type *makeAliasType(TypeTable *table, const Type *aliased)
 {
     Type type = make(Type, .tag = typAlias, .alias = {.aliased = aliased});
 
-    return getOrInsertType(table, &type);
+    return getOrInsertType(table, &type).s;
 }
 
 const Type *makeUnionType(TypeTable *table, const Type **members, u64 count)
@@ -264,7 +291,12 @@ const Type *makeUnionType(TypeTable *table, const Type **members, u64 count)
     Type type = make(
         Type, .tag = typUnion, .tUnion = {.members = members, .count = count});
 
-    return getOrInsertType(table, &type);
+    GetOrInset ret = getOrInsertType(table, &type);
+    if (!ret.f) {
+        ((Type *)ret.s)->tUnion.members = copyTypes(table, members, count);
+    }
+
+    return ret.s;
 }
 
 const Type *makeTupleType(TypeTable *table, const Type **members, u64 count)
@@ -272,7 +304,12 @@ const Type *makeTupleType(TypeTable *table, const Type **members, u64 count)
     Type type = make(
         Type, .tag = typTuple, .tuple = {.members = members, .count = count});
 
-    return getOrInsertType(table, &type);
+    GetOrInset ret = getOrInsertType(table, &type);
+    if (!ret.f) {
+        ((Type *)ret.s)->tuple.members = copyTypes(table, members, count);
+    }
+
+    return ret.s;
 }
 
 const Type *makeFuncType(TypeTable *table,
@@ -288,5 +325,10 @@ const Type *makeFuncType(TypeTable *table,
                               .paramsCount = paramsCount,
                               .params = params});
 
-    return getOrInsertType(table, &type);
+    GetOrInset ret = getOrInsertType(table, &type);
+    if (!ret.f) {
+        ((Type *)ret.s)->func.params = copyTypes(table, params, paramsCount);
+    }
+
+    return ret.s;
 }

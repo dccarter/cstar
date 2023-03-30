@@ -39,11 +39,15 @@ set(CXY_CORE_SOURCES
 
 set(CXY_LANG_SOURCES
         src/cxy/lang/ast.c
+        src/cxy/lang/codegen.c
         src/cxy/lang/lexer.c
         src/cxy/lang/parser.c
         src/cxy/lang/tcheck.c
         src/cxy/lang/ttable.c
-        src/cxy/lang/types.c)
+        src/cxy/lang/types.c
+        src/cxy/lang/ccodegen/epilogue.c
+        src/cxy/lang/ccodegen/generate.c
+        src/cxy/lang/ccodegen/prologue.c)
 
 set(CXY_DRIVER_SOURCES
         src/cxy/driver/driver.c

@@ -25,7 +25,11 @@ const Type *makeStringType(TypeTable *table);
 const Type *makePointerType(TypeTable *table,
                             const Type *pointed,
                             bool isConst);
-const Type *makeArrayType(TypeTable *table, const Type *elementType, u64 size);
+const Type *makeArrayType(TypeTable *table,
+                          const Type *elementType,
+                          const u64 *indexes,
+                          u64 indexesCount);
+
 const Type *makeMapType(TypeTable *table, const Type *key, const Type *value);
 const Type *makeAliasType(TypeTable *table, const Type *aliased);
 const Type *makeUnionType(TypeTable *table, const Type **members, u64 count);

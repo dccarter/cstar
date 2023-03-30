@@ -315,7 +315,7 @@ static void checkFuncDecl(AstVisitor *visitor, AstNode *node)
     defineSymbol(ctx, node->funcDecl.name, node);
 
     pushScope(ctx, node);
-    params = allocFromMemPool(ctx->pool, sizeof(Type *) * paramsCount);
+    params = mallocOrDie(sizeof(Type *) * paramsCount);
     for (; param; param = param->next) {
         param->parentScope = node;
         params[i] = evalType(visitor, param);
@@ -331,6 +331,8 @@ static void checkFuncDecl(AstVisitor *visitor, AstNode *node)
     node->type =
         makeFuncType(ctx->typeTable, isVariadic, ret, params, paramsCount);
 
+    free((void *)params);
+
     popScope(ctx);
 }
 
@@ -345,7 +347,7 @@ static void checkVarDecl(AstVisitor *visitor, AstNode *node)
         if (!isTypeAssignableFrom(ctx->typeTable, node->type, value)) {
             logError(ctx->L,
                      &node->varDecl.init->loc,
-                     "incompatible types, expecting type '{t}', got '{t}",
+                     "incompatible types, expecting type '{t}', got '{t}'",
                      (FormatArg[]){{.t = node->type}, {.t = value}});
         }
         else {
@@ -398,6 +400,13 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
         node->type = left;
     }
     else {
+        logError(ctx->L,
+                 &node->loc,
+                 "binary operator '{s}' not support between type '{t}' and "
+                 "type '{t}'",
+                 (FormatArg[]){{.s = getBinaryOpString(node->binaryExpr.op)},
+                               {.t = left},
+                               {.t = right}});
         node->type = sError;
     }
 }
@@ -408,6 +417,107 @@ static void checkUnary(AstVisitor *visitor, AstNode *node)
     const Type *operand = evalType(visitor, node->unaryExpr.operand);
     // TODO check compatibility
     node->type = operand;
+}
+
+static void checkIndex(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    const Type *target = evalType(visitor, node->indexExpr.target);
+    u64 count = checkMany(visitor, node->indexExpr.indices);
+
+    if (target->tag == typArray) {
+        if (target->array.arity != count) {
+            logError(ctx->L,
+                     &getLastAstNode(node->indexExpr.indices)->loc,
+                     "invalid number of indexes to type '{t}', expecting "
+                     "'{u64}' but got '{u64}'",
+                     (FormatArg[]){{.t = target},
+                                   {.u64 = target->array.arity},
+                                   {.u64 = count}});
+        }
+        node->type = target->array.elementType;
+    }
+    else if (target->tag == typMap) {
+        if (count > 1) {
+            logError(ctx->L,
+                     &node->indexExpr.indices->next->loc,
+                     "invalid indexes passed to map type '{t}', expecting "
+                     "'1' but got '{u64}'",
+                     (FormatArg[]){{.t = target}, {.u64 = count}});
+        }
+        node->type = target->map.value;
+    }
+    else if (target->tag == typStruct || target->tag == typUnion) {
+        // TODO find index operator
+        logWarning(ctx->L,
+                   &node->indexExpr.target->loc,
+                   "indexing into {s} types currently not supported",
+                   (FormatArg[]){
+                       {.s = target->tag == typStruct ? "struct" : "union"}});
+    }
+    else {
+        logError(ctx->L,
+                 &node->loc,
+                 "index operator (.[]) not supported on type '{t}'",
+                 (FormatArg[]){{.t = target}});
+    }
+}
+
+static void checkMember(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    const Type *target = evalType(visitor, node->memberExpr.target);
+    AstNode *member = node->memberExpr.member;
+
+    if (member->tag == astIntegerLit) {
+
+        if (target->tag != typTuple) {
+            logError(ctx->L,
+                     &node->memberExpr.target->loc,
+                     "literal member expression cannot be used on type '{t}', "
+                     "type is not a tuple",
+                     (FormatArg[]){{.t = target}});
+            node->type = sError;
+            return;
+        }
+
+        if (member->intLiteral.value > target->tuple.count) {
+            logError(ctx->L,
+                     &member->loc,
+                     "literal member '{u64}' out of range, type '{t}' has "
+                     "{u64} members",
+                     (FormatArg[]){{.u64 = member->intLiteral.value},
+                                   {.t = target},
+                                   {.u64 = target->tuple.count}});
+            node->type = sError;
+            return;
+        }
+        node->type = target->tuple.members[member->intLiteral.value];
+    }
+    else {
+        csAssert(member->tag == astIdentifier, "TODO");
+        node->type = sError;
+    }
+}
+
+static void checkTupleExpr(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    u64 count = countAstNodes(node->tupleExpr.args);
+    const Type **args = mallocOrDie(sizeof(Type *) * count);
+    AstNode *arg = node->tupleExpr.args;
+
+    for (u64 i = 0; arg; arg = arg->next, i++) {
+        args[i] = evalType(visitor, arg);
+        if (args[i] == sError)
+            node->type = sError;
+    }
+
+    if (node->type == NULL) {
+        node->type = makeTupleType(ctx->typeTable, args, count);
+    }
+
+    free(args);
 }
 
 static void checkBlock(AstVisitor *visitor, AstNode *node)
@@ -476,8 +586,12 @@ static void checkArrayType(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     const Type *element = evalType(visitor, node->arrayType.elementType);
-    // TODO const evaluate dimensions
-    node->type = makeArrayType(ctx->typeTable, element, 0);
+    u64 count = countAstNodes(node->arrayExpr.elements);
+    const u64 *indexes = mallocOrDie(sizeof(u64) * count);
+    // TODO evaluate indexes
+    node->type = makeArrayType(ctx->typeTable, element, indexes, count);
+
+    free((void *)indexes);
 }
 
 static void checkTypeDecl(AstVisitor *visitor, AstNode *node)
@@ -487,6 +601,47 @@ static void checkTypeDecl(AstVisitor *visitor, AstNode *node)
 
     node->type = makeAliasType(ctx->typeTable,
                                evalType(visitor, node->typeDecl.aliased));
+}
+
+static void checkUnionDecl(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    defineSymbol(ctx, node->unionDecl.name, node);
+
+    u64 count = countAstNodes(node->unionDecl.members);
+    const Type **members = mallocOrDie(sizeof(Type *) * count);
+
+    AstNode *member = node->unionDecl.members;
+    for (u64 i = 0; member; member = member->next, i++) {
+        members[i] = evalType(visitor, member);
+        if (members[i] == sError)
+            node->type = sError;
+    }
+
+    if (node->type == NULL)
+        node->type = makeUnionType(ctx->typeTable, members, count);
+
+    free((void *)members);
+}
+
+static void checkTupleType(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+
+    u64 count = countAstNodes(node->tupleType.args);
+    const Type **args = mallocOrDie(sizeof(Type *) * count);
+
+    AstNode *arg = node->tupleType.args;
+    for (u64 i = 0; arg; arg = arg->next, i++) {
+        args[i] = evalType(visitor, arg);
+        if (args[i] == sError)
+            node->type = sError;
+    }
+
+    if (node->type == NULL)
+        node->type = makeTupleType(ctx->typeTable, args, count);
+
+    free(args);
 }
 
 void typeCheck(AstNode *program, Log *L, MemPool *pool, TypeTable *typeTable)
@@ -516,12 +671,17 @@ void typeCheck(AstNode *program, Log *L, MemPool *pool, TypeTable *typeTable)
         [astIdentifier] = checkIdentifier,
         [astBinaryExpr] = checkBinary,
         [astUnaryExpr] = checkUnary,
+        [astIndexExpr] = checkIndex,
+        [astMemberExpr] = checkMember,
+        [astTupleExpr] = checkTupleExpr,
         [astBlockStmt] = checkBlock,
         [astReturnStmt] = checkReturn,
         [astPrimitiveType] = checkPrimitiveType,
         [astArrayType] = checkArrayType,
         [astPointerType] = checkPointerType,
-        [astTypeDecl] = checkTypeDecl
+        [astTypeDecl] = checkTypeDecl,
+        [astUnionDecl] = checkUnionDecl,
+        [astTupleType] = checkTupleType
     },
     .fallback = checkFallback);
     // clang-format off

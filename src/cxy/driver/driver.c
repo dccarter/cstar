@@ -4,6 +4,7 @@
 #include "core/utils.h"
 #include "driver/options.h"
 #include "lang/ast.h"
+#include "lang/codegen.h"
 #include "lang/lexer.h"
 #include "lang/parser.h"
 #include "lang/tcheck.h"
@@ -36,10 +37,15 @@ bool compileFile(const char *fileName, const Options *options, Log *log)
     MemPool memPool = newMemPool();
     AstNode *program = parseFile(fileName, &memPool, log);
 
+
     if (!options->noTypeCheck && log->errorCount == 0) {
         TypeTable *table = newTypeTable(&memPool);
         typeCheck(program, log, &memPool, table);
         freeTypeTable(table);
+    }
+
+    if (log->errorCount == 0) {
+        generateCode(program);
     }
 
     if (options->printAst && log->errorCount == 0) {
