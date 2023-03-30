@@ -600,7 +600,8 @@ static void checkTypeDecl(AstVisitor *visitor, AstNode *node)
     defineSymbol(ctx, node->typeDecl.name, node);
 
     node->type = makeAliasType(ctx->typeTable,
-                               evalType(visitor, node->typeDecl.aliased));
+                               evalType(visitor, node->typeDecl.aliased),
+                               node->typeDecl.name);
 }
 
 static void checkUnionDecl(AstVisitor *visitor, AstNode *node)

@@ -2,11 +2,5 @@
  * Simplicity
  */
 
-type string = [u8]
-
-func main(args: [string]) {
-    const a = (100, true);
-    const c : (u16, bool) = a;
-    const d = a.0 + 10;
-    const b = f"'${args.[0]}' a is ${a}";
-}
+type User = (u32, [u8], (u32, f64))
+type Age = &const f64

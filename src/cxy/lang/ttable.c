@@ -279,9 +279,10 @@ const Type *makeMapType(TypeTable *table, const Type *key, const Type *value)
     return getOrInsertType(table, &type).s;
 }
 
-const Type *makeAliasType(TypeTable *table, const Type *aliased)
+const Type *makeAliasType(TypeTable *table, const Type *aliased, cstring name)
 {
-    Type type = make(Type, .tag = typAlias, .alias = {.aliased = aliased});
+    Type type = make(
+        Type, .tag = typAlias, .name = name, .alias = {.aliased = aliased});
 
     return getOrInsertType(table, &type).s;
 }

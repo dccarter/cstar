@@ -31,7 +31,7 @@ const Type *makeArrayType(TypeTable *table,
                           u64 indexesCount);
 
 const Type *makeMapType(TypeTable *table, const Type *key, const Type *value);
-const Type *makeAliasType(TypeTable *table, const Type *aliased);
+const Type *makeAliasType(TypeTable *table, const Type *aliased, cstring name);
 const Type *makeUnionType(TypeTable *table, const Type **members, u64 count);
 const Type *makeTupleType(TypeTable *table, const Type **members, u64 count);
 const Type *makeFuncType(TypeTable *table,

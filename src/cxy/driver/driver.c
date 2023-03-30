@@ -37,7 +37,6 @@ bool compileFile(const char *fileName, const Options *options, Log *log)
     MemPool memPool = newMemPool();
     AstNode *program = parseFile(fileName, &memPool, log);
 
-
     if (!options->noTypeCheck && log->errorCount == 0) {
         TypeTable *table = newTypeTable(&memPool);
         typeCheck(program, log, &memPool, table);
@@ -45,7 +44,9 @@ bool compileFile(const char *fileName, const Options *options, Log *log)
     }
 
     if (log->errorCount == 0) {
-        generateCode(program);
+        TypeTable *table = newTypeTable(&memPool);
+        generateCode(table, program);
+        freeTypeTable(table);
     }
 
     if (options->printAst && log->errorCount == 0) {

@@ -6,5 +6,9 @@
 
 typedef struct {
     CodeGenContext base;
-    HashTable *generated;
+    TypeTable *table;
 } CCodegenContext;
+
+void generateCCodeFallback(ConstAstVisitor *visitor, const AstNode *node);
+void cCodegenPrologue(CCodegenContext *context, const AstNode *prog);
+void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog);
