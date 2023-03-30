@@ -218,8 +218,9 @@ static inline void popScope(CheckerContext *ctx)
 
 static inline const Type *evalType(AstVisitor *visitor, AstNode *node)
 {
+    CheckerContext *ctx = getAstVisitorContext(visitor);
     astVisit(visitor, node);
-    return node->type;
+    return resolveType(ctx->typeTable, node->type);
 }
 
 static inline u64 checkMany(AstVisitor *visitor, AstNode *node)
@@ -319,6 +320,13 @@ static void checkFuncDecl(AstVisitor *visitor, AstNode *node)
     for (; param; param = param->next) {
         param->parentScope = node;
         params[i] = evalType(visitor, param);
+        if (isVariadic && param->funcParam.isVariadic) {
+            logError(ctx->L,
+                     &param->loc,
+                     "variadic parameters should the last parameter type in "
+                     "function declaration",
+                     NULL);
+        }
         isVariadic = param->funcParam.isVariadic;
     }
 
@@ -328,8 +336,47 @@ static void checkFuncDecl(AstVisitor *visitor, AstNode *node)
     node->funcDecl.body->parentScope = node;
     ret = evalType(visitor, node->funcDecl.body);
 
+    node->type = makeFuncType(ctx->typeTable,
+                              node->funcDecl.name,
+                              isVariadic,
+                              ret,
+                              params,
+                              paramsCount);
+
+    free((void *)params);
+
+    popScope(ctx);
+}
+
+static void checkClosure(AstVisitor *visitor, AstNode *node)
+{
+    const Type *ret, **params;
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    u64 paramsCount = countAstNodes(node->closureExpr.params);
+    AstNode *param = node->closureExpr.params;
+    u64 i = 0;
+
+    pushScope(ctx, node);
+    params = mallocOrDie(sizeof(Type *) * paramsCount);
+    for (; param; param = param->next) {
+        param->parentScope = node;
+        params[i] = evalType(visitor, param);
+        if (param->funcParam.isVariadic) {
+            logError(ctx->L,
+                     &param->loc,
+                     "variadic parameters are not supported on closures",
+                     NULL);
+        }
+    }
+
+    if (node->closureExpr.ret)
+        evalType(visitor, node->closureExpr.ret);
+
+    node->closureExpr.body->parentScope = node;
+    ret = evalType(visitor, node->closureExpr.body);
+
     node->type =
-        makeFuncType(ctx->typeTable, isVariadic, ret, params, paramsCount);
+        makeFuncType(ctx->typeTable, NULL, false, ret, params, paramsCount);
 
     free((void *)params);
 
@@ -598,10 +645,8 @@ static void checkTypeDecl(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     defineSymbol(ctx, node->typeDecl.name, node);
-
-    node->type = makeAliasType(ctx->typeTable,
-                               evalType(visitor, node->typeDecl.aliased),
-                               node->typeDecl.name);
+    const Type *ref = evalType(visitor, node->typeDecl.aliased);
+    node->type = makeAliasType(ctx->typeTable, ref, node->typeDecl.name);
 }
 
 static void checkUnionDecl(AstVisitor *visitor, AstNode *node)
@@ -645,6 +690,35 @@ static void checkTupleType(AstVisitor *visitor, AstNode *node)
     free(args);
 }
 
+static void checkFuncType(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+
+    const Type *ret = evalType(visitor, node->funcType.ret);
+    u64 count = countAstNodes(node->funcType.params);
+    const Type **params = mallocOrDie(sizeof(Type *) * count);
+
+    AstNode *param = node->funcType.params;
+    for (u64 i = 0; param; param = param->next, i++) {
+        params[i] = evalType(visitor, param);
+        if (params[i] == sError)
+            node->type = sError;
+    }
+
+    if (node->type == NULL)
+        node->type =
+            makeFuncType(ctx->typeTable, NULL, false, ret, params, count);
+
+    free(params);
+}
+
+static void checkBuiltinType(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    node->type = node->tag == astVoidType ? makeVoidType(ctx->typeTable)
+                                          : makeStringType(ctx->typeTable);
+}
+
 void typeCheck(AstNode *program, Log *L, MemPool *pool, TypeTable *typeTable)
 {
     CheckerContext context = {.L = L,
@@ -675,6 +749,7 @@ void typeCheck(AstNode *program, Log *L, MemPool *pool, TypeTable *typeTable)
         [astIndexExpr] = checkIndex,
         [astMemberExpr] = checkMember,
         [astTupleExpr] = checkTupleExpr,
+        [astClosureExpr] = checkClosure,
         [astBlockStmt] = checkBlock,
         [astReturnStmt] = checkReturn,
         [astPrimitiveType] = checkPrimitiveType,
@@ -682,7 +757,10 @@ void typeCheck(AstNode *program, Log *L, MemPool *pool, TypeTable *typeTable)
         [astPointerType] = checkPointerType,
         [astTypeDecl] = checkTypeDecl,
         [astUnionDecl] = checkUnionDecl,
-        [astTupleType] = checkTupleType
+        [astTupleType] = checkTupleType,
+        [astFuncType] = checkFuncType,
+        [astVoidType] = checkBuiltinType,
+        [astStringType] = checkBuiltinType
     },
     .fallback = checkFallback);
     // clang-format off

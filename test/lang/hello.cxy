@@ -2,5 +2,12 @@
  * Simplicity
  */
 
-type User = (u32, [u8], (u32, f64))
-type Age = &const f64
+type Func = func(age: u32) -> void
+type Pair = (u32, string)
+
+const num = 65;
+const user = (45, "Hello");
+
+func main(args: [string]) {
+    var fn : Func = (age: u32) => f"Your are ${age} years old ${args[0]}";
+}

@@ -96,6 +96,8 @@
     f(Default, "default")           \
     f(Defer, "defer")               \
     f(Macro, "macro")               \
+    f(Void, "void")                 \
+    f(String, "string")             \
     PRIM_TYPE_LIST(f)
 
 #define SPECIAL_TOKEN_LIST(f)                   \
@@ -115,7 +117,7 @@
     SPECIAL_TOKEN_LIST(f)
 
 typedef enum {
-#define f(name, str) tok##name,
+#define f(name, ...) tok##name,
     TOKEN_LIST(f)
 #undef f
     tokAssignEqual = tokAssign
@@ -139,7 +141,7 @@ static inline const char *token_tag_to_str(TokenTag tag)
 #define f(name, str)                                                           \
     case tok##name:                                                            \
         return str;
-#define g(name, str)                                                           \
+#define g(name, str, ...)                                                      \
     case tok##name:                                                            \
         return "'" str "'";
         SYMBOL_LIST(g)

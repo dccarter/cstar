@@ -17,28 +17,28 @@
 // clang-format off
 
 #define UNSIGNED_INTEGER_TYPE_LIST(f) \
-    f(U8,   "u8")         \
-    f(U16,  "u16")        \
-    f(U32,  "u32")        \
-    f(U64,  "u64")           \
+    f(U8,   "u8", 1)         \
+    f(U16,  "u16", 2)        \
+    f(U32,  "u32", 4)        \
+    f(U64,  "u64", 8)        \
 
 #define SIGNED_INTEGER_TYPE_LIST(f) \
-    f(I8,   "i8")         \
-    f(I16,  "i16")        \
-    f(I32,  "i32")        \
-    f(I64,  "i64")        \
+    f(I8,   "i8", 1)         \
+    f(I16,  "i16", 2)        \
+    f(I32,  "i32", 4)        \
+    f(I64,  "i64", 8)        \
 
 #define INTEGER_TYPE_LIST(f)        \
     UNSIGNED_INTEGER_TYPE_LIST(f)   \
     SIGNED_INTEGER_TYPE_LIST(f)     \
 
 #define FLOAT_TYPE_LIST(f)          \
-    f(F32,  "f32")                  \
-    f(F64,  "f64")
+    f(F32,  "f32", 4)                  \
+    f(F64,  "f64", 8)
 
 #define PRIM_TYPE_LIST(f) \
-    f(Bool, "bool")       \
-    f(Char, "char")       \
+    f(Bool, "bool", 1)    \
+    f(Char, "char", 4)    \
     INTEGER_TYPE_LIST(f)  \
     FLOAT_TYPE_LIST(f)
 
@@ -85,8 +85,8 @@ typedef struct EnumOption {
 typedef struct Type {
     TTag tag;
     u64 size;
+    u64 index;
     cstring name;
-
     struct {
         PrtId id;
     } primitive;

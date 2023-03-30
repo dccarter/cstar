@@ -1,8 +1,8 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdbool.h>
 
 #include "core/hash.h"
 #include "core/utils.h"
@@ -19,28 +19,32 @@
 typedef struct {
     size_t capacity;
     size_t size;
-    HashCode* hashes;
-    void* elems;
+    HashCode *hashes;
+    void *elems;
 } HashTable;
 
 HashTable newHashTable(size_t elemSize);
 HashTable newHashTableWithCapacity(size_t elemSize, size_t capacity);
-void freeHashTable(HashTable*);
+void freeHashTable(HashTable *);
 
-bool isBucketOccupied(const HashTable*, size_t);
+bool isBucketOccupied(const HashTable *, size_t);
 
-bool insertInHashTable(HashTable*,
-    const void* elem,
-    HashCode hash,
-    size_t elemSize,
-    bool (*compare)(const void*, const void*));
+bool insertInHashTable(HashTable *,
+                       const void *elem,
+                       HashCode hash,
+                       size_t elemSize,
+                       bool (*compare)(const void *, const void *));
 
-void* findInHashTable(
-    const HashTable*,
-    const void* elem,
-    HashCode hash,
-    size_t elemSize,
-    bool (*compare)(const void*, const void*));
+void *findInHashTable(const HashTable *,
+                      const void *elem,
+                      HashCode hash,
+                      size_t elemSize,
+                      bool (*compare)(const void *, const void *));
 
-void removeFromHashTable(HashTable*, void* elem, size_t elemSize);
-void clearHashTable(HashTable*);
+void removeFromHashTable(HashTable *, void *elem, size_t elemSize);
+void clearHashTable(HashTable *);
+
+void enumerateHashTable(HashTable *,
+                        void *ctx,
+                        bool (*with)(void *ctx, const void *elem),
+                        size_t elemSize);

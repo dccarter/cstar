@@ -24,7 +24,7 @@ static bool compareKeywords(const void *left, const void *right)
 
 static void registerKeywords(HashTable *keywords)
 {
-#define f(name, str)                                                           \
+#define f(name, str, ...)                                                      \
     insertInHashTable(keywords,                                                \
                       &(Keyword){str, strlen(str), tok##name},                 \
                       hashStr(hashInit(), str),                                \
@@ -40,7 +40,7 @@ Lexer newLexer(const char *fileName,
                Log *log)
 {
     enum {
-#define f(name, str) KEYWORD_##name,
+#define f(name, str, ...) KEYWORD_##name,
         KEYWORD_LIST(f)
 #undef f
             KEYWORD_COUNT

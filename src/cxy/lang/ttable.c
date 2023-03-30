@@ -156,28 +156,42 @@ static const Type **copyTypes(TypeTable *table, const Type **types, u64 count)
 
 static bool compareTypesWrapper(const void *left, const void *right)
 {
-    return compareTypes((const Type *)left, (const Type *)right);
+    return compareTypes(*(const Type **)left, *(const Type **)right);
 }
 
 static GetOrInset getOrInsertType(TypeTable *table, const Type *type)
 {
     u32 hash = hashType(hashInit(), type);
-    const Type *found = findInHashTable(&table->types, //
-                                        type,
-                                        hash,
-                                        sizeof(Type *),
-                                        compareTypesWrapper);
+    const Type **found = findInHashTable(&table->types, //
+                                         &type,
+                                         hash,
+                                         sizeof(Type *),
+                                         compareTypesWrapper);
     if (found)
-        return (GetOrInset){true, found};
+        return (GetOrInset){true, *found};
 
     Type *newType = New(table->memPool, Type);
     memcpy(newType, type, sizeof(Type));
 
     if (!insertInHashTable(
-            &table->types, newType, hash, sizeof(Type *), compareTypesWrapper))
+            &table->types, &newType, hash, sizeof(Type *), compareTypesWrapper))
         csAssert0("failing to insert in type table");
 
+    newType->index = table->typeCount++;
     return (GetOrInset){false, newType};
+}
+typedef struct {
+    const Type **types;
+    u64 count;
+} SortTypesContext;
+
+static bool countTypesWrapper(void *ctx, const void *elem)
+{
+    SortTypesContext *context = ctx;
+    const Type *type = *(const Type **)elem;
+    if (type->index < context->count)
+        context->types[type->index] = type;
+    return true;
 }
 
 TypeTable *newTypeTable(MemPool *pool)
@@ -192,6 +206,7 @@ TypeTable *newTypeTable(MemPool *pool)
             getOrInsertType(table,
                             &make(Type,
                                   .tag = typPrimitive,
+                                  .size = getPrimitiveTypeSize(i),
                                   .name = getPrimitiveTypeName(i),
                                   .primitive.id = i))
                 .s;
@@ -314,6 +329,7 @@ const Type *makeTupleType(TypeTable *table, const Type **members, u64 count)
 }
 
 const Type *makeFuncType(TypeTable *table,
+                         cstring name,
                          bool isVariadic,
                          const Type *retType,
                          const Type **params,
@@ -321,6 +337,7 @@ const Type *makeFuncType(TypeTable *table,
 {
     Type type = make(Type,
                      .tag = typFunc,
+                     .name = name,
                      .func = {.isVariadic = isVariadic,
                               .retType = retType,
                               .paramsCount = paramsCount,
@@ -332,4 +349,24 @@ const Type *makeFuncType(TypeTable *table,
     }
 
     return ret.s;
+}
+
+u64 getTypesCount(TypeTable *table) { return table->typeCount; }
+
+u64 sortedByInsertionOrder(TypeTable *table, const Type **types, u64 size)
+{
+    SortTypesContext context = {.types = types,
+                                .count = MIN(size, table->typeCount)};
+
+    enumerateHashTable(
+        &table->types, &context, countTypesWrapper, sizeof(Type *));
+
+    return context.count;
+}
+
+void enumerateTypeTable(TypeTable *table,
+                        void *ctx,
+                        bool(with)(void *, const void *))
+{
+    enumerateHashTable(&table->types, ctx, with, sizeof(Type *));
 }

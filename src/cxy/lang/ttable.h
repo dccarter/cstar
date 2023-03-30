@@ -35,7 +35,15 @@ const Type *makeAliasType(TypeTable *table, const Type *aliased, cstring name);
 const Type *makeUnionType(TypeTable *table, const Type **members, u64 count);
 const Type *makeTupleType(TypeTable *table, const Type **members, u64 count);
 const Type *makeFuncType(TypeTable *table,
+                         cstring name,
                          bool isVariadic,
                          const Type *retType,
                          const Type **params,
                          u64 paramsCount);
+
+u64 getTypesCount(TypeTable *table);
+u64 sortedByInsertionOrder(TypeTable *table, const Type **types, u64 size);
+
+void enumerateTypeTable(TypeTable *table,
+                        void *ctx,
+                        bool(with)(void *, const void *));

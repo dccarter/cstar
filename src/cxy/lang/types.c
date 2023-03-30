@@ -147,7 +147,7 @@ void printType(FormatState *state, const Type *type)
     switch (type->tag) {
     case typPrimitive:
         switch (type->primitive.id) {
-#define f(I, str)                                                              \
+#define f(I, str, ...)                                                         \
     case prt##I:                                                               \
         printKeyword(state, str);                                              \
         return;
@@ -206,6 +206,13 @@ void printType(FormatState *state, const Type *type)
         format(state, "(", NULL);
         printManyTypes(state, type->tuple.members, type->tuple.count, ", ");
         format(state, ")", NULL);
+        break;
+    case typFunc:
+        printKeyword(state, "func");
+        format(state, "(", NULL);
+        printManyTypes(state, type->func.params, type->func.paramsCount, ", ");
+        format(state, ") -> ", NULL);
+        printType(state, type->func.retType);
         break;
     default:
         unreachable("TODO");

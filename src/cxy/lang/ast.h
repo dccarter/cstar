@@ -100,6 +100,8 @@ typedef enum {
     astGenericParam,
     astIdentifier,
     /* Types */
+    astVoidType,
+    astStringType,
     astTupleType,
     astArrayType,
     astPointerType,
@@ -484,6 +486,8 @@ const AstNode *getParentScopeWithTagConst(const AstNode *node, AstTag tag);
 void insertAstNodeAfter(AstNode *before, AstNode *after);
 
 const char *getPrimitiveTypeName(PrtId tag);
+
+u64 getPrimitiveTypeSize(PrtId tag);
 
 const char *getUnaryOpString(Operator op);
 

@@ -979,9 +979,22 @@ void insertAstNodeAfter(AstNode *before, AstNode *after)
 const char *getPrimitiveTypeName(PrtId tag)
 {
     switch (tag) {
-#define f(name, str)                                                           \
+#define f(name, str, ...)                                                      \
     case prt##name:                                                            \
         return str;
+        PRIM_TYPE_LIST(f)
+#undef f
+    default:
+        csAssert0(false);
+    }
+}
+
+u64 getPrimitiveTypeSize(PrtId tag)
+{
+    switch (tag) {
+#define f(name, str, size)                                                     \
+    case prt##name:                                                            \
+        return size;
         PRIM_TYPE_LIST(f)
 #undef f
     default:

@@ -1304,6 +1304,14 @@ static AstNode *parseType(Parser *P)
             return parseFuncType(P);
         case tokBAnd:
             return parsePointerType(P);
+        case tokVoid:
+            advance(P);
+            return makeAstNode(
+                P->memPool, &tok.fileLoc, &(AstNode){.tag = astVoidType});
+        case tokString:
+            advance(P);
+            return makeAstNode(
+                P->memPool, &tok.fileLoc, &(AstNode){.tag = astStringType});
         default:
             reportUnexpectedToken(P, "a type");
             break;
