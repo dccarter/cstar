@@ -5,6 +5,29 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef enum {
+    STYLE_NORMAL = 0,
+    STYLE_BOLD,
+    STYLE_DIM,
+    STYLE_UNDERLINE,
+    STYLE_ITALIC
+} Style;
+
+typedef enum {
+    COLOR_NORMAL = 0,
+    COLOR_RED,
+    COLOR_GREEN,
+    COLOR_BLUE,
+    COLOR_CYAN,
+    COLOR_MAGENTA,
+    COLOR_YELLOW,
+    COLOR_WHITE
+} Color;
+
 typedef struct FormatBuf {
     size_t size;
     size_t capacity;
@@ -13,23 +36,8 @@ typedef struct FormatBuf {
 } FormatBuf;
 
 typedef struct {
-    enum {
-        STYLE_NORMAL = 0,
-        STYLE_BOLD,
-        STYLE_DIM,
-        STYLE_UNDERLINE,
-        STYLE_ITALIC
-    } style;
-    enum {
-        COLOR_NORMAL = 0,
-        COLOR_RED,
-        COLOR_GREEN,
-        COLOR_BLUE,
-        COLOR_CYAN,
-        COLOR_MAGENTA,
-        COLOR_YELLOW,
-        COLOR_WHITE
-    } color;
+    Style style;
+    Color color;
 } FormatStyle;
 
 typedef struct Type Type;
@@ -76,8 +84,12 @@ FormatState newFormatState(const char *tab, bool ignoreStyle);
 void freeFormatState(FormatState *);
 
 void format(FormatState *, const char *format_str, const FormatArg *args);
-
+void append(FormatState *, const char *s, size_t bytes);
 void printWithStyle(FormatState *, const char *, FormatStyle);
 void printKeyword(FormatState *, const char *);
 void printUtf8(FormatState *state, uint32_t);
 void writeFormatState(FormatState *, FILE *);
+
+#ifdef __cplusplus
+}
+#endif

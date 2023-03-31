@@ -15,7 +15,6 @@
  */
 
 // clang-format off
-
 #define UNSIGNED_INTEGER_TYPE_LIST(f) \
     f(U8,   "u8", 1)         \
     f(U16,  "u16", 2)        \
@@ -36,10 +35,10 @@
     f(F32,  "f32", 4)                  \
     f(F64,  "f64", 8)
 
-#define PRIM_TYPE_LIST(f) \
-    f(Bool, "bool", 1)    \
-    f(Char, "char", 4)    \
-    INTEGER_TYPE_LIST(f)  \
+#define PRIM_TYPE_LIST(f)  \
+    f(Bool, "bool", 1)     \
+    f(Char, "wchar", 4)    \
+    INTEGER_TYPE_LIST(f)   \
     FLOAT_TYPE_LIST(f)
 
 typedef enum {
@@ -86,7 +85,10 @@ typedef struct Type {
     TTag tag;
     u64 size;
     u64 index;
+    u64 flags;
     cstring name;
+    cstring namespace;
+
     struct {
         PrtId id;
     } primitive;
@@ -122,7 +124,6 @@ typedef struct Type {
     } tuple;
 
     struct {
-        bool isVariadic : 1;
         u32 paramsCount;
         const Type *retType;
         const Type **params;

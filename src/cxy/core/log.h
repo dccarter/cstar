@@ -5,6 +5,10 @@
 #include "core/format.h"
 #include "core/htable.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * The log object is used to report messages from various passes of the
  * compiler. It also caches source files, so as to print error diagnostics
@@ -36,3 +40,8 @@ void freeLog(Log *);
 void logError(Log *, const FileLoc *, const char *, const FormatArg *);
 void logWarning(Log *, const FileLoc *, const char *, const FormatArg *);
 void logNote(Log *, const FileLoc *, const char *, const FormatArg *);
+const FileLoc *builtinLoc(void);
+
+#ifdef __cplusplus
+}
+#endif

@@ -102,10 +102,10 @@ static Token *parserMatch(Parser *parser, TokenTag tags[], u32 count)
 
 // clang-format off
 #define check(P, ...) \
-({ TokenTag LineVAR(tags)[] = { __VA_ARGS__, tokEoF }; parserCheck((P), LineVAR(tags), sizeof__(LineVAR(tags))-1); })
+({ TokenTag LINE_VAR(tags)[] = { __VA_ARGS__, tokEoF }; parserCheck((P), LINE_VAR(tags), sizeof__(LINE_VAR(tags))-1); })
 
 #define match(P, ...) \
-({ TokenTag LineVAR(mtags)[] = { __VA_ARGS__, tokEoF }; parserMatch((P), LineVAR(mtags), sizeof__(LineVAR(mtags))-1); })
+({ TokenTag LINE_VAR(mtags)[] = { __VA_ARGS__, tokEoF }; parserMatch((P), LINE_VAR(mtags), sizeof__(LINE_VAR(mtags))-1); })
 
 // clang-format on
 
@@ -481,7 +481,7 @@ static AstNode *functionParam(Parser *P)
     if (check(P, tokAt))
         attrs = attributes(P);
 
-    bool isVariadic = match(P, tokElipsis) != NULL;
+    u64 flags = match(P, tokElipsis) ? flgVariadic : flgNone;
     const char *name = getTokenString(P, consume0(P, tokIdent), false);
     consume0(P, tokColon);
     AstNode *type = parseType(P), *def = NULL;
@@ -489,20 +489,19 @@ static AstNode *functionParam(Parser *P)
         def = expression(P, false);
     }
 
-    return newAstNode(P,
-                      &tok.fileLoc.begin,
-                      &(AstNode){.tag = astFuncParam,
-                                 .attrs = attrs,
-                                 .funcParam = {.isVariadic = isVariadic,
-                                               .name = name,
-                                               .type = type,
-                                               .def = def}});
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astFuncParam,
+                   .attrs = attrs,
+                   .flags = flags,
+                   .funcParam = {.name = name, .type = type, .def = def}});
 }
 
 static AstNode *closure(Parser *P)
 {
     AstNode *ret = NULL, *body = NULL;
-    bool isAsync = match(P, tokAsync) != NULL;
+    u64 flags = match(P, tokAsync) ? flgAsync : flgNone;
     Token tok = *consume0(P, tokLParen);
     AstNode *params = parseMany(P, tokRParen, tokComma, functionParam);
     consume0(P, tokRParen);
@@ -513,13 +512,13 @@ static AstNode *closure(Parser *P)
     consume0(P, tokFatArrow);
 
     body = expression(P, true);
-    return newAstNode(P,
-                      &tok.fileLoc.begin,
-                      &(AstNode){.tag = astClosureExpr,
-                                 .closureExpr = {.isAsync = isAsync,
-                                                 .params = params,
-                                                 .ret = ret,
-                                                 .body = body}});
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){
+            .tag = astClosureExpr,
+            .flags = flags,
+            .closureExpr = {.params = params, .ret = ret, .body = body}});
 }
 
 static AstNode *tuple(
@@ -590,7 +589,7 @@ static AstNode *parseFuncType(Parser *P)
 {
     AstNode *gParams = NULL, *params = NULL, *ret = NULL;
     Token tok = *current(P);
-    bool isAsync = match(P, tokAsync) != NULL;
+    u64 flags = match(P, tokAsync) ? flgAsync : flgNone;
     consume0(P, tokFunc);
     if (match(P, tokLBracket)) {
         gParams = parseMany(P, tokRBracket, tokComma, parseGenericParam);
@@ -607,8 +606,8 @@ static AstNode *parseFuncType(Parser *P)
     return newAstNode(P,
                       &tok.fileLoc.begin,
                       &(AstNode){.tag = astFuncType,
-                                 .funcType = {.isAsync = isAsync,
-                                              .genericParams = gParams,
+                                 .flags = flags,
+                                 .funcType = {.genericParams = gParams,
                                               .params = params,
                                               .ret = ret}});
 }
@@ -630,14 +629,14 @@ static AstNode *createTupleOrGroupExpression(Parser *P,
 static AstNode *parsePointerType(Parser *P)
 {
     Token tok = *consume0(P, tokBAnd);
-    bool isConst = match(P, tokConst) != NULL;
+    u64 flags = match(P, tokConst) ? flgConst : flgNone;
     AstNode *pointed = parseType(P);
 
-    return newAstNode(
-        P,
-        &tok.fileLoc.begin,
-        &(AstNode){.tag = astPointerType,
-                   .pointerType = {.isConst = isConst, .pointed = pointed}});
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astPointerType,
+                                 .flags = flags,
+                                 .pointerType = {.pointed = pointed}});
 }
 
 static AstNode *parenExpr(Parser *P, bool strict)
@@ -914,6 +913,9 @@ static AstNode *variable(
     Parser *P, bool isPublic, bool isNative, bool isExpression, bool woInit)
 {
     Token tok = *current(P);
+    uint64_t flags = isPublic ? flgPublic : flgNone;
+    flags |= isNative ? flgNative : flgNone;
+
     if (!match(P, tokConst, tokVar))
         reportUnexpectedToken(P, "var/const to start variable declaration");
 
@@ -952,11 +954,8 @@ static AstNode *variable(
         P,
         &tok.fileLoc.begin,
         &(AstNode){.tag = tok.tag == tokConst ? astConstDecl : astVarDecl,
-                   .varDecl = {.isPublic = isPublic,
-                               .isNative = isNative,
-                               .names = names,
-                               .type = type,
-                               .init = init}});
+                   .flags = flags,
+                   .varDecl = {.names = names, .type = type, .init = init}});
 }
 
 static AstNode *macroDecl(Parser *P, bool isPublic)
@@ -978,8 +977,8 @@ static AstNode *macroDecl(Parser *P, bool isPublic)
     return newAstNode(P,
                       &tok.fileLoc.begin,
                       &(AstNode){.tag = astMacroDecl,
-                                 .macroDecl = {.isPublic = isPublic,
-                                               .name = name,
+                                 .flags = isPublic ? flgPublic : flgNone,
+                                 .macroDecl = {.name = name,
                                                .params = params,
                                                .ret = ret,
                                                .body = body}});
@@ -1029,7 +1028,10 @@ static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative)
 {
     AstNode *gParams = NULL, *params = NULL, *ret = NULL, *body = NULL;
     Token tok = *current(P);
-    bool isAsync = match(P, tokAsync) != NULL;
+    u64 flags = isPublic ? flgPublic : flgNone;
+    flags |= isNative ? flgNative : flgNone;
+    flags |= match(P, tokAsync) ? flgAsync : flgNone;
+
     consume0(P, tokFunc);
     cstring name = NULL;
     Operator op = opInvalid;
@@ -1081,9 +1083,8 @@ static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative)
     return newAstNode(P,
                       &tok.fileLoc.begin,
                       &(AstNode){.tag = astFuncDecl,
-                                 .funcDecl = {.isPublic = isPublic,
-                                              .isNative = isNative,
-                                              .name = name,
+                                 .flags = flags,
+                                 .funcDecl = {.name = name,
                                               .operatorOverload = op,
                                               .genericParams = gParams,
                                               .params = params,
@@ -1156,7 +1157,7 @@ static AstNode *whileStatement(Parser *P)
 
 static AstNode *caseStatement(Parser *P)
 {
-    bool isDefault = false;
+    u64 flags = flgNone;
     Token tok = *current(P);
     AstNode *match = NULL, *body = NULL;
     if (match(P, tokCase)) {
@@ -1167,7 +1168,7 @@ static AstNode *caseStatement(Parser *P)
     else {
         consume(
             P, tokDefault, "expecting a 'default' or a 'case' statement", NULL);
-        isDefault = true;
+        flags |= flgDefault;
     }
 
     consume0(P, tokColon);
@@ -1177,9 +1178,8 @@ static AstNode *caseStatement(Parser *P)
     return newAstNode(P,
                       &tok.fileLoc.begin,
                       &(AstNode){.tag = astCaseStmt,
-                                 .caseStmt = {.match = match,
-                                              .body = body,
-                                              .isDefault = isDefault}});
+                                 .flags = flags,
+                                 .caseStmt = {.match = match, .body = body}});
 }
 
 static AstNode *switchStatement(Parser *P)
@@ -1334,13 +1334,13 @@ static AstNode *parseStructField(Parser *P, bool isPrivate)
         value = expression(P, false);
     }
 
-    return newAstNode(P,
-                      &tok.fileLoc.begin,
-                      &(AstNode){.tag = astStructField,
-                                 .structField = {.isPrivate = isPrivate,
-                                                 .name = name,
-                                                 .type = type,
-                                                 .value = value}});
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){
+            .tag = astStructField,
+            .flags = isPrivate ? flgPrivate : flgNone,
+            .structField = {.name = name, .type = type, .value = value}});
 }
 
 static AstNode *parseStructMember(Parser *P)
@@ -1408,8 +1408,8 @@ static AstNode *structDecl(Parser *P, bool isPublic)
     return newAstNode(P,
                       &tok.fileLoc.begin,
                       &(AstNode){.tag = astStructDecl,
-                                 .structDecl = {.isPublic = isPublic,
-                                                .name = name,
+                                 .flags = isPublic ? flgPublic : flgNone,
+                                 .structDecl = {.name = name,
                                                 .base = base,
                                                 .genericParams = gParams,
                                                 .members = members.first}});
@@ -1443,17 +1443,19 @@ static AstNode *enumDecl(Parser *P, bool isPublic)
         parseAtLeastOne(P, "enum options", tokRBrace, tokComma, enumOption);
     consume0(P, tokRBrace);
 
-    return newAstNode(
-        P,
-        &tok.fileLoc.begin,
-        &(AstNode){.tag = astEnumDecl,
-                   .enumDecl = {.isPublic = true, .options = options}});
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astEnumDecl,
+                                 .flags = isPublic ? flgPublic : flgNone,
+                                 .enumDecl = {.options = options}});
 }
 
 static AstNode *aliasDecl(Parser *P, bool isPublic, bool isNative)
 {
     AstNode *alias = NULL;
     Token tok = *consume0(P, tokType);
+    u64 flags = isPublic ? flgPublic : flgNone;
+    flags |= isNative ? flgNative : flgNone;
     cstring name = getTokenString(P, consume0(P, tokIdent), false);
     if (!isNative) {
         consume0(P, tokAssign);
@@ -1467,21 +1469,20 @@ static AstNode *aliasDecl(Parser *P, bool isPublic, bool isNative)
         consume0(P, tokComma);
     }
     if (alias && alias->next) {
-        return newAstNode(P,
-                          &tok.fileLoc.begin,
-                          &(AstNode){.tag = astUnionDecl,
-                                     .unionDecl = {.isPublic = isPublic,
-                                                   .name = name,
-                                                   .members = alias}});
+        return newAstNode(
+            P,
+            &tok.fileLoc.begin,
+            &(AstNode){.tag = astUnionDecl,
+                       .flags = flags,
+                       .unionDecl = {.name = name, .members = alias}});
     }
     else {
-        return newAstNode(P,
-                          &tok.fileLoc.begin,
-                          &(AstNode){.tag = astTypeDecl,
-                                     .typeDecl = {.isPublic = isPublic,
-                                                  .isNative = isNative,
-                                                  .name = name,
-                                                  .aliased = alias}});
+        return newAstNode(
+            P,
+            &tok.fileLoc.begin,
+            &(AstNode){.tag = astTypeDecl,
+                       .flags = flags,
+                       .typeDecl = {.name = name, .aliased = alias}});
     }
 }
 
@@ -1492,8 +1493,21 @@ static AstNode *declaration(Parser *P)
     if (check(P, tokAt))
         attrs = attributes(P);
     bool isPublic = match(P, tokPub) != NULL;
-
-#define isNative isPublic ? match(P, tokNative) != NULL : false
+    bool isNative = false;
+    if (isPublic && check(P, tokNative)) {
+        // do we need to consume native
+        switch (peek(P, 1)->tag) {
+        case tokType:
+        case tokVar:
+        case tokConst:
+        case tokFunc:
+            advance(P);
+            isNative = true;
+            break;
+        default:
+            break;
+        }
+    }
 
     switch (current(P)->tag) {
     case tokStruct:

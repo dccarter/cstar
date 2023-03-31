@@ -1,12 +1,13 @@
-#include "driver/options.h"
-#include "driver/driver.h"
 #include "core/log.h"
 #include "core/utils.h"
+#include "driver/driver.h"
+#include "driver/options.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv)
+{
     FormatState state = newFormatState("    ", !isColorSupported(stderr));
     Log log = newLog(&state);
     bool status = true;

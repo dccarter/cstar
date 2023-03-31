@@ -43,6 +43,8 @@ static HashCode hasTypes(HashCode hash, const Type **types, u64 count)
 static HashCode hashType(HashCode hash, const Type *type)
 {
     hash = hashUint32(hash, type->tag);
+    hash = hashUint64(hash, type->flags);
+
     switch (type->tag) {
     case typAuto:
     case typNull:
@@ -75,7 +77,6 @@ static HashCode hashType(HashCode hash, const Type *type)
         hash = hasTypes(hash, type->tuple.members, type->tuple.count);
         break;
     case typFunc:
-        hash = hashUint8(hash, type->func.isVariadic);
         hash = hasTypes(hash, type->func.params, type->func.paramsCount);
         hash = hashType(hash, type->func.retType);
         break;
@@ -133,7 +134,7 @@ static bool compareTypes(const Type *left, const Type *right)
                                 right->tUnion.members,
                                 left->tUnion.count);
     case typFunc:
-        return (left->func.isVariadic == right->func.isVariadic) &&
+        return ((left->flags & flgVariadic) == (right->flags & flgVariadic)) &&
                (left->func.paramsCount == right->func.paramsCount) &&
                compareTypes(left->func.retType, right->func.retType) &&
                compareManyTypes(left->func.params,
@@ -330,7 +331,7 @@ const Type *makeTupleType(TypeTable *table, const Type **members, u64 count)
 
 const Type *makeFuncType(TypeTable *table,
                          cstring name,
-                         bool isVariadic,
+                         u64 flags,
                          const Type *retType,
                          const Type **params,
                          u64 paramsCount)
@@ -338,8 +339,8 @@ const Type *makeFuncType(TypeTable *table,
     Type type = make(Type,
                      .tag = typFunc,
                      .name = name,
-                     .func = {.isVariadic = isVariadic,
-                              .retType = retType,
+                     .flags = flags,
+                     .func = {.retType = retType,
                               .paramsCount = paramsCount,
                               .params = params});
 

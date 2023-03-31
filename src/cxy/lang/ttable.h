@@ -36,7 +36,7 @@ const Type *makeUnionType(TypeTable *table, const Type **members, u64 count);
 const Type *makeTupleType(TypeTable *table, const Type **members, u64 count);
 const Type *makeFuncType(TypeTable *table,
                          cstring name,
-                         bool isVariadic,
+                         u64 flags,
                          const Type *retType,
                          const Type **params,
                          u64 paramsCount);

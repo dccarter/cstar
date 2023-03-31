@@ -1,4 +1,4 @@
-FROM suilteam/remote:ubuntu
+FROM cxyteam/remote:ubuntu
 
 # Install ZSH
 RUN apt-get -y update && apt-get -y upgrade

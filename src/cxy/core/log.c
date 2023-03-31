@@ -147,7 +147,9 @@ static bool isMultilineFileLoc(const FileLoc *fileLoc)
 
 static void printDiagnostic(Log *log, FormatStyle style, const FileLoc *fileLoc)
 {
-    FILE *file = getCachedFile(log, fileLoc->fileName);
+    FILE *file =
+        fileLoc->fileName ? getCachedFile(log, fileLoc->fileName) : NULL;
+
     if (!file)
         return;
 
@@ -283,4 +285,11 @@ void logNote(Log *log,
              const FormatArg *args)
 {
     printMessage(log, LOG_NOTE, fileLoc, format_str, args);
+}
+
+const FileLoc *builtinLoc(void)
+{
+    static FileLoc builtin = {
+        .fileName = NULL, .begin = {0, 0, 0}, .end = {0, 0, 0}};
+    return &builtin;
 }

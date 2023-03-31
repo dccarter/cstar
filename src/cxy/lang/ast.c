@@ -208,7 +208,7 @@ static void printCallExpr(ConstAstVisitor *visitor, const AstNode *expr)
 static void printClosureExpr(ConstAstVisitor *visitor, const AstNode *expr)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
-    if (expr->closureExpr.isAsync)
+    if (expr->flags & flgAsync)
         printKeyword(context->state, "async");
 
     printManyAstsWithinParen(visitor, expr->closureExpr.params);
@@ -341,7 +341,7 @@ static void printPointerType(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state, "&", NULL);
-    if (node->pointerType.isConst) {
+    if (node->flags & flgConst) {
         printKeyword(context->state, "const");
         format(context->state, " ", NULL);
     }
@@ -351,7 +351,7 @@ static void printPointerType(ConstAstVisitor *visitor, const AstNode *node)
 static void printFuncType(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
-    if (node->funcType.isAsync) {
+    if (node->flags & flgAsync) {
         printKeyword(context->state, "async");
         format(context->state, " ", NULL);
     }
@@ -369,7 +369,7 @@ static void printFuncParam(ConstAstVisitor *visitor, const AstNode *node)
         format(context->state, " ", NULL);
     }
 
-    if (node->funcParam.isVariadic)
+    if (node->flags & flgVariadic)
         format(context->state, "...", NULL);
 
     format(context->state, "{s}: ", (FormatArg[]){{.s = node->funcParam.name}});
@@ -439,10 +439,10 @@ static void printFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
         format(context->state, "\n", NULL);
     }
 
-    if (context->isWithinStruct && !node->funcDecl.isPublic)
+    if (context->isWithinStruct && !(node->flags & flgPublic))
         format(context->state, "- ", NULL);
 
-    if (node->funcDecl.isAsync) {
+    if (node->flags & flgPublic) {
         printKeyword(context->state, "async");
         format(context->state, " ", NULL);
     }
@@ -519,7 +519,7 @@ static void printTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
         format(context->state, "\n", NULL);
     }
 
-    if (context->isWithinStruct && !node->typeDecl.isPublic)
+    if (context->isWithinStruct && !(node->flags & flgPublic))
         format(context->state, "- ", NULL);
 
     printKeyword(context->state, "type");
@@ -543,7 +543,7 @@ static void printUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
         format(context->state, "\n", NULL);
     }
 
-    if (context->isWithinStruct && !node->unionDecl.isPublic)
+    if (context->isWithinStruct && !(node->flags & flgPublic))
         format(context->state, "- ", NULL);
 
     printKeyword(context->state, "type");
@@ -567,7 +567,7 @@ static void printEnumDecl(ConstAstVisitor *visitor, const AstNode *node)
         format(context->state, "\n", NULL);
     }
 
-    if (context->isWithinStruct && !node->enumDecl.isPublic)
+    if (context->isWithinStruct && !(node->flags & flgPublic))
         format(context->state, "- ", NULL);
 
     printKeyword(context->state, "enum");
@@ -606,7 +606,7 @@ static void printStructField(ConstAstVisitor *visitor, const AstNode *node)
         format(context->state, "\n", NULL);
     }
 
-    if (node->structField.isPrivate)
+    if (node->flags & flgPrivate)
         format(context->state, "- ", NULL);
 
     format(
@@ -626,7 +626,7 @@ static void printStructDecl(ConstAstVisitor *visitor, const AstNode *node)
         format(context->state, "\n", NULL);
     }
 
-    if (context->isWithinStruct && !node->structDecl.isPublic)
+    if (context->isWithinStruct && !(node->flags & flgPublic))
         format(context->state, "- ", NULL);
     context->isWithinStruct++;
 
@@ -748,7 +748,7 @@ static void printWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
 static void printCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
-    if (node->caseStmt.isDefault) {
+    if (node->flags & flgDefault) {
         printKeyword(context->state, "default");
     }
     else {
@@ -897,39 +897,6 @@ bool isAssignableExpr(attr(unused) const AstNode *node)
 {
     csAssert(node->type, "expression must have been key-checked first");
     return false;
-}
-
-bool isPublicDecl(const AstNode *node)
-{
-    switch (node->tag) {
-    case astVarDecl:
-    case astConstDecl:
-        return node->varDecl.isPublic;
-    case astFuncDecl:
-        return node->funcDecl.isPublic;
-    case astTypeDecl:
-        return node->typeDecl.isPublic;
-    case astEnumDecl:
-        return node->enumDecl.isPublic;
-    case astUnionDecl:
-        return node->unionDecl.isPublic;
-    case astStructDecl:
-        return node->structDecl.isPublic;
-    default:
-        return false;
-    }
-}
-
-bool isNative(const AstNode *node)
-{
-    switch (node->tag) {
-    case astFuncDecl:
-        return node->funcDecl.isNative;
-    case astTypeDecl:
-        return node->typeDecl.isNative;
-    default:
-        return false;
-    }
 }
 
 u64 countAstNodes(const AstNode *node)

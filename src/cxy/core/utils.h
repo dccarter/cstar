@@ -6,34 +6,38 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define CYN_PASTE__(X, Y) X##Y
-#define CynPST(X, Y) CYN_PASTE__(X, Y)
-
-#define LineVAR(name) CynPST(name, __LINE__)
-
-#define CYN_STR__(V) #V
-#define CynSTR(V) CYN_STR__(V)
-
-#ifndef CYN_VERSION_MAJOR
-#define CYN_VERSION_MAJOR 0
+#ifdef __cplusplus
+extern "C" {
 #endif
 
-#ifndef CYN_VERSION_MINOR
-#define CYN_VERSION_MINOR 1
+#define CXY_PASTE__(X, Y) X##Y
+#define CXY_PASTE(X, Y) CXY_PASTE__(X, Y)
+
+#define LINE_VAR(name) CXY_PASTE(name, __LINE__)
+
+#define CXY_STR__(V) #V
+#define CXY_STR(V) CXY_STR__(V)
+
+#ifndef CXY_VERSION_MAJOR
+#define CXY_VERSION_MAJOR 0
 #endif
 
-#ifndef CYN_VERSION_PATCH
-#define CYN_VERSION_PATCH 0
+#ifndef CXY_VERSION_MINOR
+#define CXY_VERSION_MINOR 1
 #endif
 
-#define CYN_VERSION                                                            \
-    CynSTR(CYN_VERSION_MAJOR) "." CynSTR(CYN_VERSION_MINOR) "." CynSTR(        \
-        CYN_VERSION_PATCH)
+#ifndef CXY_VERSION_PATCH
+#define CXY_VERSION_PATCH 0
+#endif
+
+#define CXY_VERSION_STR                                                        \
+    CXY_STR(CXY_VERSION_MAJOR)                                                 \
+    "." CXY_STR(CXY_VERSION_MINOR) "." CXY_STR(CXY_VERSION_PATCH)
 
 #ifdef __BASE_FILE__
-#define CYN_FILENAME __BASE_FILE__
+#define CXY_FILENAME __BASE_FILE__
 #else
-#define CYN_FILENAME ((strrchr(__FILE__, '/') ?: __FILE__ - 1) + 1)
+#define CXY_FILENAME ((strrchr(__FILE__, '/') ?: __FILE__ - 1) + 1)
 #endif
 
 #define sizeof__(A) (sizeof(A) / sizeof(*(A)))
@@ -128,10 +132,10 @@
 #define unreachable(...) csAssert(false, "Unreachable code reached");
 #endif
 
-#define attr(A, ...) CynPST(cyn_, A)(__VA_ARGS__)
+#define attr(A, ...) CXY_PASTE(cyn_, A)(__VA_ARGS__)
 
-#ifndef CynAlign
-#define CynAlign(S, A) (((S) + ((A)-1)) & ~((A)-1))
+#ifndef CYN_ALIGN
+#define CYN_ALIGN(S, A) (((S) + ((A)-1)) & ~((A)-1))
 #endif
 
 typedef uint8_t u8;
@@ -146,6 +150,7 @@ typedef float f32;
 typedef double f64;
 typedef uintptr_t uptr;
 typedef const char *cstring;
+typedef u32 wchar;
 
 #define MIN(A, B)                                                              \
     ({                                                                         \
@@ -162,21 +167,21 @@ typedef const char *cstring;
 
 #define unalignedLoad(T, k)                                                    \
     ({                                                                         \
-        T LineVAR(k);                                                          \
-        memcpy(&LineVAR(k), k, sizeof(LineVAR(k)));                            \
-        LineVAR(k);                                                            \
+        T LINE_VAR(k);                                                         \
+        memcpy(&LINE_VAR(k), k, sizeof(LINE_VAR(k)));                          \
+        LINE_VAR(k);                                                           \
     })
 
-#define Stack_str_(N)                                                          \
+#define __stack_str_t(N)                                                       \
     _Static_assert(((N) <= 32), "Stack string's must be small");               \
     typedef struct Stack_str_##N##_t {                                         \
         char str[(N) + 1];                                                     \
     } Stack_str_##N
 
-Stack_str_(4);
-Stack_str_(8);
-Stack_str_(16);
-Stack_str_(32);
+__stack_str_t(4);
+__stack_str_t(8);
+__stack_str_t(16);
+__stack_str_t(32);
 
 #define Stack_str(N) Stack_str_##N
 #define Format_to_ss(SS, fmt, ...)                                             \
@@ -215,16 +220,16 @@ attr(noreturn) attr(format, printf, 1, 2) void cynAbort(const char *fmt, ...);
         T2 s;                                                                  \
     }
 #define unpack(A, B, P)                                                        \
-    __typeof(P) LineVAR(uPp) = (P);                                            \
-    __typeof__((P).f) A = LineVAR(uPp).f;                                      \
-    __typeof__((P).s) B = LineVAR(uPp).s
+    __typeof(P) LINE_VAR(uPp) = (P);                                           \
+    __typeof__((P).f) A = LINE_VAR(uPp).f;                                     \
+    __typeof__((P).s) B = LINE_VAR(uPp).s
 
 #define make(T, ...) ((T){__VA_ARGS__})
 #define New(P, T, ...)                                                         \
     ({                                                                         \
-        T *LineVAR(aNa) = allocFromMemPool((P), sizeof(T));                    \
-        *LineVAR(aNa) = make(T, __VA_ARGS__);                                  \
-        LineVAR(aNa);                                                          \
+        T *LINE_VAR(aNa) = allocFromMemPool((P), sizeof(T));                   \
+        *LINE_VAR(aNa) = make(T, __VA_ARGS__);                                 \
+        LINE_VAR(aNa);                                                         \
     })
 
 static inline unsigned ilog2(uintmax_t i)
@@ -238,3 +243,7 @@ static inline unsigned ilog2(uintmax_t i)
 size_t convertEscapeSeq(const char *str, size_t n, u32 *res);
 bool isColorSupported(FILE *);
 char *readFile(const char *fileName, size_t *file_size);
+
+#ifdef __cplusplus
+}
+#endif

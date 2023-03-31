@@ -8,7 +8,7 @@
 
 typedef struct {
     FormatState *state;
-} CodeGenContext;
+} CodegenContext;
 
 void generateCode(TypeTable *table, const AstNode *prog);
 

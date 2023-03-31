@@ -60,5 +60,6 @@ add_executable(cxy
         ${CXY_DRIVER_SOURCES})
 
 target_compile_definitions(cxy PRIVATE
-        -DCXY_VERSION="${CXY_VERSION}")
+        -DCXY_VERSION="${CXY_VERSION}"
+        -DCXY_SOURCE_LANG_DIR="${CMAKE_SOURCE_DIR}/src/cxy/lang")
 

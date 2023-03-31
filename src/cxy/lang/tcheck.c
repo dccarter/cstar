@@ -28,6 +28,7 @@ typedef struct {
     struct {
         Scope *first, *scope;
     } env;
+    bool mainOptimized;
 } CheckerContext;
 
 static const Type *sError;
@@ -232,10 +233,57 @@ static inline u64 checkMany(AstVisitor *visitor, AstNode *node)
     return i;
 }
 
+static void addBuiltinFunc(CheckerContext *ctx,
+                           cstring name,
+                           const Type *ret,
+                           const Type **params,
+                           u64 paramsCount)
+{
+    defineSymbol(ctx,
+                 name,
+                 makeAstNode(ctx->pool,
+                             builtinLoc(),
+                             &(AstNode){.tag = astFuncDecl,
+                                        .flags = flgBuiltin,
+                                        .type = makeFuncType(ctx->typeTable,
+                                                             name,
+                                                             flgBuiltin,
+                                                             ret,
+                                                             params,
+                                                             paramsCount)}));
+}
+
+static void addBuiltinVariable(CheckerContext *ctx,
+                               cstring name,
+                               const Type *type,
+                               AstNode *value,
+                               u64 paramsCount)
+{
+    defineSymbol(ctx,
+                 name,
+                 makeAstNode(ctx->pool,
+                             builtinLoc(),
+                             &(AstNode){.tag = astConstDecl,
+                                        .flags = flgBuiltin,
+                                        .type = type}));
+}
+
+static void initBuiltins(CheckerContext *ctx)
+{
+    {
+        const Type *params[] = {makePrimitiveType(ctx->typeTable, prtChar)};
+        addBuiltinFunc(
+            ctx, "wputc", makePrimitiveType(ctx->typeTable, prtI32), params, 1);
+    }
+}
+
 static void checkProgram(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     pushScope(ctx, node);
+
+    initBuiltins(ctx);
+
     checkMany(visitor, node->program.decls);
 }
 
@@ -314,31 +362,38 @@ static void checkFuncDecl(AstVisitor *visitor, AstNode *node)
     bool isVariadic = false;
 
     defineSymbol(ctx, node->funcDecl.name, node);
+    if (!ctx->mainOptimized) {
+        node->flags |=
+            (strcmp(node->funcDecl.name, "main") == 0) ? flgMain : flgNone;
+        ctx->mainOptimized = node->flags & flgMain;
+    }
 
     pushScope(ctx, node);
     params = mallocOrDie(sizeof(Type *) * paramsCount);
     for (; param; param = param->next) {
         param->parentScope = node;
         params[i] = evalType(visitor, param);
-        if (isVariadic && param->funcParam.isVariadic) {
+        if (isVariadic && (param->flags & flgVariadic)) {
             logError(ctx->L,
                      &param->loc,
                      "variadic parameters should the last parameter type in "
                      "function declaration",
                      NULL);
         }
-        isVariadic = param->funcParam.isVariadic;
+        isVariadic = (param->flags & flgVariadic);
     }
 
     if (node->funcDecl.ret)
-        evalType(visitor, node->funcDecl.ret);
+        ret = evalType(visitor, node->funcDecl.ret);
 
-    node->funcDecl.body->parentScope = node;
-    ret = evalType(visitor, node->funcDecl.body);
+    if (!(node->flags & flgNative)) {
+        node->funcDecl.body->parentScope = node;
+        ret = evalType(visitor, node->funcDecl.body);
+    }
 
     node->type = makeFuncType(ctx->typeTable,
                               node->funcDecl.name,
-                              isVariadic,
+                              node->flags,
                               ret,
                               params,
                               paramsCount);
@@ -361,7 +416,7 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
     for (; param; param = param->next) {
         param->parentScope = node;
         params[i] = evalType(visitor, param);
-        if (param->funcParam.isVariadic) {
+        if (param->flags & flgVariadic) {
             logError(ctx->L,
                      &param->loc,
                      "variadic parameters are not supported on closures",
@@ -383,9 +438,23 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
     popScope(ctx);
 }
 
+static void checkStatementExpr(AstVisitor *visitor, AstNode *node)
+{
+    node->type = evalType(visitor, node->stmtExpr.stmt);
+}
+
+static void checkExpressionStmt(AstVisitor *visitor, AstNode *node)
+{
+    node->type = evalType(visitor, node->exprStmt.expr);
+}
+
 static void checkVarDecl(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
+    AstNode *names = node->varDecl.names;
+
+    defineSymbol(ctx, names->ident.value, node);
+
     node->type = node->varDecl.type ? evalType(visitor, node->varDecl.type)
                                     : makeAutoType(ctx->typeTable);
     const Type *value = NULL;
@@ -401,8 +470,6 @@ static void checkVarDecl(AstVisitor *visitor, AstNode *node)
             node->type = value;
         }
     }
-
-    defineSymbol(ctx, node->varDecl.names->ident.value, node);
 }
 
 static void checkIdentifier(AstVisitor *visitor, AstNode *node)
@@ -567,6 +634,48 @@ static void checkTupleExpr(AstVisitor *visitor, AstNode *node)
     free(args);
 }
 
+static void checkCall(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    const Type *callee = evalType(visitor, node->callExpr.callee);
+    AstNode *arg = node->callExpr.args;
+
+    if (callee->tag != typFunc) {
+        logError(
+            ctx->L,
+            &node->callExpr.callee->loc,
+            "expression of type '{t}' cannot be invoked, expecting a function",
+            (FormatArg[]){{.t = callee}});
+        node->type = sError;
+        return;
+    }
+
+    node->type = callee->func.retType;
+    u64 count = countAstNodes(arg);
+    if (count != callee->func.paramsCount) {
+        logError(ctx->L,
+                 &node->loc,
+                 "invalid number of arguments provided to function of type "
+                 "'{t}', expecting '{u64}' but got '{u64}'",
+                 (FormatArg[]){{.t = callee},
+                               {.u64 = callee->func.paramsCount},
+                               {.u64 = count}});
+        return;
+    }
+
+    for (u64 i = 0; arg; arg = arg->next, i++) {
+        const Type *type = evalType(visitor, arg);
+        if (!isTypeAssignableFrom(
+                ctx->typeTable, callee->func.params[i], type)) {
+            logError(
+                ctx->L,
+                &arg->loc,
+                "incompatible argument types, expecting '{t}' but got '{t}'",
+                (FormatArg[]){{.t = callee->func.params[i]}, {.t = type}});
+        }
+    }
+}
+
 static void checkBlock(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
@@ -626,14 +735,14 @@ static void checkPointerType(AstVisitor *visitor, AstNode *node)
     CheckerContext *ctx = getAstVisitorContext(visitor);
     node->type = makePointerType(ctx->typeTable,
                                  evalType(visitor, node->pointerType.pointed),
-                                 node->pointerType.isConst);
+                                 node->flags & flgConst);
 }
 
 static void checkArrayType(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     const Type *element = evalType(visitor, node->arrayType.elementType);
-    u64 count = countAstNodes(node->arrayExpr.elements);
+    u64 count = countAstNodes(node->arrayType.dims);
     const u64 *indexes = mallocOrDie(sizeof(u64) * count);
     // TODO evaluate indexes
     node->type = makeArrayType(ctx->typeTable, element, indexes, count);
@@ -749,7 +858,10 @@ void typeCheck(AstNode *program, Log *L, MemPool *pool, TypeTable *typeTable)
         [astIndexExpr] = checkIndex,
         [astMemberExpr] = checkMember,
         [astTupleExpr] = checkTupleExpr,
+        [astCallExpr] = checkCall,
         [astClosureExpr] = checkClosure,
+        [astStmtExpr] = checkStatementExpr,
+        [astExprStmt] = checkExpressionStmt,
         [astBlockStmt] = checkBlock,
         [astReturnStmt] = checkReturn,
         [astPrimitiveType] = checkPrimitiveType,

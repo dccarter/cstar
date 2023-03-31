@@ -58,3 +58,5 @@ bool compileFile(const char *fileName, const Options *options, Log *log)
 
     return program;
 }
+
+bool buildS

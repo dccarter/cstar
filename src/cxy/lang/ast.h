@@ -159,9 +159,24 @@ typedef enum {
     COUNT
 } AstTag;
 
+enum {
+    flgNone = 0,
+    flgNative = BIT(0),
+    flgBuiltin = BIT(1),
+    flgPublic = BIT(2),
+    flgPrivate = BIT(3),
+    flgAsync = BIT(4),
+    flgTypeAst = BIT(5),
+    flgMain = BIT(6),
+    flgVariadic = BIT(7),
+    flgConst = BIT(8),
+    flgDefault = BIT(9)
+};
+
 typedef struct AstNode {
     AstTag tag;
     FileLoc loc;
+    u64 flags;
     const Type *type;
     struct AstNode *parentScope;
     struct AstNode *next;
@@ -214,7 +229,6 @@ typedef struct AstNode {
         } arrayType;
 
         struct {
-            bool isAsync;
             struct AstNode *genericParams;
             struct AstNode *params;
             struct AstNode *ret;
@@ -226,7 +240,6 @@ typedef struct AstNode {
 
         struct {
             struct AstNode *pointed;
-            bool isConst;
         } pointerType;
 
         struct {
@@ -252,7 +265,6 @@ typedef struct AstNode {
             const char *name;
             struct AstNode *args;
             u64 index;
-            bool isType;
         } pathElement;
 
         struct {
@@ -262,9 +274,6 @@ typedef struct AstNode {
 
         struct {
             const char *name;
-            bool isPublic : 1;
-            bool isNative : 1;
-            bool isAsync : 1;
             Operator operatorOverload;
             struct AstNode *genericParams;
             struct AstNode *params;
@@ -274,37 +283,30 @@ typedef struct AstNode {
 
         struct {
             const char *name;
-            bool isPublic;
             struct AstNode *params;
             struct AstNode *ret;
             struct AstNode *body;
         } macroDecl;
 
         struct {
-            bool isVariadic;
             const char *name;
             struct AstNode *type;
             struct AstNode *def;
         } funcParam;
 
         struct {
-            bool isPublic : 1;
-            bool isNative : 1;
             struct AstNode *names;
             struct AstNode *type;
             struct AstNode *init;
         } constDecl, varDecl;
 
         struct {
-            bool isPublic;
-            bool isNative;
             const char *name;
             struct AstNode *genericParams;
             struct AstNode *aliased;
         } typeDecl;
 
         struct {
-            bool isPublic;
             const char *name;
             struct AstNode *genericParams;
             struct AstNode *members;
@@ -317,14 +319,12 @@ typedef struct AstNode {
 
         struct {
             const char *name;
-            bool isPublic : 1;
             struct AstNode *base;
             struct AstNode *options;
         } enumDecl;
 
         struct {
             const char *name;
-            bool isPrivate;
             u64 index;
             struct AstNode *type;
             struct AstNode *value;
@@ -332,7 +332,6 @@ typedef struct AstNode {
 
         struct {
             const char *name;
-            bool isPublic : 1;
             struct AstNode *base;
             struct AstNode *genericParams;
             struct AstNode *members;
@@ -375,7 +374,6 @@ typedef struct AstNode {
         } callExpr, macroCallExpr;
 
         struct {
-            bool isAsync;
             struct AstNode **capture;
             struct AstNode *params;
             struct AstNode *ret;
@@ -427,7 +425,6 @@ typedef struct AstNode {
         } switchStmt;
 
         struct {
-            bool isDefault;
             struct AstNode *match;
             struct AstNode *body;
         } caseStmt;
@@ -468,10 +465,6 @@ void printAst(FormatState *state, const AstNode *node);
 bool isTuple(const AstNode *node);
 
 bool isAssignableExpr(const AstNode *node);
-
-bool isPublicDecl(const AstNode *node);
-
-bool isNative(const AstNode *node);
 
 u64 countAstNodes(const AstNode *node);
 

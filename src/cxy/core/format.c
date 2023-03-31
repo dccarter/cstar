@@ -342,3 +342,8 @@ void writeFormatState(FormatState *state, FILE *file)
     for (FormatBuf *buf = state->firstBuf; buf; buf = buf->next)
         fwrite(buf->data, 1, buf->size, file);
 }
+
+void append(FormatState *state, const char *s, size_t bytes)
+{
+    write(state, s, bytes);
+}
