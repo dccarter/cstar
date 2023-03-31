@@ -342,7 +342,7 @@ static void checkFuncParam(AstVisitor *visitor, AstNode *node)
     node->type = evalType(visitor, node->funcParam.type);
     if (node->funcParam.def) {
         const Type *def = evalType(visitor, node->funcParam.def);
-        if (isTypeAssignableFrom(ctx->typeTable, node->type, def)) {
+        if (!isTypeAssignableFrom(ctx->typeTable, node->type, def)) {
             logError(ctx->L,
                      &node->funcParam.def->loc,
                      "parameter default value type '{t}' not compatible with "
@@ -370,7 +370,7 @@ static void checkFuncDecl(AstVisitor *visitor, AstNode *node)
 
     pushScope(ctx, node);
     params = mallocOrDie(sizeof(Type *) * paramsCount);
-    for (; param; param = param->next) {
+    for (; param; param = param->next, i++) {
         param->parentScope = node;
         params[i] = evalType(visitor, param);
         if (isVariadic && (param->flags & flgVariadic)) {
@@ -533,6 +533,14 @@ static void checkUnary(AstVisitor *visitor, AstNode *node)
     node->type = operand;
 }
 
+static void checkAddressOf(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    const Type *operand = evalType(visitor, node->unaryExpr.operand);
+    node->type = makePointerType(
+        ctx->typeTable, operand, node->unaryExpr.operand->flags & flgConst);
+}
+
 static void checkIndex(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
@@ -584,7 +592,8 @@ static void checkMember(AstVisitor *visitor, AstNode *node)
     AstNode *member = node->memberExpr.member;
 
     if (member->tag == astIntegerLit) {
-
+        u64 flags = target->flags & flgConst;
+        target = stripPointer(ctx->typeTable, target);
         if (target->tag != typTuple) {
             logError(ctx->L,
                      &node->memberExpr.target->loc,
@@ -606,6 +615,9 @@ static void checkMember(AstVisitor *visitor, AstNode *node)
             node->type = sError;
             return;
         }
+
+        if (flags)
+            node->flags |= flags;
         node->type = target->tuple.members[member->intLiteral.value];
     }
     else {
@@ -855,6 +867,7 @@ void typeCheck(AstNode *program, Log *L, MemPool *pool, TypeTable *typeTable)
         [astIdentifier] = checkIdentifier,
         [astBinaryExpr] = checkBinary,
         [astUnaryExpr] = checkUnary,
+        [astAddressOf] = checkAddressOf,
         [astIndexExpr] = checkIndex,
         [astMemberExpr] = checkMember,
         [astTupleExpr] = checkTupleExpr,

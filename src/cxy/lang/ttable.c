@@ -57,7 +57,6 @@ static HashCode hashType(HashCode hash, const Type *type)
     case typString:
         break;
     case typPointer:
-        hash = hashUint8(hash, type->pointer.isConst);
         hash = hashType(hash, type->pointer.pointed);
         break;
     case typArray:
@@ -111,7 +110,7 @@ static bool compareTypes(const Type *left, const Type *right)
     case typPrimitive:
         return left->primitive.id == right->primitive.id;
     case typPointer:
-        return (left->pointer.isConst == right->pointer.isConst) &&
+        return ((left->flags & flgConst) == (right->flags & flgConst)) &&
                compareTypes(left->pointer.pointed, right->pointer.pointed);
     case typArray:
         if ((left->array.arity == right->array.arity) &&
@@ -241,6 +240,19 @@ const Type *resolveType(TypeTable *table, const Type *type)
     }
 }
 
+const Type *stripPointer(TypeTable *table, const Type *type)
+{
+    while (true) {
+        switch (resolveType(table, type)->tag) {
+        case typPointer:
+            type = stripPointer(table, type->pointer.pointed);
+            break;
+        default:
+            return type;
+        }
+    }
+}
+
 const Type *makeErrorType(TypeTable *table) { return table->errorType; }
 
 const Type *makeAutoType(TypeTable *table) { return table->autoType; }
@@ -279,11 +291,12 @@ const Type *makeArrayType(TypeTable *table,
     return ret.s;
 }
 
-const Type *makePointerType(TypeTable *table, const Type *pointed, bool isConst)
+const Type *makePointerType(TypeTable *table, const Type *pointed, u64 flags)
 {
     Type type = make(Type,
                      .tag = typPointer,
-                     .pointer = {.pointed = pointed, .isConst = isConst});
+                     .flags = flags,
+                     .pointer = {.pointed = pointed});
 
     return getOrInsertType(table, &type).s;
 }

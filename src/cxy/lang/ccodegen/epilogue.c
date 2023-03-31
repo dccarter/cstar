@@ -93,7 +93,17 @@ static void generateFunc(ConstAstVisitor *visitor, const AstNode *node)
     }
     else {
         format(ctx->state, " ", NULL);
-        astConstVisit(visitor, node->funcDecl.body);
+        if (node->funcDecl.body->tag == astBlockStmt) {
+            astConstVisit(visitor, node->funcDecl.body);
+        }
+        else {
+            format(ctx->state, "{{{>}\n", NULL);
+            if (node->type->func.retType != makeVoidType(table)) {
+                format(ctx->state, "return ", NULL);
+            }
+            astConstVisit(visitor, node->funcDecl.body);
+            format(ctx->state, "{<}\n}", NULL);
+        }
     }
 }
 
@@ -161,6 +171,13 @@ static void generateLiteral(ConstAstVisitor *visitor, const AstNode *node)
     }
 }
 
+static void generateAddressOf(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    format(ctx->state, "&", NULL);
+    astConstVisit(visitor, node->unaryExpr.operand);
+}
+
 static void generateStatementExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     astConstVisit(visitor, node->stmtExpr.stmt);
@@ -170,6 +187,10 @@ static void generateTupleExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     const AstNode *arg = node->tupleExpr.args;
+
+    format(ctx->state, "(", NULL);
+    generateTypeUsage((CCodegenContext *)ctx, node->type);
+    format(ctx->state, ")", NULL);
 
     format(ctx->state, "{{", NULL);
     for (u64 i = 0; arg; arg = arg->next, i++) {
@@ -223,6 +244,17 @@ static void generateExpressionStmt(ConstAstVisitor *visitor,
     format(ctx->state, ";", NULL);
 }
 
+static void generateReturn(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    format(ctx->state, "return", NULL);
+    if (node->returnStmt.expr) {
+        format(ctx->state, " ", NULL);
+        astConstVisit(visitor, node->returnStmt.expr);
+    }
+    format(ctx->state, ";", NULL);
+}
+
 void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
 {
     // clang-format off
@@ -238,12 +270,14 @@ void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
         [astIntegerLit] = generateLiteral,
         [astFloatLit] = generateLiteral,
         [astStringLit] = generateLiteral,
+        [astAddressOf] = generateAddressOf,
         [astStmtExpr] = generateStatementExpr,
         [astTupleExpr] = generateTupleExpr,
         [astMemberExpr] = generateMemberExpr,
         [astCallExpr] = generateCallExpr,
         [astBlockStmt] = generateBlock,
         [astExprStmt] = generateExpressionStmt,
+        [astReturnStmt] = generateReturn,
         [astFuncParam] = generateFuncParam,
         [astFuncDecl] = generateFunc,
         [astVarDecl] = generateVariable,

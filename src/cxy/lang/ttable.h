@@ -15,6 +15,7 @@ TypeTable *newTypeTable(MemPool *pool);
 void freeTypeTable(TypeTable *table);
 
 const Type *resolveType(TypeTable *table, const Type *type);
+const Type *stripPointer(TypeTable *table, const Type *type);
 
 const Type *makeErrorType(TypeTable *table);
 const Type *makeAutoType(TypeTable *table);
@@ -22,9 +23,7 @@ const Type *makeVoidType(TypeTable *table);
 const Type *makeNullType(TypeTable *table);
 const Type *makePrimitiveType(TypeTable *table, PrtId id);
 const Type *makeStringType(TypeTable *table);
-const Type *makePointerType(TypeTable *table,
-                            const Type *pointed,
-                            bool isConst);
+const Type *makePointerType(TypeTable *table, const Type *pointed, u64 flags);
 const Type *makeArrayType(TypeTable *table,
                           const Type *elementType,
                           const u64 *indexes,

@@ -129,6 +129,7 @@ typedef enum {
     /* Expressions */
     astGroupExpr,
     astUnaryExpr,
+    astAddressOf,
     astBinaryExpr,
     astAssignExpr,
     astTernaryExpr,

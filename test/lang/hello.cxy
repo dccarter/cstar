@@ -1,6 +1,16 @@
 /**
  * Simplicity
  */
+
+type Range = (i64, i64, i64)
+
+func range(start: i64, end: i64, step: i64 = 1) => (start, end, step)
+func next(range: &const Range) : &i64 {
+    const x = 20;
+    return range
+}
+
 func main(args: [string]) {
     wputc('😃')
+    return 100
 }

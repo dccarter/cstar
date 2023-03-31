@@ -70,10 +70,10 @@ void generateTypeUsage(CCodegenContext *ctx, const Type *type)
         break;
 
     case typPointer:
-        if (type->pointer.isConst)
+        if (type->flags & flgConst)
             format(state, "const ", NULL);
         generateTypeUsage(ctx, type->pointer.pointed);
-        format(state, " *", NULL);
+        format(state, "*", NULL);
         break;
 
     case typArray:

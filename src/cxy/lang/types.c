@@ -60,9 +60,14 @@ bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from)
     case typPrimitive:
         switch (to->primitive.id) {
 #define f(I, ...) case prt##I:
-            INTEGER_TYPE_LIST(f)
+            SIGNED_INTEGER_TYPE_LIST(f)
 #undef f
             return isIntegerType(table, from) && isSignedType(table, from) &&
+                   to->size >= from->size;
+#define f(I, ...) case prt##I:
+            UNSIGNED_INTEGER_TYPE_LIST(f)
+#undef f
+            return isIntegerType(table, from) && isUnsignedType(table, from) &&
                    to->size >= from->size;
 #define f(I, ...) case prt##I:
             FLOAT_TYPE_LIST(f)

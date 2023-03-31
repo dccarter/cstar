@@ -94,7 +94,6 @@ typedef struct Type {
     } primitive;
 
     struct {
-        bool isConst : 1;
         const Type *pointed;
     } pointer;
 
@@ -147,5 +146,4 @@ bool isIntegerType(TypeTable *table, const Type *type);
 bool isSignedType(TypeTable *table, const Type *type);
 bool isUnsignedType(TypeTable *table, const Type *type);
 bool isFloatType(TypeTable *table, const Type *type);
-
 void printType(FormatState *state, const Type *type);

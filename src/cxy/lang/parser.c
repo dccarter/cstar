@@ -363,6 +363,7 @@ static AstNode *postfix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 
 static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 {
+    bool isBand = check(P, tokBAnd);
     switch (current(P)->tag) {
 #define f(O, T, ...) case tok##T:
         AST_PREFIX_EXPR_LIST(f)
@@ -374,13 +375,22 @@ static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 
     const Token tok = *advance(P);
     AstNode *operand = prefix(P, parsePrimary);
-    return newAstNode(
-        P,
-        &tok.fileLoc.begin,
-        &(AstNode){.tag = astUnaryExpr,
-                   .unaryExpr = {.operand = operand,
-                                 .op = tokenToUnaryOperator(tok.tag),
-                                 .isPrefix = true}});
+    
+    if (!isBand) {
+        return newAstNode(
+            P,
+            &tok.fileLoc.begin,
+            &(AstNode){.tag = astUnaryExpr,
+                       .unaryExpr = {.operand = operand,
+                                     .op = tokenToUnaryOperator(tok.tag),
+                                     .isPrefix = true}});
+    }
+    else {
+        return newAstNode(
+            P,
+            &tok.fileLoc.begin,
+            &(AstNode){.tag = astAddressOf, .unaryExpr = {.operand = operand}});
+    }
 }
 
 static AstNode *binary(Parser *P,
@@ -485,7 +495,7 @@ static AstNode *functionParam(Parser *P)
     const char *name = getTokenString(P, consume0(P, tokIdent), false);
     consume0(P, tokColon);
     AstNode *type = parseType(P), *def = NULL;
-    if (match(P, tokEqual)) {
+    if (match(P, tokAssign)) {
         def = expression(P, false);
     }
 
@@ -1066,7 +1076,6 @@ static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative)
     if (!isNative) {
         if (match(P, tokFatArrow)) {
             body = expression(P, true);
-            consume0(P, tokSemicolon);
         }
         else {
             body = block(P);
