@@ -12,6 +12,8 @@ extern "C" {
 
 #define CXY_PASTE__(X, Y) X##Y
 #define CXY_PASTE(X, Y) CXY_PASTE__(X, Y)
+#define CXY_PASTE_XYZ__(X, Y, Z) X##Y##Z
+#define CXY_PASTE_XYZ(X, Y, Z) CXY_PASTE_XYZ__(X, Y, Z)
 
 #define LINE_VAR(name) CXY_PASTE(name, __LINE__)
 

@@ -27,6 +27,7 @@ option(ENABLE_TESTS "Enable CMake tests" ON)
 include_directories(src/cxy)
 
 set(CXY_CORE_SOURCES
+        src/cxy/core/args.c
         src/cxy/core/array.c
         src/cxy/core/e4c.c
         src/cxy/core/format.c
@@ -39,10 +40,12 @@ set(CXY_CORE_SOURCES
 
 set(CXY_LANG_SOURCES
         src/cxy/lang/ast.c
+        src/cxy/lang/capture.c
         src/cxy/lang/codegen.c
         src/cxy/lang/lexer.c
         src/cxy/lang/parser.c
-        src/cxy/lang/tcheck.c
+        src/cxy/lang/check.c
+        src/cxy/lang/scope.c
         src/cxy/lang/ttable.c
         src/cxy/lang/types.c
         src/cxy/lang/ccodegen/epilogue.c

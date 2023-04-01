@@ -19,11 +19,6 @@ E4C_DEFINE_EXCEPTION(ErrorLimitExceeded,
                      "Error limit exceeded",
                      RuntimeException);
 
-typedef struct {
-    AstNode *first;
-    AstNode *last;
-} AstNodeList;
-
 static void synchronize(Parser *P);
 static void synchronizeUntil(Parser *P, TokenTag tag);
 static AstNode *expression(Parser *P, bool allowStructs);
@@ -375,7 +370,7 @@ static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 
     const Token tok = *advance(P);
     AstNode *operand = prefix(P, parsePrimary);
-    
+
     if (!isBand) {
         return newAstNode(
             P,
@@ -925,6 +920,7 @@ static AstNode *variable(
     Token tok = *current(P);
     uint64_t flags = isPublic ? flgPublic : flgNone;
     flags |= isNative ? flgNative : flgNone;
+    flags |= tok.tag == tokConst ? flgConst : flgNone;
 
     if (!match(P, tokConst, tokVar))
         reportUnexpectedToken(P, "var/const to start variable declaration");
@@ -963,7 +959,7 @@ static AstNode *variable(
     return newAstNode(
         P,
         &tok.fileLoc.begin,
-        &(AstNode){.tag = tok.tag == tokConst ? astConstDecl : astVarDecl,
+        &(AstNode){.tag = astVarDecl,
                    .flags = flags,
                    .varDecl = {.names = names, .type = type, .init = init}});
 }

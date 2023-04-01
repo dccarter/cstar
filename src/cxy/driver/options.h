@@ -10,6 +10,7 @@ typedef struct Log Log;
 typedef struct Options {
     bool printAst;
     bool noTypeCheck;
+    const char *output;
 } Options;
 
 static const Options default_options = {.printAst = false,
@@ -19,5 +20,3 @@ static const Options default_options = {.printAst = false,
 /// argument list. After parsing, `argc` and `argv` are modified to only
 /// contain the arguments that were not parsed.
 bool parse_options(int *argc, char **argv, Options *options, Log *log);
-
-

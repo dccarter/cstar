@@ -10,7 +10,12 @@ func next(range: &const Range) : &i64 {
     return range
 }
 
+pub native func puts(str: string) : i32;
+
 func main(args: [string]) {
+    defer wputc('0');
+    const x = range(10, 20, 10);
+    const f = () => puts("Hello");
     wputc('😃')
-    return 100
+    return 0;
 }

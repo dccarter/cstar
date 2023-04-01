@@ -87,15 +87,10 @@ void generateTypeUsage(CCodegenContext *ctx, const Type *type)
     }
 }
 
-void generateCode(TypeTable *table, const AstNode *prog)
+void generateCode(FormatState *state, TypeTable *table, const AstNode *prog)
 {
-    FormatState state = newFormatState("  ", true);
-    CCodegenContext context = {.base = {.state = &state}, .table = table};
+    CCodegenContext context = {.base = {.state = state}, .table = table};
 
     cCodegenPrologue(&context, prog);
     cCodegenEpilogue(&context, prog);
-
-    writeFormatState(&state, stdout);
-
-    freeFormatState(&state);
 }

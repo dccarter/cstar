@@ -342,24 +342,12 @@ const Type *makeTupleType(TypeTable *table, const Type **members, u64 count)
     return ret.s;
 }
 
-const Type *makeFuncType(TypeTable *table,
-                         cstring name,
-                         u64 flags,
-                         const Type *retType,
-                         const Type **params,
-                         u64 paramsCount)
+const Type *makeFuncType(TypeTable *table, const Type *init)
 {
-    Type type = make(Type,
-                     .tag = typFunc,
-                     .name = name,
-                     .flags = flags,
-                     .func = {.retType = retType,
-                              .paramsCount = paramsCount,
-                              .params = params});
-
-    GetOrInset ret = getOrInsertType(table, &type);
+    GetOrInset ret = getOrInsertType(table, init);
     if (!ret.f) {
-        ((Type *)ret.s)->func.params = copyTypes(table, params, paramsCount);
+        ((Type *)ret.s)->func.params =
+            copyTypes(table, init->func.params, init->func.paramsCount);
     }
 
     return ret.s;

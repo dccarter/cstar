@@ -106,7 +106,7 @@ static void programPrologue(ConstAstVisitor *visitor, const AstNode *node)
            " * Generated from cxy compile\n"
            " */\n"
            "\n"
-           "/* --------------------- prologue.cxy.c --------------*/\n"
+           "/* --------------------- epilogue.cxy.c --------------*/\n"
            "\n",
            NULL);
     append(ctx->base.state, readFile(CXY_PROLOGUE_SRC_FILE, &bytes), bytes);

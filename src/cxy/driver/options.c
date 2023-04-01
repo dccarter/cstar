@@ -1,67 +1,76 @@
 #include "driver/options.h"
+#include "core/args.h"
 #include "core/log.h"
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
-static void usage()
-{
-    printf("cxy -- a programming language giving c steroids (ver. " CXY_VERSION
-           ")\n"
-           "usage: cxy [options] files...\n"
-           "options:\n"
-           "  -h    --help           Shows this message\n"
-           "        --print-ast      Prints the AST on the standard output\n"
-           "        --no-key-check  Disables key checking\n"
-           "        --no-color       Disables colored output\n"
-           "        --max-errors     Sets the maximum number of errors\n");
-}
+Command(dev,
+        "development mode build, useful when developing the compiler",
+        Positionals(),
+        Opt(Name("no-type-check"),
+            Help("Disable type checking, ignore if --print-ast is not set"),
+            Def("false")),
+        Opt(Name("print-ast"),
+            Help("Prints the AST to standard output or given output file after "
+                 "compilation"),
+            Def("false")),
+        Str(Name("output"),
+            Sf('o'),
+            Help("Prints the AST to standard output or given output file after "
+                 "compilation"),
+            Def("")));
 
-static inline bool checkOptionArg(int i, int argc, char **argv, Log *log)
-{
-    if (i + 1 >= argc) {
-        logError(log,
-                 NULL,
-                 "missing argument for option '{s}'",
-                 (FormatArg[]){{.s = argv[i]}});
-        return false;
-    }
-    return true;
-}
+#define BUILD_COMMANDS(f)                                                      \
+    PARSER_BUILTIN_COMMANDS(f)                                                 \
+    f(dev)
+
+// clang-format off
+#define DEV_CMD_LAYOUT(f, ...)                                                 \
+    f(noTypeCheck, Local, Option, 0, ##__VA_ARGS__)                            \
+    f(printAst, Local, Option, 1, ##__VA_ARGS__)                               \
+    f(output, Local, String, 2, ##__VA_ARGS__)
 
 bool parse_options(int *argc, char **argv, Options *options, Log *log)
 {
     bool status = true;
     int file_count = 0;
-    for (int i = 1, n = *argc; i < n; ++i) {
-        if (argv[i][0] != '-') {
-            argv[++file_count] = argv[i];
-            continue;
-        }
-        if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
-            usage();
-            goto error;
-        }
-        else if (!strcmp(argv[i], "--no-color"))
-            log->state->ignoreStyle = true;
-        else if (!strcmp(argv[i], "--no-key-check"))
-            options->noTypeCheck = true;
-        else if (!strcmp(argv[i], "--print-ast"))
-            options->printAst = true;
-        else if (!strcmp(argv[i], "--max-errors")) {
-            if (!checkOptionArg(i, n, argv, log))
-                goto error;
-            log->maxErrors = strtoull(argv[++i], NULL, 10);
-        }
-        else {
-            logError(log,
-                     NULL,
-                     "invalid option '{s}'",
-                     (FormatArg[]){{.s = argv[i]}});
-            goto error;
-        }
+
+    Parser(
+        "cxy",
+        CXY_VERSION,
+        BUILD_COMMANDS,
+        DefaultCmd(dev),
+        Int(Name("max-errors"),
+            Help(
+                "Set the maximum number of errors incurred before the compiler "
+                "aborts"),
+            Def("10")),
+        Opt(Name("no-color"),
+            Help("disable colored output when formatting outputs")));
+
+    int selected = argparse(argc, &argv, parser);
+
+    if (selected == CMD_help) {
+        CmdFlagValue *cmd = cmdGetPositional(&help.meta, 0);
+        cmdShowUsage(P, (cmd ? cmd->str : NULL), stdout);
+        goto error;
     }
+    else if (selected == -1) {
+        logError(log, NULL, P->error, NULL);
+        goto error;
+    }
+
+    CmdCommand *cmd = parser.cmds[selected];
+
+    log->maxErrors = getGlobalInt(cmd, 0);
+    log->state->ignoreStyle = getGlobalOption(cmd, 1);
+
+    if (cmd->id == CMD_dev) {
+        UnloadCmd(cmd, options, DEV_CMD_LAYOUT);
+    }
+
+    file_count = *argc - 1;
+
     if (file_count == 0) {
         logError(log,
                  NULL,

@@ -118,7 +118,6 @@ typedef enum {
     astFuncParam,
     astFuncDecl,
     astMacroDecl,
-    astConstDecl,
     astVarDecl,
     astTypeDecl,
     astUnionDecl,
@@ -171,10 +170,24 @@ enum {
     flgMain = BIT(6),
     flgVariadic = BIT(7),
     flgConst = BIT(8),
-    flgDefault = BIT(9)
+    flgDefault = BIT(9),
+    flgDeferred = BIT(10),
+    flgCapture = BIT(11),
 };
 
-typedef struct AstNode {
+typedef struct AstNode AstNode;
+
+typedef struct AstNodeList {
+    AstNode *first;
+    AstNode *last;
+} AstNodeList;
+
+typedef struct CaptureSet {
+    HashTable table;
+    u64 index;
+} ClosureCapture;
+
+struct AstNode {
     AstTag tag;
     FileLoc loc;
     u64 flags;
@@ -375,7 +388,7 @@ typedef struct AstNode {
         } callExpr, macroCallExpr;
 
         struct {
-            struct AstNode **capture;
+            ClosureCapture capture;
             struct AstNode *params;
             struct AstNode *ret;
             struct AstNode *body;
@@ -406,6 +419,7 @@ typedef struct AstNode {
         } returnStmt;
 
         struct {
+            struct AstNodeList epilogue;
             struct AstNode *stmts;
         } blockStmt;
 
@@ -430,7 +444,7 @@ typedef struct AstNode {
             struct AstNode *body;
         } caseStmt;
     };
-} AstNode;
+};
 
 typedef struct AstVisitor {
     void *context;
@@ -459,7 +473,7 @@ void astConstVisit(ConstAstVisitor *visitor, const AstNode *node);
 
 AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *node);
 
-AstNode *copyAstNode(AstNode *dst, const AstNode *src, FileLoc *fileLoc);
+AstNode *copyAstNode(MemPool *pool, const AstNode *node);
 
 void printAst(FormatState *state, const AstNode *node);
 
@@ -470,14 +484,18 @@ bool isAssignableExpr(const AstNode *node);
 u64 countAstNodes(const AstNode *node);
 
 AstNode *getLastAstNode(AstNode *node);
+AstNode *getNodeAtIndex(AstNode *node, u64 index);
 
 AstNode *getParentScopeWithTag(AstNode *node, AstTag tag);
 
 const AstNode *getLastAstNodeConst(const AstNode *node);
-
+const AstNode *getConstNodeAtIndex(const AstNode *node, u64 index);
 const AstNode *getParentScopeWithTagConst(const AstNode *node, AstTag tag);
+AstNode *cloneAstNode(MemPool *pool, const AstNode *node);
 
 void insertAstNodeAfter(AstNode *before, AstNode *after);
+void insertAstNode(AstNodeList *list, AstNode *node);
+void unlinkAstNode(AstNode **head, AstNode *prev, AstNode *node);
 
 const char *getPrimitiveTypeName(PrtId tag);
 

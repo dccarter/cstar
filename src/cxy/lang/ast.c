@@ -489,7 +489,7 @@ static void printVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
 
-    if (node->tag == astVarDecl)
+    if (node->flags & flgConst)
         printKeyword(context->state, "var");
     else
         printKeyword(context->state, "const");
@@ -788,11 +788,13 @@ AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *init)
     return node;
 }
 
-AstNode *copyAstNode(AstNode *dst, const AstNode *src, FileLoc *loc)
+AstNode *copyAstNode(MemPool *pool, const AstNode *node)
 {
-    memcpy(dst, src, sizeof(AstNode));
-    dst->loc = *loc;
-    return dst;
+    AstNode *copy = allocFromMemPool(pool, sizeof(AstNode));
+    memcpy(copy, node, sizeof(AstNode));
+    copy->next = NULL;
+    copy->parentScope = NULL;
+    return copy;
 }
 
 void astVisit(AstVisitor *visitor, AstNode *node)
@@ -842,7 +844,6 @@ void printAst(FormatState *state, const AstNode *node)
         [astFuncParam] = printFuncParam,
         [astFuncDecl] = printFuncDecl,
         [astMacroDecl] = printMacroDecl,
-        [astConstDecl] = printVariableDecl,
         [astVarDecl] = printVariableDecl,
         [astTypeDecl] = printTypeDecl,
         [astUnionDecl] = printUnionDecl,
@@ -914,6 +915,18 @@ AstNode *getLastAstNode(AstNode *node)
     return node;
 }
 
+AstNode *getNodeAtIndex(AstNode *node, u64 index)
+{
+    u64 i = 0;
+    while (node) {
+        if (i == index)
+            return node;
+        node = node->next;
+        i++;
+    }
+    return NULL;
+}
+
 AstNode *getParentScopeWithTag(AstNode *node, AstTag tag)
 {
     AstNode *parentScope = node->parentScope;
@@ -929,6 +942,18 @@ const AstNode *getLastAstNodeConst(const AstNode *node)
     return node;
 }
 
+const AstNode *getConstNodeAtIndex(const AstNode *node, u64 index)
+{
+    u64 i = 0;
+    while (node) {
+        if (i == index)
+            return node;
+        node = node->next;
+        i++;
+    }
+    return NULL;
+}
+
 const AstNode *getParentScopeWithTagConst(const AstNode *node, AstTag tag)
 {
     const AstNode *parentScope = node->parentScope;
@@ -937,10 +962,238 @@ const AstNode *getParentScopeWithTagConst(const AstNode *node, AstTag tag)
     return parentScope;
 }
 
+AstNode *cloneManyAstNodes(MemPool *pool, const AstNode *nodes)
+{
+    AstNode *first = NULL, *node = NULL;
+    while (nodes) {
+        if (!first) {
+            first = cloneAstNode(pool, nodes);
+            node = first;
+        }
+        else {
+            node->next = cloneAstNode(pool, nodes);
+            node = node->next;
+        }
+        nodes = nodes->next;
+    }
+    return first;
+}
+
+AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
+{
+    if (node == NULL)
+        return NULL;
+
+    AstNode *clone = copyAstNode(pool, node);
+    clone->attrs = cloneManyAstNodes(pool, node->attrs);
+
+#define CLONE_MANY(AST, MEMBER)                                                \
+    clone->AST.MEMBER = cloneManyAstNodes(pool, node->AST.MEMBER);
+#define CLONE_ONE(AST, MEMBER)                                                 \
+    clone->AST.MEMBER = cloneAstNode(pool, node->AST.MEMBER);
+
+    switch (clone->tag) {
+    case astProgram:
+        CLONE_MANY(program, decls);
+        break;
+    case astImplicitCast:
+        CLONE_ONE(implicitCast, expr);
+        break;
+    case astPathElem:
+        CLONE_ONE(pathElement, args);
+        break;
+    case astPath:
+        CLONE_MANY(path, elements);
+        break;
+    case astGenericParam:
+        CLONE_MANY(genericParam, constraints);
+        break;
+    case astTupleType:
+        CLONE_MANY(tupleType, args);
+        break;
+    case astArrayType:
+        CLONE_ONE(arrayType, elementType);
+        CLONE_MANY(arrayType, dims);
+        break;
+    case astPointerType:
+        CLONE_MANY(pointerType, pointed);
+        break;
+    case astFuncType:
+        CLONE_ONE(funcType, ret);
+        CLONE_MANY(funcType, params);
+        CLONE_MANY(funcType, genericParams);
+        break;
+    case astFuncParam:
+        CLONE_ONE(funcParam, type);
+        CLONE_ONE(funcParam, def);
+        break;
+    case astFuncDecl:
+        CLONE_MANY(funcDecl, genericParams);
+        CLONE_MANY(funcDecl, params);
+        CLONE_ONE(funcDecl, ret);
+        CLONE_ONE(funcDecl, body);
+        break;
+    case astMacroDecl:
+        CLONE_MANY(macroDecl, params);
+        CLONE_ONE(macroDecl, ret);
+        CLONE_ONE(macroDecl, body);
+        break;
+    case astVarDecl:
+        CLONE_ONE(varDecl, type);
+        CLONE_ONE(varDecl, init);
+        CLONE_MANY(varDecl, names);
+        break;
+    case astTypeDecl:
+        CLONE_MANY(typeDecl, genericParams);
+        CLONE_ONE(typeDecl, aliased);
+        break;
+    case astUnionDecl:
+        CLONE_MANY(unionDecl, members);
+        CLONE_MANY(unionDecl, genericParams);
+        break;
+
+    case astEnumOption:
+    case astEnumDecl:
+    case astStructField:
+    case astStructDecl:
+        break; // TODO
+
+    case astGroupExpr:
+        CLONE_ONE(groupExpr, expr);
+        break;
+    case astUnaryExpr:
+    case astAddressOf:
+        CLONE_ONE(unaryExpr, operand);
+        break;
+    case astBinaryExpr:
+        CLONE_ONE(binaryExpr, lhs);
+        CLONE_ONE(binaryExpr, rhs);
+        break;
+    case astAssignExpr:
+        CLONE_ONE(assignExpr, lhs);
+        CLONE_ONE(assignExpr, rhs);
+        break;
+    case astTernaryExpr:
+        CLONE_ONE(ternaryExpr, cond);
+        CLONE_ONE(ternaryExpr, body);
+        CLONE_ONE(ternaryExpr, otherwise);
+        break;
+    case astStmtExpr:
+        CLONE_ONE(stmtExpr, stmt);
+        break;
+    case astStringExpr:
+        CLONE_MANY(stringExpr, parts);
+        break;
+    case astTypedExpr:
+        CLONE_ONE(typedExpr, expr);
+        CLONE_ONE(typedExpr, type);
+        break;
+    case astCallExpr:
+    case astMacroCallExpr:
+        CLONE_ONE(callExpr, callee);
+        CLONE_MANY(callExpr, args);
+        break;
+    case astClosureExpr:
+        CLONE_ONE(closureExpr, ret);
+        CLONE_MANY(closureExpr, params);
+        CLONE_ONE(closureExpr, body);
+        break;
+    case astArrayExpr:
+        CLONE_MANY(arrayExpr, elements);
+        break;
+    case astIndexExpr:
+        CLONE_ONE(indexExpr, target);
+        CLONE_MANY(indexExpr, indices);
+        break;
+    case astTupleExpr:
+        CLONE_MANY(tupleExpr, args);
+        break;
+    case astFieldExpr:
+    case astStructExpr:
+        break; // TODO
+
+    case astMemberExpr:
+        CLONE_ONE(memberExpr, target);
+        CLONE_ONE(memberExpr, member);
+        break;
+    case astExprStmt:
+        CLONE_ONE(exprStmt, expr);
+        break;
+    case astDeferStmt:
+        CLONE_ONE(deferStmt, expr);
+        break;
+    case astReturnStmt:
+        CLONE_ONE(returnStmt, expr);
+        break;
+    case astBlockStmt:
+        CLONE_MANY(blockStmt, stmts);
+        break;
+    case astIfStmt:
+        CLONE_ONE(ifStmt, cond);
+        CLONE_ONE(ifStmt, body);
+        CLONE_ONE(ifStmt, otherwise);
+        break;
+    case astForStmt:
+        CLONE_ONE(forStmt, var);
+        CLONE_ONE(forStmt, range);
+        CLONE_ONE(forStmt, body);
+        break;
+    case astWhileStmt:
+        CLONE_ONE(whileStmt, cond);
+        CLONE_ONE(whileStmt, body);
+        break;
+    case astSwitchStmt:
+        CLONE_ONE(switchStmt, cond);
+        CLONE_MANY(switchStmt, cases);
+        break;
+    case astCaseStmt:
+        CLONE_ONE(caseStmt, match);
+        CLONE_ONE(caseStmt, match);
+        break;
+
+    case astError:
+    case astIdentifier:
+    case astVoidType:
+    case astStringType:
+    case astPrimitiveType:
+    case astNullLit:
+    case astBoolLit:
+    case astCharLit:
+    case astIntegerLit:
+    case astFloatLit:
+    case astStringLit:
+    case astBreakStmt:
+    case astContinueStmt:
+    default:
+        break;
+    }
+
+    return clone;
+}
+
 void insertAstNodeAfter(AstNode *before, AstNode *after)
 {
     getLastAstNode(after)->next = before->next;
     before->next = after;
+}
+
+void insertAstNode(AstNodeList *list, AstNode *node)
+{
+    if (list->first == NULL) {
+        list->first = node;
+    }
+    else {
+        list->last->next = node;
+    }
+    list->last = node;
+}
+
+void unlinkAstNode(AstNode **head, AstNode *prev, AstNode *node)
+{
+    if (prev == node)
+        *head = node->next;
+    else
+        prev->next = node->next;
 }
 
 const char *getPrimitiveTypeName(PrtId tag)

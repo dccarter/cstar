@@ -102,6 +102,7 @@ static void generateFunc(ConstAstVisitor *visitor, const AstNode *node)
                 format(ctx->state, "return ", NULL);
             }
             astConstVisit(visitor, node->funcDecl.body);
+            format(ctx->state, ";", NULL);
             format(ctx->state, "{<}\n}", NULL);
         }
     }
@@ -117,7 +118,7 @@ static void generateVariable(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
 
-    if (node->tag == astConstDecl)
+    if (node->flags == flgConst)
         format(ctx->state, "const ", NULL);
     generateTypeUsage((CCodegenContext *)ctx, node->type);
 
@@ -233,7 +234,33 @@ static void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
 
 static void generateBlock(ConstAstVisitor *visitor, const AstNode *node)
 {
-    generateManyAstsWithinBlock(visitor, "\n", node->blockStmt.stmts, true);
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    const AstNode *ret = NULL;
+    const AstNode *epilogue = node->blockStmt.epilogue.first;
+
+    format(ctx->state, "{{{>}\n", NULL);
+    for (const AstNode *stmt = node->blockStmt.stmts; stmt; stmt = stmt->next) {
+        if (epilogue && stmt->tag == astReturnStmt) {
+            ret = stmt;
+            continue;
+        }
+        astConstVisit(visitor, stmt);
+        if (epilogue || stmt->next)
+            format(ctx->state, "\n", NULL);
+    }
+
+    for (; epilogue; epilogue = epilogue->next) {
+        astConstVisit(visitor, epilogue);
+        if ((epilogue->flags & flgDeferred) && epilogue->tag != astBlockStmt)
+            format(ctx->state, ";", NULL);
+
+        if (ret || epilogue->next)
+            format(ctx->state, "\n", NULL);
+    }
+
+    if (ret)
+        astConstVisit(visitor, ret);
+    format(ctx->state, "{<}\n}", NULL);
 }
 
 static void generateExpressionStmt(ConstAstVisitor *visitor,
@@ -281,7 +308,6 @@ void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
         [astFuncParam] = generateFuncParam,
         [astFuncDecl] = generateFunc,
         [astVarDecl] = generateVariable,
-        [astConstDecl] = generateVariable,
         [astTypeDecl] = generateTypeDecl
     },
 

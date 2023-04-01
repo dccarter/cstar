@@ -1,3 +1,9 @@
+/**
+ * Generated from cxy compile
+ */
+
+/* --------------------- epilogue.cxy.c --------------*/
+
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -215,3 +221,48 @@ static inline int wputc(wchar c)
     s.str[5] += 1;
     return fwrite(s.str, 1, s.str[5], stdout);
 }
+
+/* --------------------- Generated PROLOGUE --------------*/
+
+typedef struct {
+  i64 _0;
+  i64 _1;
+  i64 _2;
+} __cxy_anonymous_tuple_18_t;
+typedef string __cxy_anonymous_array_25_t[];
+typedef i32(*__cxy_anonymous_func_26_t)();
+
+/* --------------------- Generated EPILOGUE --------------*/
+
+
+
+__cxy_anonymous_tuple_18_t range(i64 start, i64 end, i64 step) {
+  return (__cxy_anonymous_tuple_18_t){._0 = start, ._1 = end, ._2 = step};
+}
+
+const __cxy_anonymous_tuple_18_t* next(const __cxy_anonymous_tuple_18_t* range) {
+  const i32 x = 20;
+  return range;
+}
+
+extern i32 puts(string str);
+
+#define __CXY_MAIN_INVOKE(...) return __cxy_main(__VA_ARGS__)
+
+i32 __cxy_main(__cxy_anonymous_array_25_t args) {
+  const __cxy_anonymous_tuple_18_t x = range(10, 20, 10);
+  const __cxy_anonymous_func_26_t f = /* <unsupported AST tag 42> */;
+  wputc(128515);
+  wputc(48);
+  return 0;
+}
+/* --------------------- epilogue.cxy.c --------------*/
+
+typedef const char **__cxy_main_argv_t;
+
+int main(int argc, const char *argv[])
+{
+    __cxy_main_argv_t args = argv;
+    __CXY_MAIN_INVOKE(args);
+}
+

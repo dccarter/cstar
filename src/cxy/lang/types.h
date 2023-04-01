@@ -48,6 +48,8 @@ typedef enum {
     prtCOUNT
 } PrtId;
 
+typedef struct AstNode AstNode;
+
 // clang-format on
 
 typedef enum {
@@ -124,8 +126,10 @@ typedef struct Type {
 
     struct {
         u32 paramsCount;
+        u32 defaultValuesCount;
         const Type *retType;
         const Type **params;
+        AstNode *decl;
     } func;
 
     struct {

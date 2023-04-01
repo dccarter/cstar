@@ -2,7 +2,9 @@
 // Created by Carter on 2023-03-28.
 //
 
-#include "tcheck.h"
+#include "check.h"
+#include "capture.h"
+#include "scope.h"
 #include "ttable.h"
 
 #include "core/alloc.h"
@@ -11,211 +13,15 @@
 #include <string.h>
 
 typedef struct {
-    const char *name;
-    AstNode *declSite;
-} Symbol;
-
-typedef struct Scope {
-    HashTable symbols;
-    AstNode *node;
-    struct Scope *next, *prev;
-} Scope;
-
-typedef struct {
     Log *L;
     MemPool *pool;
     TypeTable *typeTable;
-    struct {
-        Scope *first, *scope;
-    } env;
+    Env env;
     bool mainOptimized;
+    Scope *closure;
 } CheckerContext;
 
 static const Type *sError;
-
-static inline bool compareSymbols(const void *lhs, const void *rhs)
-{
-    return !strcmp(((const Symbol *)lhs)->name, ((const Symbol *)rhs)->name);
-}
-
-static Scope *newScope(Scope *prev)
-{
-    Scope *next = mallocOrDie(sizeof(Scope));
-    next->prev = prev;
-    next->next = NULL;
-    next->symbols = newHashTable(sizeof(Symbol));
-    if (prev)
-        prev->next = next;
-
-    return next;
-}
-
-static void freeScopes(Scope *scope)
-{
-    while (scope) {
-        Scope *next = scope->next;
-        freeHashTable(&scope->symbols);
-        free(scope);
-        scope = next;
-    }
-}
-
-static void defineSymbol(CheckerContext *context,
-                         const char *name,
-                         AstNode *node)
-{
-    csAssert0(context->env.scope);
-    if (name[0] == '_')
-        return;
-
-    Symbol symbol = {.name = name, .declSite = node};
-    u32 hash = hashStr(hashInit(), name);
-    bool wasInserted = insertInHashTable(&context->env.scope->symbols,
-                                         &symbol,
-                                         hash,
-                                         sizeof(Symbol),
-                                         compareSymbols);
-    if (!wasInserted) {
-        logError(context->L,
-                 &node->loc,
-                 "symbol {s} already defined",
-                 (FormatArg[]){{.s = name}});
-        const Symbol *prev = findInHashTable(&context->env.scope->symbols,
-                                             &symbol,
-                                             hash,
-                                             sizeof(Symbol),
-                                             compareSymbols);
-        csAssert0(prev);
-        logNote(
-            context->L, &prev->declSite->loc, "previously declared here", NULL);
-    }
-}
-
-static u64 levenshteinDistance(const char *lhs, const char *rhs, u64 minDist)
-{
-    if (!lhs)
-        return strlen(rhs);
-    if (!rhs)
-        return strlen(lhs);
-
-    if (lhs[0] == rhs[0])
-        return levenshteinDistance(lhs + 1, rhs + 1, minDist);
-
-    if (minDist == 0)
-        return 1;
-
-    u64 a = levenshteinDistance(lhs + 1, rhs, minDist - 1);
-    u64 b = levenshteinDistance(lhs, rhs + 1, minDist - 1);
-    u64 c = levenshteinDistance(lhs + 1, rhs + 1, minDist - 1);
-
-    u64 min = MIN(a, b);
-
-    return MIN(min, c);
-}
-
-static void suggestSimilarSymbol(CheckerContext *ctx, const char *name)
-{
-    u64 minDist = 2;
-
-    if (strlen(name) <= minDist)
-        return;
-
-    const char *similar = NULL;
-    for (Scope *scope = ctx->env.scope; scope; scope = scope->prev) {
-        Symbol *symbols = scope->symbols.elems;
-        for (u32 i = 0; i < scope->symbols.capacity; i++) {
-            if (!isBucketOccupied(&scope->symbols, i))
-                continue;
-            u64 dist = levenshteinDistance(name, symbols[i].name, minDist);
-            if (dist < minDist) {
-                minDist = dist;
-                similar = symbols[i].name;
-            }
-        }
-    }
-
-    if (similar) {
-        logNote(
-            ctx->L, NULL, "did you mean '{s}'", (FormatArg[]){{.s = similar}});
-    }
-}
-
-static AstNode *findSymbol(CheckerContext *ctx,
-                           const char *name,
-                           const FileLoc *loc)
-{
-    u32 hash = hashStr(hashInit(), name);
-    for (Scope *scope = ctx->env.scope; scope; scope = scope->prev) {
-        Symbol *symbol = findInHashTable(&scope->symbols,
-                                         &(Symbol){.name = name},
-                                         hash,
-                                         sizeof(Symbol),
-                                         compareSymbols);
-        if (symbol)
-            return symbol->declSite;
-    }
-
-    logError(ctx->L, loc, "undefined symbol '{s}'", (FormatArg[]){{.s = name}});
-    suggestSimilarSymbol(ctx, name);
-    return NULL;
-}
-
-static inline AstNode *findEnclosingScope(CheckerContext *ctx,
-                                          const char *keyword,
-                                          const char *context,
-                                          AstTag firstTag,
-                                          AstTag secondTag,
-                                          const FileLoc *loc)
-{
-    for (Scope *scope = ctx->env.scope; scope; scope = scope->prev) {
-        if (scope->node->tag == firstTag || scope->node->tag == secondTag)
-            return scope->node;
-    }
-
-    logError(ctx->L,
-             loc,
-             "use of '{$}{s}{$}' outside of a {s}",
-             (FormatArg[]){
-                 {.style = keywordStyle},
-                 {.s = keyword},
-                 {.style = resetStyle},
-                 {.s = context},
-             });
-    return NULL;
-}
-
-static inline AstNode *findEnclosingLoop(CheckerContext *ctx,
-                                         const char *keyword,
-                                         const FileLoc *loc)
-{
-    return findEnclosingScope(
-        ctx, keyword, "loop", astWhileStmt, astForStmt, loc);
-}
-
-static inline AstNode *findEnclosingFunc(CheckerContext *ctx,
-                                         const FileLoc *loc)
-{
-    return findEnclosingScope(
-        ctx, "return", "function", astClosureExpr, astFuncDecl, loc);
-}
-
-static void pushScope(CheckerContext *ctx, AstNode *node)
-{
-    if (!ctx->env.scope)
-        ctx->env.scope = ctx->env.first;
-    else if (ctx->env.scope->next)
-        ctx->env.scope = ctx->env.scope->next;
-    else
-        ctx->env.scope = newScope(ctx->env.scope);
-    ctx->env.scope->node = node;
-    clearHashTable(&ctx->env.scope->symbols);
-}
-
-static inline void popScope(CheckerContext *ctx)
-{
-    csAssert0(ctx->env.scope);
-    ctx->env.scope = ctx->env.scope->prev;
-}
 
 static inline const Type *evalType(AstVisitor *visitor, AstNode *node)
 {
@@ -239,33 +45,48 @@ static void addBuiltinFunc(CheckerContext *ctx,
                            const Type **params,
                            u64 paramsCount)
 {
-    defineSymbol(ctx,
-                 name,
-                 makeAstNode(ctx->pool,
-                             builtinLoc(),
-                             &(AstNode){.tag = astFuncDecl,
-                                        .flags = flgBuiltin,
-                                        .type = makeFuncType(ctx->typeTable,
-                                                             name,
-                                                             flgBuiltin,
-                                                             ret,
-                                                             params,
-                                                             paramsCount)}));
+    AstNode *node = makeAstNode(
+        ctx->pool,
+        builtinLoc(),
+        &(AstNode){.tag = astFuncDecl, .flags = flgBuiltin, .type = NULL});
+
+    defineSymbol(&ctx->env, ctx->L, name, node);
+
+    node->type = makeFuncType(ctx->typeTable,
+                              &(Type){.tag = typFunc,
+                                      .name = name,
+                                      .flags = flgBuiltin,
+                                      .func = {.retType = ret,
+                                               .params = params,
+                                               .paramsCount = paramsCount,
+                                               .decl = node}});
 }
 
 static void addBuiltinVariable(CheckerContext *ctx,
                                cstring name,
                                const Type *type,
-                               AstNode *value,
-                               u64 paramsCount)
+                               AstNode *value)
 {
-    defineSymbol(ctx,
+    defineSymbol(&ctx->env,
+                 ctx->L,
                  name,
                  makeAstNode(ctx->pool,
                              builtinLoc(),
-                             &(AstNode){.tag = astConstDecl,
-                                        .flags = flgBuiltin,
+                             &(AstNode){.tag = astVarDecl,
+                                        .flags = flgBuiltin | flgConst,
                                         .type = type}));
+}
+
+static void addBuiltinType(CheckerContext *ctx, cstring name, const Type *type)
+{
+    defineSymbol(
+        &ctx->env,
+        ctx->L,
+        name,
+        makeAstNode(
+            ctx->pool,
+            builtinLoc(),
+            &(AstNode){.tag = astTypeDecl, .flags = flgBuiltin, .type = type}));
 }
 
 static void initBuiltins(CheckerContext *ctx)
@@ -280,7 +101,7 @@ static void initBuiltins(CheckerContext *ctx)
 static void checkProgram(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
-    pushScope(ctx, node);
+    pushScope(&ctx->env, node);
 
     initBuiltins(ctx);
 
@@ -290,7 +111,17 @@ static void checkProgram(AstVisitor *visitor, AstNode *node)
 static void checkFallback(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
-    node->type = makeVoidType(ctx->typeTable);
+
+    switch (node->tag) {
+    case astExprStmt:
+        node->type = evalType(visitor, node->exprStmt.expr);
+        break;
+    case astStmtExpr:
+        node->type = evalType(visitor, node->stmtExpr.stmt);
+        break;
+    default:
+        node->type = makeVoidType(ctx->typeTable);
+    }
 }
 
 static void checkLiterals(AstVisitor *visitor, AstNode *node)
@@ -338,7 +169,7 @@ static void checkStringExpr(AstVisitor *visitor, AstNode *node)
 static void checkFuncParam(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
-    defineSymbol(ctx, node->funcParam.name, node);
+    defineSymbol(&ctx->env, ctx->L, node->funcParam.name, node);
     node->type = evalType(visitor, node->funcParam.type);
     if (node->funcParam.def) {
         const Type *def = evalType(visitor, node->funcParam.def);
@@ -352,7 +183,7 @@ static void checkFuncParam(AstVisitor *visitor, AstNode *node)
     }
 }
 
-static void checkFuncDecl(AstVisitor *visitor, AstNode *node)
+static void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
 {
     const Type *ret, **params;
     CheckerContext *ctx = getAstVisitorContext(visitor);
@@ -360,16 +191,18 @@ static void checkFuncDecl(AstVisitor *visitor, AstNode *node)
     AstNode *param = node->funcDecl.params;
     u64 i = 0;
     bool isVariadic = false;
+    u64 withDefaultValues = 0;
 
-    defineSymbol(ctx, node->funcDecl.name, node);
+    defineSymbol(&ctx->env, ctx->L, node->funcDecl.name, node);
     if (!ctx->mainOptimized) {
         node->flags |=
             (strcmp(node->funcDecl.name, "main") == 0) ? flgMain : flgNone;
         ctx->mainOptimized = node->flags & flgMain;
     }
 
-    pushScope(ctx, node);
+    pushScope(&ctx->env, node);
     params = mallocOrDie(sizeof(Type *) * paramsCount);
+
     for (; param; param = param->next, i++) {
         param->parentScope = node;
         params[i] = evalType(visitor, param);
@@ -379,8 +212,19 @@ static void checkFuncDecl(AstVisitor *visitor, AstNode *node)
                      "variadic parameters should the last parameter type in "
                      "function declaration",
                      NULL);
+            continue;
         }
+
         isVariadic = (param->flags & flgVariadic);
+
+        if (withDefaultValues && param->funcParam.def == NULL) {
+            logError(ctx->L,
+                     &param->loc,
+                     "parameter cannot be declared without a default value",
+                     NULL);
+            continue;
+        }
+        withDefaultValues = (param->funcParam.def != NULL);
     }
 
     if (node->funcDecl.ret)
@@ -391,16 +235,20 @@ static void checkFuncDecl(AstVisitor *visitor, AstNode *node)
         ret = evalType(visitor, node->funcDecl.body);
     }
 
-    node->type = makeFuncType(ctx->typeTable,
-                              node->funcDecl.name,
-                              node->flags,
-                              ret,
-                              params,
-                              paramsCount);
+    node->type = makeFuncType(
+        ctx->typeTable,
+        &(Type){.tag = typFunc,
+                .name = node->funcDecl.name,
+                .flags = node->flags,
+                .func = {.retType = ret,
+                         .params = params,
+                         .paramsCount = paramsCount,
+                         .decl = node,
+                         .defaultValuesCount = withDefaultValues}});
 
     free((void *)params);
 
-    popScope(ctx);
+    popScope(&ctx->env);
 }
 
 static void checkClosure(AstVisitor *visitor, AstNode *node)
@@ -411,7 +259,11 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
     AstNode *param = node->closureExpr.params;
     u64 i = 0;
 
-    pushScope(ctx, node);
+    pushScope(&ctx->env, node);
+
+    Scope *stack = ctx->closure;
+    ctx->closure = ctx->env.scope;
+
     params = mallocOrDie(sizeof(Type *) * paramsCount);
     for (; param; param = param->next) {
         param->parentScope = node;
@@ -430,22 +282,20 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
     node->closureExpr.body->parentScope = node;
     ret = evalType(visitor, node->closureExpr.body);
 
-    node->type =
-        makeFuncType(ctx->typeTable, NULL, false, ret, params, paramsCount);
+    node->type = makeFuncType(ctx->typeTable,
+                              &(Type){.tag = typFunc,
+                                      .name = NULL,
+                                      .flags = node->flags,
+                                      .func = {.retType = ret,
+                                               .params = params,
+                                               .paramsCount = paramsCount,
+                                               .decl = node}});
 
     free((void *)params);
 
-    popScope(ctx);
-}
+    ctx->closure = stack;
 
-static void checkStatementExpr(AstVisitor *visitor, AstNode *node)
-{
-    node->type = evalType(visitor, node->stmtExpr.stmt);
-}
-
-static void checkExpressionStmt(AstVisitor *visitor, AstNode *node)
-{
-    node->type = evalType(visitor, node->exprStmt.expr);
+    popScope(&ctx->env);
 }
 
 static void checkVarDecl(AstVisitor *visitor, AstNode *node)
@@ -453,7 +303,7 @@ static void checkVarDecl(AstVisitor *visitor, AstNode *node)
     CheckerContext *ctx = getAstVisitorContext(visitor);
     AstNode *names = node->varDecl.names;
 
-    defineSymbol(ctx, names->ident.value, node);
+    defineSymbol(&ctx->env, ctx->L, names->ident.value, node);
 
     node->type = node->varDecl.type ? evalType(visitor, node->varDecl.type)
                                     : makeAutoType(ctx->typeTable);
@@ -475,7 +325,8 @@ static void checkVarDecl(AstVisitor *visitor, AstNode *node)
 static void checkIdentifier(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
-    AstNode *symbol = findSymbol(ctx, node->ident.value, &node->loc);
+    AstNode *symbol =
+        findSymbol(&ctx->env, ctx->L, node->pathElement.name, &node->loc);
     if (symbol == NULL)
         node->type = sError;
     else
@@ -485,21 +336,55 @@ static void checkIdentifier(AstVisitor *visitor, AstNode *node)
 static void checkPathElement(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
-    AstNode *symbol = findSymbol(ctx, node->pathElement.name, &node->loc);
+    AstNode *symbol =
+        findSymbol(&ctx->env, ctx->L, node->pathElement.name, &node->loc);
     if (symbol == NULL)
         node->type = sError;
     else
         node->type = symbol->type;
 }
 
+static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+
+    Scope *scope = NULL, *closure = ctx->closure;
+    AstNode *symbol = findSymbolAndScope(
+        &ctx->env, ctx->L, node->pathElement.name, &node->loc, &scope);
+    if (symbol == NULL)
+        node->type = sError;
+    else
+        node->type = symbol->type;
+
+    if (closure == NULL)
+        // We are outside a closure
+        return node->type;
+    if (isRootScope(scope) && isInSameEnv(closure, scope))
+        // Symbol defined in global scope
+        return node->type;
+    if (isAncestorScope(scope, closure))
+        // Symbol defined in parent scope of closure
+        return node->type;
+
+    node->pathElement.index =
+        addClosureCapture(&closure->node->closureExpr.capture,
+                          node->pathElement.name,
+                          node->type);
+
+    node->flags |= flgCapture;
+
+    return node->type;
+}
+
 static void checkPath(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
-    AstNode *element = node->path.elements;
-    const Type *type;
-    for (; element; element = element->next) {
-        // TODO, change scope
-        type = evalType(visitor, element);
+    AstNode *elem = node->path.elements;
+    const Type *type = checkFirstPathElement(visitor, elem);
+    elem = elem->next;
+
+    for (; elem; elem = elem->next) {
+        type = evalType(visitor, elem);
     }
     node->type = type;
 }
@@ -653,22 +538,34 @@ static void checkCall(AstVisitor *visitor, AstNode *node)
     AstNode *arg = node->callExpr.args;
 
     if (callee->tag != typFunc) {
-        logError(
-            ctx->L,
-            &node->callExpr.callee->loc,
-            "expression of type '{t}' cannot be invoked, expecting a function",
-            (FormatArg[]){{.t = callee}});
+        logError(ctx->L,
+                 &node->callExpr.callee->loc,
+                 "expression of type '{t}' cannot be invoked, expecting a "
+                 "function",
+                 (FormatArg[]){{.t = callee}});
         node->type = sError;
         return;
     }
 
     node->type = callee->func.retType;
-    u64 count = countAstNodes(arg);
-    if (count != callee->func.paramsCount) {
+    u64 count = countAstNodes(arg),
+        withoutDefaulted =
+            callee->func.paramsCount - callee->func.defaultValuesCount;
+    if (count < withoutDefaulted) {
         logError(ctx->L,
                  &node->loc,
-                 "invalid number of arguments provided to function of type "
-                 "'{t}', expecting '{u64}' but got '{u64}'",
+                 "few arguments provided to function of type "
+                 "'{t}', expecting at least '{u64}' but got '{u64}'",
+                 (FormatArg[]){
+                     {.t = callee}, {.u64 = withoutDefaulted}, {.u64 = count}});
+        return;
+    }
+
+    if (count > callee->func.paramsCount) {
+        logError(ctx->L,
+                 &node->loc,
+                 "too many arguments provided to function of type "
+                 "'{t}', at most '{u64}' but got '{u64}'",
                  (FormatArg[]){{.t = callee},
                                {.u64 = callee->func.paramsCount},
                                {.u64 = count}});
@@ -679,11 +576,23 @@ static void checkCall(AstVisitor *visitor, AstNode *node)
         const Type *type = evalType(visitor, arg);
         if (!isTypeAssignableFrom(
                 ctx->typeTable, callee->func.params[i], type)) {
-            logError(
-                ctx->L,
-                &arg->loc,
-                "incompatible argument types, expecting '{t}' but got '{t}'",
-                (FormatArg[]){{.t = callee->func.params[i]}, {.t = type}});
+            logError(ctx->L,
+                     &arg->loc,
+                     "incompatible argument types, expecting '{t}' but got "
+                     "'{t}'",
+                     (FormatArg[]){{.t = callee->func.params[i]}, {.t = type}});
+        }
+    }
+
+    if (callee->func.paramsCount > count) {
+        // Add default parameters to function call
+        AstNode *param =
+            getNodeAtIndex(callee->func.decl->funcDecl.params, count);
+        csAssert0(param);
+
+        arg = getLastAstNode(node->callExpr.args);
+        for (; param; param = param->next) {
+            arg->next = copyAstNode(ctx->pool, param->funcParam.def);
         }
     }
 }
@@ -692,13 +601,20 @@ static void checkBlock(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     AstNode *stmt = node->blockStmt.stmts;
-
+    AstNode *prev = stmt;
     for (; stmt; stmt = stmt->next) {
         stmt->parentScope = node;
         const Type *type = evalType(visitor, stmt);
         if (stmt->tag == astReturnStmt) {
             node->type = type;
         }
+        if (stmt->tag == astDeferStmt) {
+            // add statement to epilogue
+            insertAstNode(&node->blockStmt.epilogue, stmt->deferStmt.expr);
+            stmt->deferStmt.expr->flags |= flgDeferred;
+            unlinkAstNode(&node->blockStmt.stmts, prev, stmt);
+        }
+        prev = stmt;
     }
 
     if (node->type == NULL) {
@@ -709,7 +625,7 @@ static void checkBlock(AstVisitor *visitor, AstNode *node)
 static void checkReturn(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
-    AstNode *func = findEnclosingFunc(ctx, &node->loc);
+    AstNode *func = findEnclosingFunc(&ctx->env, ctx->L, &node->loc);
     node->type = node->returnStmt.expr
                      ? evalType(visitor, node->returnStmt.expr)
                      : makeVoidType(ctx->typeTable);
@@ -734,6 +650,20 @@ static void checkReturn(AstVisitor *visitor, AstNode *node)
                      (FormatArg[]){{.t = node->type}, {.t = block->type}});
         }
     }
+}
+
+static void checkDeferStmt(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+
+    if (node->parentScope == NULL || node->parentScope->tag != astBlockStmt) {
+        logError(ctx->L,
+                 &node->loc,
+                 "use of 'defer' statement outside of a block",
+                 NULL);
+    }
+
+    node->type = evalType(visitor, node->deferStmt.expr);
 }
 
 static void checkPrimitiveType(AstVisitor *visitor, AstNode *node)
@@ -765,7 +695,7 @@ static void checkArrayType(AstVisitor *visitor, AstNode *node)
 static void checkTypeDecl(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
-    defineSymbol(ctx, node->typeDecl.name, node);
+    defineSymbol(&ctx->env, ctx->L, node->typeDecl.name, node);
     const Type *ref = evalType(visitor, node->typeDecl.aliased);
     node->type = makeAliasType(ctx->typeTable, ref, node->typeDecl.name);
 }
@@ -773,7 +703,7 @@ static void checkTypeDecl(AstVisitor *visitor, AstNode *node)
 static void checkUnionDecl(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
-    defineSymbol(ctx, node->unionDecl.name, node);
+    defineSymbol(&ctx->env, ctx->L, node->unionDecl.name, node);
 
     u64 count = countAstNodes(node->unionDecl.members);
     const Type **members = mallocOrDie(sizeof(Type *) * count);
@@ -827,8 +757,14 @@ static void checkFuncType(AstVisitor *visitor, AstNode *node)
     }
 
     if (node->type == NULL)
-        node->type =
-            makeFuncType(ctx->typeTable, NULL, false, ret, params, count);
+        node->type = makeFuncType(ctx->typeTable,
+                                  &(Type){.tag = typFunc,
+                                          .name = NULL,
+                                          .flags = node->flags,
+                                          .func = {.retType = ret,
+                                                   .params = params,
+                                                   .paramsCount = count,
+                                                   .decl = node}});
 
     free(params);
 }
@@ -840,12 +776,14 @@ static void checkBuiltinType(AstVisitor *visitor, AstNode *node)
                                           : makeStringType(ctx->typeTable);
 }
 
-void typeCheck(AstNode *program, Log *L, MemPool *pool, TypeTable *typeTable)
+void semanticsCheck(AstNode *program,
+                    Log *L,
+                    MemPool *pool,
+                    TypeTable *typeTable)
 {
-    CheckerContext context = {.L = L,
-                              .typeTable = typeTable,
-                              .pool = pool,
-                              .env = {.first = newScope(NULL)}};
+    CheckerContext context = {
+        .L = L, .typeTable = typeTable, .pool = pool, .env = {NULL}};
+    environmentInit(&context.env);
 
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context,
@@ -861,9 +799,8 @@ void typeCheck(AstNode *program, Log *L, MemPool *pool, TypeTable *typeTable)
         [astStringLit] = checkLiterals,
         [astStringExpr] = checkStringExpr,
         [astFuncParam] = checkFuncParam,
-        [astFuncDecl] = checkFuncDecl,
+        [astFuncDecl] = checkFunctionDecl,
         [astVarDecl] = checkVarDecl,
-        [astConstDecl] = checkVarDecl,
         [astIdentifier] = checkIdentifier,
         [astBinaryExpr] = checkBinary,
         [astUnaryExpr] = checkUnary,
@@ -873,10 +810,9 @@ void typeCheck(AstNode *program, Log *L, MemPool *pool, TypeTable *typeTable)
         [astTupleExpr] = checkTupleExpr,
         [astCallExpr] = checkCall,
         [astClosureExpr] = checkClosure,
-        [astStmtExpr] = checkStatementExpr,
-        [astExprStmt] = checkExpressionStmt,
         [astBlockStmt] = checkBlock,
         [astReturnStmt] = checkReturn,
+        [astDeferStmt] = checkDeferStmt,
         [astPrimitiveType] = checkPrimitiveType,
         [astArrayType] = checkArrayType,
         [astPointerType] = checkPointerType,
@@ -885,7 +821,7 @@ void typeCheck(AstNode *program, Log *L, MemPool *pool, TypeTable *typeTable)
         [astTupleType] = checkTupleType,
         [astFuncType] = checkFuncType,
         [astVoidType] = checkBuiltinType,
-        [astStringType] = checkBuiltinType
+        [astStringType] = checkBuiltinType,
     },
     .fallback = checkFallback);
     // clang-format off

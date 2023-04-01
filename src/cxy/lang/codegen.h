@@ -10,7 +10,7 @@ typedef struct {
     FormatState *state;
 } CodegenContext;
 
-void generateCode(TypeTable *table, const AstNode *prog);
+void generateCode(FormatState *state, TypeTable *table, const AstNode *prog);
 
 void generateManyAsts(ConstAstVisitor *visitor,
                       const char *sep,
