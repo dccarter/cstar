@@ -35,10 +35,16 @@ static void programEpilogue(ConstAstVisitor *visitor, const AstNode *node)
 static void generatePathElement(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    if (node->flags & flgCapture)
-        format(ctx->state,
-               "__closure->_{u64}",
-               (FormatArg[]){{.u64 = node->pathElement.index}});
+    if (node->flags & flgCapture) {
+        if (node->type->tag == typPrimitive || node->type->tag == typPointer)
+            format(ctx->state,
+                   "__closure->_{u64}",
+                   (FormatArg[]){{.u64 = node->pathElement.index}});
+        else
+            format(ctx->state,
+                   "(*__closure->_{u64})",
+                   (FormatArg[]){{.u64 = node->pathElement.index}});
+    }
     else
         format(ctx->state, "{s}", (FormatArg[]){{.s = node->pathElement.name}});
 }
@@ -189,6 +195,16 @@ static void generateStatementExpr(ConstAstVisitor *visitor, const AstNode *node)
     astConstVisit(visitor, node->stmtExpr.stmt);
 }
 
+static void generateBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    astConstVisit(visitor, node->binaryExpr.lhs);
+    format(ctx->state,
+           " {s} ",
+           (FormatArg[]){{.s = getBinaryOpString(node->binaryExpr.op)}});
+    astConstVisit(visitor, node->binaryExpr.rhs);
+}
+
 static void generateTupleExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -246,12 +262,20 @@ static void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
         name = makeAnonymousVariable(cctx->strPool, "__cap");
         format(ctx->state, " {s} = {{", (FormatArg[]){{.s = name}});
         for (u64 i = 0; i < type->func.capturedNamesCount; i++) {
+            const Type *captureType =
+                stripPointer(cctx->table, type->func.params[0]);
             if (i != 0)
                 format(ctx->state, ", ", NULL);
-            format(
-                ctx->state,
-                "._{u64} = {s}",
-                (FormatArg[]){{.u64 = i}, {.s = type->func.captureNames[i]}});
+            if (captureType->tuple.members[i]->flags & flgCapturePointer)
+                format(ctx->state,
+                       "._{u64} = &{s}",
+                       (FormatArg[]){{.u64 = i},
+                                     {.s = type->func.captureNames[i]}});
+            else
+                format(ctx->state,
+                       "._{u64} = {s}",
+                       (FormatArg[]){{.u64 = i},
+                                     {.s = type->func.captureNames[i]}});
         }
         format(ctx->state, "}; ", NULL);
     }
@@ -346,6 +370,7 @@ void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
         [astStringLit] = generateLiteral,
         [astAddressOf] = generateAddressOf,
         [astStmtExpr] = generateStatementExpr,
+        [astBinaryExpr] = generateBinaryExpr,
         [astTupleExpr] = generateTupleExpr,
         [astMemberExpr] = generateMemberExpr,
         [astCallExpr] = generateCallExpr,

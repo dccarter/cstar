@@ -428,6 +428,7 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
         node->type = sError;
     else
         node->type = symbol->type;
+    node->flags |= (symbol->flags & flgConst);
 
     if (closure == NULL)
         // We are outside a closure
@@ -439,10 +440,14 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
         // Symbol not defined in parent scope of closure
         return node->type;
 
-    node->pathElement.index =
-        addClosureCapture(&closure->node->closureExpr.capture,
-                          node->pathElement.name,
-                          node->type);
+    node->pathElement.index = addClosureCapture(
+        &closure->node->closureExpr.capture,
+        node->pathElement.name,
+        (node->type->tag == typPrimitive || node->type->tag == typPointer)
+            ? node->type
+            : makePointerType(ctx->typeTable,
+                              node->type,
+                              (symbol->flags & flgConst) | flgCapturePointer));
 
     node->flags |= flgCapture;
 
@@ -454,12 +459,15 @@ static void checkPath(AstVisitor *visitor, AstNode *node)
     CheckerContext *ctx = getAstVisitorContext(visitor);
     AstNode *elem = node->path.elements;
     const Type *type = checkFirstPathElement(visitor, elem);
-    elem = elem->next;
+    u64 flags = elem->flags;
 
+    elem = elem->next;
     for (; elem; elem = elem->next) {
         type = evalType(visitor, elem);
+        flags = elem->flags;
     }
     node->type = type;
+    node->flags |= flags;
 }
 
 static void checkBinary(AstVisitor *visitor, AstNode *node)
@@ -468,18 +476,129 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
     const Type *left = evalType(visitor, node->binaryExpr.lhs);
     const Type *right = evalType(visitor, node->binaryExpr.rhs);
     // TODO check compatibility
-    if (isTypeAssignableFrom(ctx->typeTable, left, right)) {
-        node->type = left;
+    enum {
+        optInvalid = -1,
+        optNumeric,
+        optInteger,
+        optLogical,
+        optComparison,
+        optEquality,
+        optRange,
+    } opType = optInvalid;
+
+    Operator op = node->binaryExpr.op;
+    const Type *type = promoteType(ctx->typeTable, left, right);
+    node->type = sError;
+
+    switch (op) {
+        // Numeric arithmetic
+#define f(O, ...) case op##O:
+        AST_ARITH_EXPR_LIST(f)
+        opType = optNumeric;
+        break;
+
+        AST_BIT_EXPR_LIST(f)
+        AST_SHIFT_EXPR_LIST(f)
+        opType = optInteger;
+        break;
+
+        AST_LOGIC_EXPR_LIST(f)
+        opType = optLogical;
+        break;
+
+        AST_CMP_EXPR_LIST(f)
+        opType = (op == opEq || op == opNe) ? optEquality : optComparison;
+        break;
+    case opRange:
+        opType = optRange;
+        break;
+    default:
+        unreachable("");
     }
-    else {
+
+    if (type == NULL) {
         logError(ctx->L,
                  &node->loc,
-                 "binary operator '{s}' not support between type '{t}' and "
-                 "type '{t}'",
-                 (FormatArg[]){{.s = getBinaryOpString(node->binaryExpr.op)},
-                               {.t = left},
-                               {.t = right}});
-        node->type = sError;
+                 "binary operation '{s}' between type '{t}' and '{t}' is not "
+                 "supported",
+                 (FormatArg[]){
+                     {.s = getBinaryOpString(op)}, {.t = left}, {.t = right}});
+        return;
+    }
+
+    switch (opType) {
+    case optNumeric:
+        if (!isNumericType(ctx->typeTable, type)) {
+            logError(ctx->L,
+                     &node->loc,
+                     "cannot perform binary operation '{s}' on non-numeric "
+                     "type '{t}'",
+                     (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
+            return;
+        }
+        node->type = type;
+        break;
+    case optInteger:
+        if (!isIntegerType(ctx->typeTable, type)) {
+            logError(ctx->L,
+                     &node->loc,
+                     "cannot perform binary operation '{s}' on non-integer "
+                     "type '{t}'",
+                     (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
+            return;
+        }
+        node->type = type;
+        break;
+    case optLogical:
+        if (type != makePrimitiveType(ctx->typeTable, prtBool)) {
+            logError(
+                ctx->L,
+                &node->loc,
+                "cannot perform logical binary operation '{s}' on non-boolean "
+                "type '{t}'",
+                (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
+            return;
+        }
+        node->type = type;
+        break;
+    case optComparison:
+        if (!isNumericType(ctx->typeTable, type)) {
+            logError(ctx->L,
+                     &node->loc,
+                     "cannot perform comparison binary operation '{s}' on "
+                     "non-numeric "
+                     "type '{t}'",
+                     (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
+            return;
+        }
+        node->type = type;
+        break;
+    case optEquality:
+        if (type->tag != typPrimitive && type->tag != typPointer &&
+            type->tag != typString) {
+            logError(ctx->L,
+                     &node->loc,
+                     "cannot perform equality binary operation '{s}' on "
+                     "type '{t}'",
+                     (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
+            return;
+            return;
+        }
+        node->type = makePrimitiveType(ctx->typeTable, prtBool);
+        break;
+    case optRange:
+        if (!isIntegerType(ctx->typeTable, type)) {
+            logError(ctx->L,
+                     &node->loc,
+                     "cannot perform range binary operation '{s}' on "
+                     "type '{t}'",
+                     (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
+            return;
+        }
+        node->type = makeRangeType(ctx->typeTable);
+        break;
+    default:
+        unreachable("");
     }
 }
 
@@ -548,9 +667,10 @@ static void checkMember(AstVisitor *visitor, AstNode *node)
     CheckerContext *ctx = getAstVisitorContext(visitor);
     const Type *target = evalType(visitor, node->memberExpr.target);
     AstNode *member = node->memberExpr.member;
+    node->flags |= (node->memberExpr.target->flags & flgConst);
 
     if (member->tag == astIntegerLit) {
-        u64 flags = target->flags & flgConst;
+        u64 flags = target->flags;
         target = stripPointer(ctx->typeTable, target);
         if (target->tag != typTuple) {
             logError(ctx->L,
@@ -562,7 +682,7 @@ static void checkMember(AstVisitor *visitor, AstNode *node)
             return;
         }
 
-        if (member->intLiteral.value > target->tuple.count) {
+        if (member->intLiteral.value >= target->tuple.count) {
             logError(ctx->L,
                      &member->loc,
                      "literal member '{u64}' out of range, type '{t}' has "
@@ -574,9 +694,8 @@ static void checkMember(AstVisitor *visitor, AstNode *node)
             return;
         }
 
-        if (flags)
-            node->flags |= flags;
         node->type = target->tuple.members[member->intLiteral.value];
+        node->flags |= ((flags | node->type->flags) & flgConst);
     }
     else {
         csAssert(member->tag == astIdentifier, "TODO");

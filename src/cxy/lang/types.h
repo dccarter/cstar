@@ -155,4 +155,5 @@ bool isIntegerType(TypeTable *table, const Type *type);
 bool isSignedType(TypeTable *table, const Type *type);
 bool isUnsignedType(TypeTable *table, const Type *type);
 bool isFloatType(TypeTable *table, const Type *type);
+bool isNumericType(TypeTable *table, const Type *type);
 void printType(FormatState *state, const Type *type);

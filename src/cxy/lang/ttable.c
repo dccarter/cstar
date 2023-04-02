@@ -352,6 +352,15 @@ const Type *makeFuncType(TypeTable *table, const Type *init)
     return ret.s;
 }
 
+const Type *makeRangeType(TypeTable *table)
+{
+    const Type *members[] = {makePrimitiveType(table, prtI64),
+                             makePrimitiveType(table, prtI64),
+                             makePrimitiveType(table, prtI64),
+                             makePrimitiveType(table, prtI64)};
+    return makeTupleType(table, members, 4);
+}
+
 u64 getTypesCount(TypeTable *table) { return table->typeCount; }
 
 u64 sortedByInsertionOrder(TypeTable *table, const Type **types, u64 size)
@@ -370,4 +379,46 @@ void enumerateTypeTable(TypeTable *table,
                         bool(with)(void *, const void *))
 {
     enumerateHashTable(&table->types, ctx, with, sizeof(Type *));
+}
+
+const Type *promoteType(TypeTable *table, const Type *left, const Type *right)
+{
+    left = resolveType(table, left);
+    right = resolveType(table, right);
+
+    if (left == right)
+        return left;
+
+    switch (left->tag) {
+    case typPrimitive:
+        switch (left->primitive.id) {
+#define f(T, ...) case prt##T:
+            INTEGER_TYPE_LIST(f)
+            if (isIntegerType(table, right))
+                return left->size >= right->size ? left : right;
+            if (isFloatType(table, right))
+                return right;
+            if (right->primitive.id == prtChar)
+                return left->size >= 4 ? left
+                                       : makePrimitiveType(table, prtU32);
+            return NULL;
+
+            FLOAT_TYPE_LIST(f)
+            if (isFloatType(table, right))
+                return left->size >= right->size ? left : right;
+            if (isIntegerType(table, right) || right->tag == prtChar)
+                return left;
+
+#undef f
+        case prtChar:
+            if (isIntegerType(table, right))
+                return right->size >= 4 ? right
+                                        : makePrimitiveType(table, prtU32);
+            return NULL;
+        default:
+            return NULL;
+        }
+    default:
+        return NULL;
+    }
 }

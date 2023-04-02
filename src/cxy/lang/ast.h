@@ -174,6 +174,7 @@ enum {
     flgDeferred = BIT(10),
     flgCapture = BIT(11),
     flgClosure = BIT(12),
+    flgCapturePointer = BIT(13)
 };
 
 typedef struct AstNode AstNode;

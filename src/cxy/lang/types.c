@@ -147,6 +147,13 @@ bool isFloatType(TypeTable *table, const Type *type)
     }
 }
 
+bool isNumericType(TypeTable *table, const Type *type)
+{
+    if (type->tag != typPrimitive || type->primitive.id == prtBool)
+        return false;
+    return true;
+}
+
 void printType(FormatState *state, const Type *type)
 {
     switch (type->tag) {

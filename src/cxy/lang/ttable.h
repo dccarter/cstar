@@ -37,6 +37,7 @@ const Type *makeTupleType(TypeTable *table, const Type **members, u64 count);
 const Type *makeFuncType(TypeTable *table, const Type *init);
 const Type *makeStruct(TypeTable *table, const Type *init);
 const Type *makeEnum(TypeTable *table, const Type *init);
+const Type *makeRangeType(TypeTable *table);
 
 u64 getTypesCount(TypeTable *table);
 u64 sortedByInsertionOrder(TypeTable *table, const Type **types, u64 size);
@@ -44,3 +45,5 @@ u64 sortedByInsertionOrder(TypeTable *table, const Type **types, u64 size);
 void enumerateTypeTable(TypeTable *table,
                         void *ctx,
                         bool(with)(void *, const void *));
+
+const Type *promoteType(TypeTable *table, const Type *left, const Type *right);

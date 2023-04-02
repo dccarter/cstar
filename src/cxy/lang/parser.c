@@ -387,12 +387,15 @@ static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
             &(AstNode){.tag = astAddressOf, .unaryExpr = {.operand = operand}});
     }
 }
-
+static AstNode *assign(Parser *P, AstNode *(parsePrimary)(Parser *, bool));
 static AstNode *binary(Parser *P,
                        AstNode *lhs,
                        int prec,
                        AstNode *(parsePrimary)(Parser *, bool))
 {
+    if (lhs == NULL)
+        lhs = prefix(P, parsePrimary);
+
     while (!isEoF(P)) {
         const Token tok = *current(P);
         Operator op = tokenToBinaryOperator(tok.tag);
@@ -402,17 +405,14 @@ static AstNode *binary(Parser *P,
         int nextPrecedence = getBinaryOpPrecedence(op);
         if (nextPrecedence > prec)
             break;
-        if (nextPrecedence < prec)
-            lhs = binary(P, lhs, nextPrecedence, parsePrimary);
-        else {
-            advance(P);
-            AstNode *rhs = prefix(P, parsePrimary);
-            lhs = newAstNode(
-                P,
-                &lhs->loc.begin,
-                &(AstNode){.tag = astBinaryExpr,
-                           .binaryExpr = {.lhs = lhs, .op = op, .rhs = rhs}});
-        }
+
+        advance(P);
+        AstNode *rhs = binary(P, NULL, nextPrecedence, parsePrimary);
+        lhs = newAstNode(
+            P,
+            &lhs->loc.begin,
+            &(AstNode){.tag = astBinaryExpr,
+                       .binaryExpr = {.lhs = lhs, .op = op, .rhs = rhs}});
     }
 
     return lhs;

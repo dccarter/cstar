@@ -4,8 +4,8 @@
 
 pub native func puts(str: string) : i32;
 func println(str: string) => puts(str)
+func fib(n: u32) => n <= 1? 1 : fib(n - 2) + fib(n - 1)
 
 func main(args: [string]) {
-    const name = ("User", 22, (100, 900, "Street St"));
-    println(f"Hello ${name.0}, you are ${name.1} years old, your address is ${name.2}");
+
 }
