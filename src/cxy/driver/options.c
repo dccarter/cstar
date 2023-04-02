@@ -8,16 +8,16 @@ Command(dev,
         "development mode build, useful when developing the compiler",
         Positionals(),
         Opt(Name("no-type-check"),
-            Help("Disable type checking, ignore if --print-ast is not set"),
+            Help("disable type checking, ignore if --print-ast is not set"),
             Def("false")),
         Opt(Name("print-ast"),
-            Help("Prints the AST to standard output or given output file after "
+            Help("prints the AST to standard output or given output file after "
                  "compilation"),
             Def("false")),
         Str(Name("output"),
             Sf('o'),
-            Help("Prints the AST to standard output or given output file after "
-                 "compilation"),
+            Help("path to file to generate code or print AST to (default is "
+                 "stdout)"),
             Def("")));
 
 #define BUILD_COMMANDS(f)                                                      \

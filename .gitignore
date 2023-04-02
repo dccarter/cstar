@@ -73,6 +73,7 @@ dkms.conf
 build
 .creator
 cmake-build-*
+generated.dSYM
 
 # Generate SCC files
 *.scc.*

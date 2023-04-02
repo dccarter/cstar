@@ -6,10 +6,6 @@ pub native func puts(str: string) : i32;
 func println(str: string) => puts(str)
 
 func main(args: [string]) {
-    const name = "Carter";
-    // Simple but yet complicated, we just created a lambda and invoked, aka IIFE
-    // - We create a lambda that calls the native function puts
-    // - We immediately invoke the lambda (see generated prologue code)
-    (() => puts("Hello World!"))();
-    ((msg: string) => f"${msg} ${name}")("Hello ")
+    const name = ("User", 22, (100, 900, "Street St"));
+    println(f"Hello ${name.0}, you are ${name.1} years old, your address is ${name.2}");
 }

@@ -349,6 +349,7 @@ void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
         [astTupleExpr] = generateTupleExpr,
         [astMemberExpr] = generateMemberExpr,
         [astCallExpr] = generateCallExpr,
+        [astStringExpr] = cCodegenStringExpr,
         [astGroupExpr] = generateGroupExpr,
         [astBlockStmt] = generateBlock,
         [astExprStmt] = generateExpressionStmt,

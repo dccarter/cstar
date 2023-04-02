@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 typedef uint8_t u8;
 typedef uint16_t u16;
@@ -12,8 +13,8 @@ typedef int16_t i16;
 typedef int32_t i32;
 typedef int64_t i64;
 
-typedef int8_t f32;
-typedef int8_t f64;
+typedef float f32;
+typedef double f64;
 
 typedef const char *string;
 typedef u32 wchar;
@@ -161,7 +162,7 @@ static __cxy_stack_str_8_t __cxy_wchar_str(wchar chr)
 {
     int i = 0;
     if (chr < 0x80) {
-        return (__cxy_stack_str_8_t){.str = {[0] = chr, [1] = '\n'}};
+        return (__cxy_stack_str_8_t){.str = {[0] = chr, [1] = '\0', [5] = 1}};
     }
     else if (chr < 0x800) {
         return (__cxy_stack_str_8_t){.str = {[0] = (char)(0xC0 | (chr >> 6)),
@@ -214,4 +215,146 @@ static inline int wputc(wchar c)
     s.str[4] = '\n';
     s.str[5] += 1;
     return fwrite(s.str, 1, s.str[5], stdout);
+}
+
+typedef struct {
+    u64 size;
+    char data[0];
+} __cxy_string_t;
+
+__cxy_string_t *__cxy_string_new0(const char *cstr, u64 len)
+{
+    __cxy_string_t *str = calloc(sizeof(__cxy_string_t) + len + 1, 1);
+    str->size = len;
+    if (cstr != NULL)
+        memcpy(str->data, cstr, len);
+    str->data[len] = '\0';
+    return str;
+}
+
+attr(always_inline) __cxy_string_t *__cxy_string_new1(const char *cstr)
+{
+    return __cxy_string_new0(cstr, strlen(cstr));
+}
+
+attr(always_inline) __cxy_string_t *__cxy_string_dup(const __cxy_string_t *str)
+{
+    return __cxy_string_new0(str->data, str->size);
+}
+
+__cxy_string_t *__cxy_string_concat(const __cxy_string_t *s1,
+                                    const __cxy_string_t *s2)
+{
+    __cxy_string_t *str = __cxy_string_new0(NULL, s1->size + s2->size);
+    memcpy(str->data, s1->data, s1->size);
+    memcpy(&str->data[s1->size], s2->data, s2->size);
+    return str;
+}
+
+attr(always_inline) void __cxy_string_delete(__cxy_string_t *str) { free(str); }
+
+#ifndef __CXY_STRING_BUILDER_DEFAULT_CAPACITY
+#define __CXY_STRING_BUILDER_DEFAULT_CAPACITY 32
+#endif
+
+typedef struct {
+    u64 capacity;
+    u64 size;
+    char *data;
+} __cxy_string_builder_t;
+
+void __cxy_string_builder_grow(__cxy_string_builder_t *sb, u64 size)
+{
+    size;
+    if (sb->data == NULL) {
+        sb->data = malloc(size + 1);
+        sb->capacity = size;
+    }
+    else if (size > (sb->capacity - sb->size)) {
+        while (sb->capacity < sb->size + size) {
+            sb->capacity <<= 1;
+        }
+        sb->data = realloc(sb->data, sb->capacity + 1);
+    }
+}
+
+attr(always_inline) void __cxy_string_builder_init(__cxy_string_builder_t *sb)
+{
+    __cxy_string_builder_grow(sb, __CXY_STRING_BUILDER_DEFAULT_CAPACITY);
+}
+
+__cxy_string_builder_t *__cxy_string_builder_new()
+{
+    __cxy_string_builder_t *sb = calloc(1, sizeof(__cxy_string_builder_t));
+    __cxy_string_builder_init(sb);
+    return sb;
+}
+
+void __cxy_string_builder_deinit(__cxy_string_builder_t *sb)
+{
+    if (sb->data)
+        free(sb->data);
+    memset(sb, 0, sizeof(*sb));
+}
+
+attr(always_inline) void __cxy_string_builder_delete(__cxy_string_builder_t *sb)
+{
+    if (sb)
+        free(sb);
+}
+
+void __cxy_string_builder_append_cstr0(__cxy_string_builder_t *sb,
+                                       const char *cstr,
+                                       u64 len)
+{
+    __cxy_string_builder_grow(sb, len);
+    memmove(&sb->data[sb->size], cstr, len);
+    sb->size += len;
+    sb->data[sb->size] = '\0';
+}
+
+attr(always_inline) void __cxy_string_builder_append_cstr1(
+    __cxy_string_builder_t *sb, const char *cstr)
+{
+    __cxy_string_builder_append_cstr0(sb, cstr, strlen(cstr));
+}
+
+attr(always_inline) void __cxy_string_builder_append_int(
+    __cxy_string_builder_t *sb, i64 num)
+{
+    char data[32];
+    i64 len = sprintf(data, "%lld", num);
+    __cxy_string_builder_append_cstr0(sb, data, len);
+}
+
+attr(always_inline) void __cxy_string_builder_append_float(
+    __cxy_string_builder_t *sb, f64 num)
+{
+    char data[32];
+    i64 len = sprintf(data, "%g", num);
+    __cxy_string_builder_append_cstr0(sb, data, len);
+}
+
+attr(always_inline) void __cxy_string_builder_append_char(
+    __cxy_string_builder_t *sb, wchar c)
+{
+    __cxy_stack_str_8_t s = __cxy_wchar_str(c);
+    __cxy_string_builder_append_cstr0(sb, s.str, s.str[5]);
+}
+
+attr(always_inline) void __cxy_string_builder_append_bool(
+    __cxy_string_builder_t *sb, bool v)
+{
+    if (v)
+        __cxy_string_builder_append_cstr0(sb, "true", 4);
+    else
+        __cxy_string_builder_append_cstr0(sb, "false", 5);
+}
+
+char *__cxy_string_builder_release(__cxy_string_builder_t *sb)
+{
+    char *data = sb->data;
+    sb->data = NULL;
+    __cxy_string_builder_deinit(sb);
+    return data;
 }

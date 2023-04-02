@@ -17,3 +17,4 @@ void generateTypeUsage(CCodegenContext *ctx, const Type *type);
 void generateCCodeFallback(ConstAstVisitor *visitor, const AstNode *node);
 void cCodegenPrologue(CCodegenContext *context, const AstNode *prog);
 void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog);
+void cCodegenStringExpr(ConstAstVisitor *visitor, const AstNode *node);
