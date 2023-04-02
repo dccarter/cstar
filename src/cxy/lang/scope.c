@@ -86,8 +86,8 @@ static void suggestSimilarSymbol(Env *env, Log *L, const char *name)
 bool defineSymbol(Env *env, Log *L, const char *name, AstNode *node)
 {
     csAssert0(env->scope);
-    if (name[0] == '_')
-        return false;
+    //    if (name[0] == '_')
+    //        return false;
 
     Symbol symbol = {.name = name, .declSite = node};
     u32 hash = hashStr(hashInit(), name);

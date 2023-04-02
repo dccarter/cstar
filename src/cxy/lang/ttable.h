@@ -7,11 +7,12 @@
 #pragma once
 
 #include <core/mempool.h>
+#include <core/strpool.h>
 #include <lang/types.h>
 
 typedef struct TypeTable TypeTable;
 
-TypeTable *newTypeTable(MemPool *pool);
+TypeTable *newTypeTable(MemPool *pool, StrPool *strPool);
 void freeTypeTable(TypeTable *table);
 
 const Type *resolveType(TypeTable *table, const Type *type);
@@ -34,6 +35,8 @@ const Type *makeAliasType(TypeTable *table, const Type *aliased, cstring name);
 const Type *makeUnionType(TypeTable *table, const Type **members, u64 count);
 const Type *makeTupleType(TypeTable *table, const Type **members, u64 count);
 const Type *makeFuncType(TypeTable *table, const Type *init);
+const Type *makeStruct(TypeTable *table, const Type *init);
+const Type *makeEnum(TypeTable *table, const Type *init);
 
 u64 getTypesCount(TypeTable *table);
 u64 sortedByInsertionOrder(TypeTable *table, const Type **types, u64 size);

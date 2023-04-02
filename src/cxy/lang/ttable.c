@@ -17,7 +17,7 @@ typedef Pair(bool, const Type *) GetOrInset;
 typedef struct TypeTable {
     HashTable types;
     MemPool *memPool;
-    StrPool strPool;
+    StrPool *strPool;
     u64 typeCount;
     const Type *autoType;
     const Type *voidType;
@@ -194,11 +194,11 @@ static bool countTypesWrapper(void *ctx, const void *elem)
     return true;
 }
 
-TypeTable *newTypeTable(MemPool *pool)
+TypeTable *newTypeTable(MemPool *pool, StrPool *strPool)
 {
     TypeTable *table = mallocOrDie(sizeof(TypeTable));
     table->types = newHashTable(sizeof(Type *));
-    table->strPool = newStrPool(pool);
+    table->strPool = strPool;
     table->memPool = pool;
     table->typeCount = 0;
     for (u64 i = 0; i < prtCOUNT; i++)
@@ -223,7 +223,6 @@ TypeTable *newTypeTable(MemPool *pool)
 void freeTypeTable(TypeTable *table)
 {
     freeHashTable(&table->types);
-    freeStrPool(&table->strPool);
     free(table);
 }
 

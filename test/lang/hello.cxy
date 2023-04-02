@@ -2,20 +2,14 @@
  * Simplicity
  */
 
-type Range = (i64, i64, i64)
-
-func range(start: i64, end: i64, step: i64 = 1) => (start, end, step)
-func next(range: &const Range) : &i64 {
-    const x = 20;
-    return range
-}
-
 pub native func puts(str: string) : i32;
+func println(str: string) => puts(str)
 
 func main(args: [string]) {
-    defer wputc('0');
-    const x = range(10, 20, 10);
-    const f = () => puts("Hello");
-    wputc('😃')
-    return 0;
+    const name = "Carter";
+    // Simple but yet complicated, we just created a lambda and invoked, aka IIFE
+    // - We create a lambda that calls the native function puts
+    // - We immediately invoke the lambda (see generated prologue code)
+    (() => puts("Hello World!"))();
+    ((msg: string) => f"${msg} ${name}")("Hello ")
 }

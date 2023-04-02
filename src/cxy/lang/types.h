@@ -49,6 +49,7 @@ typedef enum {
 } PrtId;
 
 typedef struct AstNode AstNode;
+typedef struct Scope Scope;
 
 // clang-format on
 
@@ -126,19 +127,23 @@ typedef struct Type {
 
     struct {
         u32 paramsCount;
+        u32 capturedNamesCount;
         u32 defaultValuesCount;
         const Type *retType;
         const Type **params;
+        const char **captureNames;
         AstNode *decl;
     } func;
 
     struct {
+        Scope *scope;
         const Type *base;
         EnumOption **options;
         u64 optionsCount;
     } tEnum;
 
     struct {
+        Scope *scope;
         const Type *base;
         StructField **fields;
         u64 fieldsCount;

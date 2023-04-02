@@ -173,6 +173,7 @@ enum {
     flgDefault = BIT(9),
     flgDeferred = BIT(10),
     flgCapture = BIT(11),
+    flgClosure = BIT(12),
 };
 
 typedef struct AstNode AstNode;
@@ -287,8 +288,9 @@ struct AstNode {
         } path;
 
         struct {
-            const char *name;
             Operator operatorOverload;
+            const char *name;
+
             struct AstNode *genericParams;
             struct AstNode *params;
             struct AstNode *ret;

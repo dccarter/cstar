@@ -35,12 +35,13 @@ static AstNode *parseFile(const char *fileName, MemPool *memPool, Log *log)
 bool compileFile(const char *fileName, const Options *options, Log *log)
 {
     MemPool memPool = newMemPool();
+    StrPool strPool = newStrPool(&memPool);
     AstNode *program = parseFile(fileName, &memPool, log);
     FILE *output = stdout;
-    TypeTable *table = newTypeTable(&memPool);
+    TypeTable *table = newTypeTable(&memPool, &strPool);
 
     if (!options->noTypeCheck && log->errorCount == 0) {
-        semanticsCheck(program, log, &memPool, table);
+        semanticsCheck(program, log, &memPool, &strPool, table);
     }
 
     if (options->output) {
@@ -65,7 +66,7 @@ bool compileFile(const char *fileName, const Options *options, Log *log)
 
     if (log->errorCount == 0) {
         FormatState state = newFormatState("  ", true);
-        generateCode(&state, table, program);
+        generateCode(&state, table, &strPool, program);
         writeFormatState(&state, output);
         freeFormatState(&state);
     }

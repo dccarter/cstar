@@ -29,7 +29,7 @@ u64 addClosureCapture(ClosureCapture *set, cstring name, const Type *type)
     const Capture *found = findInHashTable(&set->table, //
                                            &cap,
                                            hash,
-                                           sizeof(Capture *),
+                                           sizeof(Capture),
                                            compareCaptures);
     if (found) {
         csAssert0(found->type == type);
@@ -37,13 +37,14 @@ u64 addClosureCapture(ClosureCapture *set, cstring name, const Type *type)
     }
 
     if (!insertInHashTable(
-            &set->table, &cap, hash, sizeof(Capture *), compareCaptures))
+            &set->table, &cap, hash, sizeof(Capture), compareCaptures))
         csAssert0("failing to insert in type table");
 
     return set->index++;
 }
 typedef struct {
-    const Type **arr;
+    const Type **types;
+    const char **names;
     u64 count;
 } OrderedCaptureCtx;
 
@@ -51,14 +52,20 @@ bool populateOrderedCapture(void *ctx, const void *elem)
 {
     OrderedCaptureCtx *dst = ctx;
     const Capture *cap = elem;
-    if (cap->id < dst->count)
-        dst->arr[cap->id] = cap->type;
+    if (cap->id < dst->count) {
+        dst->types[cap->id] = cap->type;
+        dst->names[cap->id] = cap->name;
+    }
     return true;
 }
 
-u64 getOrderedCapture(ClosureCapture *set, const Type **capture, u64 count)
+u64 getOrderedCapture(ClosureCapture *set,
+                      const Type **capture,
+                      const char **names,
+                      u64 count)
 {
-    OrderedCaptureCtx ctx = {.arr = capture, .count = MIN(set->index, count)};
+    OrderedCaptureCtx ctx = {
+        .types = capture, .names = names, .count = MIN(set->index, count)};
     enumerateHashTable(
         &set->table, &ctx, populateOrderedCapture, sizeof(Capture));
     return ctx.count;

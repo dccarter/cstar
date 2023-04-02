@@ -224,37 +224,38 @@ static inline int wputc(wchar c)
 
 /* --------------------- Generated PROLOGUE --------------*/
 
+typedef string __cxy_anonymous_array_20_t[];
 typedef struct {
-  i64 _0;
-  i64 _1;
-  i64 _2;
-} __cxy_anonymous_tuple_18_t;
-typedef string __cxy_anonymous_array_25_t[];
-typedef i32(*__cxy_anonymous_func_26_t)();
+  
+} __cxy_anonymous_tuple_21_t;
+typedef i32(*__cxy_anonymous_func_23_t)(__cxy_anonymous_tuple_21_t*);
+typedef struct {
+  string _0;
+} __cxy_anonymous_tuple_24_t;
+typedef string(*__cxy_anonymous_func_26_t)(__cxy_anonymous_tuple_24_t*, string);
 
 /* --------------------- Generated EPILOGUE --------------*/
 
-
-
-__cxy_anonymous_tuple_18_t range(i64 start, i64 end, i64 step) {
-  return (__cxy_anonymous_tuple_18_t){._0 = start, ._1 = end, ._2 = step};
-}
-
-const __cxy_anonymous_tuple_18_t* next(const __cxy_anonymous_tuple_18_t* range) {
-  const i32 x = 20;
-  return range;
-}
-
 extern i32 puts(string str);
 
-#define __CXY_MAIN_INVOKE(...) return __cxy_main(__VA_ARGS__)
+i32 println(string str) {
+  return puts(str);
+}
 
-i32 __cxy_main(__cxy_anonymous_array_25_t args) {
-  const __cxy_anonymous_tuple_18_t x = range(10, 20, 10);
-  const __cxy_anonymous_func_26_t f = /* <unsupported AST tag 42> */;
-  wputc(128515);
-  wputc(48);
-  return 0;
+i32 __cxy_closure_expr_0(__cxy_anonymous_tuple_21_t* __closure) {
+  return puts("Hello World!");
+}
+
+string __cxy_closure_expr_1(__cxy_anonymous_tuple_24_t* __closure, string msg) {
+  return /* <unsupported AST tag 38> */;
+}
+
+#define __CXY_MAIN_INVOKE(...) __cxy_main(__VA_ARGS__); return EXIT_SUCCESS
+
+void __cxy_main(__cxy_anonymous_array_20_t args) {
+  const string name = "Carter";
+  ({__cxy_anonymous_tuple_21_t __cap_2 = {}; (__cxy_closure_expr_0)(&__cap_2); });
+  ({__cxy_anonymous_tuple_24_t __cap_3 = {._0 = name}; (__cxy_closure_expr_1)(&__cap_3, "Hello "); });
 }
 /* --------------------- epilogue.cxy.c --------------*/
 

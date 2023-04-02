@@ -4,13 +4,17 @@
 
 #pragma once
 
+#include "core/strpool.h"
 #include <lang/ast.h>
 
 typedef struct {
     FormatState *state;
 } CodegenContext;
 
-void generateCode(FormatState *state, TypeTable *table, const AstNode *prog);
+void generateCode(FormatState *state,
+                  TypeTable *table,
+                  StrPool *strPool,
+                  const AstNode *prog);
 
 void generateManyAsts(ConstAstVisitor *visitor,
                       const char *sep,

@@ -35,7 +35,12 @@ static void programEpilogue(ConstAstVisitor *visitor, const AstNode *node)
 static void generatePathElement(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    format(ctx->state, "{s}", (FormatArg[]){{.s = node->pathElement.name}});
+    if (node->flags & flgCapture)
+        format(ctx->state,
+               "__closure->_{u64}",
+               (FormatArg[]){{.u64 = node->pathElement.index}});
+    else
+        format(ctx->state, "{s}", (FormatArg[]){{.s = node->pathElement.name}});
 }
 
 static void generatePath(ConstAstVisitor *visitor, const AstNode *node)
@@ -228,8 +233,50 @@ static void generateMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
 static void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    CCodegenContext *cctx = (CCodegenContext *)ctx;
+
+    const Type *type = node->callExpr.callee->type;
+
+    const char *name = "";
+    if (type->flags & flgClosure) {
+        // we are calling a closure, generate closure data
+        format(ctx->state, "({{", NULL);
+        generateTypeUsage(cctx,
+                          stripPointer(cctx->table, type->func.params[0]));
+        name = makeAnonymousVariable(cctx->strPool, "__cap");
+        format(ctx->state, " {s} = {{", (FormatArg[]){{.s = name}});
+        for (u64 i = 0; i < type->func.capturedNamesCount; i++) {
+            if (i != 0)
+                format(ctx->state, ", ", NULL);
+            format(
+                ctx->state,
+                "._{u64} = {s}",
+                (FormatArg[]){{.u64 = i}, {.s = type->func.captureNames[i]}});
+        }
+        format(ctx->state, "}; ", NULL);
+    }
+
     astConstVisit(visitor, node->callExpr.callee);
-    generateManyAstsWithDelim(visitor, "(", ", ", ")", node->callExpr.args);
+    if (type->flags & flgClosure) {
+        format(ctx->state, "(&{s}", (FormatArg[]){{.s = name}});
+        if (type->func.paramsCount > 1)
+            format(ctx->state, ", ", NULL);
+    }
+    else {
+        format(ctx->state, "(", NULL);
+    }
+    generateManyAstsWithDelim(visitor, "", ", ", ")", node->callExpr.args);
+    if (type->flags & flgClosure) {
+        format(ctx->state, "; })", NULL);
+    }
+}
+
+static void generateGroupExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    format(ctx->state, "(", NULL);
+    astConstVisit(visitor, node->groupExpr.expr);
+    format(ctx->state, ")", NULL);
 }
 
 static void generateBlock(ConstAstVisitor *visitor, const AstNode *node)
@@ -302,6 +349,7 @@ void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
         [astTupleExpr] = generateTupleExpr,
         [astMemberExpr] = generateMemberExpr,
         [astCallExpr] = generateCallExpr,
+        [astGroupExpr] = generateGroupExpr,
         [astBlockStmt] = generateBlock,
         [astExprStmt] = generateExpressionStmt,
         [astReturnStmt] = generateReturn,

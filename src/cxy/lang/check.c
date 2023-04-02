@@ -15,10 +15,15 @@
 typedef struct {
     Log *L;
     MemPool *pool;
+    StrPool *strPool;
     TypeTable *typeTable;
     Env env;
-    bool mainOptimized;
     Scope *closure;
+    AstNode *previousTopLevelDecl;
+    AstNode *currentTopLevelDecl;
+    AstNode *program;
+    bool mainOptimized;
+    u64 anonymousDeclsIndex;
 } CheckerContext;
 
 static const Type *sError;
@@ -98,6 +103,24 @@ static void initBuiltins(CheckerContext *ctx)
     }
 }
 
+static void addAnonymousTopLevelDecl(CheckerContext *ctx,
+                                     cstring name,
+                                     AstNode *node)
+{
+    Env env = {.first = ctx->env.first, .scope = ctx->env.first};
+    if (!defineSymbol(&env, ctx->L, name, node))
+        return;
+    if (ctx->previousTopLevelDecl == ctx->currentTopLevelDecl) {
+        ctx->program->program.decls = node;
+        node->next = ctx->currentTopLevelDecl;
+    }
+    else {
+        ctx->previousTopLevelDecl->next = node;
+        node->next = ctx->currentTopLevelDecl;
+    }
+    ctx->previousTopLevelDecl = node;
+}
+
 static void checkProgram(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
@@ -105,7 +128,12 @@ static void checkProgram(AstVisitor *visitor, AstNode *node)
 
     initBuiltins(ctx);
 
-    checkMany(visitor, node->program.decls);
+    ctx->previousTopLevelDecl = node->program.decls;
+    for (AstNode *decl = node->program.decls; decl; decl = decl->next) {
+        ctx->currentTopLevelDecl = decl;
+        astVisit(visitor, decl);
+        ctx->previousTopLevelDecl = decl;
+    }
 }
 
 static void checkFallback(AstVisitor *visitor, AstNode *node)
@@ -255,9 +283,9 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
 {
     const Type *ret, **params;
     CheckerContext *ctx = getAstVisitorContext(visitor);
-    u64 paramsCount = countAstNodes(node->closureExpr.params);
+    u64 paramsCount = countAstNodes(node->closureExpr.params) + 1;
     AstNode *param = node->closureExpr.params;
-    u64 i = 0;
+    u64 i = 1;
 
     pushScope(&ctx->env, node);
 
@@ -282,20 +310,65 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
     node->closureExpr.body->parentScope = node;
     ret = evalType(visitor, node->closureExpr.body);
 
-    node->type = makeFuncType(ctx->typeTable,
-                              &(Type){.tag = typFunc,
-                                      .name = NULL,
-                                      .flags = node->flags,
-                                      .func = {.retType = ret,
-                                               .params = params,
-                                               .paramsCount = paramsCount,
-                                               .decl = node}});
-
-    free((void *)params);
-
     ctx->closure = stack;
 
     popScope(&ctx->env);
+
+    // We need to create a tuple for the capture
+    u64 index = node->closureExpr.capture.index;
+    const Type **capturedTypes = mallocOrDie(sizeof(Type *) * index);
+    const char **names = allocFromMemPool(ctx->pool, sizeof(void *) * index);
+    index = getOrderedCapture(
+        &node->closureExpr.capture, capturedTypes, names, index);
+    params[0] =
+        makePointerType(ctx->typeTable,
+                        makeTupleType(ctx->typeTable, capturedTypes, index),
+                        flgNone);
+    free((void *)capturedTypes);
+    node->type = makeFuncType(ctx->typeTable,
+                              &(Type){.tag = typFunc,
+                                      .name = NULL,
+                                      .flags = node->flags | flgClosure,
+                                      .func = {.retType = ret,
+                                               .params = params,
+                                               .captureNames = names,
+                                               .capturedNamesCount = index,
+                                               .paramsCount = paramsCount,
+                                               .decl = node}});
+
+    // We need to copy the closure node to global scope and replace it with
+    // an identifier.
+    AstNode *copy = copyAstNode(ctx->pool, node);
+    __typeof(node->closureExpr) closureExpr = node->closureExpr;
+    memset(&copy->closureExpr, 0, sizeof(closureExpr));
+    copy->tag = astFuncDecl;
+    copy->funcDecl.ret = closureExpr.ret;
+    copy->funcDecl.params = makeAstNode(ctx->pool,
+                                        &copy->loc,
+                                        &(AstNode){.tag = astFuncParam,
+                                                   .type = params[0],
+                                                   .flags = flgCapture,
+                                                   .next = closureExpr.params,
+                                                   .funcParam = {
+                                                       .name = "__closure",
+                                                   }});
+
+    copy->funcDecl.body = closureExpr.body;
+    copy->funcDecl.name =
+        makeAnonymousVariable(ctx->strPool, "__cxy_closure_expr");
+
+    addAnonymousTopLevelDecl(ctx, copy->funcDecl.name, copy);
+
+    node->next = NULL;
+    node->tag = astPath;
+    node->path.elements =
+        makeAstNode(ctx->pool,
+                    &node->loc,
+                    &(AstNode){.tag = astPathElem,
+                               .type = node->type,
+                               .pathElement = {.name = copy->funcDecl.name}});
+
+    free((void *)params);
 }
 
 static void checkVarDecl(AstVisitor *visitor, AstNode *node)
@@ -362,8 +435,8 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
     if (isRootScope(scope) && isInSameEnv(closure, scope))
         // Symbol defined in global scope
         return node->type;
-    if (isAncestorScope(scope, closure))
-        // Symbol defined in parent scope of closure
+    if (!isAncestorScope(scope, closure))
+        // Symbol not defined in parent scope of closure
         return node->type;
 
     node->pathElement.index =
@@ -531,6 +604,11 @@ static void checkTupleExpr(AstVisitor *visitor, AstNode *node)
     free(args);
 }
 
+static void checkGroupExpr(AstVisitor *visitor, AstNode *node)
+{
+    node->type = evalType(visitor, node->groupExpr.expr);
+}
+
 static void checkCall(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
@@ -548,9 +626,14 @@ static void checkCall(AstVisitor *visitor, AstNode *node)
     }
 
     node->type = callee->func.retType;
+    u64 paramsCount = callee->func.paramsCount, i = 0;
+    if (callee->flags & flgClosure) {
+        paramsCount--;
+        i = 1;
+    }
+
     u64 count = countAstNodes(arg),
-        withoutDefaulted =
-            callee->func.paramsCount - callee->func.defaultValuesCount;
+        withoutDefaulted = paramsCount - callee->func.defaultValuesCount;
     if (count < withoutDefaulted) {
         logError(ctx->L,
                  &node->loc,
@@ -561,18 +644,17 @@ static void checkCall(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    if (count > callee->func.paramsCount) {
-        logError(ctx->L,
-                 &node->loc,
-                 "too many arguments provided to function of type "
-                 "'{t}', at most '{u64}' but got '{u64}'",
-                 (FormatArg[]){{.t = callee},
-                               {.u64 = callee->func.paramsCount},
-                               {.u64 = count}});
+    if (count > paramsCount) {
+        logError(
+            ctx->L,
+            &node->loc,
+            "too many arguments provided to function of type "
+            "'{t}', at most '{u64}' but got '{u64}'",
+            (FormatArg[]){{.t = callee}, {.u64 = paramsCount}, {.u64 = count}});
         return;
     }
 
-    for (u64 i = 0; arg; arg = arg->next, i++) {
+    for (; arg; arg = arg->next, i++) {
         const Type *type = evalType(visitor, arg);
         if (!isTypeAssignableFrom(
                 ctx->typeTable, callee->func.params[i], type)) {
@@ -584,7 +666,7 @@ static void checkCall(AstVisitor *visitor, AstNode *node)
         }
     }
 
-    if (callee->func.paramsCount > count) {
+    if (paramsCount > count) {
         // Add default parameters to function call
         AstNode *param =
             getNodeAtIndex(callee->func.decl->funcDecl.params, count);
@@ -779,10 +861,14 @@ static void checkBuiltinType(AstVisitor *visitor, AstNode *node)
 void semanticsCheck(AstNode *program,
                     Log *L,
                     MemPool *pool,
+                    StrPool *strPool,
                     TypeTable *typeTable)
 {
-    CheckerContext context = {
-        .L = L, .typeTable = typeTable, .pool = pool, .env = {NULL}};
+    CheckerContext context = {.L = L,
+                              .typeTable = typeTable,
+                              .pool = pool,
+                              .strPool = strPool,
+                              .env = {NULL}};
     environmentInit(&context.env);
 
     // clang-format off
@@ -808,6 +894,7 @@ void semanticsCheck(AstNode *program,
         [astIndexExpr] = checkIndex,
         [astMemberExpr] = checkMember,
         [astTupleExpr] = checkTupleExpr,
+        [astGroupExpr] = checkGroupExpr,
         [astCallExpr] = checkCall,
         [astClosureExpr] = checkClosure,
         [astBlockStmt] = checkBlock,

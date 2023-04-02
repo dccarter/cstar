@@ -37,3 +37,23 @@ const char *makeString(StrPool *str_pool, const char *str)
         assert(false && "cannot insert string in string pool");
     return new_str;
 }
+
+const char *makeAnonymousVariable(StrPool *pool, const char *prefix)
+{
+    static char variable[MAX_ANONYMOUS_PREFIX_SIZE + 32];
+    static u64 postfix = 0;
+    u64 len;
+    if (prefix == NULL) {
+        prefix = "__cxy_anonymous_var";
+        len = 19;
+    }
+    else
+        len = strlen(prefix);
+
+    if (len > MAX_ANONYMOUS_PREFIX_SIZE)
+        return NULL;
+    memcpy(variable, prefix, len);
+    sprintf(&variable[len], "_%llu", postfix++);
+
+    return makeString(pool, variable);
+}

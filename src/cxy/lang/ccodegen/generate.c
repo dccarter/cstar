@@ -87,9 +87,13 @@ void generateTypeUsage(CCodegenContext *ctx, const Type *type)
     }
 }
 
-void generateCode(FormatState *state, TypeTable *table, const AstNode *prog)
+void generateCode(FormatState *state,
+                  TypeTable *table,
+                  StrPool *strPool,
+                  const AstNode *prog)
 {
-    CCodegenContext context = {.base = {.state = state}, .table = table};
+    CCodegenContext context = {
+        .base = {.state = state}, .table = table, .strPool = strPool};
 
     cCodegenPrologue(&context, prog);
     cCodegenEpilogue(&context, prog);

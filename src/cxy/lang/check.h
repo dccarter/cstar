@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <core/strpool.h>
 #include <lang/ast.h>
 
 typedef struct TypeTable TypeTable;
@@ -11,4 +12,5 @@ typedef struct TypeTable TypeTable;
 void semanticsCheck(AstNode *program,
                     Log *L,
                     MemPool *pool,
+                    StrPool *strPool,
                     TypeTable *typeTable);

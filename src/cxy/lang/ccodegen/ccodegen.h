@@ -2,12 +2,14 @@
 // Created by Carter on 2023-03-29.
 //
 
+#include <core/strpool.h>
 #include <lang/codegen.h>
 
 typedef struct {
     CodegenContext base;
     TypeTable *table;
     cstring namespace;
+    StrPool *strPool;
 } CCodegenContext;
 
 void writeTypename(FormatState *state, const Type *type);
