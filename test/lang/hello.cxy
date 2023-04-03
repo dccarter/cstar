@@ -3,9 +3,12 @@
  */
 
 pub native func puts(str: string) : i32;
+
 func println(str: string) => puts(str)
-func fib(n: u32) => n <= 1? 1 : fib(n - 2) + fib(n - 1)
+
+func fib(n: i32) : i32 => n == 0 ? 0 : n == 1? 1 : fib(n - 2) + fib(n - 1)
 
 func main(args: [string]) {
-
+    const value = fib(10);
+    puts(f"fib(10) = ${value}")
 }

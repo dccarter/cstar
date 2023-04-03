@@ -151,6 +151,7 @@ typedef struct Type {
 } Type;
 
 bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from);
+bool isTypeCastAssignable(TypeTable *table, const Type *to, const Type *from);
 bool isIntegerType(TypeTable *table, const Type *type);
 bool isSignedType(TypeTable *table, const Type *type);
 bool isUnsignedType(TypeTable *table, const Type *type);

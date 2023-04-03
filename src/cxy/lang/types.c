@@ -82,6 +82,42 @@ bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from)
     }
 }
 
+bool isTypeCastAssignable(TypeTable *table, const Type *to, const Type *from)
+{
+    to = resolveType(table, to);
+    from = resolveType(table, from);
+
+    if (to->tag == from->tag) {
+        if (to->tag != typPrimitive)
+            return true;
+    }
+
+    if (from->tag == typAuto)
+        return to;
+
+    switch (to->tag) {
+    case typAuto:
+        return false;
+    case typPrimitive:
+        switch (to->primitive.id) {
+#define f(I, ...) case prt##I:
+            INTEGER_TYPE_LIST(f)
+            FLOAT_TYPE_LIST(f)
+            return isNumericType(table, from);
+#undef f
+        case prtChar:
+            return isUnsignedType(table, from) && from->size <= 4;
+        case prtBool:
+            return from->primitive.id == prtBool;
+        default:
+            return to->primitive.id == from->primitive.id;
+        }
+
+    default:
+        return false;
+    }
+}
+
 bool isIntegerType(TypeTable *table, const Type *type)
 {
     type = resolveType(table, type);

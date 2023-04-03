@@ -213,7 +213,7 @@ static void checkFuncParam(AstVisitor *visitor, AstNode *node)
 
 static void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
 {
-    const Type *ret, **params;
+    const Type *ret = NULL, **params, *type = NULL;
     CheckerContext *ctx = getAstVisitorContext(visitor);
     u64 paramsCount = countAstNodes(node->funcDecl.params);
     AstNode *param = node->funcDecl.params;
@@ -255,13 +255,9 @@ static void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
         withDefaultValues = (param->funcParam.def != NULL);
     }
 
+    ret = makeAutoType(ctx->typeTable);
     if (node->funcDecl.ret)
         ret = evalType(visitor, node->funcDecl.ret);
-
-    if (!(node->flags & flgNative)) {
-        node->funcDecl.body->parentScope = node;
-        ret = evalType(visitor, node->funcDecl.body);
-    }
 
     node->type = makeFuncType(
         ctx->typeTable,
@@ -273,6 +269,13 @@ static void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
                          .paramsCount = paramsCount,
                          .decl = node,
                          .defaultValuesCount = withDefaultValues}});
+
+    if (!(node->flags & flgNative)) {
+        node->funcDecl.body->parentScope = node;
+        ret = evalType(visitor, node->funcDecl.body);
+    }
+
+    ((Type *)(node->type))->func.retType = ret;
 
     free((void *)params);
 
@@ -369,6 +372,48 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
                                .pathElement = {.name = copy->funcDecl.name}});
 
     free((void *)params);
+}
+
+static void checkTypedExpr(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    const Type *expr = evalType(visitor, node->typedExpr.expr);
+    const Type *target = evalType(visitor, node->typedExpr.type);
+    if (!isTypeCastAssignable(ctx->typeTable, target, expr)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "type '{t}' cannot be cast to type '{t}'",
+                 (FormatArg[]){{.t = expr}, {.t = target}});
+    }
+    node->type = target;
+}
+
+static void checkTernaryExpr(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    const Type *cond = evalType(visitor, node->ternaryExpr.cond);
+    const Type *body = evalType(visitor, node->ternaryExpr.body);
+    const Type *otherwise = evalType(visitor, node->ternaryExpr.otherwise);
+
+    if (!isTypeAssignableFrom(
+            ctx->typeTable, makePrimitiveType(ctx->typeTable, prtBool), cond)) {
+        logError(ctx->L,
+                 &node->ternaryExpr.cond->loc,
+                 "expecting a ternary expression ('?') condition type of bool, "
+                 "got '{t}'",
+                 (FormatArg[]){{.t = cond}});
+        node->type = sError;
+    }
+    if (!isTypeAssignableFrom(ctx->typeTable, body, otherwise)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "operands to ternary expression ('?') have different types, "
+                 "'{t}' and '{t}'",
+                 (FormatArg[]){{.t = body}, {.t = otherwise}});
+        node->type = sError;
+    }
+    else
+        node->type = body;
 }
 
 static void checkVarDecl(AstVisitor *visitor, AstNode *node)
@@ -571,7 +616,8 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
                      (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
             return;
         }
-        node->type = type;
+        node->type = makePrimitiveType(ctx->typeTable, prtBool);
+        ;
         break;
     case optEquality:
         if (type->tag != typPrimitive && type->tag != typPointer &&
@@ -1016,6 +1062,8 @@ void semanticsCheck(AstNode *program,
         [astGroupExpr] = checkGroupExpr,
         [astCallExpr] = checkCall,
         [astClosureExpr] = checkClosure,
+        [astTypedExpr] = checkTypedExpr,
+        [astTernaryExpr] = checkTernaryExpr,
         [astBlockStmt] = checkBlock,
         [astReturnStmt] = checkReturn,
         [astDeferStmt] = checkDeferStmt,
