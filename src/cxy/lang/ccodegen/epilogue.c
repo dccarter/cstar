@@ -205,6 +205,23 @@ static void generateBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
     astConstVisit(visitor, node->binaryExpr.rhs);
 }
 
+static void generateUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    if (node->unaryExpr.isPrefix) {
+        format(ctx->state,
+               "{s}",
+               (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)}});
+        astConstVisit(visitor, node->unaryExpr.operand);
+    }
+    else {
+        astConstVisit(visitor, node->unaryExpr.operand);
+        format(ctx->state,
+               "{s}",
+               (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)}});
+    }
+}
+
 static void generateAssignExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -382,6 +399,15 @@ static void generateReturn(ConstAstVisitor *visitor, const AstNode *node)
     format(ctx->state, ";", NULL);
 }
 
+static void generateBreakContinue(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    if (node->tag == astBreakStmt)
+        format(ctx->state, "break;", NULL);
+    else
+        format(ctx->state, "continue;", NULL);
+}
+
 static void generateIfStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -450,6 +476,7 @@ void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
         [astAddressOf] = generateAddressOf,
         [astStmtExpr] = generateStatementExpr,
         [astBinaryExpr] = generateBinaryExpr,
+        [astUnaryExpr] = generateUnaryExpr,
         [astAssignExpr] = generateAssignExpr,
         [astTupleExpr] = generateTupleExpr,
         [astMemberExpr] = generateMemberExpr,
@@ -461,6 +488,8 @@ void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
         [astBlockStmt] = generateBlock,
         [astExprStmt] = generateExpressionStmt,
         [astReturnStmt] = generateReturn,
+        [astBreakStmt] = generateBreakContinue,
+        [astContinueStmt] = generateBreakContinue,
         [astIfStmt] = generateIfStmt,
         [astWhileStmt] = generateWhileStmt,
         [astFuncParam] = generateFuncParam,

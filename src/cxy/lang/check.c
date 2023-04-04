@@ -278,6 +278,8 @@ static void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
         node->funcDecl.body->parentScope = node;
         ret = evalType(visitor, node->funcDecl.body);
     }
+    if (ctx->lastReturn && ret == makeVoidType(ctx->typeTable))
+        ret = ctx->lastReturn->type;
 
     ((Type *)(node->type))->func.retType = ret;
 
@@ -658,11 +660,68 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
     }
 }
 
+static const Type *checkPrefixExpr(CheckerContext *ctx,
+                                   const Type *operand,
+                                   AstNode *node)
+{
+    switch (node->unaryExpr.op) {
+    case opPreDec:
+    case opPreInc:
+    case opMinus:
+    case opPlus:
+        if (!isNumericType(ctx->typeTable, operand)) {
+            logError(ctx->L,
+                     &node->unaryExpr.operand->loc,
+                     "postfix expression '{s}' no supported on type '{t}'",
+                     (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)},
+                                   {.t = operand}});
+            operand = sError;
+        }
+        break;
+    case opNot:
+        if (operand == makePrimitiveType(ctx->typeTable, prtBool)) {
+            logError(ctx->L,
+                     &node->unaryExpr.operand->loc,
+                     "logical '!' operator no supported on type '{t}', "
+                     "expecting bool type",
+                     (FormatArg[]){{.t = operand}});
+            operand = sError;
+        }
+        break;
+    case opDeref:
+        if (operand->tag != typPointer) {
+            logError(ctx->L,
+                     &node->unaryExpr.operand->loc,
+                     "cannot not dereference an non-pointer type '{t}'",
+                     (FormatArg[]){{.t = operand}});
+            operand = sError;
+        }
+        break;
+    default:
+        operand = sError;
+        break;
+    }
+
+    return operand;
+}
+
 static void checkUnary(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     const Type *operand = evalType(visitor, node->unaryExpr.operand);
-    // TODO check compatibility
+    if (node->unaryExpr.isPrefix) {
+        operand = checkPrefixExpr(ctx, operand, node);
+    }
+    else {
+        if (!isNumericType(ctx->typeTable, operand)) {
+            logError(ctx->L,
+                     &node->unaryExpr.operand->loc,
+                     "postfix expression '{s}' no supported on type '{t}'",
+                     (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)},
+                                   {.t = operand}});
+            operand = sError;
+        }
+    }
     node->type = operand;
 }
 
@@ -962,9 +1021,21 @@ static void checkDeferStmt(AstVisitor *visitor, AstNode *node)
     node->type = evalType(visitor, node->deferStmt.expr);
 }
 
+static void checkBreakContinueStmt(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    findEnclosingLoop(&ctx->env,
+                      ctx->L,
+                      node->tag == astBreakStmt ? "break" : "continue",
+                      &node->loc);
+    node->type = makeVoidType(ctx->typeTable);
+}
+
 static void checkIfStmt(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
+    pushScope(&ctx->env, node);
+
     const Type *cond = evalType(visitor, node->ifStmt.cond);
     const Type *then = evalType(visitor, node->ifStmt.body);
 
@@ -984,11 +1055,14 @@ static void checkIfStmt(AstVisitor *visitor, AstNode *node)
     if (node->ifStmt.otherwise) {
         evalType(visitor, node->ifStmt.otherwise);
     }
+
+    popScope(&ctx->env);
 }
 
 static void checkWhileStmt(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
+    pushScope(&ctx->env, node);
     const Type *cond = evalType(visitor, node->whileStmt.cond);
     const Type *body = evalType(visitor, node->whileStmt.body);
 
@@ -1004,6 +1078,7 @@ static void checkWhileStmt(AstVisitor *visitor, AstNode *node)
     else {
         node->type = body;
     }
+    popScope(&ctx->env);
 }
 
 static void checkPrimitiveType(AstVisitor *visitor, AstNode *node)
@@ -1161,6 +1236,8 @@ void semanticsCheck(AstNode *program,
         [astBlockStmt] = checkBlock,
         [astReturnStmt] = checkReturn,
         [astDeferStmt] = checkDeferStmt,
+        [astBreakStmt] = checkBreakContinueStmt,
+        [astContinueStmt] = checkBreakContinueStmt,
         [astIfStmt] = checkIfStmt,
         [astWhileStmt] = checkWhileStmt,
         [astPrimitiveType] = checkPrimitiveType,

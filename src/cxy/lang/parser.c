@@ -941,7 +941,7 @@ static AstNode *variable(
     if (!isNative && !woInit) {
         if (tok.tag == tokConst)
             consume0(P, tokAssign);
-        if (isExpression || tok.tag == tokConst || match(P, tokAssign))
+        if (tok.tag == tokConst || match(P, tokAssign) || isExpression)
             init = expression(P, true);
     }
 
@@ -1146,10 +1146,17 @@ static AstNode *forStatement(Parser *P)
 static AstNode *whileStatement(Parser *P)
 {
     AstNode *body = NULL;
+    AstNode *cond = NULL;
+
     Token tok = *consume0(P, tokWhile);
 
     consume0(P, tokLParen);
-    AstNode *cond = expression(P, true);
+    if (check(P, tokConst, tokVar)) {
+        cond = variable(P, false, false, true, false);
+    }
+    else {
+        cond = expression(P, true);
+    }
     consume0(P, tokRParen);
     if (!match(P, tokSemicolon))
         body = statement(P);
