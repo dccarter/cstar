@@ -22,6 +22,7 @@ typedef struct {
     AstNode *previousTopLevelDecl;
     AstNode *currentTopLevelDecl;
     AstNode *program;
+    const AstNode *lastReturn;
     bool mainOptimized;
     u64 anonymousDeclsIndex;
 } CheckerContext;
@@ -215,6 +216,9 @@ static void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
 {
     const Type *ret = NULL, **params, *type = NULL;
     CheckerContext *ctx = getAstVisitorContext(visitor);
+    const AstNode *lastReturn = ctx->lastReturn;
+    ctx->lastReturn = NULL;
+
     u64 paramsCount = countAstNodes(node->funcDecl.params);
     AstNode *param = node->funcDecl.params;
     u64 i = 0;
@@ -277,8 +281,9 @@ static void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
 
     ((Type *)(node->type))->func.retType = ret;
 
-    free((void *)params);
+    ctx->lastReturn = lastReturn;
 
+    free((void *)params);
     popScope(&ctx->env);
 }
 
@@ -286,6 +291,9 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
 {
     const Type *ret, **params;
     CheckerContext *ctx = getAstVisitorContext(visitor);
+    const AstNode *lastReturn = ctx->lastReturn;
+    ctx->lastReturn = NULL;
+
     u64 paramsCount = countAstNodes(node->closureExpr.params) + 1;
     AstNode *param = node->closureExpr.params;
     u64 i = 1;
@@ -338,6 +346,8 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
                                                .capturedNamesCount = index,
                                                .paramsCount = paramsCount,
                                                .decl = node}});
+
+    ctx->lastReturn = lastReturn;
 
     // We need to copy the closure node to global scope and replace it with
     // an identifier.
@@ -656,6 +666,43 @@ static void checkUnary(AstVisitor *visitor, AstNode *node)
     node->type = operand;
 }
 
+static void checkAssign(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    AstNode *left = node->assignExpr.lhs, *right = node->assignExpr.rhs;
+    const Type *lhs = evalType(visitor, left);
+    const Type *rhs = evalType(visitor, right);
+
+    if (left->flags & flgConst) {
+        logError(ctx->L,
+                 &node->loc,
+                 "lhs of assignment expressions is a constant",
+                 (FormatArg[]){{.t = lhs}});
+        node->type = sError;
+    }
+    // TODO check r-value-ness
+    if (!isTypeAssignableFrom(ctx->typeTable, lhs, rhs)) {
+        logError(ctx->L,
+                 &node->assignExpr.rhs->loc,
+                 "incompatible types on assigment expression, expecting '{t}', "
+                 "got '{t}'",
+                 (FormatArg[]){{.t = lhs}, {.t = rhs}});
+        node->type = sError;
+    }
+
+    if (lhs == makeAutoType(ctx->typeTable)) {
+        csAssert0(left->tag == astPath);
+        const char *variable = left->path.elements->pathElement.name;
+        AstNode *symbol = findSymbol(&ctx->env, ctx->L, variable, &left->loc);
+        csAssert0(symbol);
+        symbol->type = rhs;
+        node->type = rhs;
+    }
+    else {
+        node->type = lhs;
+    }
+}
+
 static void checkAddressOf(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
@@ -886,17 +933,19 @@ static void checkReturn(AstVisitor *visitor, AstNode *node)
                  "type '{t}",
                  (FormatArg[]){{.t = node->type}, {.t = ret}});
     }
-    else {
-        AstNode *block = getParentScopeWithTag(node, astBlockStmt);
-        if (block && block->type &&
-            !isTypeAssignableFrom(ctx->typeTable, block->type, node->type)) {
-            logError(ctx->L,
-                     &node->returnStmt.expr->loc,
-                     "inconsistent return types in auto function, '{t}' not "
-                     "compatible with '{t}'",
-                     (FormatArg[]){{.t = node->type}, {.t = block->type}});
+    else if (ctx->lastReturn) {
+        // we have already seen a return
+        if (!isTypeAssignableFrom(
+                ctx->typeTable, ctx->lastReturn->type, node->type)) {
+            logError(
+                ctx->L,
+                &node->returnStmt.expr->loc,
+                "inconsistent return types in auto function, type '{t}' not "
+                "compatible with '{t}'",
+                (FormatArg[]){{.t = node->type}, {.t = ctx->lastReturn->type}});
         }
     }
+    ctx->lastReturn = node;
 }
 
 static void checkDeferStmt(AstVisitor *visitor, AstNode *node)
@@ -911,6 +960,50 @@ static void checkDeferStmt(AstVisitor *visitor, AstNode *node)
     }
 
     node->type = evalType(visitor, node->deferStmt.expr);
+}
+
+static void checkIfStmt(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    const Type *cond = evalType(visitor, node->ifStmt.cond);
+    const Type *then = evalType(visitor, node->ifStmt.body);
+
+    if (!isTypeAssignableFrom(
+            ctx->typeTable, makePrimitiveType(ctx->typeTable, prtBool), cond)) {
+        logError(ctx->L,
+                 &node->ternaryExpr.cond->loc,
+                 "unexpected type in if statement condition, expecting "
+                 "a truthy expression but got '{t}'",
+                 (FormatArg[]){{.t = cond}});
+        node->type = sError;
+    }
+    else {
+        node->type = then;
+    }
+
+    if (node->ifStmt.otherwise) {
+        evalType(visitor, node->ifStmt.otherwise);
+    }
+}
+
+static void checkWhileStmt(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    const Type *cond = evalType(visitor, node->whileStmt.cond);
+    const Type *body = evalType(visitor, node->whileStmt.body);
+
+    if (!isTypeAssignableFrom(
+            ctx->typeTable, makePrimitiveType(ctx->typeTable, prtBool), cond)) {
+        logError(ctx->L,
+                 &node->ternaryExpr.cond->loc,
+                 "unexpected type in while statement condition, expecting "
+                 "a truthy expression, but got '{t}'",
+                 (FormatArg[]){{.t = cond}});
+        node->type = sError;
+    }
+    else {
+        node->type = body;
+    }
 }
 
 static void checkPrimitiveType(AstVisitor *visitor, AstNode *node)
@@ -1054,6 +1147,7 @@ void semanticsCheck(AstNode *program,
         [astVarDecl] = checkVarDecl,
         [astIdentifier] = checkIdentifier,
         [astBinaryExpr] = checkBinary,
+        [astAssignExpr] = checkAssign,
         [astUnaryExpr] = checkUnary,
         [astAddressOf] = checkAddressOf,
         [astIndexExpr] = checkIndex,
@@ -1067,6 +1161,8 @@ void semanticsCheck(AstNode *program,
         [astBlockStmt] = checkBlock,
         [astReturnStmt] = checkReturn,
         [astDeferStmt] = checkDeferStmt,
+        [astIfStmt] = checkIfStmt,
+        [astWhileStmt] = checkWhileStmt,
         [astPrimitiveType] = checkPrimitiveType,
         [astArrayType] = checkArrayType,
         [astPointerType] = checkPointerType,

@@ -205,6 +205,16 @@ static void generateBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
     astConstVisit(visitor, node->binaryExpr.rhs);
 }
 
+static void generateAssignExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    astConstVisit(visitor, node->assignExpr.lhs);
+    format(ctx->state,
+           " {s} ",
+           (FormatArg[]){{.s = getAssignOpString(node->assignExpr.op)}});
+    astConstVisit(visitor, node->assignExpr.rhs);
+}
+
 static void generateTupleExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -372,6 +382,56 @@ static void generateReturn(ConstAstVisitor *visitor, const AstNode *node)
     format(ctx->state, ";", NULL);
 }
 
+static void generateIfStmt(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    const AstNode *cond = node->ifStmt.cond;
+    if (cond->tag == astVarDecl) {
+        format(ctx->state, "{{{>}\n", NULL);
+        astConstVisit(visitor, cond);
+        format(ctx->state,
+               "\nif ({s}) ",
+               (FormatArg[]){{.s = cond->varDecl.names->ident.value}});
+    }
+    else {
+        format(ctx->state, "if (", NULL);
+        astConstVisit(visitor, cond);
+        format(ctx->state, ") ", NULL);
+    }
+    astConstVisit(visitor, node->ifStmt.body);
+    if (node->ifStmt.otherwise) {
+        format(ctx->state, " else ", NULL);
+        astConstVisit(visitor, node->ifStmt.otherwise);
+    }
+
+    if (cond->tag == astVarDecl) {
+        format(ctx->state, "{<}\n}", NULL);
+    }
+}
+
+static void generateWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    const AstNode *cond = node->whileStmt.cond;
+    if (cond->tag == astVarDecl) {
+        format(ctx->state, "{{{>}\n", NULL);
+        astConstVisit(visitor, cond);
+        format(ctx->state,
+               "\nwhile ({s}) ",
+               (FormatArg[]){{.s = cond->varDecl.names->ident.value}});
+    }
+    else {
+        format(ctx->state, "while (", NULL);
+        astConstVisit(visitor, cond);
+        format(ctx->state, ") ", NULL);
+    }
+    astConstVisit(visitor, node->whileStmt.body);
+
+    if (cond->tag == astVarDecl) {
+        format(ctx->state, "{<}\n}", NULL);
+    }
+}
+
 void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
 {
     // clang-format off
@@ -390,6 +450,7 @@ void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
         [astAddressOf] = generateAddressOf,
         [astStmtExpr] = generateStatementExpr,
         [astBinaryExpr] = generateBinaryExpr,
+        [astAssignExpr] = generateAssignExpr,
         [astTupleExpr] = generateTupleExpr,
         [astMemberExpr] = generateMemberExpr,
         [astCallExpr] = generateCallExpr,
@@ -400,6 +461,8 @@ void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
         [astBlockStmt] = generateBlock,
         [astExprStmt] = generateExpressionStmt,
         [astReturnStmt] = generateReturn,
+        [astIfStmt] = generateIfStmt,
+        [astWhileStmt] = generateWhileStmt,
         [astFuncParam] = generateFuncParam,
         [astFuncDecl] = generateFunc,
         [astVarDecl] = generateVariable,
