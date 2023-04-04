@@ -2,14 +2,32 @@
  * Simplicity
  */
 
+pub native type FILE;
+pub native var stdin: &FILE
+pub native var stdout: &FILE
+
 pub native func puts(str: string) : i32;
+pub native func fputs(str: string, stream: &FILE) : i32;
+pub native func fgets(data: &char, size: i32, stream: &FILE) : &char;
 
 //func println(str: string) => puts(str)
 //
 //func fib(n: i32) : i32 => n == 0 ? 0 : n == 1? 1 : fib(n - 2) + fib(n - 1)
 
+func rangeX(start: i32, end: i32, step: i32 = 1) : func() -> i32? {
+    return () => {
+        if (start < end)
+            return start++;
+        return 0;
+    }
+}
+
 func main(args: [string]) {
     var i = 0;
+    var data: [char, 40];
+    fputs("What's your name? ", stdout)
+    fgets(data, 40, stdin)
+    puts(f"You said ${data}")
     while (i < 20) {
         puts(f"${i}")
         i++

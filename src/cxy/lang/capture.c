@@ -13,8 +13,8 @@ typedef struct {
 
 static bool compareCaptures(const void *left, const void *right)
 {
-    return strcmp((*(const Capture **)left)->name,
-                  (*(const Capture **)right)->name) == 0;
+    return strcmp(((const Capture *)left)->name,
+                  ((const Capture *)right)->name) == 0;
 }
 
 u64 addClosureCapture(ClosureCapture *set, cstring name, const Type *type)

@@ -25,6 +25,7 @@ const Type *makeNullType(TypeTable *table);
 const Type *makePrimitiveType(TypeTable *table, PrtId id);
 const Type *makeStringType(TypeTable *table);
 const Type *makePointerType(TypeTable *table, const Type *pointed, u64 flags);
+const Type *makeOptionalType(TypeTable *table, const Type *target, u64 flags);
 const Type *makeArrayType(TypeTable *table,
                           const Type *elementType,
                           const u64 *indexes,
@@ -32,6 +33,7 @@ const Type *makeArrayType(TypeTable *table,
 
 const Type *makeMapType(TypeTable *table, const Type *key, const Type *value);
 const Type *makeAliasType(TypeTable *table, const Type *aliased, cstring name);
+const Type *makeOpaqueType(TypeTable *table, cstring name);
 const Type *makeUnionType(TypeTable *table, const Type **members, u64 count);
 const Type *makeTupleType(TypeTable *table, const Type **members, u64 count);
 const Type *makeFuncType(TypeTable *table, const Type *init);

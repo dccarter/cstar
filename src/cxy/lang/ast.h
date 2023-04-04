@@ -93,7 +93,6 @@ typedef enum {
 typedef enum {
     astError,
     astProgram,
-    astImplicitCast,
     astAttr,
     astPathElem,
     astPath,
@@ -107,6 +106,7 @@ typedef enum {
     astPointerType,
     astFuncType,
     astPrimitiveType,
+    astOptionalType,
     /* Literals */
     astNullLit,
     astBoolLit,
@@ -135,6 +135,7 @@ typedef enum {
     astStmtExpr,
     astStringExpr,
     astTypedExpr,
+    astCastExpr,
     astCallExpr,
     astMacroCallExpr,
     astClosureExpr,
@@ -144,6 +145,7 @@ typedef enum {
     astFieldExpr,
     astStructExpr,
     astMemberExpr,
+    astRangeExpr,
     /* Statements */
     astExprStmt,
     astBreakStmt,
@@ -174,7 +176,7 @@ enum {
     flgDeferred = BIT(10),
     flgCapture = BIT(11),
     flgClosure = BIT(12),
-    flgCapturePointer = BIT(13)
+    flgCapturePointer = BIT(13),
 };
 
 typedef struct AstNode AstNode;
@@ -201,9 +203,6 @@ struct AstNode {
         struct {
             struct AstNode *decls;
         } program;
-        struct {
-            struct AstNode *expr;
-        } implicitCast;
 
         struct {
             cstring value;
@@ -245,6 +244,10 @@ struct AstNode {
         } arrayType;
 
         struct {
+            struct AstNode *type;
+        } optionalType;
+
+        struct {
             struct AstNode *genericParams;
             struct AstNode *params;
             struct AstNode *ret;
@@ -268,6 +271,17 @@ struct AstNode {
         } memberExpr;
 
         struct {
+            struct AstNode *start;
+            struct AstNode *end;
+            struct AstNode *step;
+        } rangeExpr;
+
+        struct {
+            struct AstNode *to;
+            struct AstNode *expr;
+        } castExpr;
+
+        struct {
             struct AstNode *target;
             struct AstNode *indices;
         } indexExpr;
@@ -285,7 +299,7 @@ struct AstNode {
 
         struct {
             struct AstNode *elements;
-            struct AstNode *declSite;
+            bool isType;
         } path;
 
         struct {

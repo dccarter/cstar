@@ -503,6 +503,40 @@ static AstNode *functionParam(Parser *P)
                    .funcParam = {.name = name, .type = type, .def = def}});
 }
 
+static AstNode *implicitCast(Parser *P)
+{
+    AstNode *expr;
+    Token tok = *consume0(P, tokLess);
+    AstNode *to = parseType(P);
+    consume0(P, tokGreater);
+    expr = expressionWithoutStructs(P);
+
+    return makeAstNode(
+        P->memPool,
+        &tok.fileLoc,
+        &(AstNode){.tag = astCastExpr, .castExpr = {.to = to, .expr = expr}});
+}
+
+static AstNode *range(Parser *P)
+{
+    AstNode *start, *end, *step = NULL;
+    Token tok = *consume0(P, tokRange);
+    consume0(P, tokLParen);
+    start = expressionWithoutStructs(P);
+    consume0(P, tokComma);
+    end = expressionWithoutStructs(P);
+    if (match(P, tokComma)) {
+        step = expressionWithoutStructs(P);
+    }
+    consume0(P, tokRParen);
+
+    return makeAstNode(
+        P->memPool,
+        &tok.fileLoc,
+        &(AstNode){.tag = astRangeExpr,
+                   .rangeExpr = {.start = start, .end = end, .step = step}});
+}
+
 static AstNode *closure(Parser *P)
 {
     AstNode *ret = NULL, *body = NULL;
@@ -821,6 +855,10 @@ static AstNode *primary(Parser *P, bool allowStructs)
             return structExpr(P, path, fieldExpr);
         return path;
     }
+    case tokLess:
+        return implicitCast(P);
+    case tokRange:
+        return range(P);
     case tokAsync:
         return closure(P);
     default:
@@ -1299,37 +1337,61 @@ static AstNode *statement(Parser *P)
 
 static AstNode *parseType(Parser *P)
 {
+    AstNode *type;
     Token tok = *current(P);
     if (isPrimitiveType(tok.tag)) {
-        return primitive(P);
+        type = primitive(P);
     }
     else {
         switch (tok.tag) {
         case tokIdent:
-            return parsePath(P);
+            type = parsePath(P);
+            type->path.isType = true;
+            break;
         case tokLParen:
-            return parseTupleType(P);
+            type = parseTupleType(P);
+            break;
         case tokLBracket:
-            return parseArrayType(P);
+            type = parseArrayType(P);
+            break;
         case tokAsync:
         case tokFunc:
-            return parseFuncType(P);
+            type = parseFuncType(P);
+            break;
         case tokBAnd:
-            return parsePointerType(P);
+            type = parsePointerType(P);
+            break;
         case tokVoid:
             advance(P);
-            return makeAstNode(
+            type = makeAstNode(
                 P->memPool, &tok.fileLoc, &(AstNode){.tag = astVoidType});
+            break;
         case tokString:
             advance(P);
-            return makeAstNode(
+            type = makeAstNode(
                 P->memPool, &tok.fileLoc, &(AstNode){.tag = astStringType});
+            break;
+        case tokCChar:
+            advance(P);
+            type = makeAstNode(
+                P->memPool,
+                &tok.fileLoc,
+                &(AstNode){.tag = astIdentifier, .ident.value = "char"});
+            break;
         default:
             reportUnexpectedToken(P, "a type");
-            break;
+            unreachable("");
         }
     }
-    unreachable("");
+
+    if (match(P, tokQuestion)) {
+        type = makeAstNode(
+            P->memPool,
+            &tok.fileLoc,
+            &(AstNode){.tag = astOptionalType, .optionalType.type = type});
+    }
+
+    return type;
 }
 
 static AstNode *parseStructField(Parser *P, bool isPrivate)
@@ -1478,7 +1540,7 @@ static AstNode *aliasDecl(Parser *P, bool isPublic, bool isNative)
         alias = members.first;
     }
     else {
-        consume0(P, tokComma);
+        consume0(P, tokSemicolon);
     }
     if (alias && alias->next) {
         return newAstNode(

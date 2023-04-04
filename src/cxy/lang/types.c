@@ -49,6 +49,16 @@ bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from)
     to = resolveType(table, to);
     from = resolveType(table, from);
 
+    if (to->tag == typPointer && from->tag == typPointer) {
+        return isTypeAssignableFrom(
+            table, to->pointer.pointed, from->pointer.pointed);
+    }
+
+    if (to->tag == typOptional && from->tag == typOptional) {
+        return isTypeAssignableFrom(
+            table, to->optional.target, from->optional.target);
+    }
+
     if (to->tag == from->tag) {
         if (to->tag != typPrimitive)
             return true;
@@ -76,7 +86,15 @@ bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from)
         default:
             return to->primitive.id == from->primitive.id;
         }
-
+    case typPointer:
+        // TODO arity check
+        if (from->tag == typArray)
+            return isTypeAssignableFrom(
+                table, to->pointer.pointed, from->array.elementType);
+        return false;
+    case typOptional:
+        return from->tag == typNull ||
+               isTypeAssignableFrom(table, to->optional.target, from);
     default:
         return false;
     }
@@ -227,14 +245,9 @@ void printType(FormatState *state, const Type *type)
         format(state, "[", NULL);
         printType(state, type->array.elementType);
         for (u64 i = 0; i < type->array.arity; i++) {
-            if (i == 0)
-                format(state,
-                       "{u64}",
-                       (FormatArg[]){{.u64 = type->array.indexes[i]}});
-            else
-                format(state,
-                       ", {u64}",
-                       (FormatArg[]){{.u64 = type->array.indexes[i]}});
+            format(state,
+                   ", {u64}",
+                   (FormatArg[]){{.u64 = type->array.indexes[i]}});
         }
         format(state, "]", NULL);
         break;
@@ -247,6 +260,7 @@ void printType(FormatState *state, const Type *type)
         break;
     case typAlias:
     case typUnion:
+    case typOpaque:
         printKeyword(state, "type");
         format(state, " {s}", (FormatArg[]){{.s = type->name}});
         break;

@@ -33,7 +33,7 @@ const Type *nullType;
 const Type *errorType;
 const Type *primitiveTypes[prtCOUNT];
 
-static HashCode hasTypes(HashCode hash, const Type **types, u64 count)
+static HashCode hashTypes(HashCode hash, const Type **types, u64 count)
 {
     for (u64 i = 0; i < count; i++)
         hash = hashUint64(hash, types[i]->tag);
@@ -71,12 +71,18 @@ static HashCode hashType(HashCode hash, const Type *type)
     case typAlias:
         hash = hashType(hash, type->alias.aliased);
         break;
+    case typOpaque:
+        hash = hashStr(hash, type->name);
+        break;
+    case typOptional:
+        hash = hashType(hash, type->optional.target);
+        break;
     case typUnion:
     case typTuple:
-        hash = hasTypes(hash, type->tuple.members, type->tuple.count);
+        hash = hashTypes(hash, type->tuple.members, type->tuple.count);
         break;
     case typFunc:
-        hash = hasTypes(hash, type->func.params, type->func.paramsCount);
+        hash = hashTypes(hash, type->func.params, type->func.paramsCount);
         hash = hashType(hash, type->func.retType);
         break;
     default:
@@ -126,6 +132,10 @@ static bool compareTypes(const Type *left, const Type *right)
                compareTypes(left->map.value, right->map.value);
     case typAlias:
         return compareTypes(left->alias.aliased, right->alias.aliased);
+    case typOptional:
+        return compareTypes(left->optional.target, right->optional.target);
+    case typOpaque:
+        return strcmp(left->name, right->name) == 0;
     case typTuple:
     case typUnion:
         return (left->tUnion.count == right->tUnion.count) &&
@@ -300,6 +310,16 @@ const Type *makePointerType(TypeTable *table, const Type *pointed, u64 flags)
     return getOrInsertType(table, &type).s;
 }
 
+const Type *makeOptionalType(TypeTable *table, const Type *target, u64 flags)
+{
+    Type type = make(Type,
+                     .tag = typOptional,
+                     .flags = flags,
+                     .optional = {.target = target});
+
+    return getOrInsertType(table, &type).s;
+}
+
 const Type *makeMapType(TypeTable *table, const Type *key, const Type *value)
 {
     Type type = make(Type, .tag = typMap, .map = {.key = key, .value = value});
@@ -311,6 +331,13 @@ const Type *makeAliasType(TypeTable *table, const Type *aliased, cstring name)
 {
     Type type = make(
         Type, .tag = typAlias, .name = name, .alias = {.aliased = aliased});
+
+    return getOrInsertType(table, &type).s;
+}
+
+const Type *makeOpaqueType(TypeTable *table, cstring name)
+{
+    Type type = make(Type, .tag = typOpaque, .name = name);
 
     return getOrInsertType(table, &type).s;
 }

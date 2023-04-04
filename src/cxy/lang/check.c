@@ -83,16 +83,19 @@ static void addBuiltinVariable(CheckerContext *ctx,
                                         .type = type}));
 }
 
-static void addBuiltinType(CheckerContext *ctx, cstring name, const Type *type)
+static void addBuiltinType(CheckerContext *ctx,
+                           cstring name,
+                           u64 flags,
+                           const Type *type)
 {
-    defineSymbol(
-        &ctx->env,
-        ctx->L,
-        name,
-        makeAstNode(
-            ctx->pool,
-            builtinLoc(),
-            &(AstNode){.tag = astTypeDecl, .flags = flgBuiltin, .type = type}));
+    defineSymbol(&ctx->env,
+                 ctx->L,
+                 name,
+                 makeAstNode(ctx->pool,
+                             builtinLoc(),
+                             &(AstNode){.tag = astTypeDecl,
+                                        .flags = flgBuiltin | flags,
+                                        .type = type}));
 }
 
 static void initBuiltins(CheckerContext *ctx)
@@ -101,6 +104,16 @@ static void initBuiltins(CheckerContext *ctx)
         const Type *params[] = {makePrimitiveType(ctx->typeTable, prtChar)};
         addBuiltinFunc(
             ctx, "wputc", makePrimitiveType(ctx->typeTable, prtI32), params, 1);
+    }
+
+    {
+        addBuiltinType(
+            ctx, "char", flgNative, makeOpaqueType(ctx->typeTable, "char"));
+
+        addBuiltinType(ctx,
+                       "__cxy_range_t",
+                       flgNative,
+                       makeOpaqueType(ctx->typeTable, "__cxy_range_t"));
     }
 }
 
@@ -386,11 +399,11 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
     free((void *)params);
 }
 
-static void checkTypedExpr(AstVisitor *visitor, AstNode *node)
+static void checkCastExpr(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
-    const Type *expr = evalType(visitor, node->typedExpr.expr);
-    const Type *target = evalType(visitor, node->typedExpr.type);
+    const Type *expr = evalType(visitor, node->castExpr.expr);
+    const Type *target = evalType(visitor, node->castExpr.to);
     if (!isTypeCastAssignable(ctx->typeTable, target, expr)) {
         logError(ctx->L,
                  &node->loc,
@@ -398,6 +411,45 @@ static void checkTypedExpr(AstVisitor *visitor, AstNode *node)
                  (FormatArg[]){{.t = expr}, {.t = target}});
     }
     node->type = target;
+}
+
+static void checkRangeExpr(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    const Type *i64Type = makePrimitiveType(ctx->typeTable, prtI64);
+
+    const Type *start = evalType(visitor, node->rangeExpr.start);
+    const Type *end = evalType(visitor, node->rangeExpr.end);
+
+    if (!isTypeAssignableFrom(ctx->typeTable, i64Type, start)) {
+        logError(ctx->L,
+                 &node->rangeExpr.start->loc,
+                 "expecting integer type for range start expression, got '{t}'",
+                 (FormatArg[]){{.t = start}});
+        start = sError;
+    }
+
+    if (!isTypeAssignableFrom(ctx->typeTable, i64Type, end)) {
+        logError(ctx->L,
+                 &node->rangeExpr.start->loc,
+                 "expecting integer type for range end expression, got '{t}'",
+                 (FormatArg[]){{.t = end}});
+        start = sError;
+    }
+
+    if (node->rangeExpr.step) {
+        const Type *step = evalType(visitor, node->rangeExpr.step);
+        if (!isTypeAssignableFrom(ctx->typeTable, i64Type, end)) {
+            logError(
+                ctx->L,
+                &node->rangeExpr.start->loc,
+                "expecting integer type for range step expression, got '{t}'",
+                (FormatArg[]){{.t = step}});
+            start = sError;
+        }
+    }
+
+    node->type = makeOpaqueType(ctx->typeTable, "__cxy_range_t");
 }
 
 static void checkTernaryExpr(AstVisitor *visitor, AstNode *node)
@@ -541,7 +593,7 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
         optComparison,
         optEquality,
         optRange,
-    } opType = optInvalid;
+    } opKind = optInvalid;
 
     Operator op = node->binaryExpr.op;
     const Type *type = promoteType(ctx->typeTable, left, right);
@@ -551,23 +603,23 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
         // Numeric arithmetic
 #define f(O, ...) case op##O:
         AST_ARITH_EXPR_LIST(f)
-        opType = optNumeric;
+        opKind = optNumeric;
         break;
 
         AST_BIT_EXPR_LIST(f)
         AST_SHIFT_EXPR_LIST(f)
-        opType = optInteger;
+        opKind = optInteger;
         break;
 
         AST_LOGIC_EXPR_LIST(f)
-        opType = optLogical;
+        opKind = optLogical;
         break;
 
         AST_CMP_EXPR_LIST(f)
-        opType = (op == opEq || op == opNe) ? optEquality : optComparison;
+        opKind = (op == opEq || op == opNe) ? optEquality : optComparison;
         break;
     case opRange:
-        opType = optRange;
+        opKind = optRange;
         break;
     default:
         unreachable("");
@@ -583,7 +635,7 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    switch (opType) {
+    switch (opKind) {
     case optNumeric:
         if (!isNumericType(ctx->typeTable, type)) {
             logError(ctx->L,
@@ -640,21 +692,40 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
                      "type '{t}'",
                      (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
             return;
-            return;
         }
         node->type = makePrimitiveType(ctx->typeTable, prtBool);
         break;
-    case optRange:
-        if (!isIntegerType(ctx->typeTable, type)) {
-            logError(ctx->L,
-                     &node->loc,
-                     "cannot perform range binary operation '{s}' on "
-                     "type '{t}'",
-                     (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
+    case optRange: {
+        if (!isIntegerType(ctx->typeTable, left)) {
+            logError(
+                ctx->L,
+                &node->loc,
+                "expecting an integral type for range expression start, got "
+                "type '{t}'",
+                (FormatArg[]){{.t = left}});
             return;
         }
-        node->type = makeRangeType(ctx->typeTable);
+        if (isIntegerType(ctx->typeTable, right)) {
+            logError(ctx->L,
+                     &node->loc,
+                     "expecting an integral type for range expression end, got "
+                     "type '{t}'",
+                     (FormatArg[]){{.t = left}});
+        }
+        AstNode binary = *node;
+        memset(&node->binaryExpr, 0, sizeof(node->binaryExpr));
+        node->tag = astRangeExpr;
+        node->rangeExpr.start = binary.binaryExpr.lhs;
+        node->rangeExpr.end = binary.binaryExpr.rhs;
+        node->rangeExpr.step = makeAstNode(
+            ctx->pool,
+            &binary.binaryExpr.lhs->loc,
+            &(AstNode){.tag = astIntegerLit,
+                       .type = makePrimitiveType(ctx->typeTable, prtI64),
+                       .intLiteral.value = 1});
+        node->type = makeOpaqueType(ctx->typeTable, "__cxy_range_t");
         break;
+    }
     default:
         unreachable("");
     }
@@ -982,8 +1053,13 @@ static void checkReturn(AstVisitor *visitor, AstNode *node)
     node->type = node->returnStmt.expr
                      ? evalType(visitor, node->returnStmt.expr)
                      : makeVoidType(ctx->typeTable);
-    const Type *ret =
-        func && func->funcDecl.ret ? func->funcDecl.ret->type : NULL;
+    const Type *ret = NULL;
+    if (func) {
+        if (func->tag == astFuncDecl && func->funcDecl.ret)
+            ret = func->funcDecl.ret->type;
+        else if (func->tag == astClosureExpr && func->closureExpr.ret)
+            ret = func->closureExpr.ret->type;
+    }
 
     if (ret && !isTypeAssignableFrom(ctx->typeTable, ret, node->type)) {
         logError(ctx->L,
@@ -1100,8 +1176,14 @@ static void checkArrayType(AstVisitor *visitor, AstNode *node)
     CheckerContext *ctx = getAstVisitorContext(visitor);
     const Type *element = evalType(visitor, node->arrayType.elementType);
     u64 count = countAstNodes(node->arrayType.dims);
-    const u64 *indexes = mallocOrDie(sizeof(u64) * count);
+    u64 *indexes = mallocOrDie(sizeof(u64) * count);
     // TODO evaluate indexes
+    u64 i = 0;
+    for (AstNode *dim = node->arrayType.dims; dim; dim = dim->next) {
+        evalType(visitor, dim);
+        csAssert0(dim->tag == astIntegerLit);
+        indexes[i++] = dim->intLiteral.value;
+    }
     node->type = makeArrayType(ctx->typeTable, element, indexes, count);
 
     free((void *)indexes);
@@ -1111,8 +1193,13 @@ static void checkTypeDecl(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     defineSymbol(&ctx->env, ctx->L, node->typeDecl.name, node);
-    const Type *ref = evalType(visitor, node->typeDecl.aliased);
-    node->type = makeAliasType(ctx->typeTable, ref, node->typeDecl.name);
+    if (node->typeDecl.aliased) {
+        const Type *ref = evalType(visitor, node->typeDecl.aliased);
+        node->type = makeAliasType(ctx->typeTable, ref, node->typeDecl.name);
+    }
+    else {
+        node->type = makeOpaqueType(ctx->typeTable, node->typeDecl.name);
+    }
 }
 
 static void checkUnionDecl(AstVisitor *visitor, AstNode *node)
@@ -1191,6 +1278,13 @@ static void checkBuiltinType(AstVisitor *visitor, AstNode *node)
                                           : makeStringType(ctx->typeTable);
 }
 
+static void checkOptionalType(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    const Type *type = evalType(visitor, node->optionalType.type);
+    node->type = makeOptionalType(ctx->typeTable, type, flgNone);
+}
+
 void semanticsCheck(AstNode *program,
                     Log *L,
                     MemPool *pool,
@@ -1231,7 +1325,8 @@ void semanticsCheck(AstNode *program,
         [astGroupExpr] = checkGroupExpr,
         [astCallExpr] = checkCall,
         [astClosureExpr] = checkClosure,
-        [astTypedExpr] = checkTypedExpr,
+        [astCastExpr] = checkCastExpr,
+        [astRangeExpr] = checkRangeExpr,
         [astTernaryExpr] = checkTernaryExpr,
         [astBlockStmt] = checkBlock,
         [astReturnStmt] = checkReturn,
@@ -1249,6 +1344,7 @@ void semanticsCheck(AstNode *program,
         [astFuncType] = checkFuncType,
         [astVoidType] = checkBuiltinType,
         [astStringType] = checkBuiltinType,
+        [astOptionalType] = checkOptionalType,
     },
     .fallback = checkFallback);
     // clang-format off

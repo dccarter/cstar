@@ -122,15 +122,20 @@ static void generateFunc(ConstAstVisitor *visitor, const AstNode *node)
 static void generateTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     CCodegenContext *ctx = getConstAstVisitorContext(visitor);
-    generateTypeUsage(ctx, node->type);
+    if (!(node->flags & flgNative))
+        generateTypeUsage(ctx, node->type);
 }
 
 static void generateVariable(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
 
-    if (node->flags == flgConst)
+    if (node->flags & flgNative)
+        format(ctx->state, "extern ", NULL);
+
+    if (node->flags & flgConst)
         format(ctx->state, "const ", NULL);
+
     generateTypeUsage((CCodegenContext *)ctx, node->type);
 
     format(ctx->state, " ", NULL);

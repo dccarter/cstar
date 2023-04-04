@@ -98,6 +98,8 @@
     f(Macro, "macro")               \
     f(Void, "void")                 \
     f(String, "string")             \
+    f(CChar,  "char")               \
+    f(Range,  "range")              \
     PRIM_TYPE_LIST(f)
 
 #define SPECIAL_TOKEN_LIST(f)                   \

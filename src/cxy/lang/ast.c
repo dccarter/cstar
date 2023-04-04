@@ -236,6 +236,29 @@ static void printIndexExpr(ConstAstVisitor *visitor, const AstNode *node)
     printManyAstsWithDelim(visitor, ".[", ", ", "]", node->indexExpr.indices);
 }
 
+static void printRangeExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
+    format(context->state, "range(", NULL);
+    astConstVisit(visitor, node->rangeExpr.start);
+    format(context->state, ", ", NULL);
+    astConstVisit(visitor, node->rangeExpr.end);
+    if (node->rangeExpr.step) {
+        format(context->state, ", ", NULL);
+        astConstVisit(visitor, node->rangeExpr.step);
+    }
+    format(context->state, ")", NULL);
+}
+
+static void printCastExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
+    format(context->state, "<", NULL);
+    astConstVisit(visitor, node->castExpr.to);
+    format(context->state, ">", NULL);
+    astConstVisit(visitor, node->castExpr.expr);
+}
+
 static void printFieldExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
@@ -325,6 +348,13 @@ static void printPrimitiveType(ConstAstVisitor *visitor, const AstNode *node)
 static void printTupleType(ConstAstVisitor *visitor, const AstNode *node)
 {
     printManyAstsWithDelim(visitor, "(", ", ", ")", node->tupleType.args);
+}
+
+static void printOptionalType(ConstAstVisitor *visitor, const AstNode *node)
+{
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
+    astConstVisit(visitor, node->optionalType.type);
+    format(context->state, "?", NULL);
 }
 
 static void printArrayType(ConstAstVisitor *visitor, const AstNode *node)
@@ -824,7 +854,6 @@ void printAst(FormatState *state, const AstNode *node)
     ConstAstVisitor visitor = makeConstAstVisitor(&context, {
         [astError] = printError,
         [astProgram] = printProgram,
-        [astImplicitCast] = printError,
         [astAttr] = printAttribute,
         [astPathElem] = printPathElement,
         [astPath] = printPath,
@@ -864,7 +893,10 @@ void printAst(FormatState *state, const AstNode *node)
         [astClosureExpr] = printClosureExpr,
         [astArrayExpr] = printArrayExpr,
         [astIndexExpr] = printIndexExpr,
+        [astRangeExpr] = printRangeExpr,
+        [astCastExpr] = printCastExpr,
         [astTupleExpr] = printTupleType,
+        [astOptionalType] = printOptionalType,
         [astFieldExpr] = printFieldExpr,
         [astStructExpr] = printStructExpr,
         [astMemberExpr] = printMemberExpr,
@@ -996,8 +1028,8 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
     case astProgram:
         CLONE_MANY(program, decls);
         break;
-    case astImplicitCast:
-        CLONE_ONE(implicitCast, expr);
+    case astCastExpr:
+        CLONE_ONE(castExpr, expr);
         break;
     case astPathElem:
         CLONE_ONE(pathElement, args);

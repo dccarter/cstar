@@ -61,10 +61,12 @@ typedef enum {
     typPrimitive,
     typString,
     typPointer,
+    typOptional,
     typArray,
     typMap,
     typAlias,
     typUnion,
+    typOpaque,
     typTuple,
     typFunc,
     typEnum,
@@ -114,6 +116,10 @@ typedef struct Type {
     struct {
         const Type *aliased;
     } alias;
+
+    struct {
+        const Type *target;
+    } optional;
 
     struct {
         u64 count;

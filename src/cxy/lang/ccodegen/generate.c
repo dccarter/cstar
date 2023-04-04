@@ -76,6 +76,7 @@ void generateTypeUsage(CCodegenContext *ctx, const Type *type)
         format(state, "*", NULL);
         break;
 
+    case typOpaque:
     case typArray:
     case typTuple:
     case typStruct:

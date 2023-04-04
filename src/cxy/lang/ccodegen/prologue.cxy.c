@@ -198,17 +198,6 @@ static inline u64 fwputc(wchar c, FILE *io)
     return fwrite(s.str, 1, s.str[5], io);
 }
 
-typedef struct __cxy_range_t {
-    i64 start, end, step, curr;
-} __cxy_range_t;
-
-inline void __cxy_range_init(
-    __cxy_range_t *this, i64 start, i64 end, i64 step, i64 curr)
-{
-    this->start = start;
-    this->end = end;
-}
-
 static inline int wputc(wchar c)
 {
     __cxy_stack_str_8_t s = __cxy_wchar_str(c);
@@ -357,4 +346,29 @@ char *__cxy_string_builder_release(__cxy_string_builder_t *sb)
     sb->data = NULL;
     __cxy_string_builder_deinit(sb);
     return data;
+}
+
+typedef const i64 *(*__cxy_range_next_t)();
+
+typedef struct __cxy_range_t {
+    i64 start;
+    i64 end;
+    i64 step;
+    i64 ite;
+    const __cxy_range_next_t next;
+} __cxy_range_t;
+
+inline const i64 *__cxy_range_next(__cxy_range_t *range)
+{
+    if (range->start < range->end) {
+        range->ite = range->start;
+        range->start += range->step;
+        return &range->ite;
+    }
+    return NULL;
+}
+
+attr(always_inline) __cxy_range_t range(i64 start, i64 end, i64 step)
+{
+    return (__cxy_range_t){.start = start, .end = end, .step = step};
 }
