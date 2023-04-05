@@ -136,7 +136,7 @@ static void generateVariable(ConstAstVisitor *visitor, const AstNode *node)
     if (node->flags & flgConst)
         format(ctx->state, "const ", NULL);
 
-    //if (node->varDecl.init == NULL || node->varDecl.)
+    // if (node->varDecl.init == NULL || node->varDecl.)
     generateTypeUsage((CCodegenContext *)ctx, node->type);
 
     format(ctx->state, " ", NULL);
@@ -361,6 +361,15 @@ static void generateTernaryExpr(ConstAstVisitor *visitor, const AstNode *node)
     astConstVisit(visitor, node->ternaryExpr.otherwise);
 }
 
+static void generateIndexExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    astConstVisit(visitor, node->indexExpr.target);
+    format(ctx->state, "[", NULL);
+    astConstVisit(visitor, node->indexExpr.index);
+    format(ctx->state, "]", NULL);
+}
+
 static void generateBlock(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -498,9 +507,13 @@ static void generateForStmt(ConstAstVisitor *visitor, const AstNode *node)
             format(ctx->state, "++", NULL);
     }
     else if (range->type->tag == typArray) {
+        bool isConst = (var->flags & flgConst) || (range->flags & flgConst);
         cstring name = makeAnonymousVariable(cctx->strPool, "cyx_for");
         // create an array
         format(ctx->state, "{{{>}\n", NULL);
+        if (isConst)
+            format(ctx->state, "const ", NULL);
+
         if (range->tag == astArrayExpr)
             generateTypeUsage(cctx, range->type);
         else
@@ -519,10 +532,12 @@ static void generateForStmt(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, "u64 __i_{s} = 0;\n", (FormatArg[]){{.s = name}});
 
         // Create actual loop variable
-        generateTypeUsage(cctx, range->type->array.elementType);
+        if (isConst)
+            format(ctx->state, "const ", NULL);
+        generateTypeUsage(cctx, var->type);
         format(ctx->state, " ", NULL);
         astConstVisit(visitor, var->varDecl.names);
-        format(ctx->state, " = __arr_{s}[0];\n", (FormatArg[]){{.s = name}});
+        format(ctx->state, " = &__arr_{s}[0];\n", (FormatArg[]){{.s = name}});
 
         format(ctx->state,
                "for (; __i_{s} < {u64}; __i_{s}++, ",
@@ -530,7 +545,7 @@ static void generateForStmt(ConstAstVisitor *visitor, const AstNode *node)
                    {.s = name}, {.u64 = range->type->array.size}, {.s = name}});
         astConstVisit(visitor, var->varDecl.names);
         format(ctx->state,
-               " = __arr_{s}[__i_{s}]",
+               " = &__arr_{s}[__i_{s}]",
                (FormatArg[]){{.s = name}, {.s = name}});
     }
     else {
@@ -573,6 +588,7 @@ void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
         [astGroupExpr] = generateGroupExpr,
         [astTypedExpr] = generateTypedExpr,
         [astTernaryExpr] = generateTernaryExpr,
+        [astIndexExpr] = generateIndexExpr,
         [astBlockStmt] = generateBlock,
         [astExprStmt] = generateExpressionStmt,
         [astReturnStmt] = generateReturn,

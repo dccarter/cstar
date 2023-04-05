@@ -12,9 +12,12 @@ pub native func fgets(data: &char, size: i32, stream: &FILE) : &char;
 
 pub func println(str: string) => puts(str)
 
-func main(args: [string]) {
-    const a = [("Megan", 29), ("Carter", 34)];
-    for (const user : a) {
-        println(f"{name: ${user.0}, age: ${user.1}}")
+pub func each(s: i32, e: i32, body: func(v: i32) -> void) {
+    while (s < e) {
+        body(s)
     }
+}
+
+
+func main(args: [string]) {
 }
