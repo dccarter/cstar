@@ -226,62 +226,6 @@ static void checkFuncParam(AstVisitor *visitor, AstNode *node)
     }
 }
 
-static const Type *transformFuncTypeParam(CheckerContext *ctx, const Type *func)
-{
-    u64 count = func->func.paramsCount + 1;
-    const Type *funcCtx = makeVoidType(ctx->typeTable);
-    const Type **transformedParams = mallocOrDie(sizeof(void *) * count);
-    transformedParams[0] = makePointerType(ctx->typeTable, funcCtx, flgNone);
-    for (u64 i = 1; i < count; i++)
-        transformedParams[i] = &func->func.params[i - 1];
-    // all this now returns a tuple where 0 is the context and 1 is the function
-    func = makeFuncType(ctx->typeTable,
-                        &(Type){.tag = func->tag,
-                                .flags = func->flags,
-                                .func = {.params = transformedParams,
-                                         .paramsCount = count,
-                                         .retType = func->func.retType}});
-
-    return makeTupleType(
-        ctx->typeTable, (const Type *[]){funcCtx, func}, 2, flgFuncTypeParam);
-}
-
-static void transformFuncTypeParamCall(CheckerContext *ctx, AstNode *node)
-{
-    // change hello(a) -> hello.1(hello.0, a)
-    AstNode *callee = node->callExpr.callee;
-    AstNode *args = node->callExpr.args;
-    AstNode orig = *node;
-    memset(&node->callExpr, '0', sizeof(node->callExpr));
-
-    // param(args) -> param.1
-    node->callExpr.callee = makeAstNode(
-        ctx->pool,
-        &callee->loc,
-        &(AstNode){.tag = astMemberExpr,
-                   .flags = orig.flags,
-                   .type = node->type,
-                   .memberExpr = {.target = callee,
-                                  .member = makeAstNode(
-                                      ctx->pool,
-                                      &callee->loc,
-                                      &(AstNode){.tag = astIntegerLit,
-                                                 .intLiteral.value = 1})}});
-
-    const FileLoc *loc = args ? &args->loc : &callee->loc;
-    node->callExpr.args = makeAstNode(
-        ctx->pool,
-        loc,
-        &(AstNode){.tag = astMemberExpr,
-                   .memberExpr = {.target = callee,
-                                  .member = makeAstNode(
-                                      ctx->pool,
-                                      loc,
-                                      &(AstNode){.tag = astIntegerLit,
-                                                 .intLiteral.value = 0})}});
-    node->callExpr.args->next = args;
-}
-
 static void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
 {
     const Type *ret = NULL, **params, *type = NULL;
@@ -327,10 +271,6 @@ static void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
             continue;
         }
         withDefaultValues = (param->funcParam.def != NULL);
-        if (params[i]->tag == typFunc) {
-            params[i] = transformFuncTypeParam(ctx, params[i]);
-            param->type = params[i];
-        }
     }
 
     ret = makeAutoType(ctx->typeTable);
@@ -407,10 +347,10 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
     const char **names = allocFromMemPool(ctx->pool, sizeof(void *) * index);
     index = getOrderedCapture(
         &node->closureExpr.capture, capturedTypes, names, index);
-    params[0] = makePointerType(
-        ctx->typeTable,
-        makeTupleType(ctx->typeTable, capturedTypes, index, flgNone),
-        flgNone);
+    params[0] =
+        makePointerType(ctx->typeTable,
+                        makeTupleType(ctx->typeTable, capturedTypes, index),
+                        flgNone);
     free((void *)capturedTypes);
     node->type = makeFuncType(ctx->typeTable,
                               &(Type){.tag = typFunc,
@@ -1038,7 +978,7 @@ static void checkTupleExpr(AstVisitor *visitor, AstNode *node)
     }
 
     if (node->type == NULL) {
-        node->type = makeTupleType(ctx->typeTable, args, count, flgNone);
+        node->type = makeTupleType(ctx->typeTable, args, count);
     }
 
     free(args);
@@ -1296,9 +1236,8 @@ static void checkForStmt(AstVisitor *visitor, AstNode *node)
             type = sError;
         }
         else if (type->tag == typAuto) {
-            symbol->type = makePointerType(
-                ctx->typeTable, elementType, node->forStmt.range->flags);
-            node->forStmt.var->type = symbol->type;
+            symbol->type = elementType;
+            node->forStmt.var->type = elementType;
         }
     }
     else if (range->tag == typFunc) {
@@ -1391,7 +1330,7 @@ static void checkTupleType(AstVisitor *visitor, AstNode *node)
     }
 
     if (node->type == NULL)
-        node->type = makeTupleType(ctx->typeTable, args, count, flgNone);
+        node->type = makeTupleType(ctx->typeTable, args, count);
 
     free(args);
 }

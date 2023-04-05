@@ -177,7 +177,6 @@ enum {
     flgCapture = BIT(11),
     flgClosure = BIT(12),
     flgCapturePointer = BIT(13),
-    flgFuncTypeParam = BIT(14),
 };
 
 typedef struct AstNode AstNode;

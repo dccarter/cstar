@@ -33,10 +33,7 @@ const Type *makeMapType(TypeTable *table, const Type *key, const Type *value);
 const Type *makeAliasType(TypeTable *table, const Type *aliased, cstring name);
 const Type *makeOpaqueType(TypeTable *table, cstring name);
 const Type *makeUnionType(TypeTable *table, const Type **members, u64 count);
-const Type *makeTupleType(TypeTable *table,
-                          const Type **members,
-                          u64 count,
-                          u64 flags);
+const Type *makeTupleType(TypeTable *table, const Type **members, u64 count);
 const Type *makeFuncType(TypeTable *table, const Type *init);
 const Type *makeStruct(TypeTable *table, const Type *init);
 const Type *makeEnum(TypeTable *table, const Type *init);

@@ -260,8 +260,7 @@ const Type *arrayToPointer(TypeTable *table, const Type *type)
     if (type->tag != typArray)
         return type;
 
-    return makePointerType(
-        table, arrayToPointer(table, type->array.elementType), type->flags);
+    return makePointerType(table, arrayToPointer(table, type->array.elementType), type->flags);
 }
 
 const Type *makeErrorType(TypeTable *table) { return table->errorType; }
@@ -345,15 +344,10 @@ const Type *makeUnionType(TypeTable *table, const Type **members, u64 count)
     return ret.s;
 }
 
-const Type *makeTupleType(TypeTable *table,
-                          const Type **members,
-                          u64 count,
-                          u64 flags)
+const Type *makeTupleType(TypeTable *table, const Type **members, u64 count)
 {
-    Type type = make(Type,
-                     .tag = typTuple,
-                     .flags = flags,
-                     .tuple = {.members = members, .count = count});
+    Type type = make(
+        Type, .tag = typTuple, .tuple = {.members = members, .count = count});
 
     GetOrInset ret = getOrInsertType(table, &type);
     if (!ret.f) {
@@ -380,7 +374,7 @@ const Type *makeRangeType(TypeTable *table)
                              makePrimitiveType(table, prtI64),
                              makePrimitiveType(table, prtI64),
                              makePrimitiveType(table, prtI64)};
-    return makeTupleType(table, members, 4, flgNone);
+    return makeTupleType(table, members, 4);
 }
 
 u64 getTypesCount(TypeTable *table) { return table->typeCount; }
