@@ -13,19 +13,8 @@ pub native func fgets(data: &char, size: i32, stream: &FILE) : &char;
 pub func println(str: string) => puts(str)
 
 func main(args: [string]) {
-    const a = [[10, 20], [20, 30]];
-    const b = a[0];
-    var c: [i32, 2];
-    c = [10, 10]
-    for (const num : [10, 20, 30, 40]) {
-        println(f"${num}")
-    }
-
-    for (const i : 0..10) {
-        println(f"${i} => ${i * 10}")
-    }
-
-    for (const i : range(0, 20, 2)) {
-        println(f"${i} => ${i * 5}")
+    const a = [("Megan", 29), ("Carter", 34)];
+    for (const user : a) {
+        println(f"{name: ${user.0}, age: ${user.1}}")
     }
 }

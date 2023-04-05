@@ -493,11 +493,20 @@ static void checkVarDecl(AstVisitor *visitor, AstNode *node)
     const Type *value = NULL;
     if (node->varDecl.init) {
         value = evalType(visitor, node->varDecl.init);
-        if (!isTypeAssignableFrom(ctx->typeTable, node->type, value)) {
+        if (value->tag == typArray && node->varDecl.init->tag != astArrayExpr) {
+            logError(ctx->L,
+                     &node->varDecl.init->loc,
+                     "initializer for array declaration can only be an array "
+                     "expression",
+                     NULL);
+            node->type = sError;
+        }
+        else if (!isTypeAssignableFrom(ctx->typeTable, node->type, value)) {
             logError(ctx->L,
                      &node->varDecl.init->loc,
                      "incompatible types, expecting type '{t}', got '{t}'",
                      (FormatArg[]){{.t = node->type}, {.t = value}});
+            node->type = sError;
         }
         else {
             node->type = value;
@@ -803,7 +812,10 @@ static void checkAssign(AstVisitor *visitor, AstNode *node)
     AstNode *left = node->assignExpr.lhs, *right = node->assignExpr.rhs;
     const Type *lhs = evalType(visitor, left);
     const Type *rhs = evalType(visitor, right);
+    bool isLeftAuto = lhs == makeAutoType(ctx->typeTable);
 
+    // TODO check r-value-ness
+    node->type = sError;
     if (left->flags & flgConst) {
         logError(ctx->L,
                  &node->loc,
@@ -811,23 +823,34 @@ static void checkAssign(AstVisitor *visitor, AstNode *node)
                  (FormatArg[]){{.t = lhs}});
         node->type = sError;
     }
-    // TODO check r-value-ness
-    if (!isTypeAssignableFrom(ctx->typeTable, lhs, rhs)) {
+    else if (rhs->tag == typArray) {
+        if (isLeftAuto)
+            logError(ctx->L,
+                     &node->loc,
+                     "array assignment not allowed, assignment should be done "
+                     "at initialisation",
+                     NULL);
+        else
+            logError(
+                ctx->L, &node->loc, "assign to an array is not allowed", NULL);
+    }
+    else if (!isTypeAssignableFrom(ctx->typeTable, lhs, rhs)) {
         logError(ctx->L,
                  &node->assignExpr.rhs->loc,
                  "incompatible types on assigment expression, expecting '{t}', "
                  "got '{t}'",
                  (FormatArg[]){{.t = lhs}, {.t = rhs}});
-        node->type = sError;
     }
+    if (node->type == sError)
+        return;
 
-    if (lhs == makeAutoType(ctx->typeTable)) {
+    if (isLeftAuto) {
         csAssert0(left->tag == astPath);
         const char *variable = left->path.elements->pathElement.name;
         AstNode *symbol = findSymbol(&ctx->env, ctx->L, variable, &left->loc);
         csAssert0(symbol);
         symbol->type = rhs;
-        node->type = rhs;
+        node->type = symbol->type;
     }
     else {
         node->type = lhs;
