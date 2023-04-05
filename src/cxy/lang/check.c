@@ -846,28 +846,12 @@ static void checkIndex(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     const Type *target = evalType(visitor, node->indexExpr.target);
-    u64 count = checkMany(visitor, node->indexExpr.indices);
+    astVisit(visitor, node->indexExpr.index);
 
     if (target->tag == typArray) {
-        if (target->array.arity != count) {
-            logError(ctx->L,
-                     &getLastAstNode(node->indexExpr.indices)->loc,
-                     "invalid number of indexes to type '{t}', expecting "
-                     "'{u64}' but got '{u64}'",
-                     (FormatArg[]){{.t = target},
-                                   {.u64 = target->array.arity},
-                                   {.u64 = count}});
-        }
         node->type = target->array.elementType;
     }
     else if (target->tag == typMap) {
-        if (count > 1) {
-            logError(ctx->L,
-                     &node->indexExpr.indices->next->loc,
-                     "invalid indexes passed to map type '{t}', expecting "
-                     "'1' but got '{u64}'",
-                     (FormatArg[]){{.t = target}, {.u64 = count}});
-        }
         node->type = target->map.value;
     }
     else if (target->tag == typStruct || target->tag == typUnion) {
@@ -949,12 +933,11 @@ static void checkArrayExr(AstVisitor *visitor, AstNode *node)
         }
     }
     if (elementType == NULL) {
-        node->type = makeArrayType(
-            ctx->typeTable, makeAutoType(ctx->typeTable), (const u64[]){}, 0);
+        node->type =
+            makeArrayType(ctx->typeTable, makeAutoType(ctx->typeTable), 0);
     }
     else {
-        node->type =
-            makeArrayType(ctx->typeTable, elementType, (const u64[]){count}, 1);
+        node->type = makeArrayType(ctx->typeTable, elementType, count);
     }
 }
 
@@ -1263,18 +1246,16 @@ static void checkArrayType(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     const Type *element = evalType(visitor, node->arrayType.elementType);
-    u64 count = countAstNodes(node->arrayType.dims);
-    u64 *indexes = mallocOrDie(sizeof(u64) * count);
-    // TODO evaluate indexes
-    u64 i = 0;
-    for (AstNode *dim = node->arrayType.dims; dim; dim = dim->next) {
-        evalType(visitor, dim);
-        csAssert0(dim->tag == astIntegerLit);
-        indexes[i++] = dim->intLiteral.value;
-    }
-    node->type = makeArrayType(ctx->typeTable, element, indexes, count);
 
-    free((void *)indexes);
+    u64 size = UINT64_MAX;
+    if (node->arrayType.dim) {
+        // TODO evaluate size
+        evalType(visitor, node->arrayType.dim);
+        csAssert0(node->arrayType.dim->tag == astIntegerLit);
+        size = node->arrayType.dim->intLiteral.value;
+    }
+
+    node->type = makeArrayType(ctx->typeTable, element, size);
 }
 
 static void checkTypeDecl(AstVisitor *visitor, AstNode *node)

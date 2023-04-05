@@ -14,6 +14,9 @@ pub func println(str: string) => puts(str)
 
 func main(args: [string]) {
     const a = [[10, 20], [20, 30]];
+    const b = a[0];
+    var c: [i32, 2];
+    c = [10, 10]
     for (const num : [10, 20, 30, 40]) {
         println(f"${num}")
     }

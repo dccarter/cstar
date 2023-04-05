@@ -17,6 +17,7 @@ void freeTypeTable(TypeTable *table);
 
 const Type *resolveType(TypeTable *table, const Type *type);
 const Type *stripPointer(TypeTable *table, const Type *type);
+const Type *arrayToPointer(TypeTable *table, const Type *type);
 
 const Type *makeErrorType(TypeTable *table);
 const Type *makeAutoType(TypeTable *table);
@@ -26,10 +27,7 @@ const Type *makePrimitiveType(TypeTable *table, PrtId id);
 const Type *makeStringType(TypeTable *table);
 const Type *makePointerType(TypeTable *table, const Type *pointed, u64 flags);
 const Type *makeOptionalType(TypeTable *table, const Type *target, u64 flags);
-const Type *makeArrayType(TypeTable *table,
-                          const Type *elementType,
-                          const u64 *indexes,
-                          u64 indexesCount);
+const Type *makeArrayType(TypeTable *table, const Type *elementType, u64 size);
 
 const Type *makeMapType(TypeTable *table, const Type *key, const Type *value);
 const Type *makeAliasType(TypeTable *table, const Type *aliased, cstring name);

@@ -75,7 +75,7 @@ static inline Token *advance(Parser *parser)
 
 static inline Token *peek(Parser *parser, u32 index)
 {
-    csAssert(index <= 2, "indexes out of bounds");
+    csAssert(index <= 2, "size out of bounds");
     return &parser->ahead[1 + index];
 }
 
@@ -303,18 +303,14 @@ static AstNode *member(Parser *P, const FilePos *begin, AstNode *operand)
 static AstNode *indexExpr(Parser *P, AstNode *operand)
 {
     Token tok = *consume0(P, tokIndexExpr);
-    AstNode *indices = parseAtLeastOne(P,
-                                       "indexes expressions",
-                                       tokRBracket,
-                                       tokComma,
-                                       expressionWithoutStructs);
+    AstNode *index = expressionWithoutStructs(P);
     consume0(P, tokRBracket);
 
     return newAstNode(
         P,
         &tok.fileLoc.begin,
         &(AstNode){.tag = astIndexExpr,
-                   .indexExpr = {.target = operand, .indices = indices}});
+                   .indexExpr = {.target = operand, .index = index}});
 }
 
 static AstNode *postfix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
@@ -588,19 +584,18 @@ static AstNode *parseTupleType(Parser *P)
 
 static AstNode *parseArrayType(Parser *P)
 {
-    AstNode *type = NULL, *dims = NULL;
+    AstNode *type = NULL, *dim = NULL;
     Token tok = *consume0(P, tokLBracket);
     type = parseType(P);
     if (match(P, tokComma)) {
-        dims = parseAtLeastOne(
-            P, "array index", tokRBracket, tokComma, expressionWithoutStructs);
+        dim = expressionWithoutStructs(P);
     }
     consume0(P, tokRBracket);
     return newAstNode(
         P,
         &tok.fileLoc.begin,
         &(AstNode){.tag = astArrayType,
-                   .arrayType = {.elementType = type, .dims = dims}});
+                   .arrayType = {.elementType = type, .dim = dim}});
 }
 
 static AstNode *parseGenericParam(Parser *P)

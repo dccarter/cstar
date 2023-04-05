@@ -240,7 +240,7 @@ struct AstNode {
 
         struct {
             struct AstNode *elementType;
-            struct AstNode *dims;
+            struct AstNode *dim;
         } arrayType;
 
         struct {
@@ -283,7 +283,7 @@ struct AstNode {
 
         struct {
             struct AstNode *target;
-            struct AstNode *indices;
+            struct AstNode *index;
         } indexExpr;
 
         struct {

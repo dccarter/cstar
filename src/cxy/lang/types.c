@@ -244,11 +244,8 @@ void printType(FormatState *state, const Type *type)
     case typArray:
         format(state, "[", NULL);
         printType(state, type->array.elementType);
-        for (u64 i = 0; i < type->array.arity; i++) {
-            format(state,
-                   ", {u64}",
-                   (FormatArg[]){{.u64 = type->array.indexes[i]}});
-        }
+        if (type->array.size != UINT64_MAX)
+            format(state, ", {u64}", (FormatArg[]){{.u64 = type->array.size}});
         format(state, "]", NULL);
         break;
     case typMap:

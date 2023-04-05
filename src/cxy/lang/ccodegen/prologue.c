@@ -47,15 +47,8 @@ static void generateArrayDeclaration(CCodegenContext *context, const Type *type)
     generateTypeUsage(context, type->array.elementType);
     format(state, " ", NULL);
     writeTypename(state, type);
-    if (type->array.arity) {
-        for (u64 i = 0; i < type->array.arity; i++) {
-            if (type->array.indexes[i] == UINT64_MAX)
-                format(state, "[]", NULL);
-            else
-                format(state,
-                       "[{u64}]",
-                       (FormatArg[]){{.u64 = type->array.indexes[i]}});
-        }
+    if (type->array.size != UINT64_MAX) {
+        format(state, "[{u64}]", (FormatArg[]){{.u64 = type->array.size}});
     }
     else
         format(state, "[]", NULL);

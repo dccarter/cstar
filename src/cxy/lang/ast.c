@@ -233,7 +233,7 @@ static void printIndexExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     if (node->indexExpr.target)
         astConstVisit(visitor, node->indexExpr.target);
-    printManyAstsWithDelim(visitor, ".[", ", ", "]", node->indexExpr.indices);
+    printManyAstsWithDelim(visitor, ".[", ", ", "]", node->indexExpr.index);
 }
 
 static void printRangeExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -362,8 +362,8 @@ static void printArrayType(ConstAstVisitor *visitor, const AstNode *node)
     AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state, "[", NULL);
     astConstVisit(visitor, node->arrayType.elementType);
-    if (node->arrayType.dims != NULL)
-        printManyAstsWithDelim(visitor, "", ", ", "", node->arrayType.dims);
+    if (node->arrayType.dim != NULL)
+        printManyAstsWithDelim(visitor, "", ", ", "", node->arrayType.dim);
     format(context->state, "]", NULL);
 }
 
@@ -1045,7 +1045,7 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         break;
     case astArrayType:
         CLONE_ONE(arrayType, elementType);
-        CLONE_MANY(arrayType, dims);
+        CLONE_MANY(arrayType, dim);
         break;
     case astPointerType:
         CLONE_MANY(pointerType, pointed);
@@ -1135,7 +1135,7 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         break;
     case astIndexExpr:
         CLONE_ONE(indexExpr, target);
-        CLONE_MANY(indexExpr, indices);
+        CLONE_MANY(indexExpr, index);
         break;
     case astTupleExpr:
         CLONE_MANY(tupleExpr, args);

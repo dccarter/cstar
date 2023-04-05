@@ -61,8 +61,7 @@ static HashCode hashType(HashCode hash, const Type *type)
         break;
     case typArray:
         hash = hashType(hash, type->array.elementType);
-        for (u64 i = 0; i < type->array.arity; i++)
-            hash = hashUint64(hash, type->array.indexes[i]);
+        hash = hashUint64(hash, type->array.size);
         break;
     case typMap:
         hash = hashType(hash, type->map.key);
@@ -119,14 +118,8 @@ static bool compareTypes(const Type *left, const Type *right)
         return ((left->flags & flgConst) == (right->flags & flgConst)) &&
                compareTypes(left->pointer.pointed, right->pointer.pointed);
     case typArray:
-        if ((left->array.arity == right->array.arity) &&
-            compareTypes(left->array.elementType, right->array.elementType)) {
-            for (u64 i = 0; i < left->array.arity; i++)
-                if (left->array.indexes[i] != right->array.indexes[i])
-                    return false;
-            return true;
-        }
-        return false;
+        return (left->array.size == right->array.size) &&
+               compareTypes(left->array.elementType, right->array.elementType);
     case typMap:
         return compareTypes(left->map.key, right->map.key) &&
                compareTypes(left->map.value, right->map.value);
@@ -262,6 +255,14 @@ const Type *stripPointer(TypeTable *table, const Type *type)
     }
 }
 
+const Type *arrayToPointer(TypeTable *table, const Type *type)
+{
+    if (type->tag != typArray)
+        return type;
+
+    return makePointerType(table, arrayToPointer(table, type->array.elementType), type->flags);
+}
+
 const Type *makeErrorType(TypeTable *table) { return table->errorType; }
 
 const Type *makeAutoType(TypeTable *table) { return table->autoType; }
@@ -280,24 +281,13 @@ const Type *makePrimitiveType(TypeTable *table, PrtId id)
 
 const Type *makeArrayType(TypeTable *table,
                           const Type *elementType,
-                          const u64 *indexes,
-                          u64 indexCount)
+                          const u64 size)
 {
     Type type = make(Type,
                      .tag = typArray,
-                     .array = {.elementType = elementType,
-                               .indexes = indexes,
-                               .arity = indexCount});
+                     .array = {.elementType = elementType, .size = size});
 
-    GetOrInset ret = getOrInsertType(table, &type);
-    if (!ret.f) {
-        ((Type *)ret.s)->array.indexes =
-            allocFromMemPool(table->memPool, indexCount * sizeof(u64));
-        memcpy(
-            ((u64 *)ret.s->array.indexes), indexes, sizeof(u64) * indexCount);
-    }
-
-    return ret.s;
+    return getOrInsertType(table, &type).s;
 }
 
 const Type *makePointerType(TypeTable *table, const Type *pointed, u64 flags)
@@ -331,13 +321,12 @@ const Type *makeAliasType(TypeTable *table, const Type *aliased, cstring name)
 {
     Type type = make(
         Type, .tag = typAlias, .name = name, .alias = {.aliased = aliased});
-
     return getOrInsertType(table, &type).s;
 }
 
 const Type *makeOpaqueType(TypeTable *table, cstring name)
 {
-    Type type = make(Type, .tag = typOpaque, .name = name);
+    Type type = make(Type, .tag = typOpaque, .name = name, .size = 0);
 
     return getOrInsertType(table, &type).s;
 }

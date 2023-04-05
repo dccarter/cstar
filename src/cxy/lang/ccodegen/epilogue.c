@@ -136,6 +136,7 @@ static void generateVariable(ConstAstVisitor *visitor, const AstNode *node)
     if (node->flags & flgConst)
         format(ctx->state, "const ", NULL);
 
+    //if (node->varDecl.init == NULL || node->varDecl.)
     generateTypeUsage((CCodegenContext *)ctx, node->type);
 
     format(ctx->state, " ", NULL);
@@ -525,9 +526,8 @@ static void generateForStmt(ConstAstVisitor *visitor, const AstNode *node)
 
         format(ctx->state,
                "for (; __i_{s} < {u64}; __i_{s}++, ",
-               (FormatArg[]){{.s = name},
-                             {.u64 = range->type->array.indexes[0]},
-                             {.s = name}});
+               (FormatArg[]){
+                   {.s = name}, {.u64 = range->type->array.size}, {.s = name}});
         astConstVisit(visitor, var->varDecl.names);
         format(ctx->state,
                " = __arr_{s}[__i_{s}]",

@@ -103,8 +103,7 @@ typedef struct Type {
     } pointer;
 
     struct {
-        const u64 *indexes;
-        u64 arity;
+        u64 size;
         const Type *elementType;
     } array;
 
