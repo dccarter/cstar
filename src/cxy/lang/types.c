@@ -263,16 +263,7 @@ void printType(FormatState *state, const Type *type)
         break;
     case typTuple:
         format(state, "(", NULL);
-        // printManyTypes(state, type->tuple.members, type->tuple.count, ", ");
-        for (u64 i = 0; i < type->tuple.count; i++) {
-            if (i != 0)
-                format(state, ", ", NULL);
-            const Type *member = type->tuple.members[i];
-            if (member->tag == typThis)
-                printKeyword(state, "This");
-            else
-                printType(state, member);
-        }
+        printManyTypes(state, type->tuple.members, type->tuple.count, ", ");
         format(state, ")", NULL);
         break;
     case typFunc:
@@ -281,12 +272,6 @@ void printType(FormatState *state, const Type *type)
         printManyTypes(state, type->func.params, type->func.paramsCount, ", ");
         format(state, ") -> ", NULL);
         printType(state, type->func.retType);
-        break;
-    case typThis:
-        if (type->this.that)
-            printType(state, type->this.that);
-        else
-            format(state, "<This:unresolved>", NULL);
         break;
     default:
         unreachable("TODO");

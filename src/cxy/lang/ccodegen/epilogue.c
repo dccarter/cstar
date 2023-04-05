@@ -285,50 +285,14 @@ static void generateMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
     }
 }
 
-static void generateClosureCapture(CodegenContext *ctx, const Type *type)
-{
-    CCodegenContext *cctx = (CCodegenContext *)ctx;
-    type = type->tuple.members[1];
-    format(ctx->state, "({{", NULL);
-    generateTypeUsage(cctx, stripPointer(cctx->table, type->func.params[0]));
-    cstring name = makeAnonymousVariable(cctx->strPool, "__cap");
-    format(ctx->state, " {s} = {{", (FormatArg[]){{.s = name}});
-    for (u64 i = 0; i < type->func.capturedNamesCount; i++) {
-        const Type *captureType =
-            stripPointer(cctx->table, type->func.params[0]);
-        if (i != 0)
-            format(ctx->state, ", ", NULL);
-        if (captureType->tuple.members[i]->flags & flgCapturePointer)
-            format(
-                ctx->state,
-                "._{u64} = &{s}",
-                (FormatArg[]){{.u64 = i}, {.s = type->func.captureNames[i]}});
-        else
-            format(
-                ctx->state,
-                "._{u64} = {s}",
-                (FormatArg[]){{.u64 = i}, {.s = type->func.captureNames[i]}});
-    }
-    format(ctx->state, "};)\n", NULL);
-}
-
 static void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     CCodegenContext *cctx = (CCodegenContext *)ctx;
 
-    const AstNode *callee = node->callExpr.callee;
-    const Type *type = callee->type;
+    const Type *type = node->callExpr.callee->type;
 
     const char *name = "";
-
-    if (callee->flags | flgHasClosureParam) {
-        for (const AstNode *arg = node->callExpr.args; arg; arg = arg->next) {
-            if (arg->flags & flgClosureParam)
-                generateClosureCapture(ctx, arg->type);
-        }
-    }
-
     if (type->flags & flgClosure) {
         // we are calling a closure, generate closure data
         format(ctx->state, "({{", NULL);

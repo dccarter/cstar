@@ -229,13 +229,12 @@ static void checkFuncParam(AstVisitor *visitor, AstNode *node)
 static const Type *transformFuncTypeParam(CheckerContext *ctx, const Type *func)
 {
     u64 count = func->func.paramsCount + 1;
-    const Type *funcCtx =
-        makePointerType(ctx->typeTable, makeVoidType(ctx->typeTable), flgNone);
+    const Type *funcCtx = makeVoidType(ctx->typeTable);
     const Type **transformedParams = mallocOrDie(sizeof(void *) * count);
-    transformedParams[0] = funcCtx;
+    transformedParams[0] = makePointerType(ctx->typeTable, funcCtx, flgNone);
     for (u64 i = 1; i < count; i++)
-        transformedParams[i] = func->func.params[i - 1];
-
+        transformedParams[i] = &func->func.params[i - 1];
+    // all this now returns a tuple where 0 is the context and 1 is the function
     func = makeFuncType(ctx->typeTable,
                         &(Type){.tag = func->tag,
                                 .flags = func->flags,
@@ -243,11 +242,8 @@ static const Type *transformFuncTypeParam(CheckerContext *ctx, const Type *func)
                                          .paramsCount = count,
                                          .retType = func->func.retType}});
 
-    return makePointerType(
-        ctx->typeTable,
-        makeTupleType(
-            ctx->typeTable, (const Type *[]){func}, 1, flgFuncTypeParam),
-        flgNone);
+    return makeTupleType(
+        ctx->typeTable, (const Type *[]){funcCtx, func}, 2, flgFuncTypeParam);
 }
 
 static void transformFuncTypeParamCall(CheckerContext *ctx, AstNode *node)
@@ -258,7 +254,7 @@ static void transformFuncTypeParamCall(CheckerContext *ctx, AstNode *node)
     AstNode orig = *node;
     memset(&node->callExpr, '0', sizeof(node->callExpr));
 
-    // param(args) -> param.0
+    // param(args) -> param.1
     node->callExpr.callee = makeAstNode(
         ctx->pool,
         &callee->loc,
@@ -270,11 +266,19 @@ static void transformFuncTypeParamCall(CheckerContext *ctx, AstNode *node)
                                       ctx->pool,
                                       &callee->loc,
                                       &(AstNode){.tag = astIntegerLit,
-                                                 .intLiteral.value = 0})}});
+                                                 .intLiteral.value = 1})}});
 
-    // param.0(param)
     const FileLoc *loc = args ? &args->loc : &callee->loc;
-    node->callExpr.args = cloneAstNode(ctx->pool, callee);
+    node->callExpr.args = makeAstNode(
+        ctx->pool,
+        loc,
+        &(AstNode){.tag = astMemberExpr,
+                   .memberExpr = {.target = callee,
+                                  .member = makeAstNode(
+                                      ctx->pool,
+                                      loc,
+                                      &(AstNode){.tag = astIntegerLit,
+                                                 .intLiteral.value = 0})}});
     node->callExpr.args->next = args;
 }
 
@@ -323,9 +327,7 @@ static void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
             continue;
         }
         withDefaultValues = (param->funcParam.def != NULL);
-
         if (params[i]->tag == typFunc) {
-            // transform function to tuple
             params[i] = transformFuncTypeParam(ctx, params[i]);
             param->type = params[i];
         }
@@ -359,42 +361,6 @@ static void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
 
     free((void *)params);
     popScope(&ctx->env);
-}
-
-static const Type *createForwardFunction(CheckerContext *ctx,
-                                         const AstNode *node)
-{
-    const Type **params = mallocOrDie(node->type->func.paramsCount);
-    params[0] =
-        makePointerType(ctx->typeTable, makeVoidType(ctx->typeTable), flgNone);
-    for (u64 i = 1; i < node->type->func.paramsCount; i++)
-        params[i] = node->type->func.params[i];
-
-    AstNode *func = makeAstNode(
-        ctx->pool,
-        &node->loc,
-        &(AstNode){
-            .tag = astFuncDecl,
-            .flags = node->flags | flgFuncForward,
-            .type = makeFuncType(
-                ctx->typeTable,
-                &(Type){.tag = typFunc,
-                        .func = {.retType = node->type->func.retType,
-                                 .params = params,
-                                 .paramsCount = node->type->func.paramsCount}}),
-            .funcDecl = {.name = node->funcDecl.name,
-                         .ret = node->funcDecl.ret,
-                         .params = makeAstNode(
-                             ctx->pool,
-                             &node->loc,
-                             &(AstNode){.tag = astFuncParam,
-                                        .type = makeVoidType(ctx->typeTable),
-                                        .next = node->funcDecl.params->next,
-                                        .funcParam = {
-                                            .name = "self",
-                                        }})}});
-
-    func->funcDecl.body =
 }
 
 static void checkClosure(AstVisitor *visitor, AstNode *node)
@@ -436,21 +402,16 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
     popScope(&ctx->env);
 
     // We need to create a tuple for the capture
-    u64 index = node->closureExpr.capture.index + 1;
+    u64 index = node->closureExpr.capture.index;
     const Type **capturedTypes = mallocOrDie(sizeof(Type *) * index);
     const char **names = allocFromMemPool(ctx->pool, sizeof(void *) * index);
-    getOrderedCapture(
-        &node->closureExpr.capture, &capturedTypes[1], names, index - 1);
-
-    capturedTypes[0] = makeThisType(ctx->typeTable);
-    const Type *captureType =
-        makeTupleType(ctx->typeTable, capturedTypes, index, flgNone);
-    ((Type *)capturedTypes[0])->this.that = captureType;
-
-    params[0] = makePointerType(ctx->typeTable, captureType, flgNone);
-
+    index = getOrderedCapture(
+        &node->closureExpr.capture, capturedTypes, names, index);
+    params[0] = makePointerType(
+        ctx->typeTable,
+        makeTupleType(ctx->typeTable, capturedTypes, index, flgNone),
+        flgNone);
     free((void *)capturedTypes);
-
     node->type = makeFuncType(ctx->typeTable,
                               &(Type){.tag = typFunc,
                                       .name = NULL,
@@ -478,17 +439,14 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
                                                    .flags = flgCapture,
                                                    .next = closureExpr.params,
                                                    .funcParam = {
-                                                       .name = "self",
+                                                       .name = "__closure",
                                                    }});
 
     copy->funcDecl.body = closureExpr.body;
     copy->funcDecl.name =
         makeAnonymousVariable(ctx->strPool, "__cxy_closure_expr");
-    copy->flags |= flgAlwaysInline;
-    addAnonymousTopLevelDecl(ctx, copy->funcDecl.name, copy);
 
-    // Create forward function for this function
-    node->type = createForwardFunction(ctx, copy);
+    addAnonymousTopLevelDecl(ctx, copy->funcDecl.name, copy);
 
     node->next = NULL;
     node->tag = astPath;
@@ -499,7 +457,6 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
                                .type = node->type,
                                .pathElement = {.name = copy->funcDecl.name}});
 
-    node->flags |= flgFuncForward;
     free((void *)params);
 }
 
@@ -1096,11 +1053,6 @@ static void checkCall(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     const Type *callee = evalType(visitor, node->callExpr.callee);
-    if (callee->flags & flgFuncTypeParam) {
-        transformFuncTypeParamCall(ctx, node);
-        callee = evalType(visitor, node->callExpr.callee);
-    }
-
     AstNode *arg = node->callExpr.args;
 
     if (callee->tag != typFunc) {
@@ -1143,25 +1095,7 @@ static void checkCall(AstVisitor *visitor, AstNode *node)
     }
 
     for (; arg; arg = arg->next, i++) {
-        bool wasClosure = arg->tag == astClosureExpr;
         const Type *type = evalType(visitor, arg);
-        // if this is a closure we re-write the type
-        if (type->tag == typFunc) {
-            type = makeTupleType(
-                ctx->typeTable,
-                (const Type *[]){makePointerType(ctx->typeTable,
-                                                 makeVoidType(ctx->typeTable),
-                                                 flgNone),
-                                 type},
-                2,
-                flgNone);
-            arg->type = type;
-            if (wasClosure) {
-                node->flags |= flgHasClosureParam;
-                arg->flags |= flgClosureParam;
-            }
-        }
-
         if (!isTypeAssignableFrom(
                 ctx->typeTable, callee->func.params[i], type)) {
             logError(ctx->L,

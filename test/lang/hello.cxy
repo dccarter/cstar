@@ -20,5 +20,4 @@ pub func each(s: i32, e: i32, body: func(v: i32) -> void) {
 
 
 func main(args: [string]) {
-    each(0, 10, (i: i32) => { puts(f"${i}") })
 }
