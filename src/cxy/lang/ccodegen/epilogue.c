@@ -257,6 +257,12 @@ static void generateTupleExpr(ConstAstVisitor *visitor, const AstNode *node)
     format(ctx->state, "}", NULL);
 }
 
+static void generateArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    generateManyAstsWithDelim(
+        visitor, "{{", ", ", "}", node->arrayExpr.elements);
+}
+
 static void generateMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -463,6 +469,82 @@ static void generateWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
     }
 }
 
+static void generateForStmt(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    CCodegenContext *cctx = (CCodegenContext *)ctx;
+    const AstNode *var = node->forStmt.var;
+    const AstNode *range = node->forStmt.range;
+
+    if (range->tag == astRangeExpr) {
+        format(ctx->state, "for (", NULL);
+        generateTypeUsage(cctx, var->type);
+        format(ctx->state, " ", NULL);
+        astConstVisit(visitor, var->varDecl.names);
+        format(ctx->state, " = ", NULL);
+        astConstVisit(visitor, range->rangeExpr.start);
+        format(ctx->state, "; ", NULL);
+        astConstVisit(visitor, var->varDecl.names);
+        format(ctx->state, " < ", NULL);
+        astConstVisit(visitor, range->rangeExpr.end);
+        format(ctx->state, "; ", NULL);
+        astConstVisit(visitor, var->varDecl.names);
+        if (range->rangeExpr.step) {
+            format(ctx->state, " += ", NULL);
+            astConstVisit(visitor, range->rangeExpr.step);
+        }
+        else
+            format(ctx->state, "++", NULL);
+    }
+    else if (range->type->tag == typArray) {
+        cstring name = makeAnonymousVariable(cctx->strPool, "cyx_for");
+        // create an array
+        format(ctx->state, "{{{>}\n", NULL);
+        if (range->tag == astArrayExpr)
+            generateTypeUsage(cctx, range->type);
+        else
+            generateTypeUsage(
+                cctx,
+                &(const Type){.tag = typPointer,
+                              .flags = range->type->flags,
+                              .pointer.pointed =
+                                  range->type->array.elementType});
+
+        format(ctx->state, " __arr_{s} = ", (FormatArg[]){{.s = name}});
+        astConstVisit(visitor, range);
+        format(ctx->state, ";\n", NULL);
+
+        // create index variable
+        format(ctx->state, "u64 __i_{s} = 0;\n", (FormatArg[]){{.s = name}});
+
+        // Create actual loop variable
+        generateTypeUsage(cctx, range->type->array.elementType);
+        format(ctx->state, " ", NULL);
+        astConstVisit(visitor, var->varDecl.names);
+        format(ctx->state, " = __arr_{s}[0];\n", (FormatArg[]){{.s = name}});
+
+        format(ctx->state,
+               "for (; __i_{s} < {u64}; __i_{s}++, ",
+               (FormatArg[]){{.s = name},
+                             {.u64 = range->type->array.indexes[0]},
+                             {.s = name}});
+        astConstVisit(visitor, var->varDecl.names);
+        format(ctx->state,
+               " = __arr_{s}[__i_{s}]",
+               (FormatArg[]){{.s = name}, {.s = name}});
+    }
+    else {
+        unreachable("currently not supported");
+    }
+
+    format(ctx->state, ") ", NULL);
+    astConstVisit(visitor, node->forStmt.body);
+
+    if (range->type->tag == typArray) {
+        format(ctx->state, "{<}\n}", NULL);
+    }
+}
+
 void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
 {
     // clang-format off
@@ -484,6 +566,7 @@ void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
         [astUnaryExpr] = generateUnaryExpr,
         [astAssignExpr] = generateAssignExpr,
         [astTupleExpr] = generateTupleExpr,
+        [astArrayExpr] = generateArrayExpr,
         [astMemberExpr] = generateMemberExpr,
         [astCallExpr] = generateCallExpr,
         [astStringExpr] = cCodegenStringExpr,
@@ -497,6 +580,7 @@ void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
         [astContinueStmt] = generateBreakContinue,
         [astIfStmt] = generateIfStmt,
         [astWhileStmt] = generateWhileStmt,
+        [astForStmt] = generateForStmt,
         [astFuncParam] = generateFuncParam,
         [astFuncDecl] = generateFunc,
         [astVarDecl] = generateVariable,

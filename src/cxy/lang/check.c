@@ -198,8 +198,9 @@ static void checkStringExpr(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     checkMany(visitor, node->stringExpr.parts);
-    const AstNode *part = node->stringExpr.parts;
+    AstNode *part = node->stringExpr.parts;
     for (; part; part = part->next) {
+        part->type = evalType(visitor, part);
         if (part->type == sError) {
             node->type = sError;
         }
@@ -533,12 +534,14 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
     Scope *scope = NULL, *closure = ctx->closure;
     AstNode *symbol = findSymbolAndScope(
         &ctx->env, ctx->L, node->pathElement.name, &node->loc, &scope);
+    u64 flags = flgNone;
     if (symbol == NULL)
         node->type = sError;
-    else
+    else {
         node->type = symbol->type;
-    node->flags |= (symbol->flags & flgConst);
-
+        flags = (symbol->flags & flgConst);
+    }
+    node->flags |= flags;
     if (closure == NULL)
         // We are outside a closure
         return node->type;
@@ -556,7 +559,7 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
             ? node->type
             : makePointerType(ctx->typeTable,
                               node->type,
-                              (symbol->flags & flgConst) | flgCapturePointer));
+                              (flags & flgConst) | flgCapturePointer));
 
     node->flags |= flgCapture;
 
@@ -705,7 +708,7 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
                 (FormatArg[]){{.t = left}});
             return;
         }
-        if (isIntegerType(ctx->typeTable, right)) {
+        if (!isIntegerType(ctx->typeTable, right)) {
             logError(ctx->L,
                      &node->loc,
                      "expecting an integral type for range expression end, got "
@@ -717,12 +720,7 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
         node->tag = astRangeExpr;
         node->rangeExpr.start = binary.binaryExpr.lhs;
         node->rangeExpr.end = binary.binaryExpr.rhs;
-        node->rangeExpr.step = makeAstNode(
-            ctx->pool,
-            &binary.binaryExpr.lhs->loc,
-            &(AstNode){.tag = astIntegerLit,
-                       .type = makePrimitiveType(ctx->typeTable, prtI64),
-                       .intLiteral.value = 1});
+        node->rangeExpr.step = NULL;
         node->type = makeOpaqueType(ctx->typeTable, "__cxy_range_t");
         break;
     }
@@ -766,6 +764,9 @@ static const Type *checkPrefixExpr(CheckerContext *ctx,
                      "cannot not dereference an non-pointer type '{t}'",
                      (FormatArg[]){{.t = operand}});
             operand = sError;
+        }
+        else {
+            operand = operand->pointer.pointed;
         }
         break;
     default:
@@ -923,6 +924,37 @@ static void checkMember(AstVisitor *visitor, AstNode *node)
     else {
         csAssert(member->tag == astIdentifier, "TODO");
         node->type = sError;
+    }
+}
+
+static void checkArrayExr(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    u64 count = 0;
+    const Type *elementType = NULL;
+    for (AstNode *elem = node->arrayExpr.elements; elem;
+         elem = elem->next, count++) {
+        const Type *type = evalType(visitor, elem);
+        if (elementType == NULL) {
+            elementType = type;
+            continue;
+        }
+
+        if (!isTypeAssignableFrom(ctx->typeTable, elementType, type)) {
+            logError(
+                ctx->L,
+                &elem->loc,
+                "inconsistent array types in array, expecting '{t}', got '{t}'",
+                (FormatArg[]){{.t = elementType}, {.t = type}});
+        }
+    }
+    if (elementType == NULL) {
+        node->type = makeArrayType(
+            ctx->typeTable, makeAutoType(ctx->typeTable), (const u64[]){}, 0);
+    }
+    else {
+        node->type =
+            makeArrayType(ctx->typeTable, elementType, (const u64[]){count}, 1);
     }
 }
 
@@ -1157,6 +1189,62 @@ static void checkWhileStmt(AstVisitor *visitor, AstNode *node)
     popScope(&ctx->env);
 }
 
+static void checkForStmt(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    pushScope(&ctx->env, node);
+
+    const Type *type = evalType(visitor, node->forStmt.var);
+    const Type *range = evalType(visitor, node->forStmt.range);
+
+    AstNode *symbol = findSymbol(&ctx->env,
+                                 ctx->L,
+                                 node->forStmt.var->varDecl.names->ident.value,
+                                 &node->loc);
+    csAssert0(symbol);
+
+    if (node->forStmt.range->tag == astRangeExpr) {
+        if (type->tag != typAuto && !isIntegerType(ctx->typeTable, type)) {
+            logError(ctx->L,
+                     &node->forStmt.var->loc,
+                     "unexpected type for loop variable type '{t}', expecting "
+                     "an integral type",
+                     (FormatArg[]){{.t = type}});
+            type = sError;
+        }
+        else if (type->tag == typAuto) {
+            symbol->type = makePrimitiveType(ctx->typeTable, prtI64);
+            node->forStmt.var->type = symbol->type;
+        }
+    }
+    else if (stripPointer(ctx->typeTable, range)->tag == typArray) {
+        const Type *elementType =
+            stripPointer(ctx->typeTable, range)->array.elementType;
+        if (type->tag != typAuto &&
+            !isTypeAssignableFrom(ctx->typeTable, elementType, type)) {
+            logError(ctx->L,
+                     &node->forStmt.var->loc,
+                     "unexpected type '{t}' for loop variable, expecting array "
+                     "element type '{t}'",
+                     (FormatArg[]){{.t = type}, {.t = elementType}});
+            type = sError;
+        }
+        else if (type->tag == typAuto) {
+            symbol->type = elementType;
+            node->forStmt.var->type = elementType;
+        }
+    }
+    else if (range->tag == typFunc) {
+        unreachable("TODO UNSUPPORTED");
+    }
+
+    const Type *body = evalType(visitor, node->forStmt.body);
+
+    node->type = type == sError ? type : body;
+
+    popScope(&ctx->env);
+}
+
 static void checkPrimitiveType(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
@@ -1321,6 +1409,7 @@ void semanticsCheck(AstNode *program,
         [astAddressOf] = checkAddressOf,
         [astIndexExpr] = checkIndex,
         [astMemberExpr] = checkMember,
+        [astArrayExpr] = checkArrayExr,
         [astTupleExpr] = checkTupleExpr,
         [astGroupExpr] = checkGroupExpr,
         [astCallExpr] = checkCall,
@@ -1335,6 +1424,7 @@ void semanticsCheck(AstNode *program,
         [astContinueStmt] = checkBreakContinueStmt,
         [astIfStmt] = checkIfStmt,
         [astWhileStmt] = checkWhileStmt,
+        [astForStmt] = checkForStmt,
         [astPrimitiveType] = checkPrimitiveType,
         [astArrayType] = checkArrayType,
         [astPointerType] = checkPointerType,
