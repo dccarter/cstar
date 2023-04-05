@@ -55,6 +55,7 @@ typedef struct Scope Scope;
 
 typedef enum {
     typError,
+    typThis,
     typAuto,
     typVoid,
     typNull,
@@ -129,6 +130,10 @@ typedef struct Type {
         u64 count;
         const Type **members;
     } tuple;
+
+    struct {
+        const Type *that;
+    } this;
 
     struct {
         u32 paramsCount;

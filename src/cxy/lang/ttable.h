@@ -37,6 +37,8 @@ const Type *makeTupleType(TypeTable *table,
                           const Type **members,
                           u64 count,
                           u64 flags);
+const Type *makeThisType(TypeTable *table);
+
 const Type *makeFuncType(TypeTable *table, const Type *init);
 const Type *makeStruct(TypeTable *table, const Type *init);
 const Type *makeEnum(TypeTable *table, const Type *init);

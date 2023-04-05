@@ -176,8 +176,12 @@ enum {
     flgDeferred = BIT(10),
     flgCapture = BIT(11),
     flgClosure = BIT(12),
-    flgCapturePointer = BIT(13),
-    flgFuncTypeParam = BIT(14),
+    flgHasClosureParam = BIT(13),
+    flgClosureParam = BIT(14),
+    flgCapturePointer = BIT(15),
+    flgFuncTypeParam = BIT(16),
+    flgAlwaysInline = BIT(17),
+    flgFuncForward = BIT(17)
 };
 
 typedef struct AstNode AstNode;
