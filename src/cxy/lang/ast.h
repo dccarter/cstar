@@ -307,7 +307,6 @@ struct AstNode {
         struct {
             Operator operatorOverload;
             const char *name;
-
             struct AstNode *genericParams;
             struct AstNode *params;
             struct AstNode *ret;
@@ -331,7 +330,7 @@ struct AstNode {
             struct AstNode *names;
             struct AstNode *type;
             struct AstNode *init;
-        } constDecl, varDecl;
+        } varDecl;
 
         struct {
             const char *name;

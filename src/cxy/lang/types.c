@@ -3,6 +3,7 @@
  */
 
 #include "types.h"
+#include "ast.h"
 #include "ttable.h"
 
 #include "token.h"
@@ -56,7 +57,7 @@ bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from)
     if (to->tag == typPointer && from->tag == typPointer) {
         if (to->pointer.pointed->tag == typVoid)
             return true;
-        
+
         return isTypeAssignableFrom(
             table, to->pointer.pointed, from->pointer.pointed);
     }
@@ -111,17 +112,24 @@ bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from)
                 return false;
         }
         return true;
-    case typFunc:
+    case typFunc: {
         if (!isTypeAssignableFrom(table, to->func.retType, to->func.retType))
             return false;
-        if (to->func.paramsCount != from->func.paramsCount)
+        bool isNameFuncParam =
+            (to->flags & flgFuncTypeParam) && !(from->flags & flgClosure);
+        u64 count = to->func.paramsCount;
+        count -= isNameFuncParam;
+        if (count != from->func.paramsCount) {
             return false;
-        for (u64 i = 0; i < to->func.paramsCount; i++) {
-            if (!isTypeAssignableFrom(
-                    table, to->func.params[i], from->func.params[i]))
+        }
+        for (u64 i = 0; i < count; i++) {
+            if (!isTypeAssignableFrom(table,
+                                      to->func.params[i + isNameFuncParam],
+                                      from->func.params[i]))
                 return false;
         }
         return true;
+    }
     default:
         return false;
     }

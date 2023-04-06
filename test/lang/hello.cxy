@@ -18,8 +18,9 @@ func each(s: i32, e: i32, body: func(y: i32) -> void) {
     }
 }
 
+func eat(x: i32) => { puts(f"${x}") }
+
 func main(args: [string]) {
-    const a = 10;
-    ((x: i32) => puts(f"${a} -> ${x}"))(20);
-    each(0, 10, (x: i32) => { puts(f"${x} -> ${a}")})
+    const fn: func(x: i64) -> void = eat;
+    each(0, 10, eat);
 }

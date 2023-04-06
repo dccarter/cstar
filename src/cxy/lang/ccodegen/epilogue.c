@@ -322,6 +322,36 @@ static void generateMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
     }
 }
 
+static void generateClosureCapture(CodegenContext *ctx,
+                                   const Type *type,
+                                   cstring name,
+                                   u64 index)
+{
+    CCodegenContext *cctx = (CCodegenContext *)ctx;
+    generateTypeUsage(cctx, stripPointer(cctx->table, type->func.params[0]));
+
+    format(ctx->state,
+           " {s}{u64} = {{",
+           (FormatArg[]){{.s = name}, {.u64 = index}});
+    for (u64 i = 0; i < type->func.capturedNamesCount; i++) {
+        const Type *captureType =
+            stripPointer(cctx->table, type->func.params[0]);
+        if (i != 0)
+            format(ctx->state, ", ", NULL);
+        if (captureType->tuple.members[i]->flags & flgCapturePointer)
+            format(
+                ctx->state,
+                "._{u64} = &{s}",
+                (FormatArg[]){{.u64 = i}, {.s = type->func.captureNames[i]}});
+        else
+            format(
+                ctx->state,
+                "._{u64} = {s}",
+                (FormatArg[]){{.u64 = i}, {.s = type->func.captureNames[i]}});
+    }
+    format(ctx->state, "}; ", NULL);
+}
+
 static void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -329,46 +359,55 @@ static void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
 
     const Type *type = node->callExpr.callee->type;
 
-    const char *name = "";
-    if (type->flags & flgClosure) {
-        // we are calling a closure, generate closure data
-        format(ctx->state, "({{", NULL);
-        generateTypeUsage(cctx,
-                          stripPointer(cctx->table, type->func.params[0]));
-        name = makeAnonymousVariable(cctx->strPool, "__cap");
-        format(ctx->state, " {s} = {{", (FormatArg[]){{.s = name}});
-        for (u64 i = 0; i < type->func.capturedNamesCount; i++) {
-            const Type *captureType =
-                stripPointer(cctx->table, type->func.params[0]);
-            if (i != 0)
-                format(ctx->state, ", ", NULL);
-            if (captureType->tuple.members[i]->flags & flgCapturePointer)
-                format(ctx->state,
-                       "._{u64} = &{s}",
-                       (FormatArg[]){{.u64 = i},
-                                     {.s = type->func.captureNames[i]}});
-            else
-                format(ctx->state,
-                       "._{u64} = {s}",
-                       (FormatArg[]){{.u64 = i},
-                                     {.s = type->func.captureNames[i]}});
+    const char *name =
+        (type->flags & (flgClosureStyle | flgClosure))
+            ? makeAnonymousVariable(cctx->strPool, "__closure_capture")
+            : "";
+
+    format(ctx->state, "({{ ", NULL);
+    if (type->flags & flgClosureStyle) {
+        const AstNode *arg = node->callExpr.args;
+        for (u64 i = 1; arg; arg = arg->next, i++) {
+            if (arg->type->flags & flgClosure) {
+                generateClosureCapture(ctx, arg->type, name, i);
+            }
         }
-        format(ctx->state, "}; ", NULL);
+    }
+    else if (type->flags & flgClosure) {
+        generateClosureCapture(ctx, type, name, 0);
     }
 
     astConstVisit(visitor, node->callExpr.callee);
     if (type->flags & flgClosure) {
-        format(ctx->state, "(&{s}", (FormatArg[]){{.s = name}});
+        format(ctx->state, "(&{s}0", (FormatArg[]){{.s = name}});
         if (type->func.paramsCount > 1)
             format(ctx->state, ", ", NULL);
     }
     else {
         format(ctx->state, "(", NULL);
     }
-    generateManyAstsWithDelim(visitor, "", ", ", ")", node->callExpr.args);
-    if (type->flags & flgClosure) {
-        format(ctx->state, "; })", NULL);
+    {
+        const AstNode *arg = node->callExpr.args;
+        for (u64 i = 0; arg; arg = arg->next, i++) {
+            const Type *param = type->func.params[i];
+            if (i != 0)
+                format(ctx->state, ", ", NULL);
+
+            if (arg->type->flags & flgClosure) {
+                format(ctx->state, "(", NULL);
+                generateTypeUsage(cctx, param);
+                format(ctx->state,
+                       "){{._0 = &{s}{u64}, ._1 = ",
+                       (FormatArg[]){{.s = name}, {.u64 = i + 1}});
+                astConstVisit(visitor, arg->type->func.decl);
+                format(ctx->state, "_fwd}", NULL);
+            }
+            else {
+                astConstVisit(visitor, arg);
+            }
+        }
     }
+    format(ctx->state, "); })", NULL);
 }
 
 static void generateGroupExpr(ConstAstVisitor *visitor, const AstNode *node)

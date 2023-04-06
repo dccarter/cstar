@@ -384,16 +384,23 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
         makeTupleType(ctx->typeTable, capturedTypes, index, flgNone),
         flgNone);
     free((void *)capturedTypes);
-    node->type = makeFuncType(ctx->typeTable,
-                              &(Type){.tag = typFunc,
-                                      .name = NULL,
-                                      .flags = node->flags | flgClosure,
-                                      .func = {.retType = ret,
-                                               .params = params,
-                                               .captureNames = names,
-                                               .capturedNamesCount = index,
-                                               .paramsCount = paramsCount,
-                                               .decl = node}});
+
+    cstring name = makeAnonymousVariable(ctx->strPool, "__cxy_closure_expr");
+    node->type = makeFuncType(
+        ctx->typeTable,
+        &(Type){
+            .tag = typFunc,
+            .name = NULL,
+            .flags = node->flags | flgClosure,
+            .func = {.retType = ret,
+                     .params = params,
+                     .captureNames = names,
+                     .capturedNamesCount = index,
+                     .paramsCount = paramsCount,
+                     .decl = makeAstNode(ctx->pool,
+                                         &node->loc,
+                                         &(AstNode){.tag = astIdentifier,
+                                                    .ident.value = name})}});
 
     ctx->lastReturn = lastReturn;
 
@@ -415,8 +422,7 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
                                                    }});
 
     copy->funcDecl.body = closureExpr.body;
-    copy->funcDecl.name =
-        makeAnonymousVariable(ctx->strPool, "__cxy_closure_expr");
+    copy->funcDecl.name = name;
     copy->flags |= flgClosure;
 
     addAnonymousTopLevelDecl(ctx, copy->funcDecl.name, copy);
@@ -1026,8 +1032,6 @@ static const Type *transformFuncTypeParamCallee(CheckerContext *ctx,
                                                 const Type *type,
                                                 AstNode *node)
 {
-    // transform b(X) => b._0(n, x)
-
     // b._1
     AstNode *newCallee = makeAstNode(
         ctx->pool,
@@ -1060,6 +1064,42 @@ static const Type *transformFuncTypeParamCallee(CheckerContext *ctx,
     node->callExpr.args = arg;
 
     return type->tuple.members[1];
+}
+
+static const Type *wrapFuncArgInClosure(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    AstNode *orig = copyAstNode(ctx->pool, node);
+    const Type *type = node->type;
+    AstNode *params = copyAstNode(ctx->pool, type->func.decl->funcDecl.params);
+    AstNode *param = params;
+    AstNode *args = NULL, *arg = NULL;
+    for (; param; param = param->next) {
+        AstNode *newArg =
+            makeAstNode(ctx->pool,
+                        &node->loc,
+                        &(AstNode){.tag = astIdentifier,
+                                   .type = param->type,
+                                   .ident.value = param->funcParam.name});
+        if (arg == NULL) {
+            arg = newArg;
+            args = newArg;
+        }
+        else
+            arg->next = newArg;
+    }
+
+    memset(&node->path, 0, sizeof(node->path));
+    node->tag = astClosureExpr;
+    node->closureExpr.params = params;
+    node->closureExpr.body =
+        makeAstNode(ctx->pool,
+                    &node->loc,
+                    &(AstNode){.tag = astCallExpr,
+                               .type = type,
+                               .callExpr = {.callee = orig, .args = args}});
+
+    return evalType(visitor, node);
 }
 
 static void checkCall(AstVisitor *visitor, AstNode *node)
@@ -1115,6 +1155,8 @@ static void checkCall(AstVisitor *visitor, AstNode *node)
         const Type *type = evalType(visitor, arg);
         const Type *expected = callee->func.params[i];
         if (expected->flags & flgFuncTypeParam) {
+            if (!(type->flags & flgClosure))
+                type = wrapFuncArgInClosure(visitor, arg);
             expected = expected->tuple.members[1];
         }
         if (!isTypeAssignableFrom(ctx->typeTable, expected, type)) {
