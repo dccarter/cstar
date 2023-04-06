@@ -231,8 +231,7 @@ static const Type *transformFuncTypeParam(CheckerContext *ctx, const Type *type)
     // change (i32) => X, (&void, i32) => X
     const Type **newParams =
         mallocOrDie(sizeof(Type *) * type->func.paramsCount + 1);
-    newParams[0] =
-        makePointerType(ctx->typeTable, makeVoidType(ctx->typeTable), flgNone);
+    newParams[0] = makeVoidPointerType(ctx->typeTable, flgNone);
     for (u64 i = 0; i < type->func.paramsCount; i++)
         newParams[i + 1] = type->func.params[i];
 
@@ -243,6 +242,11 @@ static const Type *transformFuncTypeParam(CheckerContext *ctx, const Type *type)
                              .func = {.params = newParams,
                                       .paramsCount = type->func.paramsCount + 1,
                                       .retType = type->func.retType}});
+    type = makeTupleType(
+        ctx->typeTable,
+        (const Type *[]){makeVoidPointerType(ctx->typeTable, flgNone), type},
+        2,
+        type->flags | flgFuncTypeParam);
 
     return type;
 }
@@ -375,10 +379,10 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
     const char **names = allocFromMemPool(ctx->pool, sizeof(void *) * index);
     index = getOrderedCapture(
         &node->closureExpr.capture, capturedTypes, names, index);
-    params[0] =
-        makePointerType(ctx->typeTable,
-                        makeTupleType(ctx->typeTable, capturedTypes, index),
-                        flgNone);
+    params[0] = makePointerType(
+        ctx->typeTable,
+        makeTupleType(ctx->typeTable, capturedTypes, index, flgNone),
+        flgNone);
     free((void *)capturedTypes);
     node->type = makeFuncType(ctx->typeTable,
                               &(Type){.tag = typFunc,
@@ -1007,7 +1011,7 @@ static void checkTupleExpr(AstVisitor *visitor, AstNode *node)
     }
 
     if (node->type == NULL) {
-        node->type = makeTupleType(ctx->typeTable, args, count);
+        node->type = makeTupleType(ctx->typeTable, args, count, flgNone);
     }
 
     free(args);
@@ -1018,11 +1022,55 @@ static void checkGroupExpr(AstVisitor *visitor, AstNode *node)
     node->type = evalType(visitor, node->groupExpr.expr);
 }
 
+static const Type *transformFuncTypeParamCallee(CheckerContext *ctx,
+                                                const Type *type,
+                                                AstNode *node)
+{
+    // transform b(X) => b._0(n, x)
+
+    // b._1
+    AstNode *newCallee = makeAstNode(
+        ctx->pool,
+        &node->callExpr.callee->loc,
+        &(AstNode){.tag = astMemberExpr,
+                   .type = type->tuple.members[1],
+                   .flags = node->callExpr.callee->flags,
+                   .memberExpr = {.target = node->callExpr.callee,
+                                  .member = makeAstNode(
+                                      ctx->pool,
+                                      &node->callExpr.callee->loc,
+                                      &(AstNode){.tag = astIntegerLit,
+                                                 .intLiteral.value = 1})}});
+    // b._0
+    AstNode *arg = makeAstNode(
+        ctx->pool,
+        &node->callExpr.callee->loc,
+        &(AstNode){.tag = astMemberExpr,
+                   .next = node->callExpr.args,
+                   .type = type->tuple.members[0],
+                   .flags = node->callExpr.callee->flags,
+                   .memberExpr = {.target = node->callExpr.callee,
+                                  .member = makeAstNode(
+                                      ctx->pool,
+                                      &node->callExpr.callee->loc,
+                                      &(AstNode){.tag = astIntegerLit,
+                                                 .intLiteral.value = 0})}});
+
+    node->callExpr.callee = newCallee;
+    node->callExpr.args = arg;
+
+    return type->tuple.members[1];
+}
+
 static void checkCall(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     const Type *callee = evalType(visitor, node->callExpr.callee);
     AstNode *arg = node->callExpr.args;
+
+    if (callee->flags & flgFuncTypeParam) {
+        callee = transformFuncTypeParamCallee(ctx, callee, node);
+    }
 
     if (callee->tag != typFunc) {
         logError(ctx->L,
@@ -1065,13 +1113,16 @@ static void checkCall(AstVisitor *visitor, AstNode *node)
 
     for (; arg; arg = arg->next, i++) {
         const Type *type = evalType(visitor, arg);
-        if (!isTypeAssignableFrom(
-                ctx->typeTable, callee->func.params[i], type)) {
+        const Type *expected = callee->func.params[i];
+        if (expected->flags & flgFuncTypeParam) {
+            expected = expected->tuple.members[1];
+        }
+        if (!isTypeAssignableFrom(ctx->typeTable, expected, type)) {
             logError(ctx->L,
                      &arg->loc,
                      "incompatible argument types, expecting '{t}' but got "
                      "'{t}'",
-                     (FormatArg[]){{.t = callee->func.params[i]}, {.t = type}});
+                     (FormatArg[]){{.t = expected}, {.t = type}});
         }
     }
 
@@ -1359,7 +1410,7 @@ static void checkTupleType(AstVisitor *visitor, AstNode *node)
     }
 
     if (node->type == NULL)
-        node->type = makeTupleType(ctx->typeTable, args, count);
+        node->type = makeTupleType(ctx->typeTable, args, count, flgNone);
 
     free(args);
 }

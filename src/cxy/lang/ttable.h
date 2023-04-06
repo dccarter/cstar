@@ -28,12 +28,18 @@ const Type *makeStringType(TypeTable *table);
 const Type *makePointerType(TypeTable *table, const Type *pointed, u64 flags);
 const Type *makeOptionalType(TypeTable *table, const Type *target, u64 flags);
 const Type *makeArrayType(TypeTable *table, const Type *elementType, u64 size);
-
+static inline const Type *makeVoidPointerType(TypeTable *table, u64 flags)
+{
+    return makePointerType(table, makeVoidType(table), flags);
+}
 const Type *makeMapType(TypeTable *table, const Type *key, const Type *value);
 const Type *makeAliasType(TypeTable *table, const Type *aliased, cstring name);
 const Type *makeOpaqueType(TypeTable *table, cstring name);
 const Type *makeUnionType(TypeTable *table, const Type **members, u64 count);
-const Type *makeTupleType(TypeTable *table, const Type **members, u64 count);
+const Type *makeTupleType(TypeTable *table,
+                          const Type **members,
+                          u64 count,
+                          u64 flags);
 const Type *makeThisType(TypeTable *table, u64 flags);
 const Type *makeFuncType(TypeTable *table, const Type *init);
 const Type *makeStruct(TypeTable *table, const Type *init);

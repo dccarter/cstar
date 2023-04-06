@@ -348,10 +348,15 @@ const Type *makeUnionType(TypeTable *table, const Type **members, u64 count)
     return ret.s;
 }
 
-const Type *makeTupleType(TypeTable *table, const Type **members, u64 count)
+const Type *makeTupleType(TypeTable *table,
+                          const Type **members,
+                          u64 count,
+                          u64 flags)
 {
-    Type type = make(
-        Type, .tag = typTuple, .tuple = {.members = members, .count = count});
+    Type type = make(Type,
+                     .tag = typTuple,
+                     .flags = flags,
+                     .tuple = {.members = members, .count = count});
 
     GetOrInset ret = getOrInsertType(table, &type);
     if (!ret.f) {
@@ -384,7 +389,7 @@ const Type *makeRangeType(TypeTable *table)
                              makePrimitiveType(table, prtI64),
                              makePrimitiveType(table, prtI64),
                              makePrimitiveType(table, prtI64)};
-    return makeTupleType(table, members, 4);
+    return makeTupleType(table, members, 4, flgNone);
 }
 
 u64 getTypesCount(TypeTable *table) { return table->typeCount; }

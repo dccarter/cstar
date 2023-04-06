@@ -54,6 +54,9 @@ bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from)
     from = resolveType(table, from);
 
     if (to->tag == typPointer && from->tag == typPointer) {
+        if (to->pointer.pointed->tag == typVoid)
+            return true;
+        
         return isTypeAssignableFrom(
             table, to->pointer.pointed, from->pointer.pointed);
     }
@@ -90,6 +93,9 @@ bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from)
         if (from->tag == typArray)
             return isTypeAssignableFrom(
                 table, to->pointer.pointed, from->array.elementType);
+        if (to->pointer.pointed->tag == typVoid && from->tag == typPointer)
+            return true;
+
         return false;
     case typOptional:
         return from->tag == typNull ||
@@ -102,6 +108,17 @@ bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from)
         for (u64 i = 0; i < from->tuple.count; i++) {
             if (!isTypeAssignableFrom(
                     table, to->tuple.members[i], from->tuple.members[i]))
+                return false;
+        }
+        return true;
+    case typFunc:
+        if (!isTypeAssignableFrom(table, to->func.retType, to->func.retType))
+            return false;
+        if (to->func.paramsCount != from->func.paramsCount)
+            return false;
+        for (u64 i = 0; i < to->func.paramsCount; i++) {
+            if (!isTypeAssignableFrom(
+                    table, to->func.params[i], from->func.params[i]))
                 return false;
         }
         return true;
