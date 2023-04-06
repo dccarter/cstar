@@ -38,11 +38,11 @@ static void generatePathElement(ConstAstVisitor *visitor, const AstNode *node)
     if (node->flags & flgCapture) {
         if (node->type->tag == typPrimitive || node->type->tag == typPointer)
             format(ctx->state,
-                   "__closure->_{u64}",
+                   "self->_{u64}",
                    (FormatArg[]){{.u64 = node->pathElement.index}});
         else
             format(ctx->state,
-                   "(*__closure->_{u64})",
+                   "(*self->_{u64})",
                    (FormatArg[]){{.u64 = node->pathElement.index}});
     }
     else
@@ -68,10 +68,42 @@ static void generateFuncParam(ConstAstVisitor *visitor, const AstNode *node)
     format(ctx->state, " {s}", (FormatArg[]){{.s = node->funcParam.name}});
 }
 
+static void generateClosureForward(ConstAstVisitor *visitor,
+                                   const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    TypeTable *table = ((CCodegenContext *)ctx)->table;
+    const AstNode *params = node->funcDecl.params;
+
+    generateTypeUsage((CCodegenContext *)ctx, node->type->func.retType);
+    format(ctx->state,
+           " {s}_fwd(void *self",
+           (FormatArg[]){{.s = node->funcDecl.name}});
+    if (params)
+        format(ctx->state, ", ", NULL);
+    generateManyAstsWithDelim(visitor, "", ", ", ") {{{>}\n", params->next);
+
+    if (node->type->func.retType->tag != typVoid) {
+        format(ctx->state, "return ", NULL);
+    }
+    format(ctx->state, "{s}((", (FormatArg[]){{.s = node->funcDecl.name}});
+    generateTypeUsage((CCodegenContext *)ctx, node->type->func.params[0]);
+    format(ctx->state, ")self", NULL);
+
+    for (const AstNode *param = params->next; param; param = param->next) {
+        format(
+            ctx->state, ", {s}", (FormatArg[]){{.s = param->funcParam.name}});
+    }
+    format(ctx->state, ");{<}\n}", (FormatArg[]){{.s = node->funcDecl.name}});
+}
+
 static void generateFunc(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     TypeTable *table = ((CCodegenContext *)ctx)->table;
+
+    if (node->flags & flgClosure)
+        format(ctx->state, "attr(always_inline)\n", NULL);
 
     if (node->flags & flgMain) {
         if (isIntegerType(table, node->type->func.retType)) {
@@ -117,6 +149,11 @@ static void generateFunc(ConstAstVisitor *visitor, const AstNode *node)
             format(ctx->state, "{<}\n}", NULL);
         }
     }
+
+    if (node->flags & flgClosure) {
+        format(ctx->state, "\n", NULL);
+        generateClosureForward(visitor, node);
+    }
 }
 
 static void generateTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
@@ -136,7 +173,7 @@ static void generateVariable(ConstAstVisitor *visitor, const AstNode *node)
     if (node->flags & flgConst)
         format(ctx->state, "const ", NULL);
 
-    //if (node->varDecl.init == NULL || node->varDecl.)
+    // if (node->varDecl.init == NULL || node->varDecl.)
     generateTypeUsage((CCodegenContext *)ctx, node->type);
 
     format(ctx->state, " ", NULL);

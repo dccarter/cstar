@@ -226,6 +226,27 @@ static void checkFuncParam(AstVisitor *visitor, AstNode *node)
     }
 }
 
+static const Type *transformFuncTypeParam(CheckerContext *ctx, const Type *type)
+{
+    // change (i32) => X, (&void, i32) => X
+    const Type **newParams =
+        mallocOrDie(sizeof(Type *) * type->func.paramsCount + 1);
+    newParams[0] =
+        makePointerType(ctx->typeTable, makeVoidType(ctx->typeTable), flgNone);
+    for (u64 i = 0; i < type->func.paramsCount; i++)
+        newParams[i + 1] = type->func.params[i];
+
+    type =
+        makeFuncType(ctx->typeTable,
+                     &(Type){.tag = typFunc,
+                             .flags = type->flags | flgFuncTypeParam,
+                             .func = {.params = newParams,
+                                      .paramsCount = type->func.paramsCount + 1,
+                                      .retType = type->func.retType}});
+
+    return type;
+}
+
 static void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
 {
     const Type *ret = NULL, **params, *type = NULL;
@@ -271,6 +292,13 @@ static void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
             continue;
         }
         withDefaultValues = (param->funcParam.def != NULL);
+        if (params[i]->tag == typFunc) {
+            params[i] = transformFuncTypeParam(ctx, params[i]);
+            param->type = params[i];
+
+            param->flags |= flgFuncTypeParam;
+            node->flags |= flgClosureStyle;
+        }
     }
 
     ret = makeAutoType(ctx->typeTable);
@@ -379,12 +407,13 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
                                                    .flags = flgCapture,
                                                    .next = closureExpr.params,
                                                    .funcParam = {
-                                                       .name = "__closure",
+                                                       .name = "self",
                                                    }});
 
     copy->funcDecl.body = closureExpr.body;
     copy->funcDecl.name =
         makeAnonymousVariable(ctx->strPool, "__cxy_closure_expr");
+    copy->flags |= flgClosure;
 
     addAnonymousTopLevelDecl(ctx, copy->funcDecl.name, copy);
 
@@ -1007,7 +1036,7 @@ static void checkCall(AstVisitor *visitor, AstNode *node)
 
     node->type = callee->func.retType;
     u64 paramsCount = callee->func.paramsCount, i = 0;
-    if (callee->flags & flgClosure) {
+    if (callee->flags & (flgClosure | flgFuncTypeParam)) {
         paramsCount--;
         i = 1;
     }

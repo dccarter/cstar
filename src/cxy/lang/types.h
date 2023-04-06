@@ -58,6 +58,7 @@ typedef enum {
     typAuto,
     typVoid,
     typNull,
+    typThis,
     typPrimitive,
     typString,
     typPointer,
@@ -101,6 +102,10 @@ typedef struct Type {
     struct {
         const Type *pointed;
     } pointer;
+
+    struct {
+        const Type *that;
+    } this;
 
     struct {
         u64 size;

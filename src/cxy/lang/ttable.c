@@ -50,6 +50,7 @@ static HashCode hashType(HashCode hash, const Type *type)
     case typNull:
     case typVoid:
     case typError:
+    case typThis:
         break;
     case typPrimitive:
         hash = hashUint32(hash, type->primitive.id);
@@ -129,6 +130,8 @@ static bool compareTypes(const Type *left, const Type *right)
         return compareTypes(left->optional.target, right->optional.target);
     case typOpaque:
         return strcmp(left->name, right->name) == 0;
+    case typThis:
+        return left->this.that == right;
     case typTuple:
     case typUnion:
         return (left->tUnion.count == right->tUnion.count) &&
@@ -260,7 +263,8 @@ const Type *arrayToPointer(TypeTable *table, const Type *type)
     if (type->tag != typArray)
         return type;
 
-    return makePointerType(table, arrayToPointer(table, type->array.elementType), type->flags);
+    return makePointerType(
+        table, arrayToPointer(table, type->array.elementType), type->flags);
 }
 
 const Type *makeErrorType(TypeTable *table) { return table->errorType; }
@@ -355,6 +359,12 @@ const Type *makeTupleType(TypeTable *table, const Type **members, u64 count)
     }
 
     return ret.s;
+}
+
+const Type *makeThisType(TypeTable *table, u64 flags)
+{
+    Type type = make(Type, .tag = typThis, .flags = flags);
+    return getOrInsertType(table, &type).s;
 }
 
 const Type *makeFuncType(TypeTable *table, const Type *init)

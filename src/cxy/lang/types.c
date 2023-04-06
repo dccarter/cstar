@@ -46,6 +46,10 @@ PrtId tokenToPrimitiveTypeId(TokenTag tag)
 
 bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from)
 {
+    if (to == from) {
+        return true;
+    }
+
     to = resolveType(table, to);
     from = resolveType(table, from);
 
@@ -57,11 +61,6 @@ bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from)
     if (to->tag == typOptional && from->tag == typOptional) {
         return isTypeAssignableFrom(
             table, to->optional.target, from->optional.target);
-    }
-
-    if (to->tag == from->tag) {
-        if (to->tag != typPrimitive)
-            return true;
     }
 
     switch (to->tag) {
@@ -95,6 +94,17 @@ bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from)
     case typOptional:
         return from->tag == typNull ||
                isTypeAssignableFrom(table, to->optional.target, from);
+    case typThis:
+        return to->this.that == from;
+    case typTuple:
+        if (from->tag != typTuple || to->tuple.count != from->tuple.count)
+            return false;
+        for (u64 i = 0; i < from->tuple.count; i++) {
+            if (!isTypeAssignableFrom(
+                    table, to->tuple.members[i], from->tuple.members[i]))
+                return false;
+        }
+        return true;
     default:
         return false;
     }
@@ -272,6 +282,9 @@ void printType(FormatState *state, const Type *type)
         printManyTypes(state, type->func.params, type->func.paramsCount, ", ");
         format(state, ") -> ", NULL);
         printType(state, type->func.retType);
+        break;
+    case typThis:
+        printKeyword(state, "This");
         break;
     default:
         unreachable("TODO");
