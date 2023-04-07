@@ -10,6 +10,7 @@
 #include "lang/parser.h"
 #include "lang/ttable.h"
 
+#include <errno.h>
 #include <unistd.h>
 
 static AstNode *parseFile(const char *fileName, MemPool *memPool, Log *log)
@@ -34,6 +35,13 @@ static AstNode *parseFile(const char *fileName, MemPool *memPool, Log *log)
     return program;
 }
 
+void invokeCCompiler(const char *fileName, const Options *options, Log *log)
+{
+    char cmd[512];
+    sprintf(cmd, "cc %s -O3 -o app", options->output);
+    system(cmd);
+}
+
 bool compileFile(const char *fileName, const Options *options, Log *log)
 {
     MemPool memPool = newMemPool();
@@ -42,8 +50,8 @@ bool compileFile(const char *fileName, const Options *options, Log *log)
     FILE *output = stdout;
     TypeTable *table = newTypeTable(&memPool, &strPool);
 
-    if (options->cmd == cmdDev && !options->noTypeCheck &&
-        log->errorCount == 0) {
+    if (options->cmd == cmdBuild ||
+        (!options->noTypeCheck && log->errorCount == 0)) {
         semanticsCheck(program, log, &memPool, &strPool, table);
     }
 
@@ -72,9 +80,10 @@ bool compileFile(const char *fileName, const Options *options, Log *log)
         generateCode(&state, table, &strPool, program);
         writeFormatState(&state, output);
         freeFormatState(&state);
+        fclose(output);
 
         if (options->cmd == cmdBuild) {
-            execl("gcc", options->output, "-O3", "-o", "app", NULL);
+            invokeCCompiler(fileName, options, log);
         }
     }
 

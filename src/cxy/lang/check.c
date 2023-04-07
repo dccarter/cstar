@@ -212,7 +212,9 @@ static void checkStringExpr(AstVisitor *visitor, AstNode *node)
 static void checkFuncParam(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
-    defineSymbol(&ctx->env, ctx->L, node->funcParam.name, node);
+    if (node->parentScope == NULL || node->parentScope->tag != astFuncType)
+        defineSymbol(&ctx->env, ctx->L, node->funcParam.name, node);
+
     if (node->funcParam.type)
         node->type = evalType(visitor, node->funcParam.type);
     else
@@ -530,9 +532,14 @@ static void checkVarDecl(AstVisitor *visitor, AstNode *node)
     AstNode *names = node->varDecl.names;
 
     defineSymbol(&ctx->env, ctx->L, names->ident.value, node);
+    if (node->varDecl.type) {
+        node->varDecl.type->flags |= node->flags;
+        node->type = evalType(visitor, node->varDecl.type);
+    }
+    else {
+        node->type = makeAutoType(ctx->typeTable);
+    }
 
-    node->type = node->varDecl.type ? evalType(visitor, node->varDecl.type)
-                                    : makeAutoType(ctx->typeTable);
     const Type *value = NULL;
     if (node->varDecl.init) {
         value = evalType(visitor, node->varDecl.init);
@@ -551,7 +558,7 @@ static void checkVarDecl(AstVisitor *visitor, AstNode *node)
                      (FormatArg[]){{.t = node->type}, {.t = value}});
             node->type = sError;
         }
-        
+
         if (node->type->tag == typAuto)
             node->type = value;
     }
@@ -1542,6 +1549,7 @@ static void checkFuncType(AstVisitor *visitor, AstNode *node)
 
     AstNode *param = node->funcType.params;
     for (u64 i = 0; param; param = param->next, i++) {
+        param->parentScope = node;
         params[i] = evalType(visitor, param);
         if (params[i] == sError)
             node->type = sError;

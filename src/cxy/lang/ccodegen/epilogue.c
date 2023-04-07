@@ -72,7 +72,6 @@ static void generateClosureForward(ConstAstVisitor *visitor,
                                    const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    TypeTable *table = ((CCodegenContext *)ctx)->table;
     const AstNode *params = node->funcDecl.params;
 
     generateTypeUsage((CCodegenContext *)ctx, node->type->func.retType);
@@ -87,7 +86,7 @@ static void generateClosureForward(ConstAstVisitor *visitor,
         format(ctx->state, "return ", NULL);
     }
     format(ctx->state, "{s}((", (FormatArg[]){{.s = node->funcDecl.name}});
-    generateTypeUsage((CCodegenContext *)ctx, node->type->func.params[0]);
+    generateTypeUsage((CCodegenContext *)ctx, node->funcDecl.params->type);
     format(ctx->state, ")self", NULL);
 
     for (const AstNode *param = params->next; param; param = param->next) {
@@ -170,7 +169,7 @@ static void generateVariable(ConstAstVisitor *visitor, const AstNode *node)
     if (node->flags & flgNative)
         format(ctx->state, "extern ", NULL);
 
-    if (node->flags & flgConst)
+    if ((node->flags & flgConst) && !(node->type->flags & flgConst))
         format(ctx->state, "const ", NULL);
 
     // if (node->varDecl.init == NULL || node->varDecl.)
@@ -459,6 +458,8 @@ static void generateBlock(ConstAstVisitor *visitor, const AstNode *node)
             continue;
         }
         astConstVisit(visitor, stmt);
+        if (stmt->tag == astCallExpr)
+            format(ctx->state, ";", NULL);
         if (epilogue || stmt->next)
             format(ctx->state, "\n", NULL);
     }
