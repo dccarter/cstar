@@ -213,7 +213,11 @@ static void checkFuncParam(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     defineSymbol(&ctx->env, ctx->L, node->funcParam.name, node);
-    node->type = evalType(visitor, node->funcParam.type);
+    if (node->funcParam.type)
+        node->type = evalType(visitor, node->funcParam.type);
+    else
+        csAssert0(node->type);
+
     if (node->funcParam.def) {
         const Type *def = evalType(visitor, node->funcParam.def);
         if (!isTypeAssignableFrom(ctx->typeTable, node->type, def)) {
@@ -352,7 +356,7 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
     ctx->closure = ctx->env.scope;
 
     params = mallocOrDie(sizeof(Type *) * paramsCount);
-    for (; param; param = param->next) {
+    for (; param; param = param->next, i++) {
         param->parentScope = node;
         params[i] = evalType(visitor, param);
         if (param->flags & flgVariadic) {
@@ -547,9 +551,9 @@ static void checkVarDecl(AstVisitor *visitor, AstNode *node)
                      (FormatArg[]){{.t = node->type}, {.t = value}});
             node->type = sError;
         }
-        else {
+        
+        if (node->type->tag == typAuto)
             node->type = value;
-        }
     }
 }
 
@@ -1317,11 +1321,83 @@ static void checkWhileStmt(AstVisitor *visitor, AstNode *node)
     popScope(&ctx->env);
 }
 
+static void checkForStmtGenerator(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    AstNode orig = *node;
+
+    AstNode *range = orig.forStmt.range;
+    AstNode *args = getLastAstNode(range->callExpr.args), *arg = NULL,
+            *names = orig.forStmt.var->varDecl.names, *closureArgs = NULL;
+    u64 varCount = countAstNodes(names), i = 1;
+
+    const Type *callee = evalType(visitor, range->callExpr.callee),
+               *bodyFunc = NULL;
+
+    if (callee->tag != typFunc || callee->func.paramsCount == 0 ||
+        callee->func.params[callee->func.paramsCount - 1]->flags !=
+            flgFuncTypeParam) {
+        logError(ctx->L,
+                 &range->callExpr.callee->loc,
+                 "for range expression is not a generator functions",
+                 NULL);
+        node->type = sError;
+        return;
+    }
+
+    bodyFunc =
+        callee->func.params[callee->func.paramsCount - 1]->tuple.members[1];
+    if (varCount != bodyFunc->func.paramsCount - 1) {
+        logError(ctx->L,
+                 &node->forStmt.var->loc,
+                 "for loop variable declaration mismatch, declared {u64}, "
+                 "expecting {u64}",
+                 (FormatArg[]){{.u64 = varCount},
+                               {.u64 = bodyFunc->func.paramsCount}});
+        node->type = sError;
+        return;
+    }
+
+    for (AstNode *name = names; name; name = name->next, i++) {
+        AstNode *newArg = makeAstNode(
+            ctx->pool,
+            &args->loc,
+            &(AstNode){.type = bodyFunc->func.params[i],
+                       .tag = astFuncParam,
+                       .funcParam = {.name = name->ident.value, .type = NULL}});
+        if (closureArgs == NULL) {
+            closureArgs = newArg;
+            arg = newArg;
+        }
+        else {
+            arg->next = newArg;
+            arg = newArg;
+        }
+    }
+
+    args->next =
+        makeAstNode(ctx->pool,
+                    &args->loc,
+                    &(AstNode){.tag = astClosureExpr,
+                               .closureExpr = {.params = closureArgs,
+                                               .body = node->forStmt.body}});
+
+    memset(&node->forStmt, 0, sizeof(node->forStmt));
+    node->tag = astCallExpr;
+    node->callExpr = orig.forStmt.range->callExpr;
+
+    evalType(visitor, node);
+}
+
 static void checkForStmt(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
-    pushScope(&ctx->env, node);
+    if (node->forStmt.range->tag == astCallExpr) {
+        checkForStmtGenerator(visitor, node);
+        return;
+    }
 
+    pushScope(&ctx->env, node);
     const Type *type = evalType(visitor, node->forStmt.var);
     const Type *range = evalType(visitor, node->forStmt.range);
 
@@ -1330,7 +1406,6 @@ static void checkForStmt(AstVisitor *visitor, AstNode *node)
                                  node->forStmt.var->varDecl.names->ident.value,
                                  &node->loc);
     csAssert0(symbol);
-
     if (node->forStmt.range->tag == astRangeExpr) {
         if (type->tag != typAuto && !isIntegerType(ctx->typeTable, type)) {
             logError(ctx->L,
@@ -1363,7 +1438,7 @@ static void checkForStmt(AstVisitor *visitor, AstNode *node)
         }
     }
     else if (range->tag == typFunc) {
-        unreachable("TODO UNSUPPORTED");
+        unreachable("");
     }
 
     const Type *body = evalType(visitor, node->forStmt.body);

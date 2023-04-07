@@ -254,7 +254,6 @@ typedef struct {
 
 void __cxy_string_builder_grow(__cxy_string_builder_t *sb, u64 size)
 {
-    size;
     if (sb->data == NULL) {
         sb->data = malloc(size + 1);
         sb->capacity = size;

@@ -12,15 +12,27 @@ pub native func fgets(data: &char, size: i32, stream: &FILE) : &char;
 
 pub func println(str: string) => puts(str)
 
-func each(s: i32, e: i32, body: func(y: i32) -> void) {
+func each(s: i64, e: i64, body: func(i: i64, y: i64) -> void) {
+    var j = 0;
     while (s < e) {
-        body(s++);
+        body(j++, s++);
     }
 }
 
-func eat(x: i32) => { puts(f"${x}") }
+//func eat(x: i32) => { puts(f"${x}") }
 
 func main(args: [string]) {
-    const fn: func(x: i64) -> void = eat;
-    each(0, 10, eat);
+    var j : i64 = 0;
+    var k : &i64 = &j;
+//    for (const (i, y): each(0, 10000000000)) {
+//        *k = y
+//    }
+
+    for (const i : 0..10000000000) {
+        *k = i;
+    }
+//    each(10, 20, (i: i32, y: i32) => {})
+//    ((x: i32, y: i32) => {})(10, 20);
+
+    puts(f"${j}")
 }

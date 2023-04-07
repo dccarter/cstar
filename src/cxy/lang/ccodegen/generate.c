@@ -21,7 +21,13 @@ void writeTypename(FormatState *state, const Type *type)
 {
     cstring ns = type->namespace ? type->namespace : "";
     if (type->name) {
-        format(state, "{s}{s}", (FormatArg[]){{.s = ns}, {.s = type->name}});
+        if (type->tag == typFunc)
+            format(state,
+                   "__{s}{s}_t",
+                   (FormatArg[]){{.s = ns}, {.s = type->name}});
+        else
+            format(
+                state, "{s}{s}", (FormatArg[]){{.s = ns}, {.s = type->name}});
     }
     else {
         switch (type->tag) {

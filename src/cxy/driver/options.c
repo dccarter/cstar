@@ -20,15 +20,29 @@ Command(dev,
                  "stdout)"),
             Def("")));
 
-#define BUILD_COMMANDS(f)                                                      \
-    PARSER_BUILTIN_COMMANDS(f)                                                 \
-    f(dev)
+Command(build,
+        "transpiles the given cxy source file and builds it using gcc",
+        Positionals(),
+        Str(Name("output"),
+            Sf('o'),
+            Help("output file for the compile binary"),
+            Def("")));
 
 // clang-format off
+#define BUILD_COMMANDS(f)                                                      \
+    PARSER_BUILTIN_COMMANDS(f)                                                 \
+    f(dev)                                                                     \
+    f(build)
+
 #define DEV_CMD_LAYOUT(f, ...)                                                 \
     f(noTypeCheck, Local, Option, 0, ##__VA_ARGS__)                            \
     f(printAst, Local, Option, 1, ##__VA_ARGS__)                               \
     f(output, Local, String, 2, ##__VA_ARGS__)
+
+#define BUILD_CMD_LAYOUT(f, ...)                                               \
+    f(output, Local, String, 0, ##__VA_ARGS__)
+
+// clang-format on
 
 bool parse_options(int *argc, char **argv, Options *options, Log *log)
 {
@@ -67,6 +81,10 @@ bool parse_options(int *argc, char **argv, Options *options, Log *log)
 
     if (cmd->id == CMD_dev) {
         UnloadCmd(cmd, options, DEV_CMD_LAYOUT);
+    }
+    else if (cmd->id == CMD_build) {
+        options->cmd = cmdBuild;
+        UnloadCmd(cmd, options, BUILD_CMD_LAYOUT);
     }
 
     file_count = *argc - 1;

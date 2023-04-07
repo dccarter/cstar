@@ -64,10 +64,8 @@ static void generateType(CCodegenContext *context, const Type *type)
         format(state, ";\n", NULL);
         break;
     case typFunc:
-        if (type->name == NULL) {
-            generateFuncDeclaration(context, type);
-            format(state, ";\n", NULL);
-        }
+        generateFuncDeclaration(context, type);
+        format(state, ";\n", NULL);
         break;
     case typTuple:
         generateTupleDefinition(context, type);

@@ -10,6 +10,8 @@
 #include "lang/parser.h"
 #include "lang/ttable.h"
 
+#include <unistd.h>
+
 static AstNode *parseFile(const char *fileName, MemPool *memPool, Log *log)
 {
     size_t file_size = 0;
@@ -40,7 +42,8 @@ bool compileFile(const char *fileName, const Options *options, Log *log)
     FILE *output = stdout;
     TypeTable *table = newTypeTable(&memPool, &strPool);
 
-    if (!options->noTypeCheck && log->errorCount == 0) {
+    if (options->cmd == cmdDev && !options->noTypeCheck &&
+        log->errorCount == 0) {
         semanticsCheck(program, log, &memPool, &strPool, table);
     }
 
@@ -69,6 +72,10 @@ bool compileFile(const char *fileName, const Options *options, Log *log)
         generateCode(&state, table, &strPool, program);
         writeFormatState(&state, output);
         freeFormatState(&state);
+
+        if (options->cmd == cmdBuild) {
+            execl("gcc", options->output, "-O3", "-o", "app", NULL);
+        }
     }
 
     freeTypeTable(table);

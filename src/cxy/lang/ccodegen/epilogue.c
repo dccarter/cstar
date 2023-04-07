@@ -427,6 +427,15 @@ static void generateTypedExpr(ConstAstVisitor *visitor, const AstNode *node)
     astConstVisit(visitor, node->typedExpr.expr);
 }
 
+static void generateCastExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    format(ctx->state, "(", NULL);
+    generateTypeUsage((CCodegenContext *)ctx, node->castExpr.to->type);
+    format(ctx->state, ")", NULL);
+    astConstVisit(visitor, node->castExpr.expr);
+}
+
 static void generateTernaryExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -648,6 +657,7 @@ void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
         [astStringExpr] = cCodegenStringExpr,
         [astGroupExpr] = generateGroupExpr,
         [astTypedExpr] = generateTypedExpr,
+        [astCastExpr] = generateCastExpr,
         [astTernaryExpr] = generateTernaryExpr,
         [astBlockStmt] = generateBlock,
         [astExprStmt] = generateExpressionStmt,

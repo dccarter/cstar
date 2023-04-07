@@ -281,7 +281,7 @@ static bool cmdParseCommandArguments(CmdParser *P,
                                      char ***pargv)
 {
     int argc = *pargc;
-    char **argv = *pargv;
+    char **argv = *pargv, **dst = cmd == P->def ? argv : argv - 1;
     u32 npos = 0;
     int reWrite = 0;
 
@@ -325,7 +325,7 @@ static bool cmdParseCommandArguments(CmdParser *P,
         }
         else {
             if (cmd->npos == 0) {
-                (*pargv)[reWrite++] = (char *)arg;
+                (dst)[reWrite++] = (char *)arg;
             }
             else if (npos >= cmd->npos) {
                 sprintf(cmd->P->error,
