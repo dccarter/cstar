@@ -352,6 +352,29 @@ static AstNode *postfix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
     unreachable("unreachable");
 }
 
+static AstNode *fieldExpr(Parser *P);
+static AstNode *structExpr(Parser *P,
+                           AstNode *lhs,
+                           AstNode *(parseField)(Parser *));
+
+static AstNode *newOperator(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
+{
+    Token tok = *current(P);
+    AstNode *type = parseType(P);
+    AstNode *init = NULL;
+    if (match(P, tokLParen)) {
+        init = parsePrimary(P, false);
+        consume0(P, tokRParen);
+    }
+    else if (check(P, tokLBrace)) {
+        return structExpr(P, type, fieldExpr);
+    }
+    return makeAstNode(
+        P->memPool,
+        &tok.fileLoc,
+        &(AstNode){.tag = astNewExpr, .newExpr = {.type = type, .init = init}});
+}
+
 static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 {
     bool isBand = check(P, tokBAnd);
@@ -365,7 +388,11 @@ static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
     }
 
     const Token tok = *advance(P);
-    AstNode *operand = prefix(P, parsePrimary);
+    AstNode *operand;
+    if (tok.tag == tokNew)
+        return newOperator(P, parsePrimary);
+    else
+        operand = prefix(P, parsePrimary);
 
     if (!isBand) {
         return newAstNode(
@@ -1487,7 +1514,7 @@ static AstNode *structDecl(Parser *P, bool isPublic)
 static AstNode *enumOption(Parser *P)
 {
     AstNode *value = NULL;
-    Token tok = *current(P);
+    Token tok = *consume0(P, tokIdent);
     cstring name = getTokenString(P, &tok, false);
     if (match(P, tokAssign)) {
         value = expression(P, false);
@@ -1501,7 +1528,7 @@ static AstNode *enumOption(Parser *P)
 static AstNode *enumDecl(Parser *P, bool isPublic)
 {
     AstNode *base = NULL, *options = NULL;
-    Token tok = *current(P);
+    Token tok = *consume0(P, tokEnum);
     cstring name = getTokenString(P, consume0(P, tokIdent), false);
 
     if (match(P, tokColon)) {

@@ -129,6 +129,11 @@ typedef u8 bool;
 #define CYN_ALIGN(S, A) (((S) + ((A)-1)) & ~((A)-1))
 #endif
 
+#ifndef __cxy_alloc
+#define __cxy_alloc(S) calloc(1, (S))
+#define __cxy_free free
+#endif
+
 static attr(noreturn)
     attr(format, printf, 1, 2) void cynAbort(const char *fmt, ...)
 {
@@ -208,12 +213,12 @@ static inline int wputc(wchar c)
 
 typedef struct {
     u64 size;
-    char data[0];
+    char *data;
 } __cxy_string_t;
 
 __cxy_string_t *__cxy_string_new0(const char *cstr, u64 len)
 {
-    __cxy_string_t *str = calloc(sizeof(__cxy_string_t) + len + 1, 1);
+    __cxy_string_t *str = __cxy_alloc(sizeof(__cxy_string_t) + len + 1);
     str->size = len;
     if (cstr != NULL)
         memcpy(str->data, cstr, len);
@@ -345,29 +350,4 @@ char *__cxy_string_builder_release(__cxy_string_builder_t *sb)
     sb->data = NULL;
     __cxy_string_builder_deinit(sb);
     return data;
-}
-
-typedef const i64 *(*__cxy_range_next_t)();
-
-typedef struct __cxy_range_t {
-    i64 start;
-    i64 end;
-    i64 step;
-    i64 ite;
-    const __cxy_range_next_t next;
-} __cxy_range_t;
-
-inline const i64 *__cxy_range_next(__cxy_range_t *range)
-{
-    if (range->start < range->end) {
-        range->ite = range->start;
-        range->start += range->step;
-        return &range->ite;
-    }
-    return NULL;
-}
-
-attr(always_inline) __cxy_range_t range(i64 start, i64 end, i64 step)
-{
-    return (__cxy_range_t){.start = start, .end = end, .step = step};
 }

@@ -526,6 +526,25 @@ static void checkTernaryExpr(AstVisitor *visitor, AstNode *node)
         node->type = body;
 }
 
+static void checkNewExpr(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    const Type *type = NULL, *init = NULL;
+    type = evalType(visitor, node->newExpr.type);
+    if (node->newExpr.init)
+        init = evalType(visitor, node->newExpr.init);
+
+    if (init && !isTypeAssignableFrom(ctx->typeTable, type, init)) {
+        logError(
+            ctx->L,
+            &node->loc,
+            "new initializer value type '{t}' is not assignable to type '{t}'",
+            (FormatArg[]){{.t = type}, {.t = init}});
+    }
+    node->flags = node->newExpr.type->flags;
+    node->type = makePointerType(ctx->typeTable, type, type->flags);
+}
+
 static void checkVarDecl(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
@@ -558,7 +577,15 @@ static void checkVarDecl(AstVisitor *visitor, AstNode *node)
                      (FormatArg[]){{.t = node->type}, {.t = value}});
             node->type = sError;
         }
-
+        else if ((value->tag == typPointer) &&
+                 ((value->flags & flgConst) && !(node->flags & flgConst))) {
+            logError(ctx->L,
+                     &node->varDecl.init->loc,
+                     "assigning a const pointer to a non-const variable "
+                     "discards const qualifier",
+                     NULL);
+            node->type = sError;
+        }
         if (node->type->tag == typAuto)
             node->type = value;
     }
@@ -795,6 +822,15 @@ static const Type *checkPrefixExpr(CheckerContext *ctx,
     switch (node->unaryExpr.op) {
     case opPreDec:
     case opPreInc:
+        if (node->flags & flgConst) {
+            logError(
+                ctx->L,
+                &node->loc,
+                "prefix operation '{s}' cannot be performed on a constant",
+                (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)}});
+            operand = sError;
+            break;
+        }
     case opMinus:
     case opPlus:
         if (!isNumericType(ctx->typeTable, operand)) {
@@ -825,7 +861,21 @@ static const Type *checkPrefixExpr(CheckerContext *ctx,
             operand = sError;
         }
         else {
+            node->flags |=
+                (operand->flags | node->unaryExpr.operand->flags & flgConst);
             operand = operand->pointer.pointed;
+        }
+        break;
+    case opDelete:
+        if (operand->tag != typPointer || !(operand->flags & flgNewAllocated)) {
+            logError(ctx->L,
+                     &node->loc,
+                     "cannot delete an none `new` allocated object",
+                     NULL);
+            operand = sError;
+        }
+        else {
+            operand = makeVoidType(ctx->typeTable);
         }
         break;
     default:
@@ -840,11 +890,21 @@ static void checkUnary(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     const Type *operand = evalType(visitor, node->unaryExpr.operand);
+    node->flags |= node->unaryExpr.operand->flags;
+
     if (node->unaryExpr.isPrefix) {
         operand = checkPrefixExpr(ctx, operand, node);
     }
     else {
-        if (!isNumericType(ctx->typeTable, operand)) {
+        if (node->flags & flgConst) {
+            logError(
+                ctx->L,
+                &node->loc,
+                "postfix operation '{s}' cannot be performed on a constant",
+                (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)}});
+            operand = sError;
+        }
+        else if (!isNumericType(ctx->typeTable, operand)) {
             logError(ctx->L,
                      &node->unaryExpr.operand->loc,
                      "postfix expression '{s}' no supported on type '{t}'",
@@ -866,7 +926,7 @@ static void checkAssign(AstVisitor *visitor, AstNode *node)
 
     // TODO check r-value-ness
     node->type = sError;
-    if (left->flags & flgConst) {
+    if ((left->flags & flgConst) || (lhs->flags & flgConst)) {
         logError(ctx->L,
                  &node->loc,
                  "lhs of assignment expressions is a constant",
@@ -911,15 +971,20 @@ static void checkAddressOf(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     const Type *operand = evalType(visitor, node->unaryExpr.operand);
+    node->flags |= node->unaryExpr.operand->flags;
     node->type = makePointerType(
-        ctx->typeTable, operand, node->unaryExpr.operand->flags & flgConst);
+        ctx->typeTable, operand, node->unaryExpr.operand->flags);
 }
 
 static void checkIndex(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     const Type *target = evalType(visitor, node->indexExpr.target);
+    node->flags |= node->indexExpr.target->flags;
+
     astVisit(visitor, node->indexExpr.index);
+    if (target->tag == typPointer)
+        target = stripPointer(ctx->typeTable, target);
 
     if (target->tag == typArray) {
         node->type = target->array.elementType;
@@ -1626,6 +1691,7 @@ void semanticsCheck(AstNode *program,
         [astCastExpr] = checkCastExpr,
         [astRangeExpr] = checkRangeExpr,
         [astTernaryExpr] = checkTernaryExpr,
+        [astNewExpr] = checkNewExpr,
         [astBlockStmt] = checkBlock,
         [astReturnStmt] = checkReturn,
         [astDeferStmt] = checkDeferStmt,

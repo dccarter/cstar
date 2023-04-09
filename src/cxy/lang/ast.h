@@ -146,6 +146,7 @@ typedef enum {
     astStructExpr,
     astMemberExpr,
     astRangeExpr,
+    astNewExpr,
     /* Statements */
     astExprStmt,
     astBreakStmt,
@@ -178,7 +179,8 @@ enum {
     flgClosure = BIT(12),
     flgCapturePointer = BIT(13),
     flgClosureStyle = BIT(14),
-    flgFuncTypeParam = BIT(15)
+    flgFuncTypeParam = BIT(15),
+    flgNewAllocated = BIT(16)
 };
 
 typedef struct AstNode AstNode;
@@ -277,6 +279,11 @@ struct AstNode {
             struct AstNode *end;
             struct AstNode *step;
         } rangeExpr;
+
+        struct {
+            struct AstNode *type;
+            struct AstNode *init;
+        } newExpr;
 
         struct {
             struct AstNode *to;

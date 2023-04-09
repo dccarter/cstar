@@ -247,14 +247,55 @@ static void generateBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
     astConstVisit(visitor, node->binaryExpr.rhs);
 }
 
+static void generateNewExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    const char *name = makeAnonymousVariable(((CCodegenContext *)ctx)->strPool,
+                                             "__cxy_new_temp");
+    const Type *type = node->newExpr.type->type;
+
+    format(ctx->state, "({{ ", NULL);
+    generateTypeUsage((CCodegenContext *)ctx, node->type);
+    format(
+        ctx->state, " {s} = __cxy_alloc(sizeof(", (FormatArg[]){{.s = name}});
+    generateTypeUsage((CCodegenContext *)ctx, node->newExpr.type->type);
+    format(ctx->state, "));", NULL);
+    if (node->newExpr.init) {
+        if (type->tag == typArray) {
+            format(ctx->state, " memcpy(*{s}, &(", (FormatArg[]){{.s = name}});
+            generateTypeUsage((CCodegenContext *)ctx, type);
+            format(ctx->state, ")", NULL);
+            astConstVisit(visitor, node->newExpr.init);
+            format(ctx->state, ", sizeof(", NULL);
+            generateTypeUsage((CCodegenContext *)ctx, node->newExpr.type->type);
+            format(ctx->state, "))", NULL);
+        }
+        else {
+            format(ctx->state, " *{s} = ", (FormatArg[]){{.s = name}});
+            astConstVisit(visitor, node->newExpr.init);
+        }
+        format(ctx->state, ";", NULL);
+    }
+    format(ctx->state, " {s}; })", (FormatArg[]){{.s = name}});
+}
+
 static void generateUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     if (node->unaryExpr.isPrefix) {
-        format(ctx->state,
-               "{s}",
-               (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)}});
-        astConstVisit(visitor, node->unaryExpr.operand);
+        switch (node->unaryExpr.op) {
+        case opDelete:
+            format(ctx->state, "__cxy_free((void *)", NULL);
+            astConstVisit(visitor, node->unaryExpr.operand);
+            format(ctx->state, ")", NULL);
+            break;
+
+        default:
+            format(ctx->state,
+                   "{s}",
+                   (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)}});
+            astConstVisit(visitor, node->unaryExpr.operand);
+        }
     }
     else {
         astConstVisit(visitor, node->unaryExpr.operand);
@@ -433,6 +474,24 @@ static void generateCastExpr(ConstAstVisitor *visitor, const AstNode *node)
     generateTypeUsage((CCodegenContext *)ctx, node->castExpr.to->type);
     format(ctx->state, ")", NULL);
     astConstVisit(visitor, node->castExpr.expr);
+}
+
+static void generateIndexExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    const Type *target = node->indexExpr.target->type;
+    const Type *stripped = target->pointer.pointed;
+    if (target->tag == typPointer && stripped->tag == typArray) {
+        format(ctx->state, "(*", NULL);
+        astConstVisit(visitor, node->indexExpr.target);
+        format(ctx->state, ")", NULL);
+    }
+    else {
+        astConstVisit(visitor, node->indexExpr.target);
+    }
+    format(ctx->state, "[", NULL);
+    astConstVisit(visitor, node->indexExpr.index);
+    format(ctx->state, "]", NULL);
 }
 
 static void generateTernaryExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -659,7 +718,9 @@ void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
         [astGroupExpr] = generateGroupExpr,
         [astTypedExpr] = generateTypedExpr,
         [astCastExpr] = generateCastExpr,
+        [astIndexExpr] = generateIndexExpr,
         [astTernaryExpr] = generateTernaryExpr,
+        [astNewExpr] = generateNewExpr,
         [astBlockStmt] = generateBlock,
         [astExprStmt] = generateExpressionStmt,
         [astReturnStmt] = generateReturn,
