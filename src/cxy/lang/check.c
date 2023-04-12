@@ -530,6 +530,8 @@ static void checkNewExpr(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     const Type *type = NULL, *init = NULL;
+    node->flags |= flgNewAllocated;
+
     type = evalType(visitor, node->newExpr.type);
     if (node->newExpr.init)
         init = evalType(visitor, node->newExpr.init);
@@ -542,7 +544,8 @@ static void checkNewExpr(AstVisitor *visitor, AstNode *node)
             (FormatArg[]){{.t = type}, {.t = init}});
     }
     node->flags = node->newExpr.type->flags;
-    node->type = makePointerType(ctx->typeTable, type, type->flags);
+    node->type =
+        makePointerType(ctx->typeTable, type, type->flags | flgNewAllocated);
 }
 
 static void checkVarDecl(AstVisitor *visitor, AstNode *node)
@@ -983,8 +986,18 @@ static void checkIndex(AstVisitor *visitor, AstNode *node)
     node->flags |= node->indexExpr.target->flags;
 
     astVisit(visitor, node->indexExpr.index);
-    if (target->tag == typPointer)
-        target = stripPointer(ctx->typeTable, target);
+    if (target->tag == typPointer) {
+        target = target->pointer.pointed;
+        node->indexExpr.target = makeAstNode(
+            ctx->pool,
+            &node->indexExpr.target->loc,
+            &(AstNode){.tag = astUnaryExpr,
+                       .type = target,
+                       .flags = node->indexExpr.target->flags,
+                       .unaryExpr = {.op = opDeref,
+                                     .operand = node->indexExpr.target,
+                                     .isPrefix = true}});
+    }
 
     if (target->tag == typArray) {
         node->type = target->array.elementType;
@@ -1492,25 +1505,39 @@ static void checkForStmt(AstVisitor *visitor, AstNode *node)
             node->forStmt.var->type = symbol->type;
         }
     }
-    else if (stripPointer(ctx->typeTable, range)->tag == typArray) {
-        const Type *elementType =
-            stripPointer(ctx->typeTable, range)->array.elementType;
-        if (type->tag != typAuto &&
-            !isTypeAssignableFrom(ctx->typeTable, elementType, type)) {
-            logError(ctx->L,
-                     &node->forStmt.var->loc,
-                     "unexpected type '{t}' for loop variable, expecting array "
-                     "element type '{t}'",
-                     (FormatArg[]){{.t = type}, {.t = elementType}});
-            type = sError;
+    else {
+        if (range->tag == typPointer)
+            range = range->pointer.pointed;
+
+        if (range->tag == typArray) {
+            const Type *elementType = range->array.elementType;
+            node->forStmt.range = makeAstNode(
+                ctx->pool,
+                &node->forStmt.range->loc,
+                &(AstNode){.tag = astUnaryExpr,
+                           .type = range,
+                           .flags = node->forStmt.range->flags,
+                           .unaryExpr = {.op = opDeref,
+                                         .operand = node->forStmt.range,
+                                         .isPrefix = true}});
+            if (type->tag != typAuto &&
+                !isTypeAssignableFrom(ctx->typeTable, elementType, type)) {
+                logError(
+                    ctx->L,
+                    &node->forStmt.var->loc,
+                    "unexpected type '{t}' for loop variable, expecting array "
+                    "element type '{t}'",
+                    (FormatArg[]){{.t = type}, {.t = elementType}});
+                type = sError;
+            }
+            else if (type->tag == typAuto) {
+                symbol->type = elementType;
+                node->forStmt.var->type = elementType;
+            }
         }
-        else if (type->tag == typAuto) {
-            symbol->type = elementType;
-            node->forStmt.var->type = elementType;
+        else {
+            unreachable("");
         }
-    }
-    else if (range->tag == typFunc) {
-        unreachable("");
     }
 
     const Type *body = evalType(visitor, node->forStmt.body);

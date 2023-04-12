@@ -139,12 +139,12 @@ static Token *consume0(Parser *parser, TokenTag id)
 
 static void reportUnexpectedToken(Parser *P, cstring expected)
 {
-    const Token *cur = current(P);
+    Token cur = *current(P);
     parserError(
         P,
-        &cur->fileLoc,
+        &cur.fileLoc,
         "unexpected token '{s}', expecting {s}",
-        (FormatArg[]){{.s = token_tag_to_str(cur->tag)}, {.s = expected}});
+        (FormatArg[]){{.s = token_tag_to_str(cur.tag)}, {.s = expected}});
 }
 
 AstNode *newAstNode(Parser *P, const FilePos *start, const AstNode *init)

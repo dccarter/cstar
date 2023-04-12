@@ -651,10 +651,10 @@ static void generateForStmt(ConstAstVisitor *visitor, const AstNode *node)
         else
             generateTypeUsage(
                 cctx,
-                &(const Type){.tag = typPointer,
-                              .flags = range->type->flags,
-                              .pointer.pointed =
-                                  range->type->array.elementType});
+                &(const Type){
+                    .tag = typPointer,
+                    .flags = range->type->flags | node->forStmt.range->flags,
+                    .pointer.pointed = range->type->array.elementType});
 
         format(ctx->state, " __arr_{s} = ", (FormatArg[]){{.s = name}});
         astConstVisit(visitor, range);
