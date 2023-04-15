@@ -43,6 +43,8 @@ AstNode *findSymbolAndScope(const Env *env,
                             const char *name,
                             const FileLoc *loc,
                             Scope **scope);
+
+AstNode *findSymbolOnly(const Env *env, const char *name);
 AstNode *findEnclosingLoop(Env *env,
                            Log *L,
                            const char *keyword,

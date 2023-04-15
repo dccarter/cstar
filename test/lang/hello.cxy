@@ -20,10 +20,11 @@ enum Command : u8 {
 }
 
 struct User {
-    name: string
+    name: string = "Carter"
     age: u64
 }
 
 func main(args: [string]) {
-    const user = User{age: 10};
+    const user = User{age: <u64>10, name: "Green"};
+    puts(f"${user}")
 }

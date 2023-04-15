@@ -343,6 +343,27 @@ static void generateTupleExpr(ConstAstVisitor *visitor, const AstNode *node)
     format(ctx->state, "}", NULL);
 }
 
+static void generateStructExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    const AstNode *field = node->structExpr.fields;
+
+    format(ctx->state, "(", NULL);
+    generateTypeUsage((CCodegenContext *)ctx, node->type);
+    format(ctx->state, ")", NULL);
+
+    format(ctx->state, "{{", NULL);
+    for (u64 i = 0; field; field = field->next, i++) {
+        if (i != 0)
+            format(ctx->state, ", ", NULL);
+        format(
+            ctx->state, ".{s} = ", (FormatArg[]){{.s = field->fieldExpr.name}});
+        astConstVisit(visitor, field->fieldExpr.value);
+    }
+
+    format(ctx->state, "}", NULL);
+}
+
 static void generateArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     generateManyAstsWithDelim(
@@ -719,6 +740,7 @@ void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
         [astUnaryExpr] = generateUnaryExpr,
         [astAssignExpr] = generateAssignExpr,
         [astTupleExpr] = generateTupleExpr,
+        [astStructExpr] = generateStructExpr,
         [astArrayExpr] = generateArrayExpr,
         [astMemberExpr] = generateMemberExpr,
         [astCallExpr] = generateCallExpr,

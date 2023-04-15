@@ -71,7 +71,12 @@ static void generateStructDefinition(CCodegenContext *context, const Type *type)
         generateTypeUsage(context, field->type);
         format(state, " {s};", (FormatArg[]){{.s = field->name}});
     }
-    format(state, "{<}\n} ", NULL);
+    format(state, "{<}\n};\n", NULL);
+    format(state, "void ", NULL);
+    writeTypename(state, type);
+    format(state, "op_str0(", NULL);
+    writeTypename(state, type);
+    format(state, " *this, __cxy_string_builder_t *sb) {{{>}\n", NULL);
     writeTypename(state, type);
 }
 

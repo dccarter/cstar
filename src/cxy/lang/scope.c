@@ -146,6 +146,26 @@ AstNode *findSymbolAndScope(const Env *env,
     return NULL;
 }
 
+AstNode *findSymbolOnly(const Env *env, const char *name)
+{
+    u32 hash = hashStr(hashInit(), name);
+    for (Scope *scope = env->scope; scope; scope = scope->prev) {
+        Symbol *symbol = findInHashTable(&scope->symbols,
+                                         &(Symbol){.name = name},
+                                         hash,
+                                         sizeof(Symbol),
+                                         compareSymbols);
+        if (symbol)
+            return symbol->declSite;
+    }
+
+    if (env->up) {
+        return findSymbolOnly(env->up, name);
+    }
+    
+    return NULL;
+}
+
 static inline AstNode *findEnclosingScope(Env *env,
                                           Log *L,
                                           const char *keyword,

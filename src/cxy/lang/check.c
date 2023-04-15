@@ -1215,6 +1215,63 @@ static void checkTupleExpr(AstVisitor *visitor, AstNode *node)
 static void checkStructExpr(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
+    const Type *target = evalType(visitor, node->structExpr.left);
+    if (target->tag != typStruct) {
+        logError(ctx->L,
+                 &node->structExpr.left->loc,
+                 "unsupported type used with struct initializer, '{t}' is not "
+                 "a struct",
+                 (FormatArg[]){{.t = target}});
+        node->type = sError;
+        return;
+    }
+
+    AstNode *field = node->structExpr.fields, *prev = node->structExpr.fields;
+    bool *initialized = mallocOrDie(sizeof(bool) * target->tStruct.fieldsCount);
+    for (; field; field = field->next) {
+        prev = field;
+        AstNode *decl =
+            findSymbolOnly(target->tStruct.env, field->fieldExpr.name);
+        if (decl == NULL) {
+            logError(
+                ctx->L,
+                &field->loc,
+                "field '{s}' does not exist in target struct type '{t}'",
+                ((FormatArg[]){{.s = field->fieldExpr.name}, {.t = target}}));
+            node->type = sError;
+            continue;
+        }
+
+        const Type *type = evalType(visitor, field->fieldExpr.value);
+        if (!isTypeAssignableFrom(ctx->typeTable, decl->type, type)) {
+            logError(ctx->L,
+                     &field->fieldExpr.value->loc,
+                     "value type '{t}' is not assignable to field type '{t}'",
+                     (FormatArg[]){{.t = type}, {.t = decl->type}});
+            node->type = sError;
+        }
+
+        initialized[decl->structField.index] = true;
+    }
+
+    if (node->type != sError) {
+        for (u64 i = 0; i < target->tStruct.fieldsCount; i++) {
+            const AstNode *targetField = target->tStruct.fields[i].decl;
+            if (initialized[i] || targetField->structField.value == NULL)
+                continue;
+            prev->next = makeAstNode(
+                ctx->pool,
+                &prev->loc,
+                &(AstNode){
+                    .tag = astFieldExpr,
+                    .type = targetField->type,
+                    .flags = targetField->flags,
+                    .fieldExpr = {.name = targetField->structField.name,
+                                  .value = targetField->structField.value}});
+            prev = prev->next;
+        }
+        node->type = target;
+    }
 }
 
 static void checkGroupExpr(AstVisitor *visitor, AstNode *node)
@@ -1899,6 +1956,7 @@ static void checkStructDecl(AstVisitor *visitor, AstNode *node)
 
     for (u64 i = 0; member; member = member->next, i++) {
         const Type *type = evalType(visitor, member);
+        member->structField.index = i;
         if (type == sError) {
             node->type = sError;
             goto checkStructDecl_cleanupScopes;

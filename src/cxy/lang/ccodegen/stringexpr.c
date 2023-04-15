@@ -20,6 +20,9 @@ static void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node)
 
     const Type *type = node->type;
     cstring namespace = type->namespace ?: "";
+    cstring scopeOp = type->namespace ? ":" : "";
+    cstring name = type->name ?: "";
+    u64 scopedNameLen = strlen(name) + strlen(namespace) + strlen(scopeOp);
 
     switch (type->tag) {
     case typString:
@@ -48,7 +51,8 @@ static void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node)
             break;
 #define f(I, ...) case prt##I:
             INTEGER_TYPE_LIST(f)
-            format(ctx->state, "__cxy_string_builder_append_int(&sb, ", NULL);
+            format(
+                ctx->state, "__cxy_string_builder_append_int(&sb, (i64)", NULL);
             break;
 #undef f
         case prtF32:
@@ -120,14 +124,17 @@ static void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node)
                                      .isPrefix = true}};
         generateStringExpr(visitor, &arg);
         break;
+    }
     case typEnum:
-        format(
-            ctx->state,
-            "__cxy_string_builder_append_cstr0(&sb, \"{s}{s}{s}.\", {u64});\n",
-            (FormatArg[]){{.s = namespace},
-                          {.s = type->namespace ? "." : ""},
-                          {.s = type->name},
-                          {.u64 = strlen(type->name) + strlen(namespace) + 1}});
+        if (type->name) {
+            format(ctx->state,
+                   "__cxy_string_builder_append_cstr0(&sb, \"{s}{s}{s}.\", "
+                   "{u64});\n",
+                   (FormatArg[]){{.s = namespace},
+                                 {.s = scopeOp},
+                                 {.s = name},
+                                 {.u64 = scopedNameLen + 1}});
+        }
         format(ctx->state, "__cxy_string_builder_append_cstr1(&sb, ", NULL);
         format(ctx->state,
                "__cxy_enum_find_name(",
@@ -139,11 +146,44 @@ static void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node)
         astConstVisit(visitor, node);
         format(ctx->state, "));\n", NULL);
         break;
+    case typStruct: {
+        if (type->name) {
+            format(ctx->state,
+                   "__cxy_string_builder_append_cstr0(&sb, \"{s}{s}{s}{{\", "
+                   "{u64});\n",
+                   (FormatArg[]){{.s = namespace},
+                                 {.s = scopeOp},
+                                 {.s = name},
+                                 {.u64 = scopedNameLen + 1}});
+        }
+        for (u64 i = 0; i < type->tStruct.fieldsCount; i++) {
+            // Create a temporary member access expression
+
+            AstNode member = {.tag = astIdentifier,
+                              .type = type->tStruct.fields[i].type,
+                              .ident.value = type->tStruct.fields[i].name};
+            AstNode arg = {
+                .tag = astMemberExpr,
+                .type = type->tStruct.fields[i].type,
+                .memberExpr = {.target = (AstNode *)node, .member = &member}};
+
+            if (i != 0)
+                format(ctx->state,
+                       "__cxy_string_builder_append_cstr0(&sb, \", \", 2);\n",
+                       NULL);
+
+            format(
+                ctx->state,
+                "__cxy_string_builder_append_cstr0(&sb, \"{s}: \", {u64});\n",
+                (FormatArg[]){{.s = member.ident.value},
+                              {.u64 = strlen(member.ident.value) + 2}});
+            generateStringExpr(visitor, &arg);
+        }
+        format(
+            ctx->state, "__cxy_string_builder_append_char(&sb, '}');\n", NULL);
+        break;
     }
     default:
-        format(ctx->state,
-               "__cxy_string_builder_append_cstr0(&sb, \"null\", 4);\n",
-               NULL);
         break;
     }
 }
