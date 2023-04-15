@@ -52,7 +52,15 @@ static void generatePathElement(ConstAstVisitor *visitor, const AstNode *node)
 static void generatePath(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    generateManyAstsWithDelim(visitor, "", ".", "", node->path.elements);
+    if (node->type->tag == typEnum && node->path.elements->next &&
+        (node->path.elements->next->flags & flgMember)) {
+        writeEnumPrefix(ctx->state, node->type);
+        generateManyAstsWithDelim(
+            visitor, "_", "_", "", node->path.elements->next);
+    }
+    else {
+        generateManyAstsWithDelim(visitor, "", ".", "", node->path.elements);
+    }
 }
 
 static void generateIdentifier(ConstAstVisitor *visitor, const AstNode *node)
@@ -254,12 +262,12 @@ static void generateNewExpr(ConstAstVisitor *visitor, const AstNode *node)
                                              "__cxy_new_temp");
     const Type *type = node->newExpr.type->type;
 
-    format(ctx->state, "({{ ", NULL);
+    format(ctx->state, "({{{>}\n", NULL);
     generateTypeUsage((CCodegenContext *)ctx, node->type);
     format(
         ctx->state, " {s} = __cxy_alloc(sizeof(", (FormatArg[]){{.s = name}});
     generateTypeUsage((CCodegenContext *)ctx, node->newExpr.type->type);
-    format(ctx->state, "));", NULL);
+    format(ctx->state, "));\n", NULL);
     if (node->newExpr.init) {
         if (type->tag == typArray) {
             format(ctx->state, " memcpy(*{s}, &(", (FormatArg[]){{.s = name}});
@@ -274,9 +282,9 @@ static void generateNewExpr(ConstAstVisitor *visitor, const AstNode *node)
             format(ctx->state, " *{s} = ", (FormatArg[]){{.s = name}});
             astConstVisit(visitor, node->newExpr.init);
         }
-        format(ctx->state, ";", NULL);
+        format(ctx->state, ";\n", NULL);
     }
-    format(ctx->state, " {s}; })", (FormatArg[]){{.s = name}});
+    format(ctx->state, " {s};{<}\n})", (FormatArg[]){{.s = name}});
 }
 
 static void generateUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -404,7 +412,7 @@ static void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
             ? makeAnonymousVariable(cctx->strPool, "__closure_capture")
             : "";
 
-    format(ctx->state, "({{ ", NULL);
+    format(ctx->state, "({{{>}\n", NULL);
     if (type->flags & flgClosureStyle) {
         const AstNode *arg = node->callExpr.args;
         for (u64 i = 1; arg; arg = arg->next, i++) {
@@ -447,7 +455,7 @@ static void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
             }
         }
     }
-    format(ctx->state, "); })", NULL);
+    format(ctx->state, ");{<}\n})", NULL);
 }
 
 static void generateGroupExpr(ConstAstVisitor *visitor, const AstNode *node)

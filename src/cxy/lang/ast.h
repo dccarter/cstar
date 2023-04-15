@@ -6,7 +6,6 @@
 #include "core/log.h"
 #include "core/mempool.h"
 #include "lang/token.h"
-#include "lang/types.h"
 
 // clang-format off
 
@@ -180,7 +179,8 @@ enum {
     flgCapturePointer = BIT(13),
     flgClosureStyle = BIT(14),
     flgFuncTypeParam = BIT(15),
-    flgNewAllocated = BIT(16)
+    flgMember = BIT(16),
+    flgNewAllocated = BIT(17),
 };
 
 typedef struct AstNode AstNode;
@@ -354,6 +354,7 @@ struct AstNode {
         struct {
             const char *name;
             struct AstNode *value;
+            u64 index;
         } enumOption;
 
         struct {

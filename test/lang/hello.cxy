@@ -12,11 +12,18 @@ pub native func fgets(data: &char, size: i32, stream: &FILE) : &char;
 
 pub func println(str: string) => puts(str)
 
+enum Command : u8 {
+    Delete,
+    Update = 204,
+    Push,
+    Cache = 2
+}
+
+struct User {
+    name: string
+    age: u64
+}
+
 func main(args: [string]) {
-    const a = new [i32, 2]([9, 0]);
-    for (var i : a) {
-        puts(f"${i}")
-    }
-    puts(f"${a.[0]}")
-    delete a
+    const user = User{age: 10};
 }

@@ -5,7 +5,7 @@
 #pragma once
 
 #include "core/strpool.h"
-#include <lang/ast.h>
+#include "lang/ast.h"
 
 typedef struct {
     FormatState *state;

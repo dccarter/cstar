@@ -1539,11 +1539,13 @@ static AstNode *enumDecl(Parser *P, bool isPublic)
         parseAtLeastOne(P, "enum options", tokRBrace, tokComma, enumOption);
     consume0(P, tokRBrace);
 
-    return newAstNode(P,
-                      &tok.fileLoc.begin,
-                      &(AstNode){.tag = astEnumDecl,
-                                 .flags = isPublic ? flgPublic : flgNone,
-                                 .enumDecl = {.options = options}});
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){
+            .tag = astEnumDecl,
+            .flags = isPublic ? flgPublic : flgNone,
+            .enumDecl = {.options = options, .name = name, .base = base}});
 }
 
 static AstNode *aliasDecl(Parser *P, bool isPublic, bool isNative)

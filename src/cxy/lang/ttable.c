@@ -4,6 +4,7 @@
 
 #include "ttable.h"
 #include "ast.h"
+#include "scope.h"
 
 #include <core/alloc.h>
 #include <core/htable.h>
@@ -44,7 +45,9 @@ static HashCode hashType(HashCode hash, const Type *type)
 {
     hash = hashUint32(hash, type->tag);
     hash = hashUint64(hash, type->flags);
-
+    if (type->namespace)
+        hash = hashStr(hash, type->namespace);
+    
     switch (type->tag) {
     case typAuto:
     case typNull:
@@ -84,6 +87,12 @@ static HashCode hashType(HashCode hash, const Type *type)
     case typFunc:
         hash = hashTypes(hash, type->func.params, type->func.paramsCount);
         hash = hashType(hash, type->func.retType);
+        break;
+    case typEnum:
+    case typStruct:
+        hash = hashUint64(hash, type->index);
+        if (type->name)
+            hash = hashStr(hash, type->name);
         break;
     default:
         csAssert0("invalid type");
@@ -145,6 +154,10 @@ static bool compareTypes(const Type *left, const Type *right)
                compareManyTypes(left->func.params,
                                 right->func.params,
                                 right->func.paramsCount);
+    case typEnum:
+    case typStruct:
+        return left == right;
+
     default:
         csAssert0("invalid type");
     }
@@ -378,6 +391,40 @@ const Type *makeFuncType(TypeTable *table, const Type *init)
     if (!ret.f) {
         ((Type *)ret.s)->func.params =
             copyTypes(table, init->func.params, init->func.paramsCount);
+    }
+
+    return ret.s;
+}
+
+const Type *makeEnum(TypeTable *table, const Type *init)
+{
+    GetOrInset ret = getOrInsertType(table, init);
+    if (!ret.f) {
+        Type *tEnum = (Type *)ret.s;
+        tEnum->tEnum.options = allocFromMemPool(
+            table->memPool, sizeof(EnumOption) * init->tEnum.count);
+        memcpy(tEnum->tEnum.options,
+               init->tEnum.options,
+               sizeof(EnumOption) * init->tEnum.count);
+        tEnum->tEnum.env = allocFromMemPool(table->memPool, sizeof(Env));
+        *tEnum->tEnum.env = *init->tEnum.env;
+    }
+
+    return ret.s;
+}
+
+const Type *makeStruct(TypeTable *table, const Type *init)
+{
+    GetOrInset ret = getOrInsertType(table, init);
+    if (!ret.f) {
+        Type *tStruct = (Type *)ret.s;
+        tStruct->tStruct.fields = allocFromMemPool(
+            table->memPool, sizeof(StructField) * init->tStruct.fieldsCount);
+        memcpy(tStruct->tStruct.fields,
+               init->tStruct.fields,
+               sizeof(StructField) * init->tStruct.fieldsCount);
+        tStruct->tStruct.env = allocFromMemPool(table->memPool, sizeof(Env));
+        *tStruct->tStruct.env = *init->tStruct.env;
     }
 
     return ret.s;

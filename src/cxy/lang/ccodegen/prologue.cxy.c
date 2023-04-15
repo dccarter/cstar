@@ -351,3 +351,19 @@ char *__cxy_string_builder_release(__cxy_string_builder_t *sb)
     __cxy_string_builder_deinit(sb);
     return data;
 }
+
+typedef struct {
+    u64 value;
+    const char *name;
+} __cxy_enum_names_t;
+
+const char *__cxy_enum_find_name(const __cxy_enum_names_t *names, u64 value)
+{
+    const __cxy_enum_names_t *name = names;
+    for (; name->name != NULL; name++) {
+        if (name->value == value)
+            return name->name;
+    }
+
+    return "(Unknown)";
+}

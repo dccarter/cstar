@@ -24,6 +24,57 @@ static void generateTupleDefinition(CCodegenContext *context, const Type *type)
     writeTypename(state, type);
 }
 
+static void generateEnumDefinition(CCodegenContext *context, const Type *type)
+{
+    FormatState *state = context->base.state;
+    format(state, "enum {{{>}\n", NULL);
+    for (u64 i = 0; i < type->tEnum.count; i++) {
+        const EnumOption *option = &type->tEnum.options[i];
+        if (i != 0)
+            format(state, "\n", NULL);
+        writeEnumPrefix(state, type);
+        format(state,
+               "_{s} = {u64},",
+               (FormatArg[]){{.s = option->name}, {.u64 = option->value}});
+    }
+    format(state, "{<}\n};\n", NULL);
+
+    format(state, "typedef ", NULL);
+    writeTypename(state, type->tEnum.base);
+    format(state, " ", NULL);
+    writeTypename(state, type);
+    format(state, ";\n", NULL);
+
+    format(state, "const __cxy_enum_names_t ", NULL);
+    writeEnumPrefix(state, type);
+    format(state, "_enum_names[] = {{{>}\n", NULL);
+
+    for (u64 i = 0; i < type->tEnum.count; i++) {
+        const EnumOption *option = &type->tEnum.options[i];
+        if (i != 0)
+            format(state, "\n", NULL);
+        format(state,
+               "{{.value = {u64}, .name = \"{s}\"},",
+               (FormatArg[]){{.u64 = option->value}, {.s = option->name}});
+    }
+    format(state, "{<}\n}", NULL);
+}
+
+static void generateStructDefinition(CCodegenContext *context, const Type *type)
+{
+    FormatState *state = context->base.state;
+    format(state, "typedef struct {{{>}\n", NULL);
+    for (u64 i = 0; i < type->tStruct.fieldsCount; i++) {
+        const StructField *field = &type->tStruct.fields[i];
+        if (i != 0)
+            format(state, "\n", NULL);
+        generateTypeUsage(context, field->type);
+        format(state, " {s};", (FormatArg[]){{.s = field->name}});
+    }
+    format(state, "{<}\n} ", NULL);
+    writeTypename(state, type);
+}
+
 static void generateFuncDeclaration(CCodegenContext *context, const Type *type)
 {
     FormatState *state = context->base.state;
@@ -61,19 +112,24 @@ static void generateType(CCodegenContext *context, const Type *type)
     switch (type->tag) {
     case typArray:
         generateArrayDeclaration(context, type);
-        format(state, ";\n", NULL);
         break;
     case typFunc:
         generateFuncDeclaration(context, type);
-        format(state, ";\n", NULL);
         break;
     case typTuple:
         generateTupleDefinition(context, type);
-        format(state, ";\n", NULL);
+        break;
+    case typEnum:
+        generateEnumDefinition(context, type);
+        break;
+    case typStruct:
+        generateStructDefinition(context, type);
         break;
     default:
-        break;
+        return;
     }
+
+    format(state, ";\n", NULL);
 }
 
 void generateAllTypes(CCodegenContext *ctx)

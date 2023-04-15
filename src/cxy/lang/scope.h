@@ -1,15 +1,18 @@
 //
 // Created by Carter on 2023-03-31.
 //
+#pragma once
 
-#include <core/htable.h>
-#include <lang/ast.h>
+#include "core/htable.h"
+#include "lang/ast.h"
 
 typedef struct {
     const char *name;
     AstNode *declSite;
 } Symbol;
+
 typedef struct Env Env;
+
 typedef struct Scope {
     HashTable symbols;
     AstNode *node;
@@ -21,15 +24,25 @@ typedef struct Scope {
 struct Env {
     Scope *scope;
     Scope *first;
+    struct Env *up;
 };
 
 void environmentInit(Env *env);
+static inline void environmentAttachUp(Env *env, Env *up) { env->up = up; }
+static inline void environmentDetachUp(Env *env) { env->up = NULL; }
 void environmentFree(Env *env);
+void releaseScope(Env *env, Env *into);
 
 bool defineSymbol(Env *env, Log *L, const char *name, AstNode *node);
-AstNode *findSymbol(Env *env, Log *L, const char *name, const FileLoc *loc);
-AstNode *findSymbolAndScope(
-    Env *env, Log *L, const char *name, const FileLoc *loc, Scope **scope);
+AstNode *findSymbol(const Env *env,
+                    Log *L,
+                    const char *name,
+                    const FileLoc *loc);
+AstNode *findSymbolAndScope(const Env *env,
+                            Log *L,
+                            const char *name,
+                            const FileLoc *loc,
+                            Scope **scope);
 AstNode *findEnclosingLoop(Env *env,
                            Log *L,
                            const char *keyword,

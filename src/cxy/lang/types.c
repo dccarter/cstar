@@ -71,6 +71,10 @@ bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from)
     case typAuto:
         return from->tag != typError;
     case typPrimitive:
+        if (from->tag == typEnum) {
+            return isTypeAssignableFrom(table, to, from->tEnum.base);
+        }
+
         switch (to->primitive.id) {
 #define f(I, ...) case prt##I:
             SIGNED_INTEGER_TYPE_LIST(f)
@@ -130,6 +134,9 @@ bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from)
         }
         return true;
     }
+    case typEnum:
+        return from->tag == typEnum &&
+               isTypeAssignableFrom(table, to->tEnum.base, from->tEnum.base);
     default:
         return false;
     }
@@ -310,6 +317,18 @@ void printType(FormatState *state, const Type *type)
         break;
     case typThis:
         printKeyword(state, "This");
+        break;
+    case typEnum:
+        printKeyword(state, "enum");
+        if (type->name) {
+            format(state, " {s}", (FormatArg[]){{.s = type->name}});
+        }
+        break;
+    case typStruct:
+        printKeyword(state, "struct");
+        if (type->name) {
+            format(state, " {s}", (FormatArg[]){{.s = type->name}});
+        }
         break;
     default:
         unreachable("TODO");

@@ -135,6 +135,47 @@ static void addAnonymousTopLevelDecl(CheckerContext *ctx,
     ctx->previousTopLevelDecl = node;
 }
 
+AstNode *findSymbolByPath(CheckerContext *ctx, const Env *env, AstNode *node)
+{
+    AstNode *elem = node->path.elements;
+    do {
+        const Type *type;
+        AstNode *sym =
+            findSymbol(env, ctx->L, elem->pathElement.name, &elem->loc);
+        if (elem->next == NULL || sym == NULL)
+            return sym;
+
+        type = sym->type;
+        elem = elem->next;
+        switch (type->tag) {
+        case typEnum:
+            env = type->tEnum.env;
+            break;
+        case typStruct:
+            env = type->tStruct.env;
+            break;
+        default:
+            logError(ctx->L,
+                     &elem->loc,
+                     "type '{t}' does not support member syntax",
+                     (FormatArg[]){{.t = type}});
+            return NULL;
+        }
+    } while (true);
+}
+
+AstNode *findSymbolByNode(CheckerContext *ctx, const Env *env, AstNode *node)
+{
+    switch (node->tag) {
+    case astPath:
+        return findSymbolByPath(ctx, env, node);
+    case astIdentifier:
+        return findSymbol(env, ctx->L, node->ident.value, &node->loc);
+    default:
+        return NULL;
+    }
+}
+
 static void checkProgram(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
@@ -598,7 +639,7 @@ static void checkIdentifier(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     AstNode *symbol =
-        findSymbol(&ctx->env, ctx->L, node->pathElement.name, &node->loc);
+        findSymbol(&ctx->env, ctx->L, node->ident.value, &node->loc);
     if (symbol == NULL)
         node->type = sError;
     else
@@ -608,12 +649,51 @@ static void checkIdentifier(AstVisitor *visitor, AstNode *node)
 static void checkPathElement(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
-    AstNode *symbol =
-        findSymbol(&ctx->env, ctx->L, node->pathElement.name, &node->loc);
-    if (symbol == NULL)
+    csAssert0(node->parentScope);
+    const Type *scope = node->parentScope->type;
+    const Env *env = NULL;
+    switch (scope->tag) {
+    case typEnum:
+        env = scope->tEnum.env;
+        break;
+    case typStruct:
+        env = scope->tStruct.env;
+        break;
+    default:
+        logError(ctx->L,
+                 &node->loc,
+                 "type '{t}' does not support member expressions",
+                 (FormatArg[]){{.t = scope}});
         node->type = sError;
-    else
-        node->type = symbol->type;
+        return;
+    }
+
+    AstNode *symbol =
+        findSymbol(env, ctx->L, node->pathElement.name, &node->loc);
+
+    if (symbol == NULL) {
+        node->type = sError;
+        return;
+    }
+
+    node->flags = symbol->flags;
+    node->type = symbol->type;
+    switch (scope->tag) {
+    case typEnum:
+        if (node->parentScope->flags & flgMember) {
+            logError(ctx->L,
+                     &node->loc,
+                     "member expression not supported on enum members",
+                     NULL);
+            node->type = sError;
+        }
+        else {
+            node->type = scope;
+        }
+        break;
+    default:
+        break;
+    }
 }
 
 static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
@@ -661,11 +741,16 @@ static void checkPath(AstVisitor *visitor, AstNode *node)
     AstNode *elem = node->path.elements;
     const Type *type = checkFirstPathElement(visitor, elem);
     u64 flags = elem->flags;
-
+    AstNode *prev = elem;
     elem = elem->next;
     for (; elem; elem = elem->next) {
-        type = evalType(visitor, elem);
+        elem->parentScope = prev;
+        if ((type = evalType(visitor, elem)) == sError) {
+            node->type = sError;
+            return;
+        };
         flags = elem->flags;
+        prev = elem;
     }
     node->type = type;
     node->flags |= flags;
@@ -752,12 +837,12 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
         break;
     case optLogical:
         if (type != makePrimitiveType(ctx->typeTable, prtBool)) {
-            logError(
-                ctx->L,
-                &node->loc,
-                "cannot perform logical binary operation '{s}' on non-boolean "
-                "type '{t}'",
-                (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
+            logError(ctx->L,
+                     &node->loc,
+                     "cannot perform logical binary operation '{s}' on "
+                     "non-boolean "
+                     "type '{t}'",
+                     (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
             return;
         }
         node->type = type;
@@ -789,12 +874,12 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
         break;
     case optRange: {
         if (!isIntegerType(ctx->typeTable, left)) {
-            logError(
-                ctx->L,
-                &node->loc,
-                "expecting an integral type for range expression start, got "
-                "type '{t}'",
-                (FormatArg[]){{.t = left}});
+            logError(ctx->L,
+                     &node->loc,
+                     "expecting an integral type for range expression "
+                     "start, got "
+                     "type '{t}'",
+                     (FormatArg[]){{.t = left}});
             return;
         }
         if (!isIntegerType(ctx->typeTable, right)) {
@@ -1056,6 +1141,21 @@ static void checkMember(AstVisitor *visitor, AstNode *node)
         node->type = target->tuple.members[member->intLiteral.value];
         node->flags |= ((flags | node->type->flags) & flgConst);
     }
+    else if (target->tag == typEnum) {
+        if (member->tag != astIdentifier && member->tag != astPath) {
+            logError(ctx->L,
+                     &member->loc,
+                     "unexpected member expression, expecting an enum member",
+                     NULL);
+            node->type = sError;
+            return;
+        }
+        AstNode *option = findSymbolByNode(ctx, target->tEnum.env, member);
+        if (option == NULL)
+            node->type = sError;
+        else
+            node->type = target;
+    }
     else {
         csAssert(member->tag == astIdentifier, "TODO");
         node->type = sError;
@@ -1076,11 +1176,11 @@ static void checkArrayExr(AstVisitor *visitor, AstNode *node)
         }
 
         if (!isTypeAssignableFrom(ctx->typeTable, elementType, type)) {
-            logError(
-                ctx->L,
-                &elem->loc,
-                "inconsistent array types in array, expecting '{t}', got '{t}'",
-                (FormatArg[]){{.t = elementType}, {.t = type}});
+            logError(ctx->L,
+                     &elem->loc,
+                     "inconsistent array types in array, expecting '{t}', "
+                     "got '{t}'",
+                     (FormatArg[]){{.t = elementType}, {.t = type}});
         }
     }
     if (elementType == NULL) {
@@ -1110,6 +1210,11 @@ static void checkTupleExpr(AstVisitor *visitor, AstNode *node)
     }
 
     free(args);
+}
+
+static void checkStructExpr(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
 }
 
 static void checkGroupExpr(AstVisitor *visitor, AstNode *node)
@@ -1324,7 +1429,8 @@ static void checkReturn(AstVisitor *visitor, AstNode *node)
             logError(
                 ctx->L,
                 &node->returnStmt.expr->loc,
-                "inconsistent return types in auto function, type '{t}' not "
+                "inconsistent return types in auto function, type "
+                "'{t}' not "
                 "compatible with '{t}'",
                 (FormatArg[]){{.t = node->type}, {.t = ctx->lastReturn->type}});
         }
@@ -1522,12 +1628,12 @@ static void checkForStmt(AstVisitor *visitor, AstNode *node)
                                          .isPrefix = true}});
             if (type->tag != typAuto &&
                 !isTypeAssignableFrom(ctx->typeTable, elementType, type)) {
-                logError(
-                    ctx->L,
-                    &node->forStmt.var->loc,
-                    "unexpected type '{t}' for loop variable, expecting array "
-                    "element type '{t}'",
-                    (FormatArg[]){{.t = type}, {.t = elementType}});
+                logError(ctx->L,
+                         &node->forStmt.var->loc,
+                         "unexpected type '{t}' for loop variable, "
+                         "expecting array "
+                         "element type '{t}'",
+                         (FormatArg[]){{.t = type}, {.t = elementType}});
                 type = sError;
             }
             else if (type->tag == typAuto) {
@@ -1674,6 +1780,161 @@ static void checkOptionalType(AstVisitor *visitor, AstNode *node)
     node->type = makeOptionalType(ctx->typeTable, type, flgNone);
 }
 
+static void checkEnumDecl(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    u64 numOptions = countAstNodes(node->enumDecl.options);
+    EnumOption *options = mallocOrDie(sizeof(EnumOption) * numOptions);
+    AstNode *option = node->enumDecl.options;
+    u64 lastValue = 0, i = 0;
+    const Type *base = NULL;
+    Env env;
+
+    if (node->enumDecl.base)
+        base = evalType(visitor, node->enumDecl.base);
+    else
+        base = makePrimitiveType(ctx->typeTable, prtI64);
+
+    if (!isIntegerType(ctx->typeTable, base)) {
+        logError(ctx->L,
+                 &node->enumDecl.base->loc,
+                 "expecting enum base to be an integral type, got '{t}'",
+                 (FormatArg[]){{.t = base}});
+        node->type = sError;
+        return;
+    }
+
+    defineSymbol(&ctx->env, ctx->L, node->enumDecl.name, node);
+    environmentInit(&env);
+    environmentAttachUp(&env, &ctx->env);
+    pushScope(&env, node);
+
+    for (; option; option = option->next, i++) {
+        option->flags |= flgMember;
+
+        if (!defineSymbol(&env, ctx->L, option->enumOption.name, option)) {
+            node->type = sError;
+            return;
+        }
+
+        u64 value = option->enumOption.value
+                        ? option->enumOption.value->intLiteral.value
+                        : lastValue;
+        options[i] =
+            (EnumOption){.value = value, .name = option->enumOption.name};
+        lastValue = value + 1;
+        option->enumOption.index = i;
+    }
+
+    environmentDetachUp(&env);
+
+    node->type = makeEnum(ctx->typeTable,
+                          &(Type){.tag = typEnum,
+                                  .name = node->enumDecl.name,
+                                  .flags = node->flags,
+                                  .tEnum = {.base = base,
+                                            .options = options,
+                                            .count = numOptions,
+                                            .env = &env}});
+
+    free(options);
+}
+
+static void checkStructField(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    const Type *type = node->structField.type
+                           ? evalType(visitor, node->structField.type)
+                           : makeAutoType(ctx->typeTable);
+    if (node->structField.value) {
+        const Type *value = evalType(visitor, node->structField.value);
+        if (!isTypeAssignableFrom(ctx->typeTable, type, value)) {
+            logError(ctx->L,
+                     &node->structField.value->loc,
+                     "field initializer of type '{t}' not compatible with "
+                     "field type '{t}'",
+                     (FormatArg[]){{.t = value}, {.t = type}});
+            node->type = sError;
+            return;
+        }
+        type = value;
+    }
+
+    node->type = type;
+    defineSymbol(&ctx->env, ctx->L, node->structField.name, node);
+}
+
+static void checkStructDecl(AstVisitor *visitor, AstNode *node)
+{
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    u64 numMembers = countAstNodes(node->structDecl.members);
+    StructField *members = mallocOrDie(sizeof(StructField) * numMembers);
+    AstNode *member = node->structDecl.members;
+
+    const Type *base = NULL;
+    if (node->structDecl.base) {
+        base = evalType(visitor, node->structDecl.base);
+        if (base->tag != typStruct) {
+            logError(ctx->L,
+                     &node->structDecl.base->loc,
+                     "type '{t}' cannot be extend",
+                     (FormatArg[]){{.t = base}});
+            node->type = sError;
+            goto checkStructDecl_error;
+        }
+    }
+
+    defineSymbol(&ctx->env, ctx->L, node->structDecl.name, node);
+
+    Env env = ctx->env;
+    environmentInit(&ctx->env);
+    pushScope(&ctx->env, node);
+    if (base) {
+        environmentAttachUp((Env *)base->tStruct.env, &env);
+        environmentAttachUp(&ctx->env, (Env *)base->tStruct.env);
+    }
+    else {
+        environmentAttachUp(&ctx->env, &env);
+    }
+
+    for (u64 i = 0; member; member = member->next, i++) {
+        const Type *type = evalType(visitor, member);
+        if (type == sError) {
+            node->type = sError;
+            goto checkStructDecl_cleanupScopes;
+        }
+
+        members[i] = (StructField){
+            .name = member->structField.name, .type = type, .decl = member};
+    }
+
+    if (base) {
+        environmentDetachUp((Env *)base->tStruct.env);
+        environmentDetachUp(&ctx->env);
+    }
+    else {
+        environmentDetachUp(&ctx->env);
+    }
+
+    Env structEnv = {NULL};
+    releaseScope(&ctx->env, &structEnv);
+
+    node->type = makeStruct(ctx->typeTable,
+                            &(Type){.tag = typStruct,
+                                    .flags = node->flags,
+                                    .name = node->structDecl.name,
+                                    .tStruct = {.env = &structEnv,
+                                                .base = base,
+                                                .fields = members,
+                                                .fieldsCount = numMembers}});
+checkStructDecl_cleanupScopes:
+    environmentFree(&ctx->env);
+    ctx->env = env;
+
+checkStructDecl_error:
+    free(members);
+}
+
 void semanticsCheck(AstNode *program,
                     Log *L,
                     MemPool *pool,
@@ -1712,6 +1973,7 @@ void semanticsCheck(AstNode *program,
         [astMemberExpr] = checkMember,
         [astArrayExpr] = checkArrayExr,
         [astTupleExpr] = checkTupleExpr,
+        [astStructExpr] = checkStructExpr,
         [astGroupExpr] = checkGroupExpr,
         [astCallExpr] = checkCall,
         [astClosureExpr] = checkClosure,
@@ -1737,6 +1999,9 @@ void semanticsCheck(AstNode *program,
         [astVoidType] = checkBuiltinType,
         [astStringType] = checkBuiltinType,
         [astOptionalType] = checkOptionalType,
+        [astEnumDecl] = checkEnumDecl,
+        [astStructDecl] = checkStructDecl,
+        [astStructField] = checkStructField
     },
     .fallback = checkFallback);
     // clang-format off

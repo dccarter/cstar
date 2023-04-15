@@ -19,6 +19,7 @@ static void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node)
     CCodegenContext *cctx = getConstAstVisitorContext(visitor);
 
     const Type *type = node->type;
+    cstring namespace = type->namespace ?: "";
 
     switch (type->tag) {
     case typString:
@@ -27,14 +28,14 @@ static void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node)
             if (len)
                 format(
                     ctx->state,
-                    "__cxy_string_builder_append_cstr0(&sb, \"{s}\", {u64}); ",
+                    "__cxy_string_builder_append_cstr0(&sb, \"{s}\", {u64});\n",
                     (FormatArg[]){{.s = node->stringLiteral.value},
                                   {.u64 = len}});
         }
         else {
             format(ctx->state, "__cxy_string_builder_append_cstr1(&sb, ", NULL);
             astConstVisit(visitor, node);
-            format(ctx->state, "); ", NULL);
+            format(ctx->state, ");\n", NULL);
         }
         break;
     case typPrimitive:
@@ -58,12 +59,12 @@ static void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node)
             break;
         }
         astConstVisit(visitor, node);
-        format(ctx->state, "); ", NULL);
+        format(ctx->state, ");\n", NULL);
         break;
 
     case typTuple:
         format(
-            ctx->state, "__cxy_string_builder_append_char(&sb, '('); ", NULL);
+            ctx->state, "__cxy_string_builder_append_char(&sb, '(');\n", NULL);
         for (u64 i = 0; i < type->tuple.count; i++) {
             // Create a temporary member access expression
             AstNode member = {.tag = astIntegerLit,
@@ -76,18 +77,72 @@ static void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node)
 
             if (i != 0)
                 format(ctx->state,
-                       "__cxy_string_builder_append_cstr0(&sb, \", \", 2); ",
+                       "__cxy_string_builder_append_cstr0(&sb, \", \", 2);\n",
                        NULL);
 
             generateStringExpr(visitor, &arg);
         }
         format(
-            ctx->state, "__cxy_string_builder_append_char(&sb, ')'); ", NULL);
+            ctx->state, "__cxy_string_builder_append_char(&sb, ')');\n", NULL);
         break;
 
+    case typArray:
+        format(
+            ctx->state, "__cxy_string_builder_append_char(&sb, '[');\n", NULL);
+        for (u64 i = 0; i < type->array.size; i++) {
+            // Create a temporary member access expression
+            AstNode index = {.tag = astIntegerLit,
+                             .type = makePrimitiveType(cctx->table, prtI32),
+                             .intLiteral.value = i};
+            AstNode arg = {
+                .tag = astIndexExpr,
+                .type = type->array.elementType,
+                .indexExpr = {.target = (AstNode *)node, .index = &index}};
+
+            if (i != 0)
+                format(ctx->state,
+                       "__cxy_string_builder_append_cstr0(&sb, \", \", 2);\n",
+                       NULL);
+
+            generateStringExpr(visitor, &arg);
+        }
+        format(
+            ctx->state, "__cxy_string_builder_append_char(&sb, ']');\n", NULL);
+        break;
+
+    case typPointer: {
+        format(
+            ctx->state, "__cxy_string_builder_append_char(&sb, '&');\n", NULL);
+        AstNode arg = {.tag = astUnaryExpr,
+                       .type = type->pointer.pointed,
+                       .unaryExpr = {.operand = (AstNode *)node,
+                                     .op = opDeref,
+                                     .isPrefix = true}};
+        generateStringExpr(visitor, &arg);
+        break;
+    case typEnum:
+        format(
+            ctx->state,
+            "__cxy_string_builder_append_cstr0(&sb, \"{s}{s}{s}.\", {u64});\n",
+            (FormatArg[]){{.s = namespace},
+                          {.s = type->namespace ? "." : ""},
+                          {.s = type->name},
+                          {.u64 = strlen(type->name) + strlen(namespace) + 1}});
+        format(ctx->state, "__cxy_string_builder_append_cstr1(&sb, ", NULL);
+        format(ctx->state,
+               "__cxy_enum_find_name(",
+               (FormatArg[]){{.s = namespace}, {.s = type->name}});
+        writeEnumPrefix(ctx->state, type);
+        format(ctx->state,
+               "_enum_names, ",
+               (FormatArg[]){{.s = namespace}, {.s = type->name}});
+        astConstVisit(visitor, node);
+        format(ctx->state, "));\n", NULL);
+        break;
+    }
     default:
         format(ctx->state,
-               "__cxy_string_builder_append_cstr0(&sb, \"null\", 4); ",
+               "__cxy_string_builder_append_cstr0(&sb, \"null\", 4);\n",
                NULL);
         break;
     }
@@ -98,14 +153,14 @@ void cCodegenStringExpr(ConstAstVisitor *visitor, const AstNode *node)
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     const AstNode *part = node->stringExpr.parts;
 
-    format(
-        ctx->state,
-        "({{ __cxy_string_builder_t sb = {{}; __cxy_string_builder_init(&sb); ",
-        NULL);
+    format(ctx->state,
+           "({{{>}\n__cxy_string_builder_t sb = {{};\n"
+           "__cxy_string_builder_init(&sb);\n",
+           NULL);
 
     for (; part; part = part->next) {
         generateStringExpr(visitor, part);
     }
 
-    format(ctx->state, "__cxy_string_builder_release(&sb); })", NULL);
+    format(ctx->state, "__cxy_string_builder_release(&sb);{<}\n})", NULL);
 }

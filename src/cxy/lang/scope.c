@@ -57,7 +57,7 @@ static u64 levenshteinDistance(const char *lhs, const char *rhs, u64 minDist)
     return MIN(min, c);
 }
 
-static void suggestSimilarSymbol(Env *env, Log *L, const char *name)
+static void suggestSimilarSymbol(const Env *env, Log *L, const char *name)
 {
     u64 minDist = 2;
 
@@ -110,14 +110,20 @@ bool defineSymbol(Env *env, Log *L, const char *name, AstNode *node)
     return wasInserted;
 }
 
-AstNode *findSymbol(Env *env, Log *L, const char *name, const FileLoc *loc)
+AstNode *findSymbol(const Env *env,
+                    Log *L,
+                    const char *name,
+                    const FileLoc *loc)
 {
     Scope *scope;
     return findSymbolAndScope(env, L, name, loc, &scope);
 }
 
-AstNode *findSymbolAndScope(
-    Env *env, Log *L, const char *name, const FileLoc *loc, Scope **outScope)
+AstNode *findSymbolAndScope(const Env *env,
+                            Log *L,
+                            const char *name,
+                            const FileLoc *loc,
+                            Scope **outScope)
 {
     u32 hash = hashStr(hashInit(), name);
     for (Scope *scope = env->scope; scope; scope = scope->prev) {
@@ -129,6 +135,10 @@ AstNode *findSymbolAndScope(
         *outScope = scope;
         if (symbol)
             return symbol->declSite;
+    }
+
+    if (env->up) {
+        return findSymbolAndScope(env->up, L, name, loc, outScope);
     }
 
     logError(L, loc, "undefined symbol '{s}'", (FormatArg[]){{.s = name}});
@@ -192,6 +202,21 @@ void pushScope(Env *env, AstNode *node)
         env->scope = newScope(env->scope);
     env->scope->node = node;
     clearHashTable(&env->scope->symbols);
+}
+
+void releaseScope(Env *env, Env *into)
+{
+    csAssert0(env->scope);
+    into->first = env->scope;
+    into->scope = env->scope;
+    if (env->first != env->scope) {
+        env->scope->prev->next = env->scope->next;
+        into->first->prev = NULL;
+        into->scope->next = NULL;
+    }
+    else {
+        env->first = env->scope = NULL;
+    }
 }
 
 void popScope(Env *env)

@@ -6,6 +6,7 @@
 
 #include "core/format.h"
 #include "core/utils.h"
+
 #include <stdbool.h>
 
 /*
@@ -48,9 +49,6 @@ typedef enum {
     prtCOUNT
 } PrtId;
 
-typedef struct AstNode AstNode;
-typedef struct Scope Scope;
-
 // clang-format on
 
 typedef enum {
@@ -71,15 +69,19 @@ typedef enum {
     typTuple,
     typFunc,
     typEnum,
-    typStruct
+    typStruct,
+    typMember
 } TTag;
 
 typedef struct Type Type;
 typedef struct TypeTable TypeTable;
+typedef struct Env Env;
+typedef struct AstNode AstNode;
 
 typedef struct StructField {
     const char *name;
     const Type *type;
+    const AstNode *decl;
 } StructField;
 
 typedef struct EnumOption {
@@ -146,18 +148,22 @@ typedef struct Type {
     } func;
 
     struct {
-        Scope *scope;
         const Type *base;
-        EnumOption **options;
-        u64 optionsCount;
+        EnumOption *options;
+        u64 count;
+        Env *env;
     } tEnum;
 
     struct {
-        Scope *scope;
         const Type *base;
-        StructField **fields;
+        StructField *fields;
         u64 fieldsCount;
+        Env *env;
     } tStruct;
+
+    struct {
+        const Type *member;
+    };
 } Type;
 
 bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from);

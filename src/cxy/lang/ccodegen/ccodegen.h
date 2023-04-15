@@ -12,6 +12,7 @@ typedef struct {
     StrPool *strPool;
 } CCodegenContext;
 
+void writeEnumPrefix(FormatState *state, const Type *type);
 void writeTypename(FormatState *state, const Type *type);
 void generateTypeUsage(CCodegenContext *ctx, const Type *type);
 void generateCCodeFallback(ConstAstVisitor *visitor, const AstNode *node);
