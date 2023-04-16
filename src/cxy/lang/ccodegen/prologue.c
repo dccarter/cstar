@@ -45,7 +45,7 @@ static void generateEnumDefinition(CCodegenContext *context, const Type *type)
     writeTypename(state, type);
     format(state, ";\n", NULL);
 
-    format(state, "const __cxy_enum_names_t ", NULL);
+    format(state, "const cxy_enum_names_t ", NULL);
     writeEnumPrefix(state, type);
     format(state, "_enum_names[] = {{{>}\n", NULL);
 
@@ -63,37 +63,82 @@ static void generateEnumDefinition(CCodegenContext *context, const Type *type)
 static void generateStructDefinition(CCodegenContext *context, const Type *type)
 {
     FormatState *state = context->base.state;
-    format(state, "typedef struct {{{>}\n", NULL);
+    format(state, "struct ", NULL);
+    writeTypename(state, type);
+    format(state, " {{{>}\n", NULL);
+    if (type->tStruct.base) {
+        writeTypename(state, type->tStruct.base);
+        format(state, " super;\n", NULL);
+    }
+
     for (u64 i = 0; i < type->tStruct.fieldsCount; i++) {
         const StructField *field = &type->tStruct.fields[i];
+        if (field->type->tag == typFunc)
+            continue;
+
         if (i != 0)
             format(state, "\n", NULL);
+
         generateTypeUsage(context, field->type);
         format(state, " {s};", (FormatArg[]){{.s = field->name}});
     }
-    format(state, "{<}\n};\n", NULL);
-    format(state, "void ", NULL);
-    writeTypename(state, type);
-    format(state, "op_str0(", NULL);
-    writeTypename(state, type);
-    format(state, " *this, __cxy_string_builder_t *sb) {{{>}\n", NULL);
-    writeTypename(state, type);
+    format(state, "{<}\n}", NULL);
 }
 
 static void generateFuncDeclaration(CCodegenContext *context, const Type *type)
 {
     FormatState *state = context->base.state;
+    const AstNode *parent = type->func.decl->parentScope;
+
+    format(state, ";\n", NULL);
+    generateTypeUsage(context, type->func.retType);
+    format(state, " ", NULL);
+    writeTypename(state, parent->type);
+    format(state, "__{s}", (FormatArg[]){{.s = type->name}});
+    format(state, "(", NULL);
+    if (type->flags & flgConst)
+        format(state, "const ", NULL);
+    writeTypename(state, parent->type);
+    format(state, " *", NULL);
+
+    for (u64 i = 0; i < type->func.paramsCount; i++) {
+        format(state, ", ", NULL);
+        generateTypeUsage(context, type->func.params[i]);
+    }
+    format(state, ")", NULL);
+}
+
+static void generateFuncType(CCodegenContext *context, const Type *type)
+{
+    FormatState *state = context->base.state;
+    const AstNode *parent =
+        type->func.decl ? type->func.decl->parentScope : NULL;
+    bool isMember = parent && parent->tag == astStructDecl;
+
     format(state, "typedef ", NULL);
     generateTypeUsage(context, type->func.retType);
     format(state, "(*", NULL);
+    if (isMember) {
+        writeTypename(state, parent->type);
+        format(state, "__", NULL);
+    }
     writeTypename(state, type);
     format(state, ")(", NULL);
+    if (isMember) {
+        if (type->flags & flgConst)
+            format(state, "const ", NULL);
+        writeTypename(state, parent->type);
+        format(state, " *this", NULL);
+    }
+
     for (u64 i = 0; i < type->func.paramsCount; i++) {
-        if (i != 0)
+        if (isMember || i != 0)
             format(state, ", ", NULL);
         generateTypeUsage(context, type->func.params[i]);
     }
     format(state, ")", NULL);
+    if (isMember)
+        generateFuncDeclaration(context, type);
 }
 
 static void generateArrayDeclaration(CCodegenContext *context, const Type *type)
@@ -119,7 +164,7 @@ static void generateType(CCodegenContext *context, const Type *type)
         generateArrayDeclaration(context, type);
         break;
     case typFunc:
-        generateFuncDeclaration(context, type);
+        generateFuncType(context, type);
         break;
     case typTuple:
         generateTupleDefinition(context, type);
@@ -137,11 +182,26 @@ static void generateType(CCodegenContext *context, const Type *type)
     format(state, ";\n", NULL);
 }
 
+static void generateStructTypedef(CCodegenContext *ctx, const Type *type)
+{
+    FormatState *state = ctx->base.state;
+    format(state, "typedef struct ", NULL);
+    writeTypename(state, type);
+    format(state, " ", NULL);
+    writeTypename(state, type);
+    format(state, ";\n", NULL);
+}
+
 void generateAllTypes(CCodegenContext *ctx)
 {
     u64 typesCount = getTypesCount(ctx->table);
     const Type **types = mallocOrDie(sizeof(Type *) * typesCount);
     u64 sorted = sortedByInsertionOrder(ctx->table, types, typesCount);
+
+    for (u64 i = 0; i < sorted; i++) {
+        if (types[i]->tag == typStruct)
+            generateStructTypedef(ctx, types[i]);
+    }
 
     for (u64 i = 0; i < sorted; i++) {
         generateType(ctx, types[i]);

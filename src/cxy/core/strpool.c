@@ -44,7 +44,7 @@ const char *makeAnonymousVariable(StrPool *pool, const char *prefix)
     static u64 postfix = 0;
     u64 len;
     if (prefix == NULL) {
-        prefix = "__cxy_anonymous_var";
+        prefix = "cxy_anonymous_var";
         len = 19;
     }
     else

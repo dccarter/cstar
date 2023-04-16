@@ -12,19 +12,30 @@ pub native func fgets(data: &char, size: i32, stream: &FILE) : &char;
 
 pub func println(str: string) => puts(str)
 
-enum Command : u8 {
-    Delete,
-    Update = 204,
-    Push,
-    Cache = 2
+struct Base {
+    id: i64
 }
 
-struct User {
-    name: string = "Carter"
-    age: u64
+struct Account : Base {
+    name: string
+    balance: f64
+    id: i64
+
+    func deposit(amount: f64) {
+        super.id = 10
+        this.balance += amount
+    }
+
+    func withdraw(amount: f64) {
+        if (balance < amount) {
+            puts("Insufficient funds")
+            return;
+        }
+        balance -= amount
+    }
+
+    const func str() : string => f"${super.id}-${name}: ${balance}"
 }
 
 func main(args: [string]) {
-    const user = User{age: <u64>10, name: "Green"};
-    puts(f"${user}")
 }

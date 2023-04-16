@@ -145,7 +145,7 @@ char *readFile(const char *fileName, size_t *file_size)
     return file_data;
 }
 
-void cynAbort(const char *fmt, ...)
+void cxyAbort(const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);

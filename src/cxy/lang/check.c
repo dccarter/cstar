@@ -23,7 +23,9 @@ typedef struct {
     AstNode *currentTopLevelDecl;
     AstNode *program;
     const AstNode *lastReturn;
-    bool mainOptimized;
+    bool mainOptimized : 1;
+    bool deferFuncBodyCheck : 1;
+    bool skipFuncDefineSymbol : 1;
     u64 anonymousDeclsIndex;
 } CheckerContext;
 
@@ -111,9 +113,9 @@ static void initBuiltins(CheckerContext *ctx)
             ctx, "char", flgNative, makeOpaqueType(ctx->typeTable, "char"));
 
         addBuiltinType(ctx,
-                       "__cxy_range_t",
+                       "cxy_range_t",
                        flgNative,
-                       makeOpaqueType(ctx->typeTable, "__cxy_range_t"));
+                       makeOpaqueType(ctx->typeTable, "cxy_range_t"));
     }
 }
 
@@ -124,6 +126,19 @@ static void addAnonymousTopLevelDecl(CheckerContext *ctx,
     Env env = {.first = ctx->env.first, .scope = ctx->env.first};
     if (!defineSymbol(&env, ctx->L, name, node))
         return;
+    if (ctx->previousTopLevelDecl == ctx->currentTopLevelDecl) {
+        ctx->program->program.decls = node;
+        node->next = ctx->currentTopLevelDecl;
+    }
+    else {
+        ctx->previousTopLevelDecl->next = node;
+        node->next = ctx->currentTopLevelDecl;
+    }
+    ctx->previousTopLevelDecl = node;
+}
+
+static void addTopLevelDecl(CheckerContext *ctx, AstNode *node)
+{
     if (ctx->previousTopLevelDecl == ctx->currentTopLevelDecl) {
         ctx->program->program.decls = node;
         node->next = ctx->currentTopLevelDecl;
@@ -298,6 +313,125 @@ static const Type *transformFuncTypeParam(CheckerContext *ctx, const Type *type)
     return type;
 }
 
+static const Type *checkFuncDeclSignature(AstVisitor *visitor, AstNode *node)
+{
+    const Type *ret = NULL, **params, *type = NULL;
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+
+    u64 paramsCount = countAstNodes(node->funcDecl.params);
+    AstNode *param = node->funcDecl.params;
+    u64 i = 0;
+    bool isVariadic = false;
+    u64 withDefaultValues = 0;
+
+    defineSymbol(&ctx->env, ctx->L, node->funcDecl.name, node);
+
+    pushScope(&ctx->env, node);
+    params = mallocOrDie(sizeof(Type *) * paramsCount);
+
+    for (; param; param = param->next, i++) {
+        param->parentScope = node;
+        params[i] = evalType(visitor, param);
+        if (isVariadic && (param->flags & flgVariadic)) {
+            logError(ctx->L,
+                     &param->loc,
+                     "variadic parameters should the last parameter type in "
+                     "function declaration",
+                     NULL);
+            continue;
+        }
+
+        isVariadic = (param->flags & flgVariadic);
+
+        if (withDefaultValues && param->funcParam.def == NULL) {
+            logError(ctx->L,
+                     &param->loc,
+                     "parameter cannot be declared without a default value",
+                     NULL);
+            continue;
+        }
+        withDefaultValues = (param->funcParam.def != NULL);
+        if (params[i]->tag == typFunc) {
+            params[i] = transformFuncTypeParam(ctx, params[i]);
+            param->type = params[i];
+
+            param->flags |= flgFuncTypeParam;
+            node->flags |= flgClosureStyle;
+        }
+    }
+
+    ret = makeAutoType(ctx->typeTable);
+    if (node->funcDecl.ret)
+        ret = evalType(visitor, node->funcDecl.ret);
+
+    node->type = makeFuncType(
+        ctx->typeTable,
+        &(Type){.tag = typFunc,
+                .name = node->funcDecl.name,
+                .flags = node->flags,
+                .func = {.retType = ret,
+                         .params = params,
+                         .paramsCount = paramsCount,
+                         .decl = node,
+                         .defaultValuesCount = withDefaultValues}});
+
+    free((void *)params);
+    popScope(&ctx->env);
+
+    return node->type;
+}
+
+static void checkFuncDeclBody(AstVisitor *visitor, AstNode *node)
+{
+    const Type *ret = NULL, *type = NULL;
+    CheckerContext *ctx = getAstVisitorContext(visitor);
+    AstNode *param = node->funcDecl.params;
+    const Type *parent = makeThisType(ctx->typeTable, node->flags & flgConst);
+    const AstNode *lastReturn = ctx->lastReturn;
+    ctx->lastReturn = NULL;
+
+    pushScope(&ctx->env, node);
+    defineSymbol(&ctx->env,
+                 ctx->L,
+                 "this",
+                 makeAstNode(ctx->pool,
+                             &node->loc,
+                             &(AstNode){.tag = astIdentifier,
+                                        .flags = parent->flags,
+                                        .type = parent,
+                                        .ident.value = "this"}));
+
+    if (node->parentScope->structDecl.base) {
+        defineSymbol(
+            &ctx->env,
+            ctx->L,
+            "super",
+            makeAstNode(
+                ctx->pool,
+                &node->loc,
+                &(AstNode){.tag = astIdentifier,
+                           .flags = parent->flags | flgAddThis,
+                           .type = node->parentScope->structDecl.base->type,
+                           .ident.value = "super"}));
+    }
+
+    for (; param; param = param->next) {
+        defineSymbol(&ctx->env, ctx->L, param->funcParam.name, param);
+    }
+
+    node->funcDecl.body->parentScope = node;
+    ret = evalType(visitor, node->funcDecl.body);
+
+    if (ctx->lastReturn && ret == makeVoidType(ctx->typeTable))
+        ret = ctx->lastReturn->type;
+    ctx->lastReturn = lastReturn;
+
+    if (ret != node->type->func.retType)
+        ((Type *)(node->type))->func.retType = ret;
+
+    popScope(&ctx->env);
+}
+
 static void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
 {
     const Type *ret = NULL, **params, *type = NULL;
@@ -432,7 +566,7 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
         flgNone);
     free((void *)capturedTypes);
 
-    cstring name = makeAnonymousVariable(ctx->strPool, "__cxy_closure_expr");
+    cstring name = makeAnonymousVariable(ctx->strPool, "cxy_closure_expr");
     node->type = makeFuncType(
         ctx->typeTable,
         &(Type){
@@ -536,7 +670,7 @@ static void checkRangeExpr(AstVisitor *visitor, AstNode *node)
         }
     }
 
-    node->type = makeOpaqueType(ctx->typeTable, "__cxy_range_t");
+    node->type = makeOpaqueType(ctx->typeTable, "cxy_range_t");
 }
 
 static void checkTernaryExpr(AstVisitor *visitor, AstNode *node)
@@ -573,9 +707,15 @@ static void checkNewExpr(AstVisitor *visitor, AstNode *node)
     const Type *type = NULL, *init = NULL;
     node->flags |= flgNewAllocated;
 
-    type = evalType(visitor, node->newExpr.type);
+    if (node->newExpr.type)
+        type = evalType(visitor, node->newExpr.type);
+
     if (node->newExpr.init)
         init = evalType(visitor, node->newExpr.init);
+
+    if (type == NULL) {
+        type = init;
+    }
 
     if (init && !isTypeAssignableFrom(ctx->typeTable, type, init)) {
         logError(
@@ -584,7 +724,8 @@ static void checkNewExpr(AstVisitor *visitor, AstNode *node)
             "new initializer value type '{t}' is not assignable to type '{t}'",
             (FormatArg[]){{.t = type}, {.t = init}});
     }
-    node->flags = node->newExpr.type->flags;
+    node->flags = (node->newExpr.type ? node->newExpr.type->flags
+                                      : node->newExpr.init->flags);
     node->type =
         makePointerType(ctx->typeTable, type, type->flags | flgNewAllocated);
 }
@@ -650,14 +791,20 @@ static void checkPathElement(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
     csAssert0(node->parentScope);
-    const Type *scope = node->parentScope->type;
+    const Type *scope = stripPointer(ctx->typeTable, node->parentScope->type);
+
     const Env *env = NULL;
+    Env thisEnv = {};
     switch (scope->tag) {
     case typEnum:
         env = scope->tEnum.env;
         break;
     case typStruct:
         env = scope->tStruct.env;
+        break;
+    case typThis:
+        thisEnv = (Env){.first = ctx->env.first, .scope = ctx->env.first};
+        env = &thisEnv;
         break;
     default:
         logError(ctx->L,
@@ -699,17 +846,22 @@ static void checkPathElement(AstVisitor *visitor, AstNode *node)
 static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
-
     Scope *scope = NULL, *closure = ctx->closure;
     AstNode *symbol = findSymbolAndScope(
         &ctx->env, ctx->L, node->pathElement.name, &node->loc, &scope);
     u64 flags = flgNone;
-    if (symbol == NULL)
+    if (symbol == NULL) {
         node->type = sError;
-    else {
-        node->type = symbol->type;
-        flags = (symbol->flags & flgConst);
+        return sError;
     }
+    if (scope->node && scope->node->tag == astStructDecl) {
+        node->flags = flgAddThis;
+        if (scope != ctx->env.first)
+            node->flags |= flgAddSuper;
+    }
+
+    node->type = symbol->type;
+    flags = (symbol->flags & (flgConst | flgAddThis));
     node->flags |= flags;
     if (closure == NULL)
         // We are outside a closure
@@ -738,6 +890,7 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
 static void checkPath(AstVisitor *visitor, AstNode *node)
 {
     CheckerContext *ctx = getAstVisitorContext(visitor);
+
     AstNode *elem = node->path.elements;
     const Type *type = checkFirstPathElement(visitor, elem);
     u64 flags = elem->flags;
@@ -752,6 +905,7 @@ static void checkPath(AstVisitor *visitor, AstNode *node)
         flags = elem->flags;
         prev = elem;
     }
+
     node->type = type;
     node->flags |= flags;
 }
@@ -895,7 +1049,7 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
         node->rangeExpr.start = binary.binaryExpr.lhs;
         node->rangeExpr.end = binary.binaryExpr.rhs;
         node->rangeExpr.step = NULL;
-        node->type = makeOpaqueType(ctx->typeTable, "__cxy_range_t");
+        node->type = makeOpaqueType(ctx->typeTable, "cxy_range_t");
         break;
     }
     default:
@@ -1232,6 +1386,13 @@ static void checkStructExpr(AstVisitor *visitor, AstNode *node)
         prev = field;
         AstNode *decl =
             findSymbolOnly(target->tStruct.env, field->fieldExpr.name);
+        if (decl == NULL && target->tStruct.base) {
+            decl = findSymbolOnly(target->tStruct.base->tStruct.env,
+                                  field->fieldExpr.name);
+            if (decl)
+                field->flags |= flgAddSuper;
+        }
+
         if (decl == NULL) {
             logError(
                 ctx->L,
@@ -1257,8 +1418,10 @@ static void checkStructExpr(AstVisitor *visitor, AstNode *node)
     if (node->type != sError) {
         for (u64 i = 0; i < target->tStruct.fieldsCount; i++) {
             const AstNode *targetField = target->tStruct.fields[i].decl;
-            if (initialized[i] || targetField->structField.value == NULL)
+            if (initialized[i] || targetField->type->tag == typFunc ||
+                targetField->structField.value == NULL)
                 continue;
+
             prev->next = makeAstNode(
                 ctx->pool,
                 &prev->loc,
@@ -1954,16 +2117,53 @@ static void checkStructDecl(AstVisitor *visitor, AstNode *node)
         environmentAttachUp(&ctx->env, &env);
     }
 
-    for (u64 i = 0; member; member = member->next, i++) {
-        const Type *type = evalType(visitor, member);
-        member->structField.index = i;
+    AstNodeList funcs;
+    u64 i = 0;
+    for (; member; member = member->next, i++) {
+        member->parentScope = node;
+        const Type *type;
+        if (member->tag == astFuncDecl) {
+            type = checkFuncDeclSignature(visitor, member);
+        }
+        else {
+            type = evalType(visitor, member);
+        }
+
         if (type == sError) {
             node->type = sError;
             goto checkStructDecl_cleanupScopes;
         }
 
-        members[i] = (StructField){
-            .name = member->structField.name, .type = type, .decl = member};
+        if (member->tag == astFuncDecl) {
+            members[i] = (StructField){
+                .name = member->funcDecl.name, .type = type, .decl = member};
+        }
+        else {
+            members[i] = (StructField){
+                .name = member->structField.name, .type = type, .decl = member};
+            member->structField.index = i;
+        }
+    }
+
+    member = node->structDecl.members;
+    AstNode *prev = member;
+    for (; member; member = member->next) {
+        if (member->tag == astFuncDecl) {
+            checkFuncDeclBody(visitor, member);
+            if (member == node->structDecl.members) {
+                node->structDecl.members = member->next;
+            }
+            else {
+                prev->next = member->next;
+            }
+
+            member->next = NULL;
+            addTopLevelDecl(ctx, member);
+            member = prev;
+        }
+        else {
+            prev = member;
+        }
     }
 
     if (base) {
@@ -1984,7 +2184,8 @@ static void checkStructDecl(AstVisitor *visitor, AstNode *node)
                                     .tStruct = {.env = &structEnv,
                                                 .base = base,
                                                 .fields = members,
-                                                .fieldsCount = numMembers}});
+                                                .fieldsCount = i}});
+
 checkStructDecl_cleanupScopes:
     environmentFree(&ctx->env);
     ctx->env = env;

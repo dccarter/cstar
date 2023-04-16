@@ -360,14 +360,17 @@ static AstNode *structExpr(Parser *P,
 static AstNode *newOperator(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 {
     Token tok = *current(P);
-    AstNode *type = parseType(P);
+    AstNode *type = NULL;
     AstNode *init = NULL;
-    if (match(P, tokLParen)) {
-        init = parsePrimary(P, false);
-        consume0(P, tokRParen);
+    if (match(P, tokAuto)) {
+        init = parsePrimary(P, true);
     }
-    else if (check(P, tokLBrace)) {
-        return structExpr(P, type, fieldExpr);
+    else {
+        type = parseType(P);
+        if (match(P, tokLParen)) {
+            init = parsePrimary(P, true);
+            consume0(P, tokRParen);
+        }
     }
     return makeAstNode(
         P->memPool,
@@ -829,6 +832,7 @@ static AstNode *fieldExpr(Parser *P)
     return newAstNode(P,
                       &tok.fileLoc.begin,
                       &(AstNode){.tag = astFieldExpr,
+                                 .next = NULL,
                                  .fieldExpr = {.name = name, .value = value}});
 }
 
@@ -1058,24 +1062,25 @@ static OperatorOverload operatorOverload(Parser *P)
     if (match(P, tokLBracket)) {
         consume0(P, tokRBracket);
         if (match(P, tokAssign)) {
-            op = (OperatorOverload){.f = opIndexAssignOverload, .s = "`[]=`"};
+            op = (OperatorOverload){.f = opIndexAssignOverload,
+                                    .s = "op_idx_assign"};
         }
         else {
-            op = (OperatorOverload){.f = opIndexOverload, .s = "`[]`"};
+            op = (OperatorOverload){.f = opIndexOverload, .s = "op_idx"};
         }
     }
     else {
         switch (current(P)->tag) {
         case tokNew:
-            op = (OperatorOverload){.f = opNew, .s = "`new`"};
+            op = (OperatorOverload){.f = opNew, .s = "op_new"};
             break;
         case tokDelete:
-            op = (OperatorOverload){.f = opDelete, .s = "`delete`"};
+            op = (OperatorOverload){.f = opDelete, .s = "op_delete"};
             break;
 
-#define f(O, P, T, S, ...)                                                     \
+#define f(O, P, T, S, N)                                                       \
     case tok##T:                                                               \
-        op = (OperatorOverload){.f = op##O, .s = "`" S "`"};                   \
+        op = (OperatorOverload){.f = op##O, .s = "op_" N};                     \
         break;
 
             AST_BINARY_EXPR_LIST(f);
@@ -1448,6 +1453,7 @@ static AstNode *parseStructMember(Parser *P)
         attrs = attributes(P);
 
     bool isPrivate = match(P, tokMinus);
+    bool isConst = match(P, tokConst);
 
     switch (current(P)->tag) {
     case tokIdent:
@@ -1474,7 +1480,7 @@ static AstNode *parseStructMember(Parser *P)
     default:
         reportUnexpectedToken(P, "struct member");
     }
-
+    member->flags |= (isConst ? flgConst : flgNone);
     member->attrs = attrs;
     return member;
 }

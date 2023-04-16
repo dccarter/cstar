@@ -34,8 +34,8 @@
     f(Leq, 5, LessEqual,    "<=", "leq")
 
 #define AST_LOGIC_EXPR_LIST(f)                \
-    f(LAnd, 10, LAnd, "&&", NULL)             \
-    f(LOr,  11, LOr,  "||", NULL)
+    f(LAnd, 10, LAnd, "&&", "land")             \
+    f(LOr,  11, LOr,  "||", "lor")
 
 #define AST_BINARY_EXPR_LIST(f)           \
     f(Range, 13,DotDot, "..", "range")    \
@@ -180,7 +180,9 @@ enum {
     flgClosureStyle = BIT(14),
     flgFuncTypeParam = BIT(15),
     flgMember = BIT(16),
-    flgNewAllocated = BIT(17),
+    flgAddThis = BIT(17),
+    flgAddSuper = BIT(18),
+    flgNewAllocated = BIT(19),
 };
 
 typedef struct AstNode AstNode;

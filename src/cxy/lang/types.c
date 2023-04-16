@@ -89,7 +89,7 @@ bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from)
 #define f(I, ...) case prt##I:
             FLOAT_TYPE_LIST(f)
 #undef f
-            return isFloatType(table, from);
+            return isFloatType(table, from) || isIntegerType(table, from);
         default:
             return to->primitive.id == from->primitive.id;
         }

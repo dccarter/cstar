@@ -46,71 +46,71 @@ typedef u8 bool;
 #endif
 
 #if __has_attribute(always_inline)
-#define cyn_always_inline() inline __attribute__((always_inline))
+#define cxy_always_inline() inline __attribute__((always_inline))
 #else
-#define cyn_always_inline()
+#define cxy_always_inline()
 #endif
 
 #if __has_attribute(unused)
-#define cyn_unused() __attribute__((unused))
+#define cxy_unused() __attribute__((unused))
 #else
-#define cyn_unused()
+#define cxy_unused()
 #endif
 
 #if __has_attribute(noreturn)
-#define cyn_noreturn() __attribute__((noreturn))
+#define cxy_noreturn() __attribute__((noreturn))
 #else
-#define cyn_noreturn()
+#define cxy_noreturn()
 #endif
 
 #if __has_attribute(pure)
-#define cyn_pure() __attribute__((pure))
+#define cxy_pure() __attribute__((pure))
 #else
-#define cyn_pure()
+#define cxy_pure()
 #endif
 
 #if __has_attribute(warn_unused_result)
-#define cyn_nodiscard() __attribute__((warn_unused_result))
+#define cxy_nodiscard() __attribute__((warn_unused_result))
 #else
-#define cyn_discard()
+#define cxy_discard()
 #endif
 
 #if __has_attribute(packed)
-#define cyn_packed() __attribute__((packed))
+#define cxy_packed() __attribute__((packed))
 #else
-#define cyn_packed()
+#define cxy_packed()
 #endif
 
 #if __has_attribute(aligned)
-#define cyn_aligned(S) __attribute__((packed, (S)))
+#define cxy_aligned(S) __attribute__((packed, (S)))
 #else
 #warning                                                                       \
-    "Align attribute not available, attempt to use cyn_aligned will cause an error"
-#define cyn_aligned(state)                                                     \
-    struct cyn_aligned_not_supported_on_current_platform {};
+    "Align attribute not available, attempt to use cxy_aligned will cause an error"
+#define cxy_aligned(state)                                                     \
+    struct cxy_aligned_not_supported_on_current_platform {};
 #endif
 
 #if __has_attribute(cleanup)
-#define cyn_cleanup(func) __attribute__((cleanup(func)))
+#define cxy_cleanup(func) __attribute__((cleanup(func)))
 #elif __has_attribute(__cleanup__)
-#define cyn_cleanup(func) __attribute__((__cleanup__(func)))
+#define cxy_cleanup(func) __attribute__((__cleanup__(func)))
 #else
 #warning                                                                       \
-    "Cleanup attribute not available, attempt to use cyn_cleanup will cause an error"
-#define cyn_cleanup(state)                                                     \
-    struct cyn_clean_not_supported_on_current_platform {}
+    "Cleanup attribute not available, attempt to use cxy_cleanup will cause an error"
+#define cxy_cleanup(state)                                                     \
+    struct cxy_clean_not_supported_on_current_platform {}
 #endif
 
 #if __has_attribute(format)
-#define cyn_format(...) __attribute__((format(__VA_ARGS__)))
+#define cxy_format(...) __attribute__((format(__VA_ARGS__)))
 #else
-#define cyn_format(...)
+#define cxy_format(...)
 #endif
 
 #if __has_attribute(fallthrough)
-#define cyn_fallthrough() __attribute__((fallthrough))
+#define cxy_fallthrough() __attribute__((fallthrough))
 #else
-#define cyn_fallthrough() /* fall through */
+#define cxy_fallthrough() /* fall through */
 #endif
 
 #if __has_attribute(__builtin_unreachable)
@@ -123,19 +123,19 @@ typedef u8 bool;
 #define unreachable(...) csAssert(false, "Unreachable code reached");
 #endif
 
-#define attr(A, ...) CXY_PASTE(cyn_, A)(__VA_ARGS__)
+#define attr(A, ...) CXY_PASTE(cxy_, A)(__VA_ARGS__)
 
-#ifndef CYN_ALIGN
-#define CYN_ALIGN(S, A) (((S) + ((A)-1)) & ~((A)-1))
+#ifndef cxy_ALIGN
+#define cxy_ALIGN(S, A) (((S) + ((A)-1)) & ~((A)-1))
 #endif
 
-#ifndef __cxy_alloc
-#define __cxy_alloc(S) calloc(1, (S))
-#define __cxy_free free
+#ifndef cxy_alloc
+#define cxy_alloc(S) calloc(1, (S))
+#define cxy_free free
 #endif
 
 static attr(noreturn)
-    attr(format, printf, 1, 2) void cynAbort(const char *fmt, ...)
+    attr(format, printf, 1, 2) void cxyAbort(const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
@@ -145,38 +145,38 @@ static attr(noreturn)
     abort();
 }
 
-#define cynAssert(COND, FMT, ...)                                              \
+#define cxyAssert(COND, FMT, ...)                                              \
     if (!(COND))                                                               \
-    cynAbort("%s:%d : (" #COND ") " FMT "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+    cxyAbort("%s:%d : (" #COND ") " FMT "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 
-#define csAssert(cond, ...) cynAssert((cond), ##__VA_ARGS__)
-#define csAssert0(cond) cynAssert((cond), "")
+#define csAssert(cond, ...) cxyAssert((cond), ##__VA_ARGS__)
+#define csAssert0(cond) cxyAssert((cond), "")
 
-#define __cxy_stack_str_t(N)                                                   \
+#define cxy_stack_str_t(N)                                                     \
     _Static_assert(((N) <= 32), "Stack string's must be small");               \
     typedef struct Stack_str_##N##_t {                                         \
         char str[(N) + 1];                                                     \
-    } __cxy_stack_str_##N##_t
+    } cxy_stack_str_##N##_t
 
-__cxy_stack_str_t(4);
-__cxy_stack_str_t(8);
-__cxy_stack_str_t(16);
-__cxy_stack_str_t(32);
+cxy_stack_str_t(4);
+cxy_stack_str_t(8);
+cxy_stack_str_t(16);
+cxy_stack_str_t(32);
 
-static __cxy_stack_str_8_t __cxy_wchar_str(wchar chr)
+static cxy_stack_str_8_t cxy_wchar_str(wchar chr)
 {
-    int i = 0;
     if (chr < 0x80) {
-        return (__cxy_stack_str_8_t){.str = {[0] = chr, [1] = '\0', [5] = 1}};
+        return (cxy_stack_str_8_t){
+            .str = {[0] = (char)chr, [1] = '\0', [5] = 1}};
     }
     else if (chr < 0x800) {
-        return (__cxy_stack_str_8_t){.str = {[0] = (char)(0xC0 | (chr >> 6)),
-                                             [1] = (char)(0x80 | (chr & 0x3F)),
-                                             [3] = '\0',
-                                             [5] = 2}};
+        return (cxy_stack_str_8_t){.str = {[0] = (char)(0xC0 | (chr >> 6)),
+                                           [1] = (char)(0x80 | (chr & 0x3F)),
+                                           [3] = '\0',
+                                           [5] = 2}};
     }
     else if (chr < 0x10000) {
-        return (__cxy_stack_str_8_t){
+        return (cxy_stack_str_8_t){
             .str = {[0] = (char)(0xE0 | (chr >> 12)),
                     [1] = (char)(0x80 | ((chr >> 6) & 0x3F)),
                     [2] = (char)(0x80 | (chr & 0x3F)),
@@ -184,7 +184,7 @@ static __cxy_stack_str_8_t __cxy_wchar_str(wchar chr)
                     [5] = 3}};
     }
     else if (chr < 0x200000) {
-        return (__cxy_stack_str_8_t){
+        return (cxy_stack_str_8_t){
             .str = {[0] = (char)(0xF0 | (chr >> 18)),
                     [1] = (char)(0x80 | ((chr >> 12) & 0x3F)),
                     [2] = (char)(0x80 | ((chr >> 6) & 0x3F)),
@@ -199,13 +199,13 @@ static __cxy_stack_str_8_t __cxy_wchar_str(wchar chr)
 
 static inline u64 fwputc(wchar c, FILE *io)
 {
-    __cxy_stack_str_8_t s = __cxy_wchar_str(c);
+    cxy_stack_str_8_t s = cxy_wchar_str(c);
     return fwrite(s.str, 1, s.str[5], io);
 }
 
-static inline int wputc(wchar c)
+static inline u64 wputc(wchar c)
 {
-    __cxy_stack_str_8_t s = __cxy_wchar_str(c);
+    cxy_stack_str_8_t s = cxy_wchar_str(c);
     s.str[4] = '\n';
     s.str[5] += 1;
     return fwrite(s.str, 1, s.str[5], stdout);
@@ -214,11 +214,11 @@ static inline int wputc(wchar c)
 typedef struct {
     u64 size;
     char *data;
-} __cxy_string_t;
+} cxy_string_t;
 
-__cxy_string_t *__cxy_string_new0(const char *cstr, u64 len)
+cxy_string_t *cxy_string_new0(const char *cstr, u64 len)
 {
-    __cxy_string_t *str = __cxy_alloc(sizeof(__cxy_string_t) + len + 1);
+    cxy_string_t *str = cxy_alloc(sizeof(cxy_string_t) + len + 1);
     str->size = len;
     if (cstr != NULL)
         memcpy(str->data, cstr, len);
@@ -226,38 +226,37 @@ __cxy_string_t *__cxy_string_new0(const char *cstr, u64 len)
     return str;
 }
 
-attr(always_inline) __cxy_string_t *__cxy_string_new1(const char *cstr)
+attr(always_inline) cxy_string_t *cxy_string_new1(const char *cstr)
 {
-    return __cxy_string_new0(cstr, strlen(cstr));
+    return cxy_string_new0(cstr, strlen(cstr));
 }
 
-attr(always_inline) __cxy_string_t *__cxy_string_dup(const __cxy_string_t *str)
+attr(always_inline) cxy_string_t *cxy_string_dup(const cxy_string_t *str)
 {
-    return __cxy_string_new0(str->data, str->size);
+    return cxy_string_new0(str->data, str->size);
 }
 
-__cxy_string_t *__cxy_string_concat(const __cxy_string_t *s1,
-                                    const __cxy_string_t *s2)
+cxy_string_t *cxy_string_concat(const cxy_string_t *s1, const cxy_string_t *s2)
 {
-    __cxy_string_t *str = __cxy_string_new0(NULL, s1->size + s2->size);
+    cxy_string_t *str = cxy_string_new0(NULL, s1->size + s2->size);
     memcpy(str->data, s1->data, s1->size);
     memcpy(&str->data[s1->size], s2->data, s2->size);
     return str;
 }
 
-attr(always_inline) void __cxy_string_delete(__cxy_string_t *str) { free(str); }
+attr(always_inline) void cxy_string_delete(cxy_string_t *str) { free(str); }
 
-#ifndef __CXY_STRING_BUILDER_DEFAULT_CAPACITY
-#define __CXY_STRING_BUILDER_DEFAULT_CAPACITY 32
+#ifndef cxy_STRING_BUILDER_DEFAULT_CAPACITY
+#define cxy_STRING_BUILDER_DEFAULT_CAPACITY 32
 #endif
 
 typedef struct {
     u64 capacity;
     u64 size;
     char *data;
-} __cxy_string_builder_t;
+} cxy_string_builder_t;
 
-void __cxy_string_builder_grow(__cxy_string_builder_t *sb, u64 size)
+void cxy_string_builder_grow(cxy_string_builder_t *sb, u64 size)
 {
     if (sb->data == NULL) {
         sb->data = malloc(size + 1);
@@ -271,95 +270,95 @@ void __cxy_string_builder_grow(__cxy_string_builder_t *sb, u64 size)
     }
 }
 
-attr(always_inline) void __cxy_string_builder_init(__cxy_string_builder_t *sb)
+attr(always_inline) void cxy_string_builder_init(cxy_string_builder_t *sb)
 {
-    __cxy_string_builder_grow(sb, __CXY_STRING_BUILDER_DEFAULT_CAPACITY);
+    cxy_string_builder_grow(sb, cxy_STRING_BUILDER_DEFAULT_CAPACITY);
 }
 
-__cxy_string_builder_t *__cxy_string_builder_new()
+cxy_string_builder_t *cxy_string_builder_new()
 {
-    __cxy_string_builder_t *sb = calloc(1, sizeof(__cxy_string_builder_t));
-    __cxy_string_builder_init(sb);
+    cxy_string_builder_t *sb = calloc(1, sizeof(cxy_string_builder_t));
+    cxy_string_builder_init(sb);
     return sb;
 }
 
-void __cxy_string_builder_deinit(__cxy_string_builder_t *sb)
+void cxy_string_builder_deinit(cxy_string_builder_t *sb)
 {
     if (sb->data)
         free(sb->data);
     memset(sb, 0, sizeof(*sb));
 }
 
-attr(always_inline) void __cxy_string_builder_delete(__cxy_string_builder_t *sb)
+attr(always_inline) void cxy_string_builder_delete(cxy_string_builder_t *sb)
 {
     if (sb)
         free(sb);
 }
 
-void __cxy_string_builder_append_cstr0(__cxy_string_builder_t *sb,
-                                       const char *cstr,
-                                       u64 len)
+void cxy_string_builder_append_cstr0(cxy_string_builder_t *sb,
+                                     const char *cstr,
+                                     u64 len)
 {
-    __cxy_string_builder_grow(sb, len);
+    cxy_string_builder_grow(sb, len);
     memmove(&sb->data[sb->size], cstr, len);
     sb->size += len;
     sb->data[sb->size] = '\0';
 }
 
-attr(always_inline) void __cxy_string_builder_append_cstr1(
-    __cxy_string_builder_t *sb, const char *cstr)
+attr(always_inline) void cxy_string_builder_append_cstr1(
+    cxy_string_builder_t *sb, const char *cstr)
 {
-    __cxy_string_builder_append_cstr0(sb, cstr, strlen(cstr));
+    cxy_string_builder_append_cstr0(sb, cstr, strlen(cstr));
 }
 
-attr(always_inline) void __cxy_string_builder_append_int(
-    __cxy_string_builder_t *sb, i64 num)
+attr(always_inline) void cxy_string_builder_append_int(cxy_string_builder_t *sb,
+                                                       i64 num)
 {
     char data[32];
     i64 len = sprintf(data, "%lld", num);
-    __cxy_string_builder_append_cstr0(sb, data, len);
+    cxy_string_builder_append_cstr0(sb, data, len);
 }
 
-attr(always_inline) void __cxy_string_builder_append_float(
-    __cxy_string_builder_t *sb, f64 num)
+attr(always_inline) void cxy_string_builder_append_float(
+    cxy_string_builder_t *sb, f64 num)
 {
     char data[32];
     i64 len = sprintf(data, "%g", num);
-    __cxy_string_builder_append_cstr0(sb, data, len);
+    cxy_string_builder_append_cstr0(sb, data, len);
 }
 
-attr(always_inline) void __cxy_string_builder_append_char(
-    __cxy_string_builder_t *sb, wchar c)
+attr(always_inline) void cxy_string_builder_append_char(
+    cxy_string_builder_t *sb, wchar c)
 {
-    __cxy_stack_str_8_t s = __cxy_wchar_str(c);
-    __cxy_string_builder_append_cstr0(sb, s.str, s.str[5]);
+    cxy_stack_str_8_t s = cxy_wchar_str(c);
+    cxy_string_builder_append_cstr0(sb, s.str, s.str[5]);
 }
 
-attr(always_inline) void __cxy_string_builder_append_bool(
-    __cxy_string_builder_t *sb, bool v)
+attr(always_inline) void cxy_string_builder_append_bool(
+    cxy_string_builder_t *sb, bool v)
 {
     if (v)
-        __cxy_string_builder_append_cstr0(sb, "true", 4);
+        cxy_string_builder_append_cstr0(sb, "true", 4);
     else
-        __cxy_string_builder_append_cstr0(sb, "false", 5);
+        cxy_string_builder_append_cstr0(sb, "false", 5);
 }
 
-char *__cxy_string_builder_release(__cxy_string_builder_t *sb)
+char *cxy_string_builder_release(cxy_string_builder_t *sb)
 {
     char *data = sb->data;
     sb->data = NULL;
-    __cxy_string_builder_deinit(sb);
+    cxy_string_builder_deinit(sb);
     return data;
 }
 
 typedef struct {
     u64 value;
     const char *name;
-} __cxy_enum_names_t;
+} cxy_enum_names_t;
 
-const char *__cxy_enum_find_name(const __cxy_enum_names_t *names, u64 value)
+const char *cxy_enum_find_name(const cxy_enum_names_t *names, u64 value)
 {
-    const __cxy_enum_names_t *name = names;
+    const cxy_enum_names_t *name = names;
     for (; name->name != NULL; name++) {
         if (name->value == value)
             return name->name;

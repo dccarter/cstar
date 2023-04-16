@@ -31,12 +31,12 @@ static void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node)
             if (len)
                 format(
                     ctx->state,
-                    "__cxy_string_builder_append_cstr0(&sb, \"{s}\", {u64});\n",
+                    "cxy_string_builder_append_cstr0(&sb, \"{s}\", {u64});\n",
                     (FormatArg[]){{.s = node->stringLiteral.value},
                                   {.u64 = len}});
         }
         else {
-            format(ctx->state, "__cxy_string_builder_append_cstr1(&sb, ", NULL);
+            format(ctx->state, "cxy_string_builder_append_cstr1(&sb, ", NULL);
             astConstVisit(visitor, node);
             format(ctx->state, ");\n", NULL);
         }
@@ -44,20 +44,20 @@ static void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node)
     case typPrimitive:
         switch (type->primitive.id) {
         case prtBool:
-            format(ctx->state, "__cxy_string_builder_append_bool(&sb, ", NULL);
+            format(ctx->state, "cxy_string_builder_append_bool(&sb, ", NULL);
             break;
         case prtChar:
-            format(ctx->state, "__cxy_string_builder_append_char(&sb, ", NULL);
+            format(ctx->state, "cxy_string_builder_append_char(&sb, ", NULL);
             break;
 #define f(I, ...) case prt##I:
             INTEGER_TYPE_LIST(f)
             format(
-                ctx->state, "__cxy_string_builder_append_int(&sb, (i64)", NULL);
+                ctx->state, "cxy_string_builder_append_int(&sb, (i64)", NULL);
             break;
 #undef f
         case prtF32:
         case prtF64:
-            format(ctx->state, "__cxy_string_builder_append_float(&sb, ", NULL);
+            format(ctx->state, "cxy_string_builder_append_float(&sb, ", NULL);
             break;
         default:
             break;
@@ -68,7 +68,7 @@ static void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node)
 
     case typTuple:
         format(
-            ctx->state, "__cxy_string_builder_append_char(&sb, '(');\n", NULL);
+            ctx->state, "cxy_string_builder_append_char(&sb, '(');\n", NULL);
         for (u64 i = 0; i < type->tuple.count; i++) {
             // Create a temporary member access expression
             AstNode member = {.tag = astIntegerLit,
@@ -81,18 +81,18 @@ static void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node)
 
             if (i != 0)
                 format(ctx->state,
-                       "__cxy_string_builder_append_cstr0(&sb, \", \", 2);\n",
+                       "cxy_string_builder_append_cstr0(&sb, \", \", 2);\n",
                        NULL);
 
             generateStringExpr(visitor, &arg);
         }
         format(
-            ctx->state, "__cxy_string_builder_append_char(&sb, ')');\n", NULL);
+            ctx->state, "cxy_string_builder_append_char(&sb, ')');\n", NULL);
         break;
 
     case typArray:
         format(
-            ctx->state, "__cxy_string_builder_append_char(&sb, '[');\n", NULL);
+            ctx->state, "cxy_string_builder_append_char(&sb, '[');\n", NULL);
         for (u64 i = 0; i < type->array.size; i++) {
             // Create a temporary member access expression
             AstNode index = {.tag = astIntegerLit,
@@ -105,18 +105,18 @@ static void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node)
 
             if (i != 0)
                 format(ctx->state,
-                       "__cxy_string_builder_append_cstr0(&sb, \", \", 2);\n",
+                       "cxy_string_builder_append_cstr0(&sb, \", \", 2);\n",
                        NULL);
 
             generateStringExpr(visitor, &arg);
         }
         format(
-            ctx->state, "__cxy_string_builder_append_char(&sb, ']');\n", NULL);
+            ctx->state, "cxy_string_builder_append_char(&sb, ']');\n", NULL);
         break;
 
     case typPointer: {
         format(
-            ctx->state, "__cxy_string_builder_append_char(&sb, '&');\n", NULL);
+            ctx->state, "cxy_string_builder_append_char(&sb, '&');\n", NULL);
         AstNode arg = {.tag = astUnaryExpr,
                        .type = type->pointer.pointed,
                        .unaryExpr = {.operand = (AstNode *)node,
@@ -128,16 +128,16 @@ static void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node)
     case typEnum:
         if (type->name) {
             format(ctx->state,
-                   "__cxy_string_builder_append_cstr0(&sb, \"{s}{s}{s}.\", "
+                   "cxy_string_builder_append_cstr0(&sb, \"{s}{s}{s}.\", "
                    "{u64});\n",
                    (FormatArg[]){{.s = namespace},
                                  {.s = scopeOp},
                                  {.s = name},
                                  {.u64 = scopedNameLen + 1}});
         }
-        format(ctx->state, "__cxy_string_builder_append_cstr1(&sb, ", NULL);
+        format(ctx->state, "cxy_string_builder_append_cstr1(&sb, ", NULL);
         format(ctx->state,
-               "__cxy_enum_find_name(",
+               "cxy_enum_find_name(",
                (FormatArg[]){{.s = namespace}, {.s = type->name}});
         writeEnumPrefix(ctx->state, type);
         format(ctx->state,
@@ -149,7 +149,7 @@ static void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node)
     case typStruct: {
         if (type->name) {
             format(ctx->state,
-                   "__cxy_string_builder_append_cstr0(&sb, \"{s}{s}{s}{{\", "
+                   "cxy_string_builder_append_cstr0(&sb, \"{s}{s}{s}{{\", "
                    "{u64});\n",
                    (FormatArg[]){{.s = namespace},
                                  {.s = scopeOp},
@@ -169,18 +169,18 @@ static void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node)
 
             if (i != 0)
                 format(ctx->state,
-                       "__cxy_string_builder_append_cstr0(&sb, \", \", 2);\n",
+                       "cxy_string_builder_append_cstr0(&sb, \", \", 2);\n",
                        NULL);
 
             format(
                 ctx->state,
-                "__cxy_string_builder_append_cstr0(&sb, \"{s}: \", {u64});\n",
+                "cxy_string_builder_append_cstr0(&sb, \"{s}: \", {u64});\n",
                 (FormatArg[]){{.s = member.ident.value},
                               {.u64 = strlen(member.ident.value) + 2}});
             generateStringExpr(visitor, &arg);
         }
         format(
-            ctx->state, "__cxy_string_builder_append_char(&sb, '}');\n", NULL);
+            ctx->state, "cxy_string_builder_append_char(&sb, '}');\n", NULL);
         break;
     }
     default:
@@ -194,13 +194,13 @@ void cCodegenStringExpr(ConstAstVisitor *visitor, const AstNode *node)
     const AstNode *part = node->stringExpr.parts;
 
     format(ctx->state,
-           "({{{>}\n__cxy_string_builder_t sb = {{};\n"
-           "__cxy_string_builder_init(&sb);\n",
+           "({{{>}\ncxy_string_builder_t sb = {{};\n"
+           "cxy_string_builder_init(&sb);\n",
            NULL);
 
     for (; part; part = part->next) {
         generateStringExpr(visitor, part);
     }
 
-    format(ctx->state, "__cxy_string_builder_release(&sb);{<}\n})", NULL);
+    format(ctx->state, "cxy_string_builder_release(&sb);{<}\n})", NULL);
 }

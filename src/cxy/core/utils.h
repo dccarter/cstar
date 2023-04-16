@@ -57,71 +57,71 @@ extern "C" {
 #endif
 
 #if __has_attribute(always_inline)
-#define cyn_always_inline() inline __attribute__((always_inline))
+#define cxy_always_inline() inline __attribute__((always_inline))
 #else
-#define cyn_always_inline()
+#define cxy_always_inline()
 #endif
 
 #if __has_attribute(unused)
-#define cyn_unused() __attribute__((unused))
+#define cxy_unused() __attribute__((unused))
 #else
-#define cyn_unused()
+#define cxy_unused()
 #endif
 
 #if __has_attribute(noreturn)
-#define cyn_noreturn() __attribute__((noreturn))
+#define cxy_noreturn() __attribute__((noreturn))
 #else
-#define cyn_noreturn()
+#define cxy_noreturn()
 #endif
 
 #if __has_attribute(pure)
-#define cyn_pure() __attribute__((pure))
+#define cxy_pure() __attribute__((pure))
 #else
-#define cyn_pure()
+#define cxy_pure()
 #endif
 
 #if __has_attribute(warn_unused_result)
-#define cyn_nodiscard() __attribute__((warn_unused_result))
+#define cxy_nodiscard() __attribute__((warn_unused_result))
 #else
-#define cyn_discard()
+#define cxy_discard()
 #endif
 
 #if __has_attribute(packed)
-#define cyn_packed() __attribute__((packed))
+#define cxy_packed() __attribute__((packed))
 #else
-#define cyn_packed()
+#define cxy_packed()
 #endif
 
 #if __has_attribute(aligned)
-#define cyn_aligned(S) __attribute__((packed, (S)))
+#define cxy_aligned(S) __attribute__((packed, (S)))
 #else
 #warning                                                                       \
-    "Align attribute not available, attempt to use cyn_aligned will cause an error"
-#define cyn_aligned(state)                                                     \
-    struct cyn_aligned_not_supported_on_current_platform {};
+    "Align attribute not available, attempt to use cxy_aligned will cause an error"
+#define cxy_aligned(state)                                                     \
+    struct cxy_aligned_not_supported_on_current_platform {};
 #endif
 
 #if __has_attribute(cleanup)
-#define cyn_cleanup(func) __attribute__((cleanup(func)))
+#define cxy_cleanup(func) __attribute__((cleanup(func)))
 #elif __has_attribute(__cleanup__)
-#define cyn_cleanup(func) __attribute__((__cleanup__(func)))
+#define cxy_cleanup(func) __attribute__((__cleanup__(func)))
 #else
 #warning                                                                       \
-    "Cleanup attribute not available, attempt to use cyn_cleanup will cause an error"
-#define cyn_cleanup(state)                                                     \
-    struct cyn_clean_not_supported_on_current_platform {}
+    "Cleanup attribute not available, attempt to use cxy_cleanup will cause an error"
+#define cxy_cleanup(state)                                                     \
+    struct cxy_clean_not_supported_on_current_platform {}
 #endif
 
 #if __has_attribute(format)
-#define cyn_format(...) __attribute__((format(__VA_ARGS__)))
+#define cxy_format(...) __attribute__((format(__VA_ARGS__)))
 #else
-#define cyn_format(...)
+#define cxy_format(...)
 #endif
 
 #if __has_attribute(fallthrough)
-#define cyn_fallthrough() __attribute__((fallthrough))
+#define cxy_fallthrough() __attribute__((fallthrough))
 #else
-#define cyn_fallthrough() /* fall through */
+#define cxy_fallthrough() /* fall through */
 #endif
 
 #if __has_attribute(__builtin_unreachable)
@@ -134,10 +134,10 @@ extern "C" {
 #define unreachable(...) csAssert(false, "Unreachable code reached");
 #endif
 
-#define attr(A, ...) CXY_PASTE(cyn_, A)(__VA_ARGS__)
+#define attr(A, ...) CXY_PASTE(cxy_, A)(__VA_ARGS__)
 
-#ifndef CYN_ALIGN
-#define CYN_ALIGN(S, A) (((S) + ((A)-1)) & ~((A)-1))
+#ifndef cxy_ALIGN
+#define cxy_ALIGN(S, A) (((S) + ((A)-1)) & ~((A)-1))
 #endif
 
 typedef uint8_t u8;
@@ -189,14 +189,14 @@ __stack_str_t(32);
 #define Format_to_ss(SS, fmt, ...)                                             \
     snprintf((SS).str, sizeof((SS).str) - 1, fmt, __VA_ARGS__)
 
-attr(noreturn) attr(format, printf, 1, 2) void cynAbort(const char *fmt, ...);
+attr(noreturn) attr(format, printf, 1, 2) void cxyAbort(const char *fmt, ...);
 
-#define cynAssert(COND, FMT, ...)                                              \
+#define cxyAssert(COND, FMT, ...)                                              \
     if (!(COND))                                                               \
-    cynAbort("%s:%d : (" #COND ") " FMT "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+    cxyAbort("%s:%d : (" #COND ") " FMT "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 
-#define csAssert(cond, ...) cynAssert((cond), ##__VA_ARGS__)
-#define csAssert0(cond) cynAssert((cond), "")
+#define csAssert(cond, ...) cxyAssert((cond), ##__VA_ARGS__)
+#define csAssert0(cond) cxyAssert((cond), "")
 
 #define cDEF "\x1B[0m"
 #define cRED "\x1B[32m"
@@ -204,7 +204,7 @@ attr(noreturn) attr(format, printf, 1, 2) void cynAbort(const char *fmt, ...);
 #define cYLW "\x1B[33m"
 #define cBLU "\x1B[34m"
 #define cMGN "\x1B[35m"
-#define cCYN "\x1B[36m"
+#define ccxy "\x1B[36m"
 #define cWHT "\x1B[37m"
 
 #define cBOLD "\x1B[1;0m"
@@ -213,7 +213,7 @@ attr(noreturn) attr(format, printf, 1, 2) void cynAbort(const char *fmt, ...);
 #define cBYLW "\x1B[1;33m"
 #define cBBLU "\x1B[1;34m"
 #define cBMGN "\x1B[1;35m"
-#define cBCYN "\x1B[1;36m"
+#define cBcxy "\x1B[1;36m"
 #define cBWHT "\x1B[1;37m"
 
 #define Pair(T1, T2)                                                           \

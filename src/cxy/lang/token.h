@@ -66,6 +66,7 @@
     f(IndexAssignOvd,  "[]=")       \
 
 #define KEYWORD_LIST(f)             \
+    f(Auto, "auto")                 \
     f(True, "true")                 \
     f(False, "false")               \
     f(Null,  "null")                \

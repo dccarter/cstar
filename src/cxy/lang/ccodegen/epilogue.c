@@ -45,6 +45,12 @@ static void generatePathElement(ConstAstVisitor *visitor, const AstNode *node)
                    "(*self->_{u64})",
                    (FormatArg[]){{.u64 = node->pathElement.index}});
     }
+    else if (node->flags & flgAddThis) {
+        format(ctx->state,
+               "this->{s}{s}",
+               (FormatArg[]){{.s = (node->flags & flgAddSuper) ? "super." : ""},
+                             {.s = node->pathElement.name}});
+    }
     else
         format(ctx->state, "{s}", (FormatArg[]){{.s = node->pathElement.name}});
 }
@@ -58,8 +64,24 @@ static void generatePath(ConstAstVisitor *visitor, const AstNode *node)
         generateManyAstsWithDelim(
             visitor, "_", "_", "", node->path.elements->next);
     }
+    else if (node->type->tag == typFunc && node->type->func.decl->parentScope &&
+             node->type->func.decl->parentScope->tag == astStructDecl) {
+        const Type *scope = node->type->func.decl->parentScope->type;
+        const AstNode *func = node->type->func.decl;
+        writeTypename(ctx->state, scope);
+        format(ctx->state, "__{s}", (FormatArg[]){{.s = func->funcDecl.name}});
+    }
     else {
-        generateManyAstsWithDelim(visitor, "", ".", "", node->path.elements);
+        const AstNode *elem = node->path.elements;
+        for (; elem; elem = elem->next) {
+            astConstVisit(visitor, elem);
+            if (elem->next) {
+                if (elem->type->tag == typPointer || elem->type->tag == typThis)
+                    format(ctx->state, "->", NULL);
+                else
+                    format(ctx->state, ".", NULL);
+            }
+        }
     }
 }
 
@@ -86,7 +108,7 @@ static void generateClosureForward(ConstAstVisitor *visitor,
     format(ctx->state,
            " {s}_fwd(void *self",
            (FormatArg[]){{.s = node->funcDecl.name}});
-    if (params)
+    if (params->next)
         format(ctx->state, ", ", NULL);
     generateManyAstsWithDelim(visitor, "", ", ", ") {{{>}\n", params->next);
 
@@ -108,20 +130,22 @@ static void generateFunc(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     TypeTable *table = ((CCodegenContext *)ctx)->table;
+    const AstNode *parent = node->parentScope;
+    bool isMember = parent && parent->tag == astStructDecl;
 
     if (node->flags & flgClosure)
         format(ctx->state, "attr(always_inline)\n", NULL);
 
-    if (node->flags & flgMain) {
+    if (!isMember && node->flags & flgMain) {
         if (isIntegerType(table, node->type->func.retType)) {
             format(ctx->state,
-                   "#define __CXY_MAIN_INVOKE(...) return "
-                   "__cxy_main(__VA_ARGS__)\n\n",
+                   "#define cxy_MAIN_INVOKE(...) return "
+                   "cxy_main(__VA_ARGS__)\n\n",
                    NULL);
         }
         else {
             format(ctx->state,
-                   "#define __CXY_MAIN_INVOKE(...) __cxy_main(__VA_ARGS__); "
+                   "#define cxy_MAIN_INVOKE(...) cxy_main(__VA_ARGS__); "
                    "return EXIT_SUCCESS\n\n",
                    NULL);
         }
@@ -131,12 +155,34 @@ static void generateFunc(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, "extern ", NULL);
 
     generateTypeUsage((CCodegenContext *)ctx, node->type->func.retType);
-    if (node->flags & flgMain)
-        format(ctx->state, " __cxy_main", NULL);
-    else
+    if (isMember) {
+        format(ctx->state, " ", NULL);
+        writeTypename(ctx->state, parent->type);
+        format(ctx->state, "__{s}", (FormatArg[]){{.s = node->funcDecl.name}});
+    }
+    else if (node->flags & flgMain) {
+        format(ctx->state, " cxy_main", NULL);
+    }
+    else {
         format(ctx->state, " {s}", (FormatArg[]){{.s = node->funcDecl.name}});
+    }
 
-    generateManyAstsWithDelim(visitor, "(", ", ", ")", node->funcDecl.params);
+    if (isMember) {
+        format(ctx->state, "(", NULL);
+        if (node->type->flags & flgConst)
+            format(ctx->state, "const ", NULL);
+        writeTypename(ctx->state, parent->type);
+        format(ctx->state, " *this", NULL);
+        if (node->funcDecl.params)
+            format(ctx->state, ", ", NULL);
+
+        generateManyAstsWithDelim(
+            visitor, "", ", ", ")", node->funcDecl.params);
+    }
+    else {
+        generateManyAstsWithDelim(
+            visitor, "(", ", ", ")", node->funcDecl.params);
+    }
 
     if (node->flags & flgNative) {
         format(ctx->state, ";", NULL);
@@ -259,14 +305,14 @@ static void generateNewExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     const char *name = makeAnonymousVariable(((CCodegenContext *)ctx)->strPool,
-                                             "__cxy_new_temp");
-    const Type *type = node->newExpr.type->type;
+                                             "cxy_new_temp");
+    const Type *type = node->type->pointer.pointed;
 
     format(ctx->state, "({{{>}\n", NULL);
     generateTypeUsage((CCodegenContext *)ctx, node->type);
     format(
-        ctx->state, " {s} = __cxy_alloc(sizeof(", (FormatArg[]){{.s = name}});
-    generateTypeUsage((CCodegenContext *)ctx, node->newExpr.type->type);
+        ctx->state, " {s} = cxy_alloc(sizeof(", (FormatArg[]){{.s = name}});
+    generateTypeUsage((CCodegenContext *)ctx, type);
     format(ctx->state, "));\n", NULL);
     if (node->newExpr.init) {
         if (type->tag == typArray) {
@@ -275,7 +321,7 @@ static void generateNewExpr(ConstAstVisitor *visitor, const AstNode *node)
             format(ctx->state, ")", NULL);
             astConstVisit(visitor, node->newExpr.init);
             format(ctx->state, ", sizeof(", NULL);
-            generateTypeUsage((CCodegenContext *)ctx, node->newExpr.type->type);
+            generateTypeUsage((CCodegenContext *)ctx, type);
             format(ctx->state, "))", NULL);
         }
         else {
@@ -293,7 +339,7 @@ static void generateUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
     if (node->unaryExpr.isPrefix) {
         switch (node->unaryExpr.op) {
         case opDelete:
-            format(ctx->state, "__cxy_free((void *)", NULL);
+            format(ctx->state, "cxy_free((void *)", NULL);
             astConstVisit(visitor, node->unaryExpr.operand);
             format(ctx->state, ")", NULL);
             break;
@@ -357,7 +403,10 @@ static void generateStructExpr(ConstAstVisitor *visitor, const AstNode *node)
         if (i != 0)
             format(ctx->state, ", ", NULL);
         format(
-            ctx->state, ".{s} = ", (FormatArg[]){{.s = field->fieldExpr.name}});
+            ctx->state,
+            ".{s}{s} = ",
+            (FormatArg[]){{.s = (field->flags & flgAddSuper) ? "super." : ""},
+                          {.s = field->fieldExpr.name}});
         astConstVisit(visitor, field->fieldExpr.value);
     }
 
@@ -427,13 +476,16 @@ static void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     CCodegenContext *cctx = (CCodegenContext *)ctx;
 
     const Type *type = node->callExpr.callee->type;
+    const AstNode *parent =
+        type->func.decl ? type->func.decl->parentScope : NULL;
 
     const char *name =
         (type->flags & (flgClosureStyle | flgClosure))
             ? makeAnonymousVariable(cctx->strPool, "__closure_capture")
             : "";
 
-    format(ctx->state, "({{{>}\n", NULL);
+    if (type->flags & (flgClosureStyle | flgClosure))
+        format(ctx->state, "({{{>}\n", NULL);
     if (type->flags & flgClosureStyle) {
         const AstNode *arg = node->callExpr.args;
         for (u64 i = 1; arg; arg = arg->next, i++) {
@@ -447,10 +499,41 @@ static void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     }
 
     astConstVisit(visitor, node->callExpr.callee);
+    bool isMember = parent && parent->tag == astStructDecl;
     if (type->flags & flgClosure) {
         format(ctx->state, "(&{s}0", (FormatArg[]){{.s = name}});
         if (type->func.paramsCount > 1)
             format(ctx->state, ", ", NULL);
+    }
+    else if (isMember) {
+        const AstNode *callee = node->callExpr.callee;
+        bool needsThis = callee->tag == astIdentifier ||
+                         (callee->path.elements->next == NULL);
+        if (needsThis) {
+            format(ctx->state, "(this", NULL);
+        }
+        else {
+            format(ctx->state, "(", NULL);
+            const AstNode *target = callee->path.elements,
+                          *elem = callee->path.elements;
+            while (true) {
+                if (target->next == NULL || target->next->next == NULL)
+                    break;
+                target = target->next;
+            }
+            if (target->type->tag != typPointer)
+                format(ctx->state, "&", NULL);
+
+            for (;; elem = elem->next) {
+                astConstVisit(visitor, elem);
+                if (elem == target)
+                    break;
+                if (elem->type->tag == typPointer)
+                    format(ctx->state, "->", NULL);
+                else
+                    format(ctx->state, ".", NULL);
+            }
+        }
     }
     else {
         format(ctx->state, "(", NULL);
@@ -459,7 +542,7 @@ static void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
         const AstNode *arg = node->callExpr.args;
         for (u64 i = 0; arg; arg = arg->next, i++) {
             const Type *param = type->func.params[i];
-            if (i != 0)
+            if (isMember || i != 0)
                 format(ctx->state, ", ", NULL);
 
             if (arg->type->flags & flgClosure) {
@@ -476,7 +559,11 @@ static void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
             }
         }
     }
-    format(ctx->state, ");{<}\n})", NULL);
+
+    if (type->flags & (flgClosureStyle | flgClosure))
+        format(ctx->state, ");{<}\n})", NULL);
+    else
+        format(ctx->state, ")", NULL);
 }
 
 static void generateGroupExpr(ConstAstVisitor *visitor, const AstNode *node)
