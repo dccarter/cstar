@@ -34,8 +34,18 @@ struct Account : Base {
         balance -= amount
     }
 
-    const func str() : string => f"${super.id}-${name}: ${balance}"
+    const func `str`() : string => f"Account{name: ${name}, balance: ${balance}}"
+
+    const func `+`(other: &const Account) => Account{name: name, balance: balance + other.balance}
+
+    func `..`(cb: func(amount: f64) -> void) => cb(balance)
 }
 
 func main(args: [string]) {
+    var acc1 = Account{name: "Checking", balance: 100};
+    var acc2 = Account{name: "Savings", balance: 100};
+    var acc3 = acc1 + acc2;
+    const all  = [&acc1, &acc2, &acc3];
+    acc1.deposit(1000)
+    puts(f"${all}")
 }

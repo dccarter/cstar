@@ -1069,6 +1069,22 @@ static OperatorOverload operatorOverload(Parser *P)
             op = (OperatorOverload){.f = opIndexOverload, .s = "op_idx"};
         }
     }
+    else if (match(P, tokLParen)) {
+        op = (OperatorOverload){.f = opCallOverload, .s = "op_call"};
+    }
+    else if (match(P, tokIdent)) {
+        Token ident = *previous(P);
+        cstring name = getTokenString(P, &ident, false);
+        if (strcmp(name, "str") == 0) {
+            op = (OperatorOverload){.f = opStringOverload, .s = "op_str"};
+        }
+        else {
+            parserError(P,
+                        &ident.fileLoc,
+                        "unexpected operator overload `{s}`",
+                        (FormatArg[]){{.s = name}});
+        }
+    }
     else {
         switch (current(P)->tag) {
         case tokNew:

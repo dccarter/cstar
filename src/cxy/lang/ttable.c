@@ -47,7 +47,7 @@ static HashCode hashType(HashCode hash, const Type *type)
     hash = hashUint64(hash, type->flags);
     if (type->namespace)
         hash = hashStr(hash, type->namespace);
-    
+
     switch (type->tag) {
     case typAuto:
     case typNull:
@@ -379,9 +379,9 @@ const Type *makeTupleType(TypeTable *table,
     return ret.s;
 }
 
-const Type *makeThisType(TypeTable *table, u64 flags)
+const Type *makeThisType(TypeTable *table, cstring name, u64 flags)
 {
-    Type type = make(Type, .tag = typThis, .flags = flags);
+    Type type = make(Type, .tag = typThis, .name = name, .flags = flags);
     return getOrInsertType(table, &type).s;
 }
 

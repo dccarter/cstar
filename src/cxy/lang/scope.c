@@ -162,7 +162,7 @@ AstNode *findSymbolOnly(const Env *env, const char *name)
     if (env->up) {
         return findSymbolOnly(env->up, name);
     }
-    
+
     return NULL;
 }
 
@@ -233,6 +233,7 @@ void releaseScope(Env *env, Env *into)
         env->scope->prev->next = env->scope->next;
         into->first->prev = NULL;
         into->scope->next = NULL;
+        env->scope = env->scope->next;
     }
     else {
         env->first = env->scope = NULL;

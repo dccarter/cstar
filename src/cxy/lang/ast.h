@@ -84,6 +84,7 @@ typedef enum {
     opCallOverload,
     opIndexOverload,
     opIndexAssignOverload,
+    opStringOverload,
     opInvalid
 } Operator;
 

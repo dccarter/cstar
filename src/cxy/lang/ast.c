@@ -1298,11 +1298,23 @@ const char *getBinaryOpFuncName(Operator op)
     switch (op) {
 #define f(name, p, t, s, fn)                                                   \
     case op##name:                                                             \
-        return fn;
+        return "op_" fn;
         // NOLINTBEGIN
         AST_BINARY_EXPR_LIST(f)
         // NOLINTEND
 #undef f
+    case opNew:
+        return "op_new";
+    case opDelete:
+        return "op_delete";
+    case opCallOverload:
+        return "op_call";
+    case opStringOverload:
+        return "op_str";
+    case opIndexAssignOverload:
+        return "op_idx_assign";
+    case opIndexOverload:
+        return "op_idx";
     default:
         csAssert0(false);
     }

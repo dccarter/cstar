@@ -115,6 +115,7 @@ void generateTypeUsage(CCodegenContext *ctx, const Type *type)
     case typTuple:
     case typStruct:
     case typFunc:
+    case typThis:
         writeTypename(state, type);
         break;
     default:

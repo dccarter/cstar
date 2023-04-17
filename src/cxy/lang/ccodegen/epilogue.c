@@ -310,8 +310,7 @@ static void generateNewExpr(ConstAstVisitor *visitor, const AstNode *node)
 
     format(ctx->state, "({{{>}\n", NULL);
     generateTypeUsage((CCodegenContext *)ctx, node->type);
-    format(
-        ctx->state, " {s} = cxy_alloc(sizeof(", (FormatArg[]){{.s = name}});
+    format(ctx->state, " {s} = cxy_alloc(sizeof(", (FormatArg[]){{.s = name}});
     generateTypeUsage((CCodegenContext *)ctx, type);
     format(ctx->state, "));\n", NULL);
     if (node->newExpr.init) {
@@ -340,6 +339,11 @@ static void generateUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
         switch (node->unaryExpr.op) {
         case opDelete:
             format(ctx->state, "cxy_free((void *)", NULL);
+            astConstVisit(visitor, node->unaryExpr.operand);
+            format(ctx->state, ")", NULL);
+            break;
+        case opDeref:
+            format(ctx->state, "(*", NULL);
             astConstVisit(visitor, node->unaryExpr.operand);
             format(ctx->state, ")", NULL);
             break;
@@ -425,18 +429,28 @@ static void generateMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
     const AstNode *target = node->memberExpr.target,
                   *member = node->memberExpr.member;
 
-    astConstVisit(visitor, target);
-    if (target->type->tag == typPointer)
-        format(ctx->state, "->", NULL);
-    else
-        format(ctx->state, ".", NULL);
-    if (member->tag == astIntegerLit) {
-        format(ctx->state,
-               "_{u64}",
-               (FormatArg[]){{.u64 = member->intLiteral.value}});
+    if (node->type->tag == typFunc && node->type->func.decl &&
+        node->type->func.decl->parentScope &&
+        node->type->func.decl->parentScope->tag == astStructDecl) {
+        const Type *parent = node->type->func.decl->parentScope->type;
+        writeTypename(ctx->state, parent);
+        format(ctx->state, "__{s}", (FormatArg[]){{.s = member->ident.value}});
     }
     else {
-        format(ctx->state, "{s}", (FormatArg[]){{.s = member->ident.value}});
+        astConstVisit(visitor, target);
+        if (target->type->tag == typPointer)
+            format(ctx->state, "->", NULL);
+        else
+            format(ctx->state, ".", NULL);
+        if (member->tag == astIntegerLit) {
+            format(ctx->state,
+                   "_{u64}",
+                   (FormatArg[]){{.u64 = member->intLiteral.value}});
+        }
+        else {
+            format(
+                ctx->state, "{s}", (FormatArg[]){{.s = member->ident.value}});
+        }
     }
 }
 
@@ -507,31 +521,43 @@ static void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     }
     else if (isMember) {
         const AstNode *callee = node->callExpr.callee;
-        bool needsThis = callee->tag == astIdentifier ||
-                         (callee->path.elements->next == NULL);
+        bool needsThis =
+            (callee->tag == astIdentifier) ||
+            ((callee->tag != astMemberExpr) &&
+             (callee->tag == astPath && callee->path.elements->next == NULL));
+
         if (needsThis) {
             format(ctx->state, "(this", NULL);
         }
         else {
             format(ctx->state, "(", NULL);
-            const AstNode *target = callee->path.elements,
-                          *elem = callee->path.elements;
-            while (true) {
-                if (target->next == NULL || target->next->next == NULL)
-                    break;
-                target = target->next;
-            }
-            if (target->type->tag != typPointer)
-                format(ctx->state, "&", NULL);
+            const AstNode *target, *elem;
+            if (callee->tag == astPath) {
+                target = callee->path.elements, elem = callee->path.elements;
+                while (true) {
+                    if (target->next == NULL || target->next->next == NULL)
+                        break;
+                    target = target->next;
+                }
 
-            for (;; elem = elem->next) {
-                astConstVisit(visitor, elem);
-                if (elem == target)
-                    break;
-                if (elem->type->tag == typPointer)
-                    format(ctx->state, "->", NULL);
-                else
-                    format(ctx->state, ".", NULL);
+                if (target->type->tag != typPointer)
+                    format(ctx->state, "&", NULL);
+
+                for (;; elem = elem->next) {
+                    astConstVisit(visitor, elem);
+                    if (elem == target)
+                        break;
+                    if (elem->type->tag == typPointer)
+                        format(ctx->state, "->", NULL);
+                    else
+                        format(ctx->state, ".", NULL);
+                }
+            }
+            else {
+                target = callee->memberExpr.target;
+                if (target->type->tag != typPointer)
+                    format(ctx->state, "&", NULL);
+                astConstVisit(visitor, target);
             }
         }
     }

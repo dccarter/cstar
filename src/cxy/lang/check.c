@@ -386,7 +386,9 @@ static void checkFuncDeclBody(AstVisitor *visitor, AstNode *node)
     const Type *ret = NULL, *type = NULL;
     CheckerContext *ctx = getAstVisitorContext(visitor);
     AstNode *param = node->funcDecl.params;
-    const Type *parent = makeThisType(ctx->typeTable, node->flags & flgConst);
+    const Type *parent = makeThisType(ctx->typeTable,
+                                      node->parentScope->structDecl.name,
+                                      node->flags & flgConst);
     const AstNode *lastReturn = ctx->lastReturn;
     ctx->lastReturn = NULL;
 
@@ -927,6 +929,46 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
     } opKind = optInvalid;
 
     Operator op = node->binaryExpr.op;
+    if (stripPointer(ctx->typeTable, left)->tag == typStruct) {
+        cstring name = getBinaryOpFuncName(op);
+        const Type *target = stripPointer(ctx->typeTable, left);
+        AstNode *overload = findSymbolOnly(target->tStruct.env, name);
+        if (overload) {
+            AstNode *callee = makeAstNode(
+                ctx->pool,
+                &node->binaryExpr.lhs->loc,
+                &(AstNode){
+                    .tag = astMemberExpr,
+                    .type = overload->type,
+                    .memberExpr = {
+                        .target = node->binaryExpr.lhs,
+                        .member = makeAstNode(
+                            ctx->pool,
+                            &node->binaryExpr.lhs->loc,
+                            &(AstNode){.tag = astIdentifier,
+                                       .type = overload->type,
+                                       .flags = node->binaryExpr.lhs->flags,
+                                       .ident.value = name})}});
+            AstNode *args =
+                right->tag == typPointer
+                    ? node->binaryExpr.rhs
+                    : makeAstNode(
+                          ctx->pool,
+                          &node->binaryExpr.rhs->loc,
+                          &(AstNode){
+                              .tag = astAddressOf,
+                              .flags = node->binaryExpr.rhs->flags,
+                              .unaryExpr = {.op = opAddrOf,
+                                            .operand = node->binaryExpr.rhs,
+                                            .isPrefix = true}});
+            memset(&node->binaryExpr, 0, sizeof(node->binaryExpr));
+            node->tag = astCallExpr;
+            node->callExpr.callee = callee;
+            node->callExpr.args = args;
+            evalType(visitor, node);
+            return;
+        }
+    }
     const Type *type = promoteType(ctx->typeTable, left, right);
     node->type = sError;
 
@@ -1310,6 +1352,21 @@ static void checkMember(AstVisitor *visitor, AstNode *node)
         else
             node->type = target;
     }
+    else if (target->tag == typStruct) {
+        if (member->tag != astIdentifier && member->tag != astPath) {
+            logError(ctx->L,
+                     &member->loc,
+                     "unexpected member expression, expecting a struct member",
+                     NULL);
+            node->type = sError;
+            return;
+        }
+        AstNode *symbol = findSymbolByNode(ctx, target->tStruct.env, member);
+        if (symbol == NULL)
+            node->type = sError;
+        else
+            node->type = symbol->type;
+    }
     else {
         csAssert(member->tag == astIdentifier, "TODO");
         node->type = sError;
@@ -1573,6 +1630,12 @@ static void checkCall(AstVisitor *visitor, AstNode *node)
                 type = wrapFuncArgInClosure(visitor, arg);
             expected = expected->tuple.members[1];
         }
+        if (stripPointer(ctx->typeTable, expected)->tag == typThis)
+            expected =
+                makePointerType(ctx->typeTable,
+                                callee->func.decl->parentScope->type,
+                                callee->func.decl->parentScope->type->flags);
+
         if (!isTypeAssignableFrom(ctx->typeTable, expected, type)) {
             logError(ctx->L,
                      &arg->loc,
@@ -1807,10 +1870,14 @@ static void checkForStmt(AstVisitor *visitor, AstNode *node)
         checkForStmtGenerator(visitor, node);
         return;
     }
+    const Type *range = evalType(visitor, node->forStmt.range);
+    if (range->tag == typStruct) {
+
+    }
 
     pushScope(&ctx->env, node);
     const Type *type = evalType(visitor, node->forStmt.var);
-    const Type *range = evalType(visitor, node->forStmt.range);
+
 
     AstNode *symbol = findSymbol(&ctx->env,
                                  ctx->L,
@@ -2104,6 +2171,8 @@ static void checkStructDecl(AstVisitor *visitor, AstNode *node)
         }
     }
 
+    node->type =
+        makeThisType(ctx->typeTable, node->structDecl.name, node->flags);
     defineSymbol(&ctx->env, ctx->L, node->structDecl.name, node);
 
     Env env = ctx->env;
@@ -2117,7 +2186,6 @@ static void checkStructDecl(AstVisitor *visitor, AstNode *node)
         environmentAttachUp(&ctx->env, &env);
     }
 
-    AstNodeList funcs;
     u64 i = 0;
     for (; member; member = member->next, i++) {
         member->parentScope = node;
@@ -2145,6 +2213,36 @@ static void checkStructDecl(AstVisitor *visitor, AstNode *node)
         }
     }
 
+    if (base) {
+        environmentDetachUp((Env *)base->tStruct.env);
+        environmentDetachUp(&ctx->env);
+    }
+    else {
+        environmentDetachUp(&ctx->env);
+    }
+
+    Env structEnv = {NULL};
+    releaseScope(&ctx->env, &structEnv);
+
+    node->type = makeStruct(ctx->typeTable,
+                            &(Type){.tag = typStruct,
+                                    .flags = node->flags,
+                                    .name = node->structDecl.name,
+                                    .tStruct = {.env = &structEnv,
+                                                .base = base,
+                                                .fields = members,
+                                                .fieldsCount = i}});
+    environmentFree(&ctx->env);
+    ctx->env = structEnv;
+
+    if (base) {
+        environmentAttachUp((Env *)base->tStruct.env, &env);
+        environmentAttachUp(&ctx->env, (Env *)base->tStruct.env);
+    }
+    else {
+        environmentAttachUp(&ctx->env, &env);
+    }
+
     member = node->structDecl.members;
     AstNode *prev = member;
     for (; member; member = member->next) {
@@ -2166,6 +2264,12 @@ static void checkStructDecl(AstVisitor *visitor, AstNode *node)
         }
     }
 
+    if (ctx->env.scope->next) {
+        Env tmp = {.first = ctx->env.first->next};
+        ctx->env.first->next = NULL;
+        ctx->env = tmp;
+    }
+
     if (base) {
         environmentDetachUp((Env *)base->tStruct.env);
         environmentDetachUp(&ctx->env);
@@ -2173,18 +2277,6 @@ static void checkStructDecl(AstVisitor *visitor, AstNode *node)
     else {
         environmentDetachUp(&ctx->env);
     }
-
-    Env structEnv = {NULL};
-    releaseScope(&ctx->env, &structEnv);
-
-    node->type = makeStruct(ctx->typeTable,
-                            &(Type){.tag = typStruct,
-                                    .flags = node->flags,
-                                    .name = node->structDecl.name,
-                                    .tStruct = {.env = &structEnv,
-                                                .base = base,
-                                                .fields = members,
-                                                .fieldsCount = i}});
 
 checkStructDecl_cleanupScopes:
     environmentFree(&ctx->env);
