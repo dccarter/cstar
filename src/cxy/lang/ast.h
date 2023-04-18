@@ -198,15 +198,28 @@ typedef struct CaptureSet {
     u64 index;
 } ClosureCapture;
 
-struct AstNode {
-    AstTag tag;
-    FileLoc loc;
-    u64 flags;
-    const Type *type;
-    struct AstNode *parentScope;
-    struct AstNode *next;
+#define CXY_AST_NODE_HEAD                                                      \
+    AstTag tag;                                                                \
+    FileLoc loc;                                                               \
+    u64 flags;                                                                 \
+    const Type *type;                                                          \
+    struct AstNode *parentScope;                                               \
+    struct AstNode *next;                                                      \
     struct AstNode *attrs;
+
+struct AstNode {
     union {
+        struct {
+            CXY_AST_NODE_HEAD
+        };
+        struct {
+            CXY_AST_NODE_HEAD
+        } _head;
+    };
+
+    union {
+        struct {
+        } _body;
         struct {
             struct AstNode *decls;
         } program;
@@ -475,6 +488,8 @@ struct AstNode {
     };
 };
 
+#define CYX_AST_NODE_BODY_SIZE (sizeof(AstNode) - sizeof(((AstNode *)0)->_head))
+
 typedef struct AstVisitor {
     void *context;
 
@@ -503,6 +518,7 @@ void astConstVisit(ConstAstVisitor *visitor, const AstNode *node);
 AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *node);
 
 AstNode *copyAstNode(MemPool *pool, const AstNode *node);
+AstNode *cloneAstNode(MemPool *pool, const AstNode *node);
 
 void printAst(FormatState *state, const AstNode *node);
 
@@ -522,7 +538,6 @@ AstNode *getParentScopeWithTag(AstNode *node, AstTag tag);
 const AstNode *getLastAstNodeConst(const AstNode *node);
 const AstNode *getConstNodeAtIndex(const AstNode *node, u64 index);
 const AstNode *getParentScopeWithTagConst(const AstNode *node, AstTag tag);
-AstNode *cloneAstNode(MemPool *pool, const AstNode *node);
 
 void insertAstNodeAfter(AstNode *before, AstNode *after);
 void insertAstNode(AstNodeList *list, AstNode *node);

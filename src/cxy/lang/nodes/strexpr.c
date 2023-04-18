@@ -8,9 +8,9 @@
  * @date 2023-04-17
  */
 
-#include "codegen.h"
+#include "lang/codegen.h"
+#include "lang/semantics.h"
 #include "lang/ttable.h"
-#include "semantics.h"
 
 #include <string.h>
 

@@ -30,8 +30,14 @@ typedef struct {
     bool skipFuncDefineSymbol : 1;
 } SemanticsContext;
 
+#define ERROR_TYPE(CTX) makeErrorType((CTX)->typeTable)
+
 const Type *evalType(AstVisitor *visitor, AstNode *node);
 u64 checkMany(AstVisitor *visitor, AstNode *node);
 void addTopLevelDecl(SemanticsContext *ctx, cstring name, AstNode *node);
 AstNode *findSymbolByPath(SemanticsContext *ctx, const Env *env, AstNode *node);
 AstNode *findSymbolByNode(SemanticsContext *ctx, const Env *env, AstNode *node);
+
+void checkLiterals(AstVisitor *visitor, AstNode *node);
+void checkStringExpr(AstVisitor *visitor, AstNode *node);
+void checkForStmt(AstVisitor *visitor, AstNode *node);

@@ -8,12 +8,14 @@
  * @date 2023-04-17
  */
 
+#include "lang/codegen.h"
+#include "lang/semantics.h"
+
 #include "lang/ttable.h"
-#include "semantics.h"
 
 void checkLiterals(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
 
     switch (node->tag) {
     case astNullLit:

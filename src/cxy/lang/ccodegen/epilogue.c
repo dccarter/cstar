@@ -2,8 +2,9 @@
 // Created by Carter on 2023-03-29.
 //
 
-#include "ccodegen.h"
 #include "lang/ttable.h"
+
+#include "lang/codegen.h"
 
 #include "core/alloc.h"
 
@@ -13,23 +14,24 @@
 
 static void programEpilogue(ConstAstVisitor *visitor, const AstNode *node)
 {
-    CCodegenContext *ctx = getConstAstVisitorContext(visitor);
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
     size_t bytes = 0;
-    format(ctx->base.state,
+    format(ctx->state,
            "\n"
            "/* --------------------- Generated EPILOGUE --------------*/\n"
            "\n",
            NULL);
+
     generateManyAsts(visitor, "\n\n", node->program.decls);
 
-    format(ctx->base.state,
+    format(ctx->state,
            "\n"
            "/* --------------------- epilogue.cxy.c --------------*/\n"
            "\n",
            NULL);
 
-    append(ctx->base.state, readFile(CXY_EPILOGUE_SRC_FILE, &bytes), bytes);
-    format(ctx->base.state, "\n", NULL);
+    append(ctx->state, readFile(CXY_EPILOGUE_SRC_FILE, &bytes), bytes);
+    format(ctx->state, "\n", NULL);
 }
 
 static void generatePathElement(ConstAstVisitor *visitor, const AstNode *node)
@@ -60,7 +62,7 @@ static void generatePath(ConstAstVisitor *visitor, const AstNode *node)
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     if (node->type->tag == typEnum && node->path.elements->next &&
         (node->path.elements->next->flags & flgMember)) {
-        writeEnumPrefix(ctx->state, node->type);
+        writeEnumPrefix(ctx, node->type);
         generateManyAstsWithDelim(
             visitor, "_", "_", "", node->path.elements->next);
     }
@@ -68,7 +70,7 @@ static void generatePath(ConstAstVisitor *visitor, const AstNode *node)
              node->type->func.decl->parentScope->tag == astStructDecl) {
         const Type *scope = node->type->func.decl->parentScope->type;
         const AstNode *func = node->type->func.decl;
-        writeTypename(ctx->state, scope);
+        writeTypename(ctx, scope);
         format(ctx->state, "__{s}", (FormatArg[]){{.s = func->funcDecl.name}});
     }
     else {
@@ -94,7 +96,7 @@ static void generateIdentifier(ConstAstVisitor *visitor, const AstNode *node)
 static void generateFuncParam(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    generateTypeUsage((CCodegenContext *)ctx, node->type);
+    generateTypeUsage(ctx, node->type);
     format(ctx->state, " {s}", (FormatArg[]){{.s = node->funcParam.name}});
 }
 
@@ -104,7 +106,7 @@ static void generateClosureForward(ConstAstVisitor *visitor,
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     const AstNode *params = node->funcDecl.params;
 
-    generateTypeUsage((CCodegenContext *)ctx, node->type->func.retType);
+    generateTypeUsage(ctx, node->type->func.retType);
     format(ctx->state,
            " {s}_fwd(void *self",
            (FormatArg[]){{.s = node->funcDecl.name}});
@@ -116,7 +118,7 @@ static void generateClosureForward(ConstAstVisitor *visitor,
         format(ctx->state, "return ", NULL);
     }
     format(ctx->state, "{s}((", (FormatArg[]){{.s = node->funcDecl.name}});
-    generateTypeUsage((CCodegenContext *)ctx, node->funcDecl.params->type);
+    generateTypeUsage(ctx, node->funcDecl.params->type);
     format(ctx->state, ")self", NULL);
 
     for (const AstNode *param = params->next; param; param = param->next) {
@@ -129,7 +131,8 @@ static void generateClosureForward(ConstAstVisitor *visitor,
 static void generateFunc(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    TypeTable *table = ((CCodegenContext *)ctx)->table;
+    TypeTable *table = (ctx)->types;
+
     const AstNode *parent = node->parentScope;
     bool isMember = parent && parent->tag == astStructDecl;
 
@@ -137,7 +140,7 @@ static void generateFunc(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, "attr(always_inline)\n", NULL);
 
     if (!isMember && node->flags & flgMain) {
-        if (isIntegerType(table, node->type->func.retType)) {
+        if (isIntegerType(node->type->func.retType)) {
             format(ctx->state,
                    "#define cxy_MAIN_INVOKE(...) return "
                    "cxy_main(__VA_ARGS__)\n\n",
@@ -154,10 +157,10 @@ static void generateFunc(ConstAstVisitor *visitor, const AstNode *node)
     if (node->flags & flgNative)
         format(ctx->state, "extern ", NULL);
 
-    generateTypeUsage((CCodegenContext *)ctx, node->type->func.retType);
+    generateTypeUsage(ctx, node->type->func.retType);
     if (isMember) {
         format(ctx->state, " ", NULL);
-        writeTypename(ctx->state, parent->type);
+        writeTypename(ctx, parent->type);
         format(ctx->state, "__{s}", (FormatArg[]){{.s = node->funcDecl.name}});
     }
     else if (node->flags & flgMain) {
@@ -171,7 +174,7 @@ static void generateFunc(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, "(", NULL);
         if (node->type->flags & flgConst)
             format(ctx->state, "const ", NULL);
-        writeTypename(ctx->state, parent->type);
+        writeTypename(ctx, parent->type);
         format(ctx->state, " *this", NULL);
         if (node->funcDecl.params)
             format(ctx->state, ", ", NULL);
@@ -211,7 +214,7 @@ static void generateFunc(ConstAstVisitor *visitor, const AstNode *node)
 
 static void generateTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
-    CCodegenContext *ctx = getConstAstVisitorContext(visitor);
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
     if (!(node->flags & flgNative))
         generateTypeUsage(ctx, node->type);
 }
@@ -227,7 +230,7 @@ static void generateVariable(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, "const ", NULL);
 
     // if (node->varDecl.init == NULL || node->varDecl.)
-    generateTypeUsage((CCodegenContext *)ctx, node->type);
+    generateTypeUsage(ctx, node->type);
 
     format(ctx->state, " ", NULL);
     astConstVisit(visitor, node->varDecl.names);
@@ -237,46 +240,6 @@ static void generateVariable(ConstAstVisitor *visitor, const AstNode *node)
         astConstVisit(visitor, node->varDecl.init);
     }
     format(ctx->state, ";", NULL);
-}
-
-static void generateLiteral(ConstAstVisitor *visitor, const AstNode *node)
-{
-    CodegenContext *ctx = getConstAstVisitorContext(visitor);
-
-    switch (node->tag) {
-    case astNullLit:
-        format(ctx->state, "nullptr", NULL);
-        break;
-    case astBoolLit:
-        format(
-            ctx->state,
-            "{s}",
-            (FormatArg[]){{.s = node->boolLiteral.value ? "true" : "false"}});
-        break;
-    case astCharLit:
-        format(ctx->state,
-               "{u32}",
-               (FormatArg[]){{.u32 = node->charLiteral.value}});
-        break;
-    case astIntegerLit:
-        format(ctx->state,
-               "{s}{u64}",
-               (FormatArg[]){{.s = node->intLiteral.hasMinus ? "-" : ""},
-                             {.u64 = node->intLiteral.value}});
-        break;
-    case astFloatLit:
-        format(ctx->state,
-               "{f64}",
-               (FormatArg[]){{.f64 = node->floatLiteral.value}});
-        break;
-    case astStringLit:
-        format(ctx->state,
-               "\"{s}\"",
-               (FormatArg[]){{.s = node->stringLiteral.value}});
-        break;
-    default:
-        break;
-    }
 }
 
 static void generateAddressOf(ConstAstVisitor *visitor, const AstNode *node)
@@ -304,23 +267,22 @@ static void generateBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
 static void generateNewExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    const char *name = makeAnonymousVariable(((CCodegenContext *)ctx)->strPool,
-                                             "cxy_new_temp");
+    const char *name = makeAnonymousVariable((ctx)->strPool, "cxy_new_temp");
     const Type *type = node->type->pointer.pointed;
 
     format(ctx->state, "({{{>}\n", NULL);
-    generateTypeUsage((CCodegenContext *)ctx, node->type);
+    generateTypeUsage(ctx, node->type);
     format(ctx->state, " {s} = cxy_alloc(sizeof(", (FormatArg[]){{.s = name}});
-    generateTypeUsage((CCodegenContext *)ctx, type);
+    generateTypeUsage(ctx, type);
     format(ctx->state, "));\n", NULL);
     if (node->newExpr.init) {
         if (type->tag == typArray) {
             format(ctx->state, " memcpy(*{s}, &(", (FormatArg[]){{.s = name}});
-            generateTypeUsage((CCodegenContext *)ctx, type);
+            generateTypeUsage(ctx, type);
             format(ctx->state, ")", NULL);
             astConstVisit(visitor, node->newExpr.init);
             format(ctx->state, ", sizeof(", NULL);
-            generateTypeUsage((CCodegenContext *)ctx, type);
+            generateTypeUsage(ctx, type);
             format(ctx->state, "))", NULL);
         }
         else {
@@ -379,7 +341,7 @@ static void generateTupleExpr(ConstAstVisitor *visitor, const AstNode *node)
     const AstNode *arg = node->tupleExpr.args;
 
     format(ctx->state, "(", NULL);
-    generateTypeUsage((CCodegenContext *)ctx, node->type);
+    generateTypeUsage(ctx, node->type);
     format(ctx->state, ")", NULL);
 
     format(ctx->state, "{{", NULL);
@@ -399,7 +361,7 @@ static void generateStructExpr(ConstAstVisitor *visitor, const AstNode *node)
     const AstNode *field = node->structExpr.fields;
 
     format(ctx->state, "(", NULL);
-    generateTypeUsage((CCodegenContext *)ctx, node->type);
+    generateTypeUsage(ctx, node->type);
     format(ctx->state, ")", NULL);
 
     format(ctx->state, "{{", NULL);
@@ -433,7 +395,7 @@ static void generateMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
         node->type->func.decl->parentScope &&
         node->type->func.decl->parentScope->tag == astStructDecl) {
         const Type *parent = node->type->func.decl->parentScope->type;
-        writeTypename(ctx->state, parent);
+        writeTypename(ctx, parent);
         format(ctx->state, "__{s}", (FormatArg[]){{.s = member->ident.value}});
     }
     else {
@@ -459,15 +421,13 @@ static void generateClosureCapture(CodegenContext *ctx,
                                    cstring name,
                                    u64 index)
 {
-    CCodegenContext *cctx = (CCodegenContext *)ctx;
-    generateTypeUsage(cctx, stripPointer(cctx->table, type->func.params[0]));
+    generateTypeUsage(ctx, stripPointer(type->func.params[0]));
 
     format(ctx->state,
            " {s}{u64} = {{",
            (FormatArg[]){{.s = name}, {.u64 = index}});
     for (u64 i = 0; i < type->func.capturedNamesCount; i++) {
-        const Type *captureType =
-            stripPointer(cctx->table, type->func.params[0]);
+        const Type *captureType = stripPointer(type->func.params[0]);
         if (i != 0)
             format(ctx->state, ", ", NULL);
         if (captureType->tuple.members[i]->flags & flgCapturePointer)
@@ -487,7 +447,6 @@ static void generateClosureCapture(CodegenContext *ctx,
 static void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    CCodegenContext *cctx = (CCodegenContext *)ctx;
 
     const Type *type = node->callExpr.callee->type;
     const AstNode *parent =
@@ -495,7 +454,7 @@ static void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
 
     const char *name =
         (type->flags & (flgClosureStyle | flgClosure))
-            ? makeAnonymousVariable(cctx->strPool, "__closure_capture")
+            ? makeAnonymousVariable(ctx->strPool, "__closure_capture")
             : "";
 
     if (type->flags & (flgClosureStyle | flgClosure))
@@ -573,7 +532,7 @@ static void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
 
             if (arg->type->flags & flgClosure) {
                 format(ctx->state, "(", NULL);
-                generateTypeUsage(cctx, param);
+                generateTypeUsage(ctx, param);
                 format(ctx->state,
                        "){{._0 = &{s}{u64}, ._1 = ",
                        (FormatArg[]){{.s = name}, {.u64 = i + 1}});
@@ -604,7 +563,7 @@ static void generateTypedExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     format(ctx->state, "(", NULL);
-    generateTypeUsage((CCodegenContext *)ctx, node->type);
+    generateTypeUsage(ctx, node->type);
     format(ctx->state, ")", NULL);
     astConstVisit(visitor, node->typedExpr.expr);
 }
@@ -613,7 +572,7 @@ static void generateCastExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     format(ctx->state, "(", NULL);
-    generateTypeUsage((CCodegenContext *)ctx, node->castExpr.to->type);
+    generateTypeUsage(ctx, node->castExpr.to->type);
     format(ctx->state, ")", NULL);
     astConstVisit(visitor, node->castExpr.expr);
 }
@@ -757,82 +716,7 @@ static void generateWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
     }
 }
 
-static void generateForStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
-    CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    CCodegenContext *cctx = (CCodegenContext *)ctx;
-    const AstNode *var = node->forStmt.var;
-    const AstNode *range = node->forStmt.range;
-
-    if (range->tag == astRangeExpr) {
-        format(ctx->state, "for (", NULL);
-        generateTypeUsage(cctx, var->type);
-        format(ctx->state, " ", NULL);
-        astConstVisit(visitor, var->varDecl.names);
-        format(ctx->state, " = ", NULL);
-        astConstVisit(visitor, range->rangeExpr.start);
-        format(ctx->state, "; ", NULL);
-        astConstVisit(visitor, var->varDecl.names);
-        format(ctx->state, " < ", NULL);
-        astConstVisit(visitor, range->rangeExpr.end);
-        format(ctx->state, "; ", NULL);
-        astConstVisit(visitor, var->varDecl.names);
-        if (range->rangeExpr.step) {
-            format(ctx->state, " += ", NULL);
-            astConstVisit(visitor, range->rangeExpr.step);
-        }
-        else
-            format(ctx->state, "++", NULL);
-    }
-    else if (range->type->tag == typArray) {
-        cstring name = makeAnonymousVariable(cctx->strPool, "cyx_for");
-        // create an array
-        format(ctx->state, "{{{>}\n", NULL);
-        if (range->tag == astArrayExpr)
-            generateTypeUsage(cctx, range->type);
-        else
-            generateTypeUsage(
-                cctx,
-                &(const Type){
-                    .tag = typPointer,
-                    .flags = range->type->flags | node->forStmt.range->flags,
-                    .pointer.pointed = range->type->array.elementType});
-
-        format(ctx->state, " __arr_{s} = ", (FormatArg[]){{.s = name}});
-        astConstVisit(visitor, range);
-        format(ctx->state, ";\n", NULL);
-
-        // create index variable
-        format(ctx->state, "u64 __i_{s} = 0;\n", (FormatArg[]){{.s = name}});
-
-        // Create actual loop variable
-        generateTypeUsage(cctx, range->type->array.elementType);
-        format(ctx->state, " ", NULL);
-        astConstVisit(visitor, var->varDecl.names);
-        format(ctx->state, " = __arr_{s}[0];\n", (FormatArg[]){{.s = name}});
-
-        format(ctx->state,
-               "for (; __i_{s} < {u64}; __i_{s}++, ",
-               (FormatArg[]){
-                   {.s = name}, {.u64 = range->type->array.size}, {.s = name}});
-        astConstVisit(visitor, var->varDecl.names);
-        format(ctx->state,
-               " = __arr_{s}[__i_{s}]",
-               (FormatArg[]){{.s = name}, {.s = name}});
-    }
-    else {
-        unreachable("currently not supported");
-    }
-
-    format(ctx->state, ") ", NULL);
-    astConstVisit(visitor, node->forStmt.body);
-
-    if (range->type->tag == typArray) {
-        format(ctx->state, "{<}\n}", NULL);
-    }
-}
-
-void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
+void codegenEpilogue(CodegenContext *context, const AstNode *prog)
 {
     // clang-format off
     ConstAstVisitor visitor = makeConstAstVisitor(context,
@@ -857,7 +741,7 @@ void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
         [astArrayExpr] = generateArrayExpr,
         [astMemberExpr] = generateMemberExpr,
         [astCallExpr] = generateCallExpr,
-        [astStringExpr] = cCodegenStringExpr,
+        [astStringExpr] = generateStringExpr,
         [astGroupExpr] = generateGroupExpr,
         [astTypedExpr] = generateTypedExpr,
         [astCastExpr] = generateCastExpr,
@@ -878,7 +762,7 @@ void cCodegenEpilogue(CCodegenContext *context, const AstNode *prog)
         [astTypeDecl] = generateTypeDecl
     },
 
-    .fallback = generateCCodeFallback);
+    .fallback = generateFallback);
 
     astConstVisit(&visitor, prog);
 }

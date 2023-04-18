@@ -2,16 +2,16 @@
 // Created by Carter on 2023-03-29.
 //
 
-#include "ccodegen.h"
+#include "lang/codegen.h"
 #include "lang/ttable.h"
 
 #include "core/alloc.h"
 
 #define CXY_PROLOGUE_SRC_FILE CXY_SOURCE_LANG_DIR "/ccodegen/prologue.cxy.c"
 
-static void generateTupleDefinition(CCodegenContext *context, const Type *type)
+static void generateTupleDefinition(CodegenContext *context, const Type *type)
 {
-    FormatState *state = context->base.state;
+    FormatState *state = context->state;
 
     format(state, "typedef struct {{{>}\n", NULL);
     for (u64 i = 0; i < type->tuple.count; i++) {
@@ -21,18 +21,18 @@ static void generateTupleDefinition(CCodegenContext *context, const Type *type)
         format(state, " _{u64};", (FormatArg[]){{.u64 = i}});
     }
     format(state, "{<}\n} ", NULL);
-    writeTypename(state, type);
+    writeTypename(context, type);
 }
 
-static void generateEnumDefinition(CCodegenContext *context, const Type *type)
+static void generateEnumDefinition(CodegenContext *context, const Type *type)
 {
-    FormatState *state = context->base.state;
+    FormatState *state = context->state;
     format(state, "enum {{{>}\n", NULL);
     for (u64 i = 0; i < type->tEnum.count; i++) {
         const EnumOption *option = &type->tEnum.options[i];
         if (i != 0)
             format(state, "\n", NULL);
-        writeEnumPrefix(state, type);
+        writeEnumPrefix(context, type);
         format(state,
                "_{s} = {u64},",
                (FormatArg[]){{.s = option->name}, {.u64 = option->value}});
@@ -40,13 +40,13 @@ static void generateEnumDefinition(CCodegenContext *context, const Type *type)
     format(state, "{<}\n};\n", NULL);
 
     format(state, "typedef ", NULL);
-    writeTypename(state, type->tEnum.base);
+    writeTypename(context, type->tEnum.base);
     format(state, " ", NULL);
-    writeTypename(state, type);
+    writeTypename(context, type);
     format(state, ";\n", NULL);
 
     format(state, "const cxy_enum_names_t ", NULL);
-    writeEnumPrefix(state, type);
+    writeEnumPrefix(context, type);
     format(state, "_enum_names[] = {{{>}\n", NULL);
 
     for (u64 i = 0; i < type->tEnum.count; i++) {
@@ -60,14 +60,14 @@ static void generateEnumDefinition(CCodegenContext *context, const Type *type)
     format(state, "{<}\n}", NULL);
 }
 
-static void generateStructDefinition(CCodegenContext *context, const Type *type)
+static void generateStructDefinition(CodegenContext *context, const Type *type)
 {
-    FormatState *state = context->base.state;
+    FormatState *state = context->state;
     format(state, "struct ", NULL);
-    writeTypename(state, type);
+    writeTypename(context, type);
     format(state, " {{{>}\n", NULL);
     if (type->tStruct.base) {
-        writeTypename(state, type->tStruct.base);
+        writeTypename(context, type->tStruct.base);
         format(state, " super;\n", NULL);
     }
 
@@ -85,20 +85,20 @@ static void generateStructDefinition(CCodegenContext *context, const Type *type)
     format(state, "{<}\n}", NULL);
 }
 
-static void generateFuncDeclaration(CCodegenContext *context, const Type *type)
+static void generateFuncDeclaration(CodegenContext *context, const Type *type)
 {
-    FormatState *state = context->base.state;
+    FormatState *state = context->state;
     const AstNode *parent = type->func.decl->parentScope;
 
     format(state, ";\n", NULL);
     generateTypeUsage(context, type->func.retType);
     format(state, " ", NULL);
-    writeTypename(state, parent->type);
+    writeTypename(context, parent->type);
     format(state, "__{s}", (FormatArg[]){{.s = type->name}});
     format(state, "(", NULL);
     if (type->flags & flgConst)
         format(state, "const ", NULL);
-    writeTypename(state, parent->type);
+    writeTypename(context, parent->type);
     format(state, " *", NULL);
 
     for (u64 i = 0; i < type->func.paramsCount; i++) {
@@ -108,9 +108,9 @@ static void generateFuncDeclaration(CCodegenContext *context, const Type *type)
     format(state, ")", NULL);
 }
 
-static void generateFuncType(CCodegenContext *context, const Type *type)
+static void generateFuncType(CodegenContext *context, const Type *type)
 {
-    FormatState *state = context->base.state;
+    FormatState *state = context->state;
     const AstNode *parent =
         type->func.decl ? type->func.decl->parentScope : NULL;
     bool isMember = parent && parent->tag == astStructDecl;
@@ -119,15 +119,15 @@ static void generateFuncType(CCodegenContext *context, const Type *type)
     generateTypeUsage(context, type->func.retType);
     format(state, "(*", NULL);
     if (isMember) {
-        writeTypename(state, parent->type);
+        writeTypename(context, parent->type);
         format(state, "__", NULL);
     }
-    writeTypename(state, type);
+    writeTypename(context, type);
     format(state, ")(", NULL);
     if (isMember) {
         if (type->flags & flgConst)
             format(state, "const ", NULL);
-        writeTypename(state, parent->type);
+        writeTypename(context, parent->type);
         format(state, " *this", NULL);
     }
 
@@ -141,13 +141,13 @@ static void generateFuncType(CCodegenContext *context, const Type *type)
         generateFuncDeclaration(context, type);
 }
 
-static void generateArrayDeclaration(CCodegenContext *context, const Type *type)
+static void generateArrayDeclaration(CodegenContext *context, const Type *type)
 {
-    FormatState *state = context->base.state;
+    FormatState *state = context->state;
     format(state, "typedef ", NULL);
     generateTypeUsage(context, type->array.elementType);
     format(state, " ", NULL);
-    writeTypename(state, type);
+    writeTypename(context, type);
     if (type->array.size != UINT64_MAX) {
         format(state, "[{u64}]", (FormatArg[]){{.u64 = type->array.size}});
     }
@@ -155,9 +155,9 @@ static void generateArrayDeclaration(CCodegenContext *context, const Type *type)
         format(state, "[]", NULL);
 }
 
-static void generateType(CCodegenContext *context, const Type *type)
+static void generateType(CodegenContext *context, const Type *type)
 {
-    FormatState *state = context->base.state;
+    FormatState *state = context->state;
 
     switch (type->tag) {
     case typArray:
@@ -182,21 +182,21 @@ static void generateType(CCodegenContext *context, const Type *type)
     format(state, ";\n", NULL);
 }
 
-static void generateStructTypedef(CCodegenContext *ctx, const Type *type)
+static void generateStructTypedef(CodegenContext *ctx, const Type *type)
 {
-    FormatState *state = ctx->base.state;
+    FormatState *state = ctx->state;
     format(state, "typedef struct ", NULL);
-    writeTypename(state, type);
+    writeTypename(ctx, type);
     format(state, " ", NULL);
-    writeTypename(state, type);
+    writeTypename(ctx, type);
     format(state, ";\n", NULL);
 }
 
-void generateAllTypes(CCodegenContext *ctx)
+void generateAllTypes(CodegenContext *ctx)
 {
-    u64 typesCount = getTypesCount(ctx->table);
+    u64 typesCount = getTypesCount(ctx->types);
     const Type **types = mallocOrDie(sizeof(Type *) * typesCount);
-    u64 sorted = sortedByInsertionOrder(ctx->table, types, typesCount);
+    u64 sorted = sortedByInsertionOrder(ctx->types, types, typesCount);
 
     for (u64 i = 0; i < sorted; i++) {
         if (types[i]->tag == typStruct)
@@ -210,10 +210,10 @@ void generateAllTypes(CCodegenContext *ctx)
 
 static void programPrologue(ConstAstVisitor *visitor, const AstNode *node)
 {
-    CCodegenContext *ctx = getConstAstVisitorContext(visitor);
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
 
     size_t bytes = 0;
-    format(ctx->base.state,
+    format(ctx->state,
            "/**\n"
            " * Generated from cxy compile\n"
            " */\n"
@@ -221,9 +221,9 @@ static void programPrologue(ConstAstVisitor *visitor, const AstNode *node)
            "/* --------------------- epilogue.cxy.c --------------*/\n"
            "\n",
            NULL);
-    append(ctx->base.state, readFile(CXY_PROLOGUE_SRC_FILE, &bytes), bytes);
+    append(ctx->state, readFile(CXY_PROLOGUE_SRC_FILE, &bytes), bytes);
 
-    format(ctx->base.state,
+    format(ctx->state,
            "\n"
            "/* --------------------- Generated PROLOGUE --------------*/\n"
            "\n",
@@ -231,7 +231,7 @@ static void programPrologue(ConstAstVisitor *visitor, const AstNode *node)
     generateAllTypes(ctx);
 }
 
-void cCodegenPrologue(CCodegenContext *context, const AstNode *prog)
+void codegenPrologue(CodegenContext *context, const AstNode *prog)
 {
     // clang-format off
     ConstAstVisitor visitor = makeConstAstVisitor(context,

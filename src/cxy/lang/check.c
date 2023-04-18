@@ -7,45 +7,12 @@
 #include "scope.h"
 #include "ttable.h"
 
+#include "semantics.h"
+
 #include "core/alloc.h"
 #include "core/utils.h"
 
 #include <string.h>
-
-typedef struct {
-    Log *L;
-    MemPool *pool;
-    StrPool *strPool;
-    TypeTable *typeTable;
-    Env env;
-    Scope *closure;
-    AstNode *previousTopLevelDecl;
-    AstNode *currentTopLevelDecl;
-    AstNode *program;
-    const AstNode *lastReturn;
-    bool mainOptimized : 1;
-    bool deferFuncBodyCheck : 1;
-    bool skipFuncDefineSymbol : 1;
-    u64 anonymousDeclsIndex;
-} SemanticsContext;
-
-static const Type *sError;
-
-static inline const Type *evalType(AstVisitor *visitor, AstNode *node)
-{
-    SemanticsContext *ctx = getAstVisitorContext(visitor);
-    astVisit(visitor, node);
-    return resolveType(ctx->typeTable, node->type);
-}
-
-static inline u64 checkMany(AstVisitor *visitor, AstNode *node)
-{
-    u64 i = 0;
-    for (; node; node = node->next, i++)
-        astVisit(visitor, node);
-
-    return i;
-}
 
 static void addBuiltinFunc(SemanticsContext *ctx,
                            cstring name,
@@ -119,78 +86,6 @@ static void initBuiltins(SemanticsContext *ctx)
     }
 }
 
-static void addAnonymousTopLevelDecl(SemanticsContext *ctx,
-                                     cstring name,
-                                     AstNode *node)
-{
-    Env env = {.first = ctx->env.first, .scope = ctx->env.first};
-    if (!defineSymbol(&env, ctx->L, name, node))
-        return;
-    if (ctx->previousTopLevelDecl == ctx->currentTopLevelDecl) {
-        ctx->program->program.decls = node;
-        node->next = ctx->currentTopLevelDecl;
-    }
-    else {
-        ctx->previousTopLevelDecl->next = node;
-        node->next = ctx->currentTopLevelDecl;
-    }
-    ctx->previousTopLevelDecl = node;
-}
-
-static void addTopLevelDecl(SemanticsContext *ctx, AstNode *node)
-{
-    if (ctx->previousTopLevelDecl == ctx->currentTopLevelDecl) {
-        ctx->program->program.decls = node;
-        node->next = ctx->currentTopLevelDecl;
-    }
-    else {
-        ctx->previousTopLevelDecl->next = node;
-        node->next = ctx->currentTopLevelDecl;
-    }
-    ctx->previousTopLevelDecl = node;
-}
-
-AstNode *findSymbolByPath(SemanticsContext *ctx, const Env *env, AstNode *node)
-{
-    AstNode *elem = node->path.elements;
-    do {
-        const Type *type;
-        AstNode *sym =
-            findSymbol(env, ctx->L, elem->pathElement.name, &elem->loc);
-        if (elem->next == NULL || sym == NULL)
-            return sym;
-
-        type = sym->type;
-        elem = elem->next;
-        switch (type->tag) {
-        case typEnum:
-            env = type->tEnum.env;
-            break;
-        case typStruct:
-            env = type->tStruct.env;
-            break;
-        default:
-            logError(ctx->L,
-                     &elem->loc,
-                     "type '{t}' does not support member syntax",
-                     (FormatArg[]){{.t = type}});
-            return NULL;
-        }
-    } while (true);
-}
-
-AstNode *findSymbolByNode(SemanticsContext *ctx, const Env *env, AstNode *node)
-{
-    switch (node->tag) {
-    case astPath:
-        return findSymbolByPath(ctx, env, node);
-    case astIdentifier:
-        return findSymbol(env, ctx->L, node->ident.value, &node->loc);
-    default:
-        return NULL;
-    }
-}
-
 static void checkProgram(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
@@ -222,49 +117,6 @@ static void checkFallback(AstVisitor *visitor, AstNode *node)
     }
 }
 
-static void checkLiterals(AstVisitor *visitor, AstNode *node)
-{
-    SemanticsContext *ctx = getAstVisitorContext(visitor);
-
-    switch (node->tag) {
-    case astNullLit:
-        node->type = makeNullType(ctx->typeTable);
-        break;
-    case astBoolLit:
-        node->type = getPrimitiveType(ctx->typeTable, prtBool);
-        break;
-    case astCharLit:
-        node->type = getPrimitiveType(ctx->typeTable, prtChar);
-        break;
-    case astIntegerLit:
-        node->type = getPrimitiveType(ctx->typeTable, prtI32);
-        break;
-    case astFloatLit:
-        node->type = getPrimitiveType(ctx->typeTable, prtF32);
-        break;
-    case astStringLit:
-        node->type = makeStringType(ctx->typeTable);
-        break;
-    default:
-        csAssert0("Not a literal");
-    }
-}
-
-static void checkStringExpr(AstVisitor *visitor, AstNode *node)
-{
-    SemanticsContext *ctx = getAstVisitorContext(visitor);
-    checkMany(visitor, node->stringExpr.parts);
-    AstNode *part = node->stringExpr.parts;
-    for (; part; part = part->next) {
-        part->type = evalType(visitor, part);
-        if (part->type == sError) {
-            node->type = sError;
-        }
-    }
-
-    node->type = makeStringType(ctx->typeTable);
-}
-
 static void checkFuncParam(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
@@ -278,7 +130,7 @@ static void checkFuncParam(AstVisitor *visitor, AstNode *node)
 
     if (node->funcParam.def) {
         const Type *def = evalType(visitor, node->funcParam.def);
-        if (!isTypeAssignableFrom(ctx->typeTable, node->type, def)) {
+        if (!isTypeAssignableFrom(node->type, def)) {
             logError(ctx->L,
                      &node->funcParam.def->loc,
                      "parameter default value type '{t}' not compatible with "
@@ -609,7 +461,7 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
     copy->funcDecl.name = name;
     copy->flags |= flgClosure;
 
-    addAnonymousTopLevelDecl(ctx, copy->funcDecl.name, copy);
+    addTopLevelDecl(ctx, copy->funcDecl.name, copy);
 
     node->next = NULL;
     node->tag = astPath;
@@ -628,7 +480,7 @@ static void checkCastExpr(AstVisitor *visitor, AstNode *node)
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *expr = evalType(visitor, node->castExpr.expr);
     const Type *target = evalType(visitor, node->castExpr.to);
-    if (!isTypeCastAssignable(ctx->typeTable, target, expr)) {
+    if (!isTypeCastAssignable(target, expr)) {
         logError(ctx->L,
                  &node->loc,
                  "type '{t}' cannot be cast to type '{t}'",
@@ -645,31 +497,31 @@ static void checkRangeExpr(AstVisitor *visitor, AstNode *node)
     const Type *start = evalType(visitor, node->rangeExpr.start);
     const Type *end = evalType(visitor, node->rangeExpr.end);
 
-    if (!isTypeAssignableFrom(ctx->typeTable, i64Type, start)) {
+    if (!isTypeAssignableFrom(i64Type, start)) {
         logError(ctx->L,
                  &node->rangeExpr.start->loc,
                  "expecting integer type for range start expression, got '{t}'",
                  (FormatArg[]){{.t = start}});
-        start = sError;
+        start = ERROR_TYPE(ctx);
     }
 
-    if (!isTypeAssignableFrom(ctx->typeTable, i64Type, end)) {
+    if (!isTypeAssignableFrom(i64Type, end)) {
         logError(ctx->L,
                  &node->rangeExpr.start->loc,
                  "expecting integer type for range end expression, got '{t}'",
                  (FormatArg[]){{.t = end}});
-        start = sError;
+        start = ERROR_TYPE(ctx);
     }
 
     if (node->rangeExpr.step) {
         const Type *step = evalType(visitor, node->rangeExpr.step);
-        if (!isTypeAssignableFrom(ctx->typeTable, i64Type, end)) {
+        if (!isTypeAssignableFrom(i64Type, end)) {
             logError(
                 ctx->L,
                 &node->rangeExpr.start->loc,
                 "expecting integer type for range step expression, got '{t}'",
                 (FormatArg[]){{.t = step}});
-            start = sError;
+            start = ERROR_TYPE(ctx);
         }
     }
 
@@ -683,22 +535,22 @@ static void checkTernaryExpr(AstVisitor *visitor, AstNode *node)
     const Type *body = evalType(visitor, node->ternaryExpr.body);
     const Type *otherwise = evalType(visitor, node->ternaryExpr.otherwise);
 
-    if (!isTypeAssignableFrom(
-            ctx->typeTable, getPrimitiveType(ctx->typeTable, prtBool), cond)) {
+    if (!isTypeAssignableFrom(getPrimitiveType(ctx->typeTable, prtBool),
+                              cond)) {
         logError(ctx->L,
                  &node->ternaryExpr.cond->loc,
                  "expecting a ternary expression ('?') condition type of bool, "
                  "got '{t}'",
                  (FormatArg[]){{.t = cond}});
-        node->type = sError;
+        node->type = ERROR_TYPE(ctx);
     }
-    if (!isTypeAssignableFrom(ctx->typeTable, body, otherwise)) {
+    if (!isTypeAssignableFrom(body, otherwise)) {
         logError(ctx->L,
                  &node->loc,
                  "operands to ternary expression ('?') have different types, "
                  "'{t}' and '{t}'",
                  (FormatArg[]){{.t = body}, {.t = otherwise}});
-        node->type = sError;
+        node->type = ERROR_TYPE(ctx);
     }
     else
         node->type = body;
@@ -720,7 +572,7 @@ static void checkNewExpr(AstVisitor *visitor, AstNode *node)
         type = init;
     }
 
-    if (init && !isTypeAssignableFrom(ctx->typeTable, type, init)) {
+    if (init && !isTypeAssignableFrom(type, init)) {
         logError(
             ctx->L,
             &node->loc,
@@ -756,14 +608,14 @@ static void checkVarDecl(AstVisitor *visitor, AstNode *node)
                      "initializer for array declaration can only be an array "
                      "expression",
                      NULL);
-            node->type = sError;
+            node->type = ERROR_TYPE(ctx);
         }
-        else if (!isTypeAssignableFrom(ctx->typeTable, node->type, value)) {
+        else if (!isTypeAssignableFrom(node->type, value)) {
             logError(ctx->L,
                      &node->varDecl.init->loc,
                      "incompatible types, expecting type '{t}', got '{t}'",
                      (FormatArg[]){{.t = node->type}, {.t = value}});
-            node->type = sError;
+            node->type = ERROR_TYPE(ctx);
         }
         else if ((value->tag == typPointer) &&
                  ((value->flags & flgConst) && !(node->flags & flgConst))) {
@@ -772,7 +624,7 @@ static void checkVarDecl(AstVisitor *visitor, AstNode *node)
                      "assigning a const pointer to a non-const variable "
                      "discards const qualifier",
                      NULL);
-            node->type = sError;
+            node->type = ERROR_TYPE(ctx);
         }
         if (node->type->tag == typAuto)
             node->type = value;
@@ -785,7 +637,7 @@ static void checkIdentifier(AstVisitor *visitor, AstNode *node)
     AstNode *symbol =
         findSymbol(&ctx->env, ctx->L, node->ident.value, &node->loc);
     if (symbol == NULL)
-        node->type = sError;
+        node->type = ERROR_TYPE(ctx);
     else
         node->type = symbol->type;
 }
@@ -794,7 +646,7 @@ static void checkPathElement(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     csAssert0(node->parentScope);
-    const Type *scope = stripPointer(ctx->typeTable, node->parentScope->type);
+    const Type *scope = stripPointer(node->parentScope->type);
 
     const Env *env = NULL;
     Env thisEnv = {};
@@ -814,7 +666,7 @@ static void checkPathElement(AstVisitor *visitor, AstNode *node)
                  &node->loc,
                  "type '{t}' does not support member expressions",
                  (FormatArg[]){{.t = scope}});
-        node->type = sError;
+        node->type = ERROR_TYPE(ctx);
         return;
     }
 
@@ -822,7 +674,7 @@ static void checkPathElement(AstVisitor *visitor, AstNode *node)
         findSymbol(env, ctx->L, node->pathElement.name, &node->loc);
 
     if (symbol == NULL) {
-        node->type = sError;
+        node->type = ERROR_TYPE(ctx);
         return;
     }
 
@@ -835,7 +687,7 @@ static void checkPathElement(AstVisitor *visitor, AstNode *node)
                      &node->loc,
                      "member expression not supported on enum members",
                      NULL);
-            node->type = sError;
+            node->type = ERROR_TYPE(ctx);
         }
         else {
             node->type = scope;
@@ -854,8 +706,8 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
         &ctx->env, ctx->L, node->pathElement.name, &node->loc, &scope);
     u64 flags = flgNone;
     if (symbol == NULL) {
-        node->type = sError;
-        return sError;
+        node->type = ERROR_TYPE(ctx);
+        return ERROR_TYPE(ctx);
     }
     if (scope->node && scope->node->tag == astStructDecl) {
         node->flags = flgAddThis;
@@ -901,8 +753,8 @@ static void checkPath(AstVisitor *visitor, AstNode *node)
     elem = elem->next;
     for (; elem; elem = elem->next) {
         elem->parentScope = prev;
-        if ((type = evalType(visitor, elem)) == sError) {
-            node->type = sError;
+        if ((type = evalType(visitor, elem)) == ERROR_TYPE(ctx)) {
+            node->type = ERROR_TYPE(ctx);
             return;
         };
         flags = elem->flags;
@@ -930,9 +782,9 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
     } opKind = optInvalid;
 
     Operator op = node->binaryExpr.op;
-    if (stripPointer(ctx->typeTable, left)->tag == typStruct) {
+    if (stripPointer(left)->tag == typStruct) {
         cstring name = getBinaryOpFuncName(op);
-        const Type *target = stripPointer(ctx->typeTable, left);
+        const Type *target = stripPointer(left);
         AstNode *overload = findSymbolOnly(target->tStruct.env, name);
         if (overload) {
             AstNode *callee = makeAstNode(
@@ -971,7 +823,7 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
         }
     }
     const Type *type = promoteType(ctx->typeTable, left, right);
-    node->type = sError;
+    node->type = ERROR_TYPE(ctx);
 
     switch (op) {
         // Numeric arithmetic
@@ -1011,7 +863,7 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
 
     switch (opKind) {
     case optNumeric:
-        if (!isNumericType(ctx->typeTable, type)) {
+        if (!isNumericType(type)) {
             logError(ctx->L,
                      &node->loc,
                      "cannot perform binary operation '{s}' on non-numeric "
@@ -1022,7 +874,7 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
         node->type = type;
         break;
     case optInteger:
-        if (!isIntegerType(ctx->typeTable, type)) {
+        if (!isIntegerType(type)) {
             logError(ctx->L,
                      &node->loc,
                      "cannot perform binary operation '{s}' on non-integer "
@@ -1045,7 +897,7 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
         node->type = type;
         break;
     case optComparison:
-        if (!isNumericType(ctx->typeTable, type)) {
+        if (!isNumericType(type)) {
             logError(ctx->L,
                      &node->loc,
                      "cannot perform comparison binary operation '{s}' on "
@@ -1070,7 +922,7 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
         node->type = getPrimitiveType(ctx->typeTable, prtBool);
         break;
     case optRange: {
-        if (!isIntegerType(ctx->typeTable, left)) {
+        if (!isIntegerType(left)) {
             logError(ctx->L,
                      &node->loc,
                      "expecting an integral type for range expression "
@@ -1079,7 +931,7 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
                      (FormatArg[]){{.t = left}});
             return;
         }
-        if (!isIntegerType(ctx->typeTable, right)) {
+        if (!isIntegerType(right)) {
             logError(ctx->L,
                      &node->loc,
                      "expecting an integral type for range expression end, got "
@@ -1113,18 +965,18 @@ static const Type *checkPrefixExpr(SemanticsContext *ctx,
                 &node->loc,
                 "prefix operation '{s}' cannot be performed on a constant",
                 (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)}});
-            operand = sError;
+            operand = ERROR_TYPE(ctx);
             break;
         }
     case opMinus:
     case opPlus:
-        if (!isNumericType(ctx->typeTable, operand)) {
+        if (!isNumericType(operand)) {
             logError(ctx->L,
                      &node->unaryExpr.operand->loc,
                      "postfix expression '{s}' no supported on type '{t}'",
                      (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)},
                                    {.t = operand}});
-            operand = sError;
+            operand = ERROR_TYPE(ctx);
         }
         break;
     case opNot:
@@ -1134,7 +986,7 @@ static const Type *checkPrefixExpr(SemanticsContext *ctx,
                      "logical '!' operator no supported on type '{t}', "
                      "expecting bool type",
                      (FormatArg[]){{.t = operand}});
-            operand = sError;
+            operand = ERROR_TYPE(ctx);
         }
         break;
     case opDeref:
@@ -1143,7 +995,7 @@ static const Type *checkPrefixExpr(SemanticsContext *ctx,
                      &node->unaryExpr.operand->loc,
                      "cannot not dereference an non-pointer type '{t}'",
                      (FormatArg[]){{.t = operand}});
-            operand = sError;
+            operand = ERROR_TYPE(ctx);
         }
         else {
             node->flags |=
@@ -1157,14 +1009,14 @@ static const Type *checkPrefixExpr(SemanticsContext *ctx,
                      &node->loc,
                      "cannot delete an none `new` allocated object",
                      NULL);
-            operand = sError;
+            operand = ERROR_TYPE(ctx);
         }
         else {
             operand = makeVoidType(ctx->typeTable);
         }
         break;
     default:
-        operand = sError;
+        operand = ERROR_TYPE(ctx);
         break;
     }
 
@@ -1187,15 +1039,15 @@ static void checkUnary(AstVisitor *visitor, AstNode *node)
                 &node->loc,
                 "postfix operation '{s}' cannot be performed on a constant",
                 (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)}});
-            operand = sError;
+            operand = ERROR_TYPE(ctx);
         }
-        else if (!isNumericType(ctx->typeTable, operand)) {
+        else if (!isNumericType(operand)) {
             logError(ctx->L,
                      &node->unaryExpr.operand->loc,
                      "postfix expression '{s}' no supported on type '{t}'",
                      (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)},
                                    {.t = operand}});
-            operand = sError;
+            operand = ERROR_TYPE(ctx);
         }
     }
     node->type = operand;
@@ -1210,13 +1062,13 @@ static void checkAssign(AstVisitor *visitor, AstNode *node)
     bool isLeftAuto = lhs == makeAutoType(ctx->typeTable);
 
     // TODO check r-value-ness
-    node->type = sError;
+    node->type = ERROR_TYPE(ctx);
     if ((left->flags & flgConst) || (lhs->flags & flgConst)) {
         logError(ctx->L,
                  &node->loc,
                  "lhs of assignment expressions is a constant",
                  (FormatArg[]){{.t = lhs}});
-        node->type = sError;
+        node->type = ERROR_TYPE(ctx);
     }
     else if (rhs->tag == typArray) {
         if (isLeftAuto)
@@ -1229,14 +1081,14 @@ static void checkAssign(AstVisitor *visitor, AstNode *node)
             logError(
                 ctx->L, &node->loc, "assign to an array is not allowed", NULL);
     }
-    else if (!isTypeAssignableFrom(ctx->typeTable, lhs, rhs)) {
+    else if (!isTypeAssignableFrom(lhs, rhs)) {
         logError(ctx->L,
                  &node->assignExpr.rhs->loc,
                  "incompatible types on assigment expression, expecting '{t}', "
                  "got '{t}'",
                  (FormatArg[]){{.t = lhs}, {.t = rhs}});
     }
-    if (node->type == sError)
+    if (node->type == ERROR_TYPE(ctx))
         return;
 
     if (isLeftAuto) {
@@ -1312,14 +1164,14 @@ static void checkMember(AstVisitor *visitor, AstNode *node)
 
     if (member->tag == astIntegerLit) {
         u64 flags = target->flags;
-        target = stripPointer(ctx->typeTable, target);
+        target = stripPointer(target);
         if (target->tag != typTuple) {
             logError(ctx->L,
                      &node->memberExpr.target->loc,
                      "literal member expression cannot be used on type '{t}', "
                      "type is not a tuple",
                      (FormatArg[]){{.t = target}});
-            node->type = sError;
+            node->type = ERROR_TYPE(ctx);
             return;
         }
 
@@ -1331,7 +1183,7 @@ static void checkMember(AstVisitor *visitor, AstNode *node)
                      (FormatArg[]){{.u64 = member->intLiteral.value},
                                    {.t = target},
                                    {.u64 = target->tuple.count}});
-            node->type = sError;
+            node->type = ERROR_TYPE(ctx);
             return;
         }
 
@@ -1344,12 +1196,12 @@ static void checkMember(AstVisitor *visitor, AstNode *node)
                      &member->loc,
                      "unexpected member expression, expecting an enum member",
                      NULL);
-            node->type = sError;
+            node->type = ERROR_TYPE(ctx);
             return;
         }
         AstNode *option = findSymbolByNode(ctx, target->tEnum.env, member);
         if (option == NULL)
-            node->type = sError;
+            node->type = ERROR_TYPE(ctx);
         else
             node->type = target;
     }
@@ -1359,18 +1211,18 @@ static void checkMember(AstVisitor *visitor, AstNode *node)
                      &member->loc,
                      "unexpected member expression, expecting a struct member",
                      NULL);
-            node->type = sError;
+            node->type = ERROR_TYPE(ctx);
             return;
         }
         AstNode *symbol = findSymbolByNode(ctx, target->tStruct.env, member);
         if (symbol == NULL)
-            node->type = sError;
+            node->type = ERROR_TYPE(ctx);
         else
             node->type = symbol->type;
     }
     else {
         csAssert(member->tag == astIdentifier, "TODO");
-        node->type = sError;
+        node->type = ERROR_TYPE(ctx);
     }
 }
 
@@ -1387,7 +1239,7 @@ static void checkArrayExr(AstVisitor *visitor, AstNode *node)
             continue;
         }
 
-        if (!isTypeAssignableFrom(ctx->typeTable, elementType, type)) {
+        if (!isTypeAssignableFrom(elementType, type)) {
             logError(ctx->L,
                      &elem->loc,
                      "inconsistent array types in array, expecting '{t}', "
@@ -1413,8 +1265,8 @@ static void checkTupleExpr(AstVisitor *visitor, AstNode *node)
 
     for (u64 i = 0; arg; arg = arg->next, i++) {
         args[i] = evalType(visitor, arg);
-        if (args[i] == sError)
-            node->type = sError;
+        if (args[i] == ERROR_TYPE(ctx))
+            node->type = ERROR_TYPE(ctx);
     }
 
     if (node->type == NULL) {
@@ -1434,7 +1286,7 @@ static void checkStructExpr(AstVisitor *visitor, AstNode *node)
                  "unsupported type used with struct initializer, '{t}' is not "
                  "a struct",
                  (FormatArg[]){{.t = target}});
-        node->type = sError;
+        node->type = ERROR_TYPE(ctx);
         return;
     }
 
@@ -1457,23 +1309,23 @@ static void checkStructExpr(AstVisitor *visitor, AstNode *node)
                 &field->loc,
                 "field '{s}' does not exist in target struct type '{t}'",
                 ((FormatArg[]){{.s = field->fieldExpr.name}, {.t = target}}));
-            node->type = sError;
+            node->type = ERROR_TYPE(ctx);
             continue;
         }
 
         const Type *type = evalType(visitor, field->fieldExpr.value);
-        if (!isTypeAssignableFrom(ctx->typeTable, decl->type, type)) {
+        if (!isTypeAssignableFrom(decl->type, type)) {
             logError(ctx->L,
                      &field->fieldExpr.value->loc,
                      "value type '{t}' is not assignable to field type '{t}'",
                      (FormatArg[]){{.t = type}, {.t = decl->type}});
-            node->type = sError;
+            node->type = ERROR_TYPE(ctx);
         }
 
         initialized[decl->structField.index] = true;
     }
 
-    if (node->type != sError) {
+    if (node->type != ERROR_TYPE(ctx)) {
         for (u64 i = 0; i < target->tStruct.fieldsCount; i++) {
             const AstNode *targetField = target->tStruct.fields[i].decl;
             if (initialized[i] || targetField->type->tag == typFunc ||
@@ -1590,7 +1442,7 @@ static void checkCall(AstVisitor *visitor, AstNode *node)
                  "expression of type '{t}' cannot be invoked, expecting a "
                  "function",
                  (FormatArg[]){{.t = callee}});
-        node->type = sError;
+        node->type = ERROR_TYPE(ctx);
         return;
     }
 
@@ -1631,13 +1483,13 @@ static void checkCall(AstVisitor *visitor, AstNode *node)
                 type = wrapFuncArgInClosure(visitor, arg);
             expected = expected->tuple.members[1];
         }
-        if (stripPointer(ctx->typeTable, expected)->tag == typThis)
+        if (stripPointer(expected)->tag == typThis)
             expected =
                 makePointerType(ctx->typeTable,
                                 callee->func.decl->parentScope->type,
                                 callee->func.decl->parentScope->type->flags);
 
-        if (!isTypeAssignableFrom(ctx->typeTable, expected, type)) {
+        if (!isTypeAssignableFrom(expected, type)) {
             logError(ctx->L,
                      &arg->loc,
                      "incompatible argument types, expecting '{t}' but got "
@@ -1699,7 +1551,7 @@ static void checkReturn(AstVisitor *visitor, AstNode *node)
             ret = func->closureExpr.ret->type;
     }
 
-    if (ret && !isTypeAssignableFrom(ctx->typeTable, ret, node->type)) {
+    if (ret && !isTypeAssignableFrom(ret, node->type)) {
         logError(ctx->L,
                  &node->returnStmt.expr->loc,
                  "return value of type '{t}' incompatible with function return "
@@ -1708,8 +1560,7 @@ static void checkReturn(AstVisitor *visitor, AstNode *node)
     }
     else if (ctx->lastReturn) {
         // we have already seen a return
-        if (!isTypeAssignableFrom(
-                ctx->typeTable, ctx->lastReturn->type, node->type)) {
+        if (!isTypeAssignableFrom(ctx->lastReturn->type, node->type)) {
             logError(
                 ctx->L,
                 &node->returnStmt.expr->loc,
@@ -1754,14 +1605,14 @@ static void checkIfStmt(AstVisitor *visitor, AstNode *node)
     const Type *cond = evalType(visitor, node->ifStmt.cond);
     const Type *then = evalType(visitor, node->ifStmt.body);
 
-    if (!isTypeAssignableFrom(
-            ctx->typeTable, getPrimitiveType(ctx->typeTable, prtBool), cond)) {
+    if (!isTypeAssignableFrom(getPrimitiveType(ctx->typeTable, prtBool),
+                              cond)) {
         logError(ctx->L,
                  &node->ternaryExpr.cond->loc,
                  "unexpected type in if statement condition, expecting "
                  "a truthy expression but got '{t}'",
                  (FormatArg[]){{.t = cond}});
-        node->type = sError;
+        node->type = ERROR_TYPE(ctx);
     }
     else {
         node->type = then;
@@ -1781,161 +1632,18 @@ static void checkWhileStmt(AstVisitor *visitor, AstNode *node)
     const Type *cond = evalType(visitor, node->whileStmt.cond);
     const Type *body = evalType(visitor, node->whileStmt.body);
 
-    if (!isTypeAssignableFrom(
-            ctx->typeTable, getPrimitiveType(ctx->typeTable, prtBool), cond)) {
+    if (!isTypeAssignableFrom(getPrimitiveType(ctx->typeTable, prtBool),
+                              cond)) {
         logError(ctx->L,
                  &node->ternaryExpr.cond->loc,
                  "unexpected type in while statement condition, expecting "
                  "a truthy expression, but got '{t}'",
                  (FormatArg[]){{.t = cond}});
-        node->type = sError;
+        node->type = ERROR_TYPE(ctx);
     }
     else {
         node->type = body;
     }
-    popScope(&ctx->env);
-}
-
-static void checkForStmtGenerator(AstVisitor *visitor, AstNode *node)
-{
-    SemanticsContext *ctx = getAstVisitorContext(visitor);
-    AstNode orig = *node;
-
-    AstNode *range = orig.forStmt.range;
-    AstNode *args = getLastAstNode(range->callExpr.args), *arg = NULL,
-            *names = orig.forStmt.var->varDecl.names, *closureArgs = NULL;
-    u64 varCount = countAstNodes(names), i = 1;
-
-    const Type *callee = evalType(visitor, range->callExpr.callee),
-               *bodyFunc = NULL;
-
-    if (callee->tag != typFunc || callee->func.paramsCount == 0 ||
-        callee->func.params[callee->func.paramsCount - 1]->flags !=
-            flgFuncTypeParam) {
-        logError(ctx->L,
-                 &range->callExpr.callee->loc,
-                 "for range expression is not a generator functions",
-                 NULL);
-        node->type = sError;
-        return;
-    }
-
-    bodyFunc =
-        callee->func.params[callee->func.paramsCount - 1]->tuple.members[1];
-    if (varCount != bodyFunc->func.paramsCount - 1) {
-        logError(ctx->L,
-                 &node->forStmt.var->loc,
-                 "for loop variable declaration mismatch, declared {u64}, "
-                 "expecting {u64}",
-                 (FormatArg[]){{.u64 = varCount},
-                               {.u64 = bodyFunc->func.paramsCount}});
-        node->type = sError;
-        return;
-    }
-
-    for (AstNode *name = names; name; name = name->next, i++) {
-        AstNode *newArg = makeAstNode(
-            ctx->pool,
-            &args->loc,
-            &(AstNode){.type = bodyFunc->func.params[i],
-                       .tag = astFuncParam,
-                       .funcParam = {.name = name->ident.value, .type = NULL}});
-        if (closureArgs == NULL) {
-            closureArgs = newArg;
-            arg = newArg;
-        }
-        else {
-            arg->next = newArg;
-            arg = newArg;
-        }
-    }
-
-    args->next =
-        makeAstNode(ctx->pool,
-                    &args->loc,
-                    &(AstNode){.tag = astClosureExpr,
-                               .closureExpr = {.params = closureArgs,
-                                               .body = node->forStmt.body}});
-
-    memset(&node->forStmt, 0, sizeof(node->forStmt));
-    node->tag = astCallExpr;
-    node->callExpr = orig.forStmt.range->callExpr;
-
-    evalType(visitor, node);
-}
-
-static void checkForStmt(AstVisitor *visitor, AstNode *node)
-{
-    SemanticsContext *ctx = getAstVisitorContext(visitor);
-    if (node->forStmt.range->tag == astCallExpr) {
-        checkForStmtGenerator(visitor, node);
-        return;
-    }
-    const Type *range = evalType(visitor, node->forStmt.range);
-    if (range->tag == typStruct) {
-    }
-
-    pushScope(&ctx->env, node);
-    const Type *type = evalType(visitor, node->forStmt.var);
-
-    AstNode *symbol = findSymbol(&ctx->env,
-                                 ctx->L,
-                                 node->forStmt.var->varDecl.names->ident.value,
-                                 &node->loc);
-    csAssert0(symbol);
-    if (node->forStmt.range->tag == astRangeExpr) {
-        if (type->tag != typAuto && !isIntegerType(ctx->typeTable, type)) {
-            logError(ctx->L,
-                     &node->forStmt.var->loc,
-                     "unexpected type for loop variable type '{t}', expecting "
-                     "an integral type",
-                     (FormatArg[]){{.t = type}});
-            type = sError;
-        }
-        else if (type->tag == typAuto) {
-            symbol->type = getPrimitiveType(ctx->typeTable, prtI64);
-            node->forStmt.var->type = symbol->type;
-        }
-    }
-    else {
-        if (range->tag == typPointer)
-            range = range->pointer.pointed;
-
-        if (range->tag == typArray) {
-            const Type *elementType = range->array.elementType;
-            node->forStmt.range = makeAstNode(
-                ctx->pool,
-                &node->forStmt.range->loc,
-                &(AstNode){.tag = astUnaryExpr,
-                           .type = range,
-                           .flags = node->forStmt.range->flags,
-                           .unaryExpr = {.op = opDeref,
-                                         .operand = node->forStmt.range,
-                                         .isPrefix = true}});
-            if (type->tag != typAuto &&
-                !isTypeAssignableFrom(ctx->typeTable, elementType, type)) {
-                logError(ctx->L,
-                         &node->forStmt.var->loc,
-                         "unexpected type '{t}' for loop variable, "
-                         "expecting array "
-                         "element type '{t}'",
-                         (FormatArg[]){{.t = type}, {.t = elementType}});
-                type = sError;
-            }
-            else if (type->tag == typAuto) {
-                symbol->type = elementType;
-                node->forStmt.var->type = elementType;
-            }
-        }
-        else {
-            unreachable("");
-        }
-    }
-
-    const Type *body = evalType(visitor, node->forStmt.body);
-
-    node->type = type == sError ? type : body;
-
     popScope(&ctx->env);
 }
 
@@ -1993,8 +1701,8 @@ static void checkUnionDecl(AstVisitor *visitor, AstNode *node)
     AstNode *member = node->unionDecl.members;
     for (u64 i = 0; member; member = member->next, i++) {
         members[i] = evalType(visitor, member);
-        if (members[i] == sError)
-            node->type = sError;
+        if (members[i] == ERROR_TYPE(ctx))
+            node->type = ERROR_TYPE(ctx);
     }
 
     if (node->type == NULL)
@@ -2013,8 +1721,8 @@ static void checkTupleType(AstVisitor *visitor, AstNode *node)
     AstNode *arg = node->tupleType.args;
     for (u64 i = 0; arg; arg = arg->next, i++) {
         args[i] = evalType(visitor, arg);
-        if (args[i] == sError)
-            node->type = sError;
+        if (args[i] == ERROR_TYPE(ctx))
+            node->type = ERROR_TYPE(ctx);
     }
 
     if (node->type == NULL)
@@ -2035,8 +1743,8 @@ static void checkFuncType(AstVisitor *visitor, AstNode *node)
     for (u64 i = 0; param; param = param->next, i++) {
         param->parentScope = node;
         params[i] = evalType(visitor, param);
-        if (params[i] == sError)
-            node->type = sError;
+        if (params[i] == ERROR_TYPE(ctx))
+            node->type = ERROR_TYPE(ctx);
     }
 
     if (node->type == NULL)
@@ -2081,12 +1789,12 @@ static void checkEnumDecl(AstVisitor *visitor, AstNode *node)
     else
         base = getPrimitiveType(ctx->typeTable, prtI64);
 
-    if (!isIntegerType(ctx->typeTable, base)) {
+    if (!isIntegerType(base)) {
         logError(ctx->L,
                  &node->enumDecl.base->loc,
                  "expecting enum base to be an integral type, got '{t}'",
                  (FormatArg[]){{.t = base}});
-        node->type = sError;
+        node->type = ERROR_TYPE(ctx);
         return;
     }
 
@@ -2099,7 +1807,7 @@ static void checkEnumDecl(AstVisitor *visitor, AstNode *node)
         option->flags |= flgMember;
 
         if (!defineSymbol(&env, ctx->L, option->enumOption.name, option)) {
-            node->type = sError;
+            node->type = ERROR_TYPE(ctx);
             return;
         }
 
@@ -2134,13 +1842,13 @@ static void checkStructField(AstVisitor *visitor, AstNode *node)
                            : makeAutoType(ctx->typeTable);
     if (node->structField.value) {
         const Type *value = evalType(visitor, node->structField.value);
-        if (!isTypeAssignableFrom(ctx->typeTable, type, value)) {
+        if (!isTypeAssignableFrom(type, value)) {
             logError(ctx->L,
                      &node->structField.value->loc,
                      "field initializer of type '{t}' not compatible with "
                      "field type '{t}'",
                      (FormatArg[]){{.t = value}, {.t = type}});
-            node->type = sError;
+            node->type = ERROR_TYPE(ctx);
             return;
         }
         type = value;
@@ -2165,7 +1873,7 @@ static void checkStructDecl(AstVisitor *visitor, AstNode *node)
                      &node->structDecl.base->loc,
                      "type '{t}' cannot be extend",
                      (FormatArg[]){{.t = base}});
-            node->type = sError;
+            node->type = ERROR_TYPE(ctx);
             goto checkStructDecl_error;
         }
     }
@@ -2196,8 +1904,8 @@ static void checkStructDecl(AstVisitor *visitor, AstNode *node)
             type = evalType(visitor, member);
         }
 
-        if (type == sError) {
-            node->type = sError;
+        if (type == ERROR_TYPE(ctx)) {
+            node->type = ERROR_TYPE(ctx);
             goto checkStructDecl_cleanupScopes;
         }
 
@@ -2255,7 +1963,7 @@ static void checkStructDecl(AstVisitor *visitor, AstNode *node)
             }
 
             member->next = NULL;
-            addTopLevelDecl(ctx, member);
+            addTopLevelDecl(ctx, NULL, member);
             member = prev;
         }
         else {
@@ -2355,8 +2063,6 @@ void semanticsCheck(AstNode *program,
     },
     .fallback = checkFallback);
     // clang-format off
-
-    sError = makeErrorType(context.typeTable);
 
     astVisit(&visitor, program);
 }

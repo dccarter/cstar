@@ -15,7 +15,7 @@ const Type *evalType(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     astVisit(visitor, node);
-    return resolveType(ctx->typeTable, node->type);
+    return resolveType(node->type);
 }
 
 u64 checkMany(AstVisitor *visitor, AstNode *node)

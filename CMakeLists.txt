@@ -48,15 +48,13 @@ set(CXY_LANG_SOURCES
         src/cxy/lang/scope.c
         src/cxy/lang/ttable.c
         src/cxy/lang/types.c
-        src/cxy/lang/nodes/codegen.c
+        src/cxy/lang/codegen.c
         src/cxy/lang/nodes/forstmt.c
         src/cxy/lang/nodes/literals.c
-        src/cxy/lang/nodes/semantics.c
+        src/cxy/lang/semantics.c
         src/cxy/lang/nodes/strexpr.c
         src/cxy/lang/ccodegen/epilogue.c
-        src/cxy/lang/ccodegen/generate.c
-        src/cxy/lang/ccodegen/prologue.c
-        src/cxy/lang/ccodegen/stringexpr.c)
+        src/cxy/lang/ccodegen/prologue.c)
 
 set(CXY_DRIVER_SOURCES
         src/cxy/driver/driver.c
