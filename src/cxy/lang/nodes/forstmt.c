@@ -21,9 +21,12 @@ static void checkForStmtGenerator(AstVisitor *visitor, AstNode *node)
     AstNode orig = *node;
 
     AstNode *range = orig.forStmt.range;
-    AstNode *args = getLastAstNode(range->callExpr.args), *arg = NULL,
-            *names = orig.forStmt.var->varDecl.names, *closureArgs = NULL;
+    AstNode *args = range->callExpr.args ? getLastAstNode(range->callExpr.args)
+                                         : NULL,
+            *arg = NULL, *names = orig.forStmt.var->varDecl.names,
+            *closureArgs = NULL;
     u64 varCount = countAstNodes(names), i = 1;
+    const FileLoc *loc = args ? &args->loc : &node->loc;
 
     const Type *callee = evalType(visitor, range->callExpr.callee),
                *bodyFunc = NULL;
@@ -33,7 +36,7 @@ static void checkForStmtGenerator(AstVisitor *visitor, AstNode *node)
             flgFuncTypeParam) {
         logError(ctx->L,
                  &range->callExpr.callee->loc,
-                 "for range expression is not a generator functions",
+                 "for range expression is not a generator function",
                  NULL);
 
         node->type = ERROR_TYPE(ctx);
@@ -56,7 +59,7 @@ static void checkForStmtGenerator(AstVisitor *visitor, AstNode *node)
     for (AstNode *name = names; name; name = name->next, i++) {
         AstNode *newArg = makeAstNode(
             ctx->pool,
-            &args->loc,
+            loc,
             &(AstNode){.type = bodyFunc->func.params[i],
                        .tag = astFuncParam,
                        .funcParam = {.name = name->ident.value, .type = NULL}});
@@ -70,12 +73,16 @@ static void checkForStmtGenerator(AstVisitor *visitor, AstNode *node)
         }
     }
 
-    args->next =
+    AstNode *next =
         makeAstNode(ctx->pool,
-                    &args->loc,
+                    loc,
                     &(AstNode){.tag = astClosureExpr,
                                .closureExpr = {.params = closureArgs,
                                                .body = node->forStmt.body}});
+    if (args != NULL)
+        args->next = next;
+    else
+        orig.forStmt.range->callExpr.args = next;
 
     memset(&node->forStmt, 0, sizeof(node->forStmt));
     node->tag = astCallExpr;
@@ -103,22 +110,22 @@ static void checkForStmtRangeOperator(AstVisitor *visitor, AstNode *node)
     AstNode *callee = makeAstNode(
         ctx->pool,
         &node->forStmt.range->loc,
-        &(AstNode){
-            .tag = astMemberExpr,
-            .flags = node->forStmt.range->flags,
-            .memberExpr = {.target = copyAstNode(ctx->pool, node),
-                           .member = makeAstNode(
-                               ctx->pool,
-                               &node->forStmt.range->loc,
-                               &(AstNode){.tag = astIdentifier,
-                                          .flags = node->forStmt.range->flags,
-                                          .ident.value = "op_range"})}});
+        &(AstNode){.tag = astMemberExpr,
+                   .flags = node->forStmt.range->flags,
+                   .memberExpr = {
+                       .target = copyAstNode(ctx->pool, node->forStmt.range),
+                       .member = makeAstNode(
+                           ctx->pool,
+                           &node->forStmt.range->loc,
+                           &(AstNode){.tag = astIdentifier,
+                                      .flags = node->forStmt.range->flags,
+                                      .ident.value = "op_range"})}});
 
-    memset(&node->_body, 0, CYX_AST_NODE_BODY_SIZE);
-    node->tag = astCallExpr;
-    node->type = NULL;
-    node->callExpr.callee = callee;
-    node->callExpr.args = NULL;
+    memset(&node->forStmt.range->_body, 0, CYX_AST_NODE_BODY_SIZE);
+    node->forStmt.range->tag = astCallExpr;
+    node->forStmt.range->type = NULL;
+    node->forStmt.range->callExpr.callee = callee;
+    node->forStmt.range->callExpr.args = NULL;
 
     checkForStmtGenerator(visitor, node);
 }
@@ -241,26 +248,26 @@ void generateForStmt(ConstAstVisitor *visitor, const AstNode *node)
                     .flags = range->type->flags | node->forStmt.range->flags,
                     .pointer.pointed = range->type->array.elementType});
 
-        format(ctx->state, " __arr_{s} = ", (FormatArg[]){{.s = name}});
+        format(ctx->state, " _arr_{s} = ", (FormatArg[]){{.s = name}});
         astConstVisit(visitor, range);
         format(ctx->state, ";\n", NULL);
 
         // create index variable
-        format(ctx->state, "u64 __i_{s} = 0;\n", (FormatArg[]){{.s = name}});
+        format(ctx->state, "u64 _i_{s} = 0;\n", (FormatArg[]){{.s = name}});
 
         // Create actual loop variable
         generateTypeUsage(ctx, range->type->array.elementType);
         format(ctx->state, " ", NULL);
         astConstVisit(visitor, var->varDecl.names);
-        format(ctx->state, " = __arr_{s}[0];\n", (FormatArg[]){{.s = name}});
+        format(ctx->state, " = _arr_{s}[0];\n", (FormatArg[]){{.s = name}});
 
         format(ctx->state,
-               "for (; __i_{s} < {u64}; __i_{s}++, ",
+               "for (; _i_{s} < {u64}; _i_{s}++, ",
                (FormatArg[]){
                    {.s = name}, {.u64 = range->type->array.size}, {.s = name}});
         astConstVisit(visitor, var->varDecl.names);
         format(ctx->state,
-               " = __arr_{s}[__i_{s}]",
+               " = _arr_{s}[_i_{s}]",
                (FormatArg[]){{.s = name}, {.s = name}});
     }
     else {

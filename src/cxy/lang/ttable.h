@@ -20,6 +20,7 @@ const Type *stripPointer(const Type *type);
 const Type *arrayToPointer(TypeTable *table, const Type *type);
 const Type *getPrimitiveType(TypeTable *table, PrtId id);
 
+void removeFromTypeTable(TypeTable *table, const Type *type);
 const Type *makeErrorType(TypeTable *table);
 const Type *makeAutoType(TypeTable *table);
 const Type *makeVoidType(TypeTable *table);

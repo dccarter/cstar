@@ -41,3 +41,8 @@ AstNode *findSymbolByNode(SemanticsContext *ctx, const Env *env, AstNode *node);
 void checkLiterals(AstVisitor *visitor, AstNode *node);
 void checkStringExpr(AstVisitor *visitor, AstNode *node);
 void checkForStmt(AstVisitor *visitor, AstNode *node);
+void checkMember(AstVisitor *visitor, AstNode *node);
+void checkClosure(AstVisitor *visitor, AstNode *node);
+void checkMethodDeclBody(AstVisitor *visitor, AstNode *node);
+const Type *checkMethodDeclSignature(AstVisitor *visitor, AstNode *node);
+void checkFunctionDecl(AstVisitor *visitor, AstNode *node);

@@ -385,37 +385,6 @@ static void generateArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
         visitor, "{{", ", ", "}", node->arrayExpr.elements);
 }
 
-static void generateMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
-    CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    const AstNode *target = node->memberExpr.target,
-                  *member = node->memberExpr.member;
-
-    if (node->type->tag == typFunc && node->type->func.decl &&
-        node->type->func.decl->parentScope &&
-        node->type->func.decl->parentScope->tag == astStructDecl) {
-        const Type *parent = node->type->func.decl->parentScope->type;
-        writeTypename(ctx, parent);
-        format(ctx->state, "__{s}", (FormatArg[]){{.s = member->ident.value}});
-    }
-    else {
-        astConstVisit(visitor, target);
-        if (target->type->tag == typPointer)
-            format(ctx->state, "->", NULL);
-        else
-            format(ctx->state, ".", NULL);
-        if (member->tag == astIntegerLit) {
-            format(ctx->state,
-                   "_{u64}",
-                   (FormatArg[]){{.u64 = member->intLiteral.value}});
-        }
-        else {
-            format(
-                ctx->state, "{s}", (FormatArg[]){{.s = member->ident.value}});
-        }
-    }
-}
-
 static void generateClosureCapture(CodegenContext *ctx,
                                    const Type *type,
                                    cstring name,
@@ -454,7 +423,7 @@ static void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
 
     const char *name =
         (type->flags & (flgClosureStyle | flgClosure))
-            ? makeAnonymousVariable(ctx->strPool, "__closure_capture")
+            ? makeAnonymousVariable(ctx->strPool, "_closure_capture")
             : "";
 
     if (type->flags & (flgClosureStyle | flgClosure))

@@ -237,7 +237,7 @@ static inline AstNode *parseFloat(Parser *P)
     return newAstNode(
         P,
         &tok->fileLoc.begin,
-        &(AstNode){.tag = astIntegerLit, .floatLiteral.value = tok->fVal});
+        &(AstNode){.tag = astFloatLit, .floatLiteral.value = tok->fVal});
 }
 
 static inline AstNode *parseString(Parser *P)

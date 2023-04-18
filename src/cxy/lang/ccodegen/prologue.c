@@ -198,14 +198,20 @@ void generateAllTypes(CodegenContext *ctx)
     const Type **types = mallocOrDie(sizeof(Type *) * typesCount);
     u64 sorted = sortedByInsertionOrder(ctx->types, types, typesCount);
 
+    u64 empty = 0;
     for (u64 i = 0; i < sorted; i++) {
-        if (types[i]->tag == typStruct)
+        if (types[i] && types[i]->tag == typStruct)
             generateStructTypedef(ctx, types[i]);
     }
 
     for (u64 i = 0; i < sorted; i++) {
-        generateType(ctx, types[i]);
+        if (types[i])
+            generateType(ctx, types[i]);
+        else
+            empty++;
     }
+
+    free(types);
 }
 
 static void programPrologue(ConstAstVisitor *visitor, const AstNode *node)

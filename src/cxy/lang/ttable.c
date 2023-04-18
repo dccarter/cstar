@@ -239,6 +239,17 @@ void freeTypeTable(TypeTable *table)
     free(table);
 }
 
+void removeFromTypeTable(TypeTable *table, const Type *type)
+{
+    u32 hash = hashType(hashInit(), type);
+    const Type **found = findInHashTable(&table->types, //
+                                         &type,
+                                         hash,
+                                         sizeof(Type *),
+                                         compareTypesWrapper);
+    removeFromHashTable(&table->types, found, sizeof(Type *));
+}
+
 const Type *resolveType(const Type *type)
 {
     while (true) {

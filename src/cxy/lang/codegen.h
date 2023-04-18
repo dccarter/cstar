@@ -57,3 +57,5 @@ void generateFallback(ConstAstVisitor *visitor, const AstNode *node);
 void generateForStmt(ConstAstVisitor *visitor, const AstNode *node);
 void generateLiteral(ConstAstVisitor *visitor, const AstNode *node);
 void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node);
+void generateMemberExpr(ConstAstVisitor *visitor, const AstNode *node);
+void generateClosure(ConstAstVisitor *visitor, const AstNode *node);

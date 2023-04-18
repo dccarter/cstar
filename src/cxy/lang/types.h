@@ -178,6 +178,7 @@ typedef struct Type {
 } Type;
 
 #define CYX_TYPE_BODY_SIZE (sizeof(Type) - sizeof(((Type *)0)->_head))
+#define typeIs(T, TAG) ((T)->tag == typ##TAG)
 
 bool isTypeAssignableFrom(const Type *to, const Type *from);
 bool isTypeCastAssignable(const Type *to, const Type *from);

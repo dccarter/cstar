@@ -49,8 +49,11 @@ set(CXY_LANG_SOURCES
         src/cxy/lang/ttable.c
         src/cxy/lang/types.c
         src/cxy/lang/codegen.c
+        src/cxy/lang/nodes/closure.c
         src/cxy/lang/nodes/forstmt.c
+        src/cxy/lang/nodes/function.c
         src/cxy/lang/nodes/literals.c
+        src/cxy/lang/nodes/member.c
         src/cxy/lang/semantics.c
         src/cxy/lang/nodes/strexpr.c
         src/cxy/lang/ccodegen/epilogue.c
