@@ -27,13 +27,13 @@ typedef struct {
     bool deferFuncBodyCheck : 1;
     bool skipFuncDefineSymbol : 1;
     u64 anonymousDeclsIndex;
-} CheckerContext;
+} SemanticsContext;
 
 static const Type *sError;
 
 static inline const Type *evalType(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     astVisit(visitor, node);
     return resolveType(ctx->typeTable, node->type);
 }
@@ -47,7 +47,7 @@ static inline u64 checkMany(AstVisitor *visitor, AstNode *node)
     return i;
 }
 
-static void addBuiltinFunc(CheckerContext *ctx,
+static void addBuiltinFunc(SemanticsContext *ctx,
                            cstring name,
                            const Type *ret,
                            const Type **params,
@@ -70,7 +70,7 @@ static void addBuiltinFunc(CheckerContext *ctx,
                                                .decl = node}});
 }
 
-static void addBuiltinVariable(CheckerContext *ctx,
+static void addBuiltinVariable(SemanticsContext *ctx,
                                cstring name,
                                const Type *type,
                                AstNode *value)
@@ -85,7 +85,7 @@ static void addBuiltinVariable(CheckerContext *ctx,
                                         .type = type}));
 }
 
-static void addBuiltinType(CheckerContext *ctx,
+static void addBuiltinType(SemanticsContext *ctx,
                            cstring name,
                            u64 flags,
                            const Type *type)
@@ -100,12 +100,12 @@ static void addBuiltinType(CheckerContext *ctx,
                                         .type = type}));
 }
 
-static void initBuiltins(CheckerContext *ctx)
+static void initBuiltins(SemanticsContext *ctx)
 {
     {
-        const Type *params[] = {makePrimitiveType(ctx->typeTable, prtChar)};
+        const Type *params[] = {getPrimitiveType(ctx->typeTable, prtChar)};
         addBuiltinFunc(
-            ctx, "wputc", makePrimitiveType(ctx->typeTable, prtI32), params, 1);
+            ctx, "wputc", getPrimitiveType(ctx->typeTable, prtI32), params, 1);
     }
 
     {
@@ -119,7 +119,7 @@ static void initBuiltins(CheckerContext *ctx)
     }
 }
 
-static void addAnonymousTopLevelDecl(CheckerContext *ctx,
+static void addAnonymousTopLevelDecl(SemanticsContext *ctx,
                                      cstring name,
                                      AstNode *node)
 {
@@ -137,7 +137,7 @@ static void addAnonymousTopLevelDecl(CheckerContext *ctx,
     ctx->previousTopLevelDecl = node;
 }
 
-static void addTopLevelDecl(CheckerContext *ctx, AstNode *node)
+static void addTopLevelDecl(SemanticsContext *ctx, AstNode *node)
 {
     if (ctx->previousTopLevelDecl == ctx->currentTopLevelDecl) {
         ctx->program->program.decls = node;
@@ -150,7 +150,7 @@ static void addTopLevelDecl(CheckerContext *ctx, AstNode *node)
     ctx->previousTopLevelDecl = node;
 }
 
-AstNode *findSymbolByPath(CheckerContext *ctx, const Env *env, AstNode *node)
+AstNode *findSymbolByPath(SemanticsContext *ctx, const Env *env, AstNode *node)
 {
     AstNode *elem = node->path.elements;
     do {
@@ -179,7 +179,7 @@ AstNode *findSymbolByPath(CheckerContext *ctx, const Env *env, AstNode *node)
     } while (true);
 }
 
-AstNode *findSymbolByNode(CheckerContext *ctx, const Env *env, AstNode *node)
+AstNode *findSymbolByNode(SemanticsContext *ctx, const Env *env, AstNode *node)
 {
     switch (node->tag) {
     case astPath:
@@ -193,7 +193,7 @@ AstNode *findSymbolByNode(CheckerContext *ctx, const Env *env, AstNode *node)
 
 static void checkProgram(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     pushScope(&ctx->env, node);
 
     initBuiltins(ctx);
@@ -208,7 +208,7 @@ static void checkProgram(AstVisitor *visitor, AstNode *node)
 
 static void checkFallback(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
 
     switch (node->tag) {
     case astExprStmt:
@@ -224,23 +224,23 @@ static void checkFallback(AstVisitor *visitor, AstNode *node)
 
 static void checkLiterals(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
 
     switch (node->tag) {
     case astNullLit:
         node->type = makeNullType(ctx->typeTable);
         break;
     case astBoolLit:
-        node->type = makePrimitiveType(ctx->typeTable, prtBool);
+        node->type = getPrimitiveType(ctx->typeTable, prtBool);
         break;
     case astCharLit:
-        node->type = makePrimitiveType(ctx->typeTable, prtChar);
+        node->type = getPrimitiveType(ctx->typeTable, prtChar);
         break;
     case astIntegerLit:
-        node->type = makePrimitiveType(ctx->typeTable, prtI32);
+        node->type = getPrimitiveType(ctx->typeTable, prtI32);
         break;
     case astFloatLit:
-        node->type = makePrimitiveType(ctx->typeTable, prtF32);
+        node->type = getPrimitiveType(ctx->typeTable, prtF32);
         break;
     case astStringLit:
         node->type = makeStringType(ctx->typeTable);
@@ -252,7 +252,7 @@ static void checkLiterals(AstVisitor *visitor, AstNode *node)
 
 static void checkStringExpr(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     checkMany(visitor, node->stringExpr.parts);
     AstNode *part = node->stringExpr.parts;
     for (; part; part = part->next) {
@@ -267,7 +267,7 @@ static void checkStringExpr(AstVisitor *visitor, AstNode *node)
 
 static void checkFuncParam(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     if (node->parentScope == NULL || node->parentScope->tag != astFuncType)
         defineSymbol(&ctx->env, ctx->L, node->funcParam.name, node);
 
@@ -288,7 +288,8 @@ static void checkFuncParam(AstVisitor *visitor, AstNode *node)
     }
 }
 
-static const Type *transformFuncTypeParam(CheckerContext *ctx, const Type *type)
+static const Type *transformFuncTypeParam(SemanticsContext *ctx,
+                                          const Type *type)
 {
     // change (i32) => X, (&void, i32) => X
     const Type **newParams =
@@ -316,7 +317,7 @@ static const Type *transformFuncTypeParam(CheckerContext *ctx, const Type *type)
 static const Type *checkFuncDeclSignature(AstVisitor *visitor, AstNode *node)
 {
     const Type *ret = NULL, **params, *type = NULL;
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
 
     u64 paramsCount = countAstNodes(node->funcDecl.params);
     AstNode *param = node->funcDecl.params;
@@ -384,7 +385,7 @@ static const Type *checkFuncDeclSignature(AstVisitor *visitor, AstNode *node)
 static void checkFuncDeclBody(AstVisitor *visitor, AstNode *node)
 {
     const Type *ret = NULL, *type = NULL;
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *param = node->funcDecl.params;
     const Type *parent = makeThisType(ctx->typeTable,
                                       node->parentScope->structDecl.name,
@@ -437,7 +438,7 @@ static void checkFuncDeclBody(AstVisitor *visitor, AstNode *node)
 static void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
 {
     const Type *ret = NULL, **params, *type = NULL;
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     const AstNode *lastReturn = ctx->lastReturn;
     ctx->lastReturn = NULL;
 
@@ -521,7 +522,7 @@ static void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
 static void checkClosure(AstVisitor *visitor, AstNode *node)
 {
     const Type *ret, **params;
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     const AstNode *lastReturn = ctx->lastReturn;
     ctx->lastReturn = NULL;
 
@@ -624,7 +625,7 @@ static void checkClosure(AstVisitor *visitor, AstNode *node)
 
 static void checkCastExpr(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *expr = evalType(visitor, node->castExpr.expr);
     const Type *target = evalType(visitor, node->castExpr.to);
     if (!isTypeCastAssignable(ctx->typeTable, target, expr)) {
@@ -638,8 +639,8 @@ static void checkCastExpr(AstVisitor *visitor, AstNode *node)
 
 static void checkRangeExpr(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
-    const Type *i64Type = makePrimitiveType(ctx->typeTable, prtI64);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    const Type *i64Type = getPrimitiveType(ctx->typeTable, prtI64);
 
     const Type *start = evalType(visitor, node->rangeExpr.start);
     const Type *end = evalType(visitor, node->rangeExpr.end);
@@ -677,13 +678,13 @@ static void checkRangeExpr(AstVisitor *visitor, AstNode *node)
 
 static void checkTernaryExpr(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *cond = evalType(visitor, node->ternaryExpr.cond);
     const Type *body = evalType(visitor, node->ternaryExpr.body);
     const Type *otherwise = evalType(visitor, node->ternaryExpr.otherwise);
 
     if (!isTypeAssignableFrom(
-            ctx->typeTable, makePrimitiveType(ctx->typeTable, prtBool), cond)) {
+            ctx->typeTable, getPrimitiveType(ctx->typeTable, prtBool), cond)) {
         logError(ctx->L,
                  &node->ternaryExpr.cond->loc,
                  "expecting a ternary expression ('?') condition type of bool, "
@@ -705,7 +706,7 @@ static void checkTernaryExpr(AstVisitor *visitor, AstNode *node)
 
 static void checkNewExpr(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *type = NULL, *init = NULL;
     node->flags |= flgNewAllocated;
 
@@ -734,7 +735,7 @@ static void checkNewExpr(AstVisitor *visitor, AstNode *node)
 
 static void checkVarDecl(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *names = node->varDecl.names;
 
     defineSymbol(&ctx->env, ctx->L, names->ident.value, node);
@@ -780,7 +781,7 @@ static void checkVarDecl(AstVisitor *visitor, AstNode *node)
 
 static void checkIdentifier(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *symbol =
         findSymbol(&ctx->env, ctx->L, node->ident.value, &node->loc);
     if (symbol == NULL)
@@ -791,7 +792,7 @@ static void checkIdentifier(AstVisitor *visitor, AstNode *node)
 
 static void checkPathElement(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     csAssert0(node->parentScope);
     const Type *scope = stripPointer(ctx->typeTable, node->parentScope->type);
 
@@ -847,7 +848,7 @@ static void checkPathElement(AstVisitor *visitor, AstNode *node)
 
 static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     Scope *scope = NULL, *closure = ctx->closure;
     AstNode *symbol = findSymbolAndScope(
         &ctx->env, ctx->L, node->pathElement.name, &node->loc, &scope);
@@ -891,7 +892,7 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
 
 static void checkPath(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
 
     AstNode *elem = node->path.elements;
     const Type *type = checkFirstPathElement(visitor, elem);
@@ -914,7 +915,7 @@ static void checkPath(AstVisitor *visitor, AstNode *node)
 
 static void checkBinary(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *left = evalType(visitor, node->binaryExpr.lhs);
     const Type *right = evalType(visitor, node->binaryExpr.rhs);
     // TODO check compatibility
@@ -1032,7 +1033,7 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
         node->type = type;
         break;
     case optLogical:
-        if (type != makePrimitiveType(ctx->typeTable, prtBool)) {
+        if (type != getPrimitiveType(ctx->typeTable, prtBool)) {
             logError(ctx->L,
                      &node->loc,
                      "cannot perform logical binary operation '{s}' on "
@@ -1053,7 +1054,7 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
                      (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
             return;
         }
-        node->type = makePrimitiveType(ctx->typeTable, prtBool);
+        node->type = getPrimitiveType(ctx->typeTable, prtBool);
         ;
         break;
     case optEquality:
@@ -1066,7 +1067,7 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
                      (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
             return;
         }
-        node->type = makePrimitiveType(ctx->typeTable, prtBool);
+        node->type = getPrimitiveType(ctx->typeTable, prtBool);
         break;
     case optRange: {
         if (!isIntegerType(ctx->typeTable, left)) {
@@ -1099,7 +1100,7 @@ static void checkBinary(AstVisitor *visitor, AstNode *node)
     }
 }
 
-static const Type *checkPrefixExpr(CheckerContext *ctx,
+static const Type *checkPrefixExpr(SemanticsContext *ctx,
                                    const Type *operand,
                                    AstNode *node)
 {
@@ -1127,7 +1128,7 @@ static const Type *checkPrefixExpr(CheckerContext *ctx,
         }
         break;
     case opNot:
-        if (operand == makePrimitiveType(ctx->typeTable, prtBool)) {
+        if (operand == getPrimitiveType(ctx->typeTable, prtBool)) {
             logError(ctx->L,
                      &node->unaryExpr.operand->loc,
                      "logical '!' operator no supported on type '{t}', "
@@ -1172,7 +1173,7 @@ static const Type *checkPrefixExpr(CheckerContext *ctx,
 
 static void checkUnary(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *operand = evalType(visitor, node->unaryExpr.operand);
     node->flags |= node->unaryExpr.operand->flags;
 
@@ -1202,7 +1203,7 @@ static void checkUnary(AstVisitor *visitor, AstNode *node)
 
 static void checkAssign(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *left = node->assignExpr.lhs, *right = node->assignExpr.rhs;
     const Type *lhs = evalType(visitor, left);
     const Type *rhs = evalType(visitor, right);
@@ -1253,7 +1254,7 @@ static void checkAssign(AstVisitor *visitor, AstNode *node)
 
 static void checkAddressOf(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *operand = evalType(visitor, node->unaryExpr.operand);
     node->flags |= node->unaryExpr.operand->flags;
     node->type = makePointerType(
@@ -1262,7 +1263,7 @@ static void checkAddressOf(AstVisitor *visitor, AstNode *node)
 
 static void checkIndex(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *target = evalType(visitor, node->indexExpr.target);
     node->flags |= node->indexExpr.target->flags;
 
@@ -1304,7 +1305,7 @@ static void checkIndex(AstVisitor *visitor, AstNode *node)
 
 static void checkMember(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *target = evalType(visitor, node->memberExpr.target);
     AstNode *member = node->memberExpr.member;
     node->flags |= (node->memberExpr.target->flags & flgConst);
@@ -1375,7 +1376,7 @@ static void checkMember(AstVisitor *visitor, AstNode *node)
 
 static void checkArrayExr(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     u64 count = 0;
     const Type *elementType = NULL;
     for (AstNode *elem = node->arrayExpr.elements; elem;
@@ -1405,7 +1406,7 @@ static void checkArrayExr(AstVisitor *visitor, AstNode *node)
 
 static void checkTupleExpr(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     u64 count = countAstNodes(node->tupleExpr.args);
     const Type **args = mallocOrDie(sizeof(Type *) * count);
     AstNode *arg = node->tupleExpr.args;
@@ -1425,7 +1426,7 @@ static void checkTupleExpr(AstVisitor *visitor, AstNode *node)
 
 static void checkStructExpr(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *target = evalType(visitor, node->structExpr.left);
     if (target->tag != typStruct) {
         logError(ctx->L,
@@ -1499,7 +1500,7 @@ static void checkGroupExpr(AstVisitor *visitor, AstNode *node)
     node->type = evalType(visitor, node->groupExpr.expr);
 }
 
-static const Type *transformFuncTypeParamCallee(CheckerContext *ctx,
+static const Type *transformFuncTypeParamCallee(SemanticsContext *ctx,
                                                 const Type *type,
                                                 AstNode *node)
 {
@@ -1539,7 +1540,7 @@ static const Type *transformFuncTypeParamCallee(CheckerContext *ctx,
 
 static const Type *wrapFuncArgInClosure(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *orig = copyAstNode(ctx->pool, node);
     const Type *type = node->type;
     AstNode *params = copyAstNode(ctx->pool, type->func.decl->funcDecl.params);
@@ -1575,7 +1576,7 @@ static const Type *wrapFuncArgInClosure(AstVisitor *visitor, AstNode *node)
 
 static void checkCall(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *callee = evalType(visitor, node->callExpr.callee);
     AstNode *arg = node->callExpr.args;
 
@@ -1660,7 +1661,7 @@ static void checkCall(AstVisitor *visitor, AstNode *node)
 
 static void checkBlock(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *stmt = node->blockStmt.stmts;
     AstNode *prev = stmt;
     for (; stmt; stmt = stmt->next) {
@@ -1685,7 +1686,7 @@ static void checkBlock(AstVisitor *visitor, AstNode *node)
 
 static void checkReturn(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *func = findEnclosingFunc(&ctx->env, ctx->L, &node->loc);
     node->type = node->returnStmt.expr
                      ? evalType(visitor, node->returnStmt.expr)
@@ -1723,7 +1724,7 @@ static void checkReturn(AstVisitor *visitor, AstNode *node)
 
 static void checkDeferStmt(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
 
     if (node->parentScope == NULL || node->parentScope->tag != astBlockStmt) {
         logError(ctx->L,
@@ -1737,7 +1738,7 @@ static void checkDeferStmt(AstVisitor *visitor, AstNode *node)
 
 static void checkBreakContinueStmt(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     findEnclosingLoop(&ctx->env,
                       ctx->L,
                       node->tag == astBreakStmt ? "break" : "continue",
@@ -1747,14 +1748,14 @@ static void checkBreakContinueStmt(AstVisitor *visitor, AstNode *node)
 
 static void checkIfStmt(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     pushScope(&ctx->env, node);
 
     const Type *cond = evalType(visitor, node->ifStmt.cond);
     const Type *then = evalType(visitor, node->ifStmt.body);
 
     if (!isTypeAssignableFrom(
-            ctx->typeTable, makePrimitiveType(ctx->typeTable, prtBool), cond)) {
+            ctx->typeTable, getPrimitiveType(ctx->typeTable, prtBool), cond)) {
         logError(ctx->L,
                  &node->ternaryExpr.cond->loc,
                  "unexpected type in if statement condition, expecting "
@@ -1775,13 +1776,13 @@ static void checkIfStmt(AstVisitor *visitor, AstNode *node)
 
 static void checkWhileStmt(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     pushScope(&ctx->env, node);
     const Type *cond = evalType(visitor, node->whileStmt.cond);
     const Type *body = evalType(visitor, node->whileStmt.body);
 
     if (!isTypeAssignableFrom(
-            ctx->typeTable, makePrimitiveType(ctx->typeTable, prtBool), cond)) {
+            ctx->typeTable, getPrimitiveType(ctx->typeTable, prtBool), cond)) {
         logError(ctx->L,
                  &node->ternaryExpr.cond->loc,
                  "unexpected type in while statement condition, expecting "
@@ -1797,7 +1798,7 @@ static void checkWhileStmt(AstVisitor *visitor, AstNode *node)
 
 static void checkForStmtGenerator(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode orig = *node;
 
     AstNode *range = orig.forStmt.range;
@@ -1865,19 +1866,17 @@ static void checkForStmtGenerator(AstVisitor *visitor, AstNode *node)
 
 static void checkForStmt(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     if (node->forStmt.range->tag == astCallExpr) {
         checkForStmtGenerator(visitor, node);
         return;
     }
     const Type *range = evalType(visitor, node->forStmt.range);
     if (range->tag == typStruct) {
-
     }
 
     pushScope(&ctx->env, node);
     const Type *type = evalType(visitor, node->forStmt.var);
-
 
     AstNode *symbol = findSymbol(&ctx->env,
                                  ctx->L,
@@ -1894,7 +1893,7 @@ static void checkForStmt(AstVisitor *visitor, AstNode *node)
             type = sError;
         }
         else if (type->tag == typAuto) {
-            symbol->type = makePrimitiveType(ctx->typeTable, prtI64);
+            symbol->type = getPrimitiveType(ctx->typeTable, prtI64);
             node->forStmt.var->type = symbol->type;
         }
     }
@@ -1942,13 +1941,13 @@ static void checkForStmt(AstVisitor *visitor, AstNode *node)
 
 static void checkPrimitiveType(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
-    node->type = makePrimitiveType(ctx->typeTable, node->primitiveType.id);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    node->type = getPrimitiveType(ctx->typeTable, node->primitiveType.id);
 }
 
 static void checkPointerType(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     node->type = makePointerType(ctx->typeTable,
                                  evalType(visitor, node->pointerType.pointed),
                                  node->flags & flgConst);
@@ -1956,7 +1955,7 @@ static void checkPointerType(AstVisitor *visitor, AstNode *node)
 
 static void checkArrayType(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *element = evalType(visitor, node->arrayType.elementType);
 
     u64 size = UINT64_MAX;
@@ -1972,7 +1971,7 @@ static void checkArrayType(AstVisitor *visitor, AstNode *node)
 
 static void checkTypeDecl(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     defineSymbol(&ctx->env, ctx->L, node->typeDecl.name, node);
     if (node->typeDecl.aliased) {
         const Type *ref = evalType(visitor, node->typeDecl.aliased);
@@ -1985,7 +1984,7 @@ static void checkTypeDecl(AstVisitor *visitor, AstNode *node)
 
 static void checkUnionDecl(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     defineSymbol(&ctx->env, ctx->L, node->unionDecl.name, node);
 
     u64 count = countAstNodes(node->unionDecl.members);
@@ -2006,7 +2005,7 @@ static void checkUnionDecl(AstVisitor *visitor, AstNode *node)
 
 static void checkTupleType(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
 
     u64 count = countAstNodes(node->tupleType.args);
     const Type **args = mallocOrDie(sizeof(Type *) * count);
@@ -2026,7 +2025,7 @@ static void checkTupleType(AstVisitor *visitor, AstNode *node)
 
 static void checkFuncType(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
 
     const Type *ret = evalType(visitor, node->funcType.ret);
     u64 count = countAstNodes(node->funcType.params);
@@ -2055,21 +2054,21 @@ static void checkFuncType(AstVisitor *visitor, AstNode *node)
 
 static void checkBuiltinType(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     node->type = node->tag == astVoidType ? makeVoidType(ctx->typeTable)
                                           : makeStringType(ctx->typeTable);
 }
 
 static void checkOptionalType(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *type = evalType(visitor, node->optionalType.type);
     node->type = makeOptionalType(ctx->typeTable, type, flgNone);
 }
 
 static void checkEnumDecl(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     u64 numOptions = countAstNodes(node->enumDecl.options);
     EnumOption *options = mallocOrDie(sizeof(EnumOption) * numOptions);
     AstNode *option = node->enumDecl.options;
@@ -2080,7 +2079,7 @@ static void checkEnumDecl(AstVisitor *visitor, AstNode *node)
     if (node->enumDecl.base)
         base = evalType(visitor, node->enumDecl.base);
     else
-        base = makePrimitiveType(ctx->typeTable, prtI64);
+        base = getPrimitiveType(ctx->typeTable, prtI64);
 
     if (!isIntegerType(ctx->typeTable, base)) {
         logError(ctx->L,
@@ -2129,7 +2128,7 @@ static void checkEnumDecl(AstVisitor *visitor, AstNode *node)
 
 static void checkStructField(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *type = node->structField.type
                            ? evalType(visitor, node->structField.type)
                            : makeAutoType(ctx->typeTable);
@@ -2153,7 +2152,7 @@ static void checkStructField(AstVisitor *visitor, AstNode *node)
 
 static void checkStructDecl(AstVisitor *visitor, AstNode *node)
 {
-    CheckerContext *ctx = getAstVisitorContext(visitor);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     u64 numMembers = countAstNodes(node->structDecl.members);
     StructField *members = mallocOrDie(sizeof(StructField) * numMembers);
     AstNode *member = node->structDecl.members;
@@ -2292,11 +2291,11 @@ void semanticsCheck(AstNode *program,
                     StrPool *strPool,
                     TypeTable *typeTable)
 {
-    CheckerContext context = {.L = L,
-                              .typeTable = typeTable,
-                              .pool = pool,
-                              .strPool = strPool,
-                              .env = {NULL}};
+    SemanticsContext context = {.L = L,
+                                .typeTable = typeTable,
+                                .pool = pool,
+                                .strPool = strPool,
+                                .env = {NULL}};
     environmentInit(&context.env);
 
     // clang-format off

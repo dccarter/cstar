@@ -15,38 +15,48 @@ typedef struct TypeTable TypeTable;
 TypeTable *newTypeTable(MemPool *pool, StrPool *strPool);
 void freeTypeTable(TypeTable *table);
 
-const Type *resolveType(TypeTable *table, const Type *type);
-const Type *stripPointer(TypeTable *table, const Type *type);
+const Type *resolveType(const Type *type);
+const Type *stripPointer(const Type *type);
 const Type *arrayToPointer(TypeTable *table, const Type *type);
+const Type *getPrimitiveType(TypeTable *table, PrtId id);
 
 const Type *makeErrorType(TypeTable *table);
 const Type *makeAutoType(TypeTable *table);
 const Type *makeVoidType(TypeTable *table);
 const Type *makeNullType(TypeTable *table);
-const Type *makePrimitiveType(TypeTable *table, PrtId id);
 const Type *makeStringType(TypeTable *table);
 const Type *makePointerType(TypeTable *table, const Type *pointed, u64 flags);
 const Type *makeOptionalType(TypeTable *table, const Type *target, u64 flags);
 const Type *makeArrayType(TypeTable *table, const Type *elementType, u64 size);
+
 static inline const Type *makeVoidPointerType(TypeTable *table, u64 flags)
 {
     return makePointerType(table, makeVoidType(table), flags);
 }
+
 const Type *makeMapType(TypeTable *table, const Type *key, const Type *value);
+
 const Type *makeAliasType(TypeTable *table, const Type *aliased, cstring name);
+
 const Type *makeOpaqueType(TypeTable *table, cstring name);
+
 const Type *makeUnionType(TypeTable *table, const Type **members, u64 count);
+
 const Type *makeTupleType(TypeTable *table,
                           const Type **members,
                           u64 count,
                           u64 flags);
+
 const Type *makeThisType(TypeTable *table, cstring name, u64 flags);
+
 const Type *makeFuncType(TypeTable *table, const Type *init);
+
 const Type *makeStruct(TypeTable *table, const Type *init);
+
 const Type *makeEnum(TypeTable *table, const Type *init);
-const Type *makeRangeType(TypeTable *table);
 
 u64 getTypesCount(TypeTable *table);
+
 u64 sortedByInsertionOrder(TypeTable *table, const Type **types, u64 size);
 
 void enumerateTypeTable(TypeTable *table,

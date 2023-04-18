@@ -506,6 +506,8 @@ AstNode *copyAstNode(MemPool *pool, const AstNode *node);
 
 void printAst(FormatState *state, const AstNode *node);
 
+#define nodeIs(NODE, TAG) (NODE)->tag == ast##TAG
+
 bool isTuple(const AstNode *node);
 
 bool isAssignableExpr(const AstNode *node);

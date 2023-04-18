@@ -166,11 +166,11 @@ typedef struct Type {
     };
 } Type;
 
-bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from);
-bool isTypeCastAssignable(TypeTable *table, const Type *to, const Type *from);
-bool isIntegerType(TypeTable *table, const Type *type);
-bool isSignedType(TypeTable *table, const Type *type);
-bool isUnsignedType(TypeTable *table, const Type *type);
-bool isFloatType(TypeTable *table, const Type *type);
-bool isNumericType(TypeTable *table, const Type *type);
+bool isTypeAssignableFrom(const Type *to, const Type *from);
+bool isTypeCastAssignable(const Type *to, const Type *from);
+bool isIntegerType(const Type *type);
+bool isSignedType(const Type *type);
+bool isUnsignedType(const Type *type);
+bool isFloatType(const Type *type);
+bool isNumericType(const Type *type);
 void printType(FormatState *state, const Type *type);
