@@ -34,6 +34,13 @@ static inline void unHookStructEnvironments(SemanticsContext *ctx,
     }
 }
 
+static inline AstNode *findStructField(const Type *type, cstring name)
+{
+    Env env = {.first = type->tStruct.env->scope,
+               .scope = type->tStruct.env->scope};
+    return findSymbolOnly(&env, name);
+}
+
 void generateStructExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -113,11 +120,9 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
 
     for (; field; field = field->next) {
         prev = field;
-        AstNode *decl =
-            findSymbolOnly(target->tStruct.env, field->fieldExpr.name);
+        AstNode *decl = findStructField(target, field->fieldExpr.name);
         if (decl == NULL && target->tStruct.base) {
-            decl = findSymbolOnly(target->tStruct.base->tStruct.env,
-                                  field->fieldExpr.name);
+            decl = findStructField(target->tStruct.base, field->fieldExpr.name);
             if (decl)
                 field->flags |= flgAddSuper;
         }
@@ -139,6 +144,7 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
                      "value type '{t}' is not assignable to field type '{t}'",
                      (FormatArg[]){{.t = type}, {.t = decl->type}});
             node->type = ERROR_TYPE(ctx);
+            continue;
         }
 
         initialized[decl->structField.index] = true;

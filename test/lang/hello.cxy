@@ -12,62 +12,20 @@ pub native func fgets(data: &char, size: i32, stream: &FILE) : &char;
 
 pub func println(str: string) => puts(str)
 
-struct Base {
-    id: i64
+struct Node {
+    left: &Node
+    right: &Node
+    value: u64
 }
 
-struct Account : Base {
-    name: string
-    balance: f64
-    id: i64
-
-    func deposit(amount: f64) {
-        super.id = 10
-        this.balance += amount
-    }
-
-    func withdraw(amount: f64) {
-        if (balance < amount) {
-            puts("Insufficient funds")
-            return;
+struct BinaryTree {
+    root: &Node
+    func add(value: u64) {
+        if (root == nullptr) {
+            root = new auto Node{left: null, right: null, value: value}
         }
-        balance -= amount
-    }
-
-    const func `str`() : string => f"Account{name: ${name}, balance: ${balance}}"
-
-    const func `+`(other: &const Account) => Account{name: name, balance: balance + other.balance}
-
-    func `..`(cb: func(amount: f64) -> void) => {
-        var i = 0.5;
-        while (i < 10) {
-            cb(balance + i)
-            i += 0.5
-        }
-    }
-
-    func `[]`(x: i32) => &balance
-
-    func `[]=`(x: i32, y: f32) => balance = y
-
-    func `()`(x: f32 = 100) => balance += x
-
-    func `<<`(s: string) {
-        puts(s)
     }
 }
 
 func main(args: [string]) {
-    var acc1 = new auto Account{};
-    defer delete acc1;
-
-    acc1(10)
-
-    for (const b: acc1) {
-        puts(f"${b}")
-    }
-
-    acc1.[10] = 10;
-
-    acc1 << "Hello World"
 }

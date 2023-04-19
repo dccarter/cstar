@@ -243,7 +243,10 @@ void releaseScope(Env *env, Env *into)
         env->scope = env->scope->next;
     }
     else {
+        if (env->scope->next)
+            freeScopes(env->scope->next);
         env->first = env->scope = NULL;
+        into->scope->next = NULL;
     }
 }
 
