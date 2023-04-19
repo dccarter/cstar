@@ -6,9 +6,14 @@
 #include "core/htable.h"
 #include "lang/ast.h"
 
-typedef struct {
+typedef struct SymbolRef {
+    AstNode *node;
+    struct SymbolRef *next;
+} SymbolRef;
+
+typedef struct Symbol {
     const char *name;
-    AstNode *declSite;
+    SymbolRef ref;
 } Symbol;
 
 typedef struct Env Env;
@@ -38,6 +43,9 @@ AstNode *findSymbol(const Env *env,
                     Log *L,
                     const char *name,
                     const FileLoc *loc);
+
+SymbolRef *findSymbolRef(const Env *env, const char *name);
+
 AstNode *findSymbolAndScope(const Env *env,
                             Log *L,
                             const char *name,

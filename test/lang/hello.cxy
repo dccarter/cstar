@@ -45,10 +45,16 @@ struct Account : Base {
             i += 0.5
         }
     }
+
+    func `[]`(x: f32) => &balance
+
+    func `()`(x: f32 = 100) => balance += x
 }
 
 func main(args: [string]) {
-    var acc1 = new auto Account{name: "Checking", balance: 100};
+    var acc1 = new auto Account{};
+    acc1(10)
+
     for (const b: acc1) {
         puts(f"${b}")
     }

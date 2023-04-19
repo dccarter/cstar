@@ -89,7 +89,7 @@ bool defineSymbol(Env *env, Log *L, const char *name, AstNode *node)
     //    if (name[0] == '_')
     //        return false;
 
-    Symbol symbol = {.name = name, .declSite = node};
+    Symbol symbol = {.name = name, .ref.node = node};
     u32 hash = hashStr(hashInit(), name);
     bool wasInserted = insertInHashTable(
         &env->scope->symbols, &symbol, hash, sizeof(Symbol), compareSymbols);
@@ -104,7 +104,7 @@ bool defineSymbol(Env *env, Log *L, const char *name, AstNode *node)
                                              sizeof(Symbol),
                                              compareSymbols);
         csAssert0(prev);
-        logNote(L, &prev->declSite->loc, "previously declared here", NULL);
+        logNote(L, &prev->ref.node->loc, "previously declared here", NULL);
     }
 
     return wasInserted;
@@ -134,7 +134,7 @@ AstNode *findSymbolAndScope(const Env *env,
                                          compareSymbols);
         *outScope = scope;
         if (symbol)
-            return symbol->declSite;
+            return symbol->ref.node;
     }
 
     if (env->up) {
@@ -146,7 +146,7 @@ AstNode *findSymbolAndScope(const Env *env,
     return NULL;
 }
 
-AstNode *findSymbolOnly(const Env *env, const char *name)
+SymbolRef *findSymbolRef(const Env *env, const char *name)
 {
     u32 hash = hashStr(hashInit(), name);
     for (Scope *scope = env->scope; scope; scope = scope->prev) {
@@ -156,14 +156,21 @@ AstNode *findSymbolOnly(const Env *env, const char *name)
                                          sizeof(Symbol),
                                          compareSymbols);
         if (symbol)
-            return symbol->declSite;
+            return &symbol->ref;
     }
 
     if (env->up) {
-        return findSymbolOnly(env->up, name);
+        return findSymbolRef(env->up, name);
     }
 
     return NULL;
+}
+
+AstNode *findSymbolOnly(const Env *env, const char *name)
+{
+    const SymbolRef *ref = findSymbolRef(env, name);
+
+    return ref ? ref->node : NULL;
 }
 
 static inline AstNode *findEnclosingScope(Env *env,

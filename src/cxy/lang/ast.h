@@ -488,7 +488,7 @@ struct AstNode {
     };
 };
 
-#define CYX_AST_NODE_BODY_SIZE (sizeof(AstNode) - sizeof(((AstNode *)0)->_head))
+#define CXY_AST_NODE_BODY_SIZE (sizeof(AstNode) - sizeof(((AstNode *)0)->_head))
 
 typedef struct AstVisitor {
     void *context;

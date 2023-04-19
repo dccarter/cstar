@@ -26,8 +26,6 @@ typedef struct {
     const AstNode *lastReturn;
     u64 anonymousDeclsIndex;
     bool mainOptimized : 1;
-    bool deferFuncBodyCheck : 1;
-    bool skipFuncDefineSymbol : 1;
 } SemanticsContext;
 
 #define ERROR_TYPE(CTX) makeErrorType((CTX)->typeTable)
@@ -38,6 +36,9 @@ void addTopLevelDecl(SemanticsContext *ctx, cstring name, AstNode *node);
 AstNode *findSymbolByPath(SemanticsContext *ctx, const Env *env, AstNode *node);
 AstNode *findSymbolByNode(SemanticsContext *ctx, const Env *env, AstNode *node);
 
+void checkPathElement(AstVisitor *visitor, AstNode *node);
+void checkPath(AstVisitor *visitor, AstNode *node);
+
 void checkLiterals(AstVisitor *visitor, AstNode *node);
 void checkStringExpr(AstVisitor *visitor, AstNode *node);
 void checkForStmt(AstVisitor *visitor, AstNode *node);
@@ -45,4 +46,27 @@ void checkMember(AstVisitor *visitor, AstNode *node);
 void checkClosure(AstVisitor *visitor, AstNode *node);
 void checkMethodDeclBody(AstVisitor *visitor, AstNode *node);
 const Type *checkMethodDeclSignature(AstVisitor *visitor, AstNode *node);
+void checkFuncParam(AstVisitor *visitor, AstNode *node);
 void checkFunctionDecl(AstVisitor *visitor, AstNode *node);
+void checkCall(AstVisitor *visitor, AstNode *node);
+void checkRangeExpr(AstVisitor *visitor, AstNode *node);
+void checkNewExpr(AstVisitor *visitor, AstNode *node);
+void checkTupleExpr(AstVisitor *visitor, AstNode *node);
+void checkStructExpr(AstVisitor *visitor, AstNode *node);
+void checkArrayExpr(AstVisitor *visitor, AstNode *node);
+void checkIndex(AstVisitor *visitor, AstNode *node);
+void checkBinaryExpr(AstVisitor *visitor, AstNode *node);
+void checkUnary(AstVisitor *visitor, AstNode *node);
+void checkVarDecl(AstVisitor *visitor, AstNode *node);
+void checkTypeDecl(AstVisitor *visitor, AstNode *node);
+void checkUnionDecl(AstVisitor *visitor, AstNode *node);
+void checkStructField(AstVisitor *visitor, AstNode *node);
+void checkStructDecl(AstVisitor *visitor, AstNode *node);
+void checkEnumDecl(AstVisitor *visitor, AstNode *node);
+void checkFuncType(AstVisitor *visitor, AstNode *node);
+void checkTupleType(AstVisitor *visitor, AstNode *node);
+void checkBuiltinType(AstVisitor *visitor, AstNode *node);
+void checkOptionalType(AstVisitor *visitor, AstNode *node);
+void checkPrimitiveType(AstVisitor *visitor, AstNode *node);
+void checkPointerType(AstVisitor *visitor, AstNode *node);
+void checkArrayType(AstVisitor *visitor, AstNode *node);

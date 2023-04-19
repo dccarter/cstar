@@ -357,6 +357,8 @@ static AstNode *structExpr(Parser *P,
                            AstNode *lhs,
                            AstNode *(parseField)(Parser *));
 
+static AstNode *functionParam(Parser *P);
+
 static AstNode *newOperator(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 {
     Token tok = *current(P);
@@ -368,9 +370,17 @@ static AstNode *newOperator(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
     else {
         type = parseType(P);
         if (match(P, tokLParen)) {
-            init = parsePrimary(P, true);
+            init = parseMany(P, tokRParen, tokComma, functionParam);
             consume0(P, tokRParen);
         }
+
+        init =
+            makeAstNode(P->memPool,
+                        &tok.fileLoc,
+                        &(AstNode){.tag = astCallExpr,
+                                   .flags = type->flags,
+                                   .callExpr = {.callee = type, .args = init}});
+        type = NULL;
     }
     return makeAstNode(
         P->memPool,
@@ -1071,6 +1081,7 @@ static OperatorOverload operatorOverload(Parser *P)
     }
     else if (match(P, tokLParen)) {
         op = (OperatorOverload){.f = opCallOverload, .s = "op_call"};
+        consume0(P, tokRParen);
     }
     else if (match(P, tokIdent)) {
         Token ident = *previous(P);

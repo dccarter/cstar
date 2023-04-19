@@ -116,6 +116,149 @@ static const Type **checkFunctionParams(AstVisitor *visitor,
     return params;
 }
 
+void generateFuncParam(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    generateTypeUsage(ctx, node->type);
+    format(ctx->state, " {s}", (FormatArg[]){{.s = node->funcParam.name}});
+}
+
+void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    TypeTable *table = (ctx)->types;
+
+    const AstNode *parent = node->parentScope;
+    bool isMember = parent && parent->tag == astStructDecl;
+
+    if (hasFlag(node, Native)) {
+        // Generated on prologue statement
+        return;
+    }
+
+    if (hasFlag(node, Closure)) {
+        generateClosureExpr(visitor, node);
+        return;
+    }
+
+    if (!isMember && hasFlag(node, Main)) {
+        if (isIntegerType(node->type->func.retType)) {
+            format(ctx->state,
+                   "#define CXY_MAIN_INVOKE(...) return "
+                   "cxy_main(__VA_ARGS__)\n\n",
+                   NULL);
+        }
+        else {
+            format(ctx->state,
+                   "#define CXY_MAIN_INVOKE(...) cxy_main(__VA_ARGS__); "
+                   "return EXIT_SUCCESS\n\n",
+                   NULL);
+        }
+    }
+
+    generateTypeUsage(ctx, node->type->func.retType);
+    if (isMember) {
+        format(ctx->state, " ", NULL);
+        writeTypename(ctx, parent->type);
+        format(ctx->state, "__{s}", (FormatArg[]){{.s = node->funcDecl.name}});
+    }
+    else if (node->flags & flgMain) {
+        format(ctx->state, " cxy_main", NULL);
+    }
+    else {
+        format(ctx->state, " {s}", (FormatArg[]){{.s = node->funcDecl.name}});
+    }
+
+    if (isMember) {
+        format(ctx->state, "(", NULL);
+        if (node->type->flags & flgConst)
+            format(ctx->state, "const ", NULL);
+
+        writeTypename(ctx, parent->type);
+        format(ctx->state, " *this", NULL);
+
+        if (node->funcDecl.params)
+            format(ctx->state, ", ", NULL);
+
+        generateManyAstsWithDelim(
+            visitor, "", ", ", ")", node->funcDecl.params);
+    }
+    else {
+        generateManyAstsWithDelim(
+            visitor, "(", ", ", ")", node->funcDecl.params);
+    }
+
+    format(ctx->state, " ", NULL);
+    if (node->funcDecl.body->tag == astBlockStmt) {
+        astConstVisit(visitor, node->funcDecl.body);
+    }
+    else {
+        format(ctx->state, "{{{>}\n", NULL);
+        if (node->type->func.retType != makeVoidType(table)) {
+            format(ctx->state, "return ", NULL);
+        }
+        astConstVisit(visitor, node->funcDecl.body);
+        format(ctx->state, ";", NULL);
+        format(ctx->state, "{<}\n}", NULL);
+    }
+}
+
+void generateFuncDeclaration(CodegenContext *context, const Type *type)
+{
+    FormatState *state = context->state;
+    const AstNode *parent = type->func.decl->parentScope;
+
+    format(state, ";\n", NULL);
+    generateTypeUsage(context, type->func.retType);
+    format(state, " ", NULL);
+    writeTypename(context, parent->type);
+    format(state, "__{s}", (FormatArg[]){{.s = type->name}});
+    format(state, "(", NULL);
+    if (type->flags & flgConst)
+        format(state, "const ", NULL);
+    writeTypename(context, parent->type);
+    format(state, " *", NULL);
+
+    for (u64 i = 0; i < type->func.paramsCount; i++) {
+        format(state, ", ", NULL);
+        generateTypeUsage(context, type->func.params[i]);
+    }
+    format(state, ")", NULL);
+}
+
+void generateFunctionTypedef(CodegenContext *context, const Type *type)
+{
+    FormatState *state = context->state;
+    const AstNode *parent =
+        type->func.decl ? type->func.decl->parentScope : NULL;
+    bool isMember = parent && parent->tag == astStructDecl;
+
+    format(state, "typedef ", NULL);
+    generateTypeUsage(context, type->func.retType);
+    format(state, "(*", NULL);
+    if (isMember) {
+        writeTypename(context, parent->type);
+        format(state, "__", NULL);
+    }
+    writeTypename(context, type);
+    format(state, ")(", NULL);
+    if (isMember) {
+        if (type->flags & flgConst)
+            format(state, "const ", NULL);
+        writeTypename(context, parent->type);
+        format(state, " *this", NULL);
+    }
+
+    for (u64 i = 0; i < type->func.paramsCount; i++) {
+        if (isMember || i != 0)
+            format(state, ", ", NULL);
+        generateTypeUsage(context, type->func.params[i]);
+    }
+    format(state, ")", NULL);
+    if (isMember)
+        generateFuncDeclaration(context, type);
+}
+
 const Type *checkMethodDeclSignature(AstVisitor *visitor, AstNode *node)
 {
     const Type *ret = NULL, **params, *type = NULL;
@@ -189,14 +332,46 @@ void checkMethodDeclBody(AstVisitor *visitor, AstNode *node)
     node->funcDecl.body->parentScope = node;
     ret = evalType(visitor, node->funcDecl.body);
 
-    if (ctx->lastReturn && ret == makeVoidType(ctx->typeTable))
+    if (ctx->lastReturn && typeIs(ret, Void))
         ret = ctx->lastReturn->type;
     ctx->lastReturn = lastReturn;
 
-    if (ret != node->type->func.retType)
-        ((Type *)(node->type))->func.retType = ret;
+    if (node->type->func.retType != ret) {
+        type = node->type;
+        node->type = makeFunctionDeclType(ctx,
+                                          node,
+                                          ret,
+                                          type->func.params,
+                                          type->func.paramsCount,
+                                          type->func.defaultValuesCount);
+        if (typeIs(type, Func))
+            removeFromTypeTable(ctx->typeTable, type);
+    }
 
     popScope(&ctx->env);
+}
+
+void checkFuncParam(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    if (node->parentScope == NULL || node->parentScope->tag != astFuncType)
+        defineSymbol(&ctx->env, ctx->L, node->funcParam.name, node);
+
+    if (node->funcParam.type)
+        node->type = evalType(visitor, node->funcParam.type);
+    else
+        csAssert0(node->type);
+
+    if (node->funcParam.def) {
+        const Type *def = evalType(visitor, node->funcParam.def);
+        if (!isTypeAssignableFrom(node->type, def)) {
+            logError(ctx->L,
+                     &node->funcParam.def->loc,
+                     "parameter default value type '{t}' not compatible with "
+                     "parameter type '{t}",
+                     (FormatArg[]){{.t = def}, {.t = node->type}});
+        }
+    }
 }
 
 void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
@@ -248,4 +423,33 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
 
     free((void *)params);
     popScope(&ctx->env);
+}
+
+void checkFuncType(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+
+    const Type *ret = evalType(visitor, node->funcType.ret);
+    u64 count = countAstNodes(node->funcType.params);
+    const Type **params = mallocOrDie(sizeof(Type *) * count);
+
+    AstNode *param = node->funcType.params;
+    for (u64 i = 0; param; param = param->next, i++) {
+        param->parentScope = node;
+        params[i] = evalType(visitor, param);
+        if (params[i] == ERROR_TYPE(ctx))
+            node->type = ERROR_TYPE(ctx);
+    }
+
+    if (node->type == NULL)
+        node->type = makeFuncType(ctx->typeTable,
+                                  &(Type){.tag = typFunc,
+                                          .name = NULL,
+                                          .flags = node->flags,
+                                          .func = {.retType = ret,
+                                                   .params = params,
+                                                   .paramsCount = count,
+                                                   .decl = node}});
+
+    free(params);
 }

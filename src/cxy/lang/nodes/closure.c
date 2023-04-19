@@ -18,34 +18,6 @@
 
 #include <memory.h>
 
-static void generateClosureCapture(CodegenContext *ctx,
-                                   const Type *type,
-                                   cstring name,
-                                   u64 index)
-{
-    generateTypeUsage(ctx, stripPointer(type->func.params[0]));
-
-    format(ctx->state,
-           " {s}{u64} = {{",
-           (FormatArg[]){{.s = name}, {.u64 = index}});
-    for (u64 i = 0; i < type->func.capturedNamesCount; i++) {
-        const Type *captureType = stripPointer(type->func.params[0]);
-        if (i != 0)
-            format(ctx->state, ", ", NULL);
-        if (captureType->tuple.members[i]->flags & flgCapturePointer)
-            format(
-                ctx->state,
-                "._{u64} = &{s}",
-                (FormatArg[]){{.u64 = i}, {.s = type->func.captureNames[i]}});
-        else
-            format(
-                ctx->state,
-                "._{u64} = {s}",
-                (FormatArg[]){{.u64 = i}, {.s = type->func.captureNames[i]}});
-    }
-    format(ctx->state, "}; ", NULL);
-}
-
 static void generateClosureForward(ConstAstVisitor *visitor,
                                    const AstNode *node)
 {
@@ -74,7 +46,7 @@ static void generateClosureForward(ConstAstVisitor *visitor,
     format(ctx->state, ");{<}\n}", (FormatArg[]){{.s = node->funcDecl.name}});
 }
 
-void generateClosure(ConstAstVisitor *visitor, const AstNode *node)
+void generateClosureExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     TypeTable *table = (ctx)->types;

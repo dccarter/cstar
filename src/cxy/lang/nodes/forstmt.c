@@ -121,7 +121,7 @@ static void checkForStmtRangeOperator(AstVisitor *visitor, AstNode *node)
                                       .flags = node->forStmt.range->flags,
                                       .ident.value = "op_range"})}});
 
-    memset(&node->forStmt.range->_body, 0, CYX_AST_NODE_BODY_SIZE);
+    memset(&node->forStmt.range->_body, 0, CXY_AST_NODE_BODY_SIZE);
     node->forStmt.range->tag = astCallExpr;
     node->forStmt.range->type = NULL;
     node->forStmt.range->callExpr.callee = callee;
@@ -139,6 +139,12 @@ void checkForStmt(AstVisitor *visitor, AstNode *node)
     }
 
     const Type *range = evalType(visitor, node->forStmt.range);
+
+    if (typeIs(stripPointer(range), Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
     if (stripPointer(range)->tag == typStruct) {
         checkForStmtRangeOperator(visitor, node);
         return;
@@ -210,74 +216,15 @@ void checkForStmt(AstVisitor *visitor, AstNode *node)
 
 void generateForStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
-    CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    const AstNode *var = node->forStmt.var;
     const AstNode *range = node->forStmt.range;
 
     if (range->tag == astRangeExpr) {
-        format(ctx->state, "for (", NULL);
-        generateTypeUsage(ctx, var->type);
-        format(ctx->state, " ", NULL);
-        astConstVisit(visitor, var->varDecl.names);
-        format(ctx->state, " = ", NULL);
-        astConstVisit(visitor, range->rangeExpr.start);
-        format(ctx->state, "; ", NULL);
-        astConstVisit(visitor, var->varDecl.names);
-        format(ctx->state, " < ", NULL);
-        astConstVisit(visitor, range->rangeExpr.end);
-        format(ctx->state, "; ", NULL);
-        astConstVisit(visitor, var->varDecl.names);
-        if (range->rangeExpr.step) {
-            format(ctx->state, " += ", NULL);
-            astConstVisit(visitor, range->rangeExpr.step);
-        }
-        else
-            format(ctx->state, "++", NULL);
+        generateForStmtRange(visitor, node);
     }
     else if (range->type->tag == typArray) {
-        cstring name = makeAnonymousVariable(ctx->strPool, "cyx_for");
-        // create an array
-        format(ctx->state, "{{{>}\n", NULL);
-        if (range->tag == astArrayExpr)
-            generateTypeUsage(ctx, range->type);
-        else
-            generateTypeUsage(
-                ctx,
-                &(const Type){
-                    .tag = typPointer,
-                    .flags = range->type->flags | node->forStmt.range->flags,
-                    .pointer.pointed = range->type->array.elementType});
-
-        format(ctx->state, " _arr_{s} = ", (FormatArg[]){{.s = name}});
-        astConstVisit(visitor, range);
-        format(ctx->state, ";\n", NULL);
-
-        // create index variable
-        format(ctx->state, "u64 _i_{s} = 0;\n", (FormatArg[]){{.s = name}});
-
-        // Create actual loop variable
-        generateTypeUsage(ctx, range->type->array.elementType);
-        format(ctx->state, " ", NULL);
-        astConstVisit(visitor, var->varDecl.names);
-        format(ctx->state, " = _arr_{s}[0];\n", (FormatArg[]){{.s = name}});
-
-        format(ctx->state,
-               "for (; _i_{s} < {u64}; _i_{s}++, ",
-               (FormatArg[]){
-                   {.s = name}, {.u64 = range->type->array.size}, {.s = name}});
-        astConstVisit(visitor, var->varDecl.names);
-        format(ctx->state,
-               " = _arr_{s}[_i_{s}]",
-               (FormatArg[]){{.s = name}, {.s = name}});
+        generateForStmtArray(visitor, node);
     }
     else {
         unreachable("currently not supported");
-    }
-
-    format(ctx->state, ") ", NULL);
-    astConstVisit(visitor, node->forStmt.body);
-
-    if (range->type->tag == typArray) {
-        format(ctx->state, "{<}\n}", NULL);
     }
 }
