@@ -217,9 +217,10 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
 
     StructField *members = mallocOrDie(sizeof(StructField) * numMembers);
     AstNode *member = node->structDecl.members;
-
-    node->type = makeThisType(
+    const Type *this = makeThisType(
         ctx->typeTable, node->structDecl.name, flgConst & node->flags);
+
+    node->type = this;
     defineSymbol(&ctx->env, ctx->L, node->structDecl.name, node);
 
     Env env = ctx->env;
@@ -267,6 +268,8 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
                                                 .base = base,
                                                 .fields = members,
                                                 .fieldsCount = i}});
+    ((Type *)this)->this.that = node->type;
+
     environmentFree(&ctx->env);
 
     ctx->env = structEnv;
@@ -297,6 +300,9 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
         Env tmp = {.first = ctx->env.first->next};
         ctx->env.first->next = NULL;
         ctx->env = tmp;
+    }
+    else {
+        ctx->env = (Env){.first = NULL};
     }
 
 checkStructDecl_cleanup:

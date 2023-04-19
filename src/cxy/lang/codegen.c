@@ -162,6 +162,13 @@ static void prologue(ConstAstVisitor *visitor, const AstNode *node)
            "\n",
            NULL);
 
+    format(ctx->state,
+           "#ifndef cxy_alloc\n"
+           "#define cxy_alloc cxy_default_alloc\n"
+           "#define cxy_free  cxy_default_dealloc\n"
+           "#endif\n",
+           NULL);
+
     append(ctx->state, readFile(CXY_PROLOGUE_SRC_FILE, &bytes), bytes);
 
     format(ctx->state,

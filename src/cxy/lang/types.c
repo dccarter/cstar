@@ -57,6 +57,8 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
     if (to->tag == typPointer && from->tag == typPointer) {
         if (to->pointer.pointed->tag == typVoid)
             return true;
+        if (typeIs(from->pointer.pointed, Null))
+            return true;
 
         return isTypeAssignableFrom(to->pointer.pointed, from->pointer.pointed);
     }
@@ -95,10 +97,19 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
         if (from->tag == typArray)
             return isTypeAssignableFrom(to->pointer.pointed,
                                         from->array.elementType);
-        if (to->pointer.pointed->tag == typVoid && from->tag == typPointer)
+        if (typeIs(to->pointer.pointed, Void) && typeIs(from, Pointer))
             return true;
-
         return false;
+
+    case typArray:
+        if (!typeIs(from, Array) ||
+            !isTypeAssignableFrom(to->array.elementType,
+                                  from->array.elementType))
+            return false;
+        if (to->size == UINT64_MAX)
+            return true;
+        return to->size == from->size;
+
     case typOptional:
         return from->tag == typNull ||
                isTypeAssignableFrom(to->optional.target, from);
@@ -133,6 +144,8 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
     case typEnum:
         return from->tag == typEnum &&
                isTypeAssignableFrom(to->tEnum.base, from->tEnum.base);
+    case typStruct:
+        return typeIs(from, This) && to == from->this.that;
     default:
         return false;
     }

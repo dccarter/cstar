@@ -22,6 +22,7 @@ typedef struct TypeTable {
     u64 typeCount;
     const Type *autoType;
     const Type *voidType;
+    const Type *_nullType;
     const Type *nullType;
     const Type *errorType;
     const Type *stringType;
@@ -228,7 +229,8 @@ TypeTable *newTypeTable(MemPool *pool, StrPool *strPool)
     table->errorType = getOrInsertType(table, &make(Type, .tag = typError)).s;
     table->autoType = getOrInsertType(table, &make(Type, .tag = typAuto)).s;
     table->voidType = getOrInsertType(table, &make(Type, .tag = typVoid)).s;
-    table->nullType = getOrInsertType(table, &make(Type, .tag = typNull)).s;
+    table->_nullType = getOrInsertType(table, &make(Type, .tag = typNull)).s;
+    table->nullType = makePointerType(table, table->_nullType, flgNone);
     table->stringType = getOrInsertType(table, &make(Type, .tag = typString)).s;
 
     return table;

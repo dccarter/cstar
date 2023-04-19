@@ -84,6 +84,7 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *left = evalType(visitor, node->binaryExpr.lhs);
+    
     if (stripPointer(left)->tag == typStruct) {
         checkBinaryOperatorOverload(visitor, node);
         return;

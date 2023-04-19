@@ -62,7 +62,7 @@ static const Type *checkPrefixExpr(SemanticsContext *ctx,
         }
         break;
     case opDelete:
-        if (operand->tag != typPointer || !(operand->flags & flgNewAllocated)) {
+        if (operand->tag != typPointer) {
             logError(ctx->L,
                      &node->loc,
                      "cannot delete an none `new` allocated object",

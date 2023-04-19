@@ -72,6 +72,11 @@ void initializeBuiltins(SemanticsContext *ctx)
         addBuiltinFunc(
             ctx, "wputc", getPrimitiveType(ctx->typeTable, prtI32), params, 1);
     }
+    {
+        const Type *params[] = {makeVoidPointerType(ctx->typeTable, flgConst)};
+        addBuiltinFunc(
+            ctx, "ptr", getPrimitiveType(ctx->typeTable, prtU64), params, 1);
+    }
 
     {
         addBuiltinType(

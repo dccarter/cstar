@@ -318,10 +318,13 @@ void checkCall(AstVisitor *visitor, AstNode *node)
         const Type *type = evalType(visitor, arg);
         const Type *expected = callee->func.params[i];
         if (expected->flags & flgFuncTypeParam) {
-            if (!(type->flags & flgClosure))
+            if (!hasFlags(type, flgClosure | flgFuncTypeParam))
                 type = wrapFuncArgInClosure(visitor, arg);
-            expected = expected->tuple.members[1];
+
+            if (!hasFlag(type, FuncTypeParam))
+                expected = expected->tuple.members[1];
         }
+
         if (stripPointer(expected)->tag == typThis)
             expected =
                 makePointerType(ctx->typeTable,

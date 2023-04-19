@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -22,6 +23,7 @@ typedef u8 bool;
 
 #define true 1
 #define false 0
+#define nullptr NULL
 
 #define CXY_PASTE__(X, Y) X##Y
 #define CXY_PASTE(X, Y) CXY_PASTE__(X, Y)
@@ -129,10 +131,50 @@ typedef u8 bool;
 #define cxy_ALIGN(S, A) (((S) + ((A)-1)) & ~((A)-1))
 #endif
 
-#ifndef cxy_alloc
-#define cxy_alloc(S) calloc(1, (S))
-#define cxy_free free
+#ifndef ptr
+#define ptr(X) ((uintptr_t)(X))
 #endif
+
+enum {
+    CXY_ALLOC_STATIC = 0b001,
+    CXY_ALLOC_HEAP = 0b010,
+    CXY_ALLOC_STACK = 0b100
+};
+
+#define CXY_MEMORY_MAGIC(ALLOC) 0xbebebe00 | CXY_ALLOC_##ALLOC
+
+typedef struct cxy_memory_hdr_t {
+    union {
+        struct {
+            u32 magic;
+            u32 refs;
+        };
+        u64 hdr;
+    };
+} attr(packed) cxy_memory_hdr_t;
+
+#define CXY_MEMORY_HEADER_SIZE sizeof(cxy_memory_hdr_t)
+#define CXY_MEMORY_HEADER(PTR)                                                 \
+    ((void *)(((u8 *)(PTR)) - CXY_MEMORY_HEADER_SIZE))
+#define CXY_MEMORY_POINTER(HDR)                                                \
+    ((void *)(((u8 *)(HDR)) + CXY_MEMORY_HEADER_SIZE))
+
+static void *cxy_default_alloc(u64 size)
+{
+    cxy_memory_hdr_t *hdr = calloc(1, size + CXY_MEMORY_HEADER_SIZE);
+    hdr->magic = CXY_MEMORY_MAGIC(HEAP);
+    hdr->refs = 1;
+    return CXY_MEMORY_POINTER(hdr);
+}
+
+static void cxy_default_dealloc(void *ctx)
+{
+    cxy_memory_hdr_t *hdr = CXY_MEMORY_HEADER(ctx);
+    if ((hdr->magic & CXY_MEMORY_MAGIC(HEAP)) && hdr->refs) {
+        hdr->hdr = 0;
+        free(hdr);
+    }
+}
 
 static attr(noreturn)
     attr(format, printf, 1, 2) void cxyAbort(const char *fmt, ...)
