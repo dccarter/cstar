@@ -45,26 +45,24 @@ PrtId tokenToPrimitiveTypeId(TokenTag tag)
     }
 }
 
-bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from)
+bool isTypeAssignableFrom(const Type *to, const Type *from)
 {
     if (to == from) {
         return true;
     }
 
-    to = resolveType(table, to);
-    from = resolveType(table, from);
+    to = resolveType(to);
+    from = resolveType(from);
 
     if (to->tag == typPointer && from->tag == typPointer) {
         if (to->pointer.pointed->tag == typVoid)
             return true;
 
-        return isTypeAssignableFrom(
-            table, to->pointer.pointed, from->pointer.pointed);
+        return isTypeAssignableFrom(to->pointer.pointed, from->pointer.pointed);
     }
 
     if (to->tag == typOptional && from->tag == typOptional) {
-        return isTypeAssignableFrom(
-            table, to->optional.target, from->optional.target);
+        return isTypeAssignableFrom(to->optional.target, from->optional.target);
     }
 
     switch (to->tag) {
@@ -72,52 +70,51 @@ bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from)
         return from->tag != typError;
     case typPrimitive:
         if (from->tag == typEnum) {
-            return isTypeAssignableFrom(table, to, from->tEnum.base);
+            return isTypeAssignableFrom(to, from->tEnum.base);
         }
 
         switch (to->primitive.id) {
 #define f(I, ...) case prt##I:
             SIGNED_INTEGER_TYPE_LIST(f)
 #undef f
-            return isIntegerType(table, from) && isSignedType(table, from) &&
+            return isIntegerType(from) && isSignedType(from) &&
                    to->size >= from->size;
 #define f(I, ...) case prt##I:
             UNSIGNED_INTEGER_TYPE_LIST(f)
 #undef f
-            return isIntegerType(table, from) && isUnsignedType(table, from) &&
+            return isIntegerType(from) && isUnsignedType(from) &&
                    to->size >= from->size;
 #define f(I, ...) case prt##I:
             FLOAT_TYPE_LIST(f)
 #undef f
-            return isFloatType(table, from) || isIntegerType(table, from);
+            return isFloatType(from) || isIntegerType(from);
         default:
             return to->primitive.id == from->primitive.id;
         }
     case typPointer:
-        // TODO arity check
         if (from->tag == typArray)
-            return isTypeAssignableFrom(
-                table, to->pointer.pointed, from->array.elementType);
+            return isTypeAssignableFrom(to->pointer.pointed,
+                                        from->array.elementType);
         if (to->pointer.pointed->tag == typVoid && from->tag == typPointer)
             return true;
 
         return false;
     case typOptional:
         return from->tag == typNull ||
-               isTypeAssignableFrom(table, to->optional.target, from);
+               isTypeAssignableFrom(to->optional.target, from);
     case typThis:
         return to->this.that == from;
     case typTuple:
         if (from->tag != typTuple || to->tuple.count != from->tuple.count)
             return false;
         for (u64 i = 0; i < from->tuple.count; i++) {
-            if (!isTypeAssignableFrom(
-                    table, to->tuple.members[i], from->tuple.members[i]))
+            if (!isTypeAssignableFrom(to->tuple.members[i],
+                                      from->tuple.members[i]))
                 return false;
         }
         return true;
     case typFunc: {
-        if (!isTypeAssignableFrom(table, to->func.retType, to->func.retType))
+        if (!isTypeAssignableFrom(to->func.retType, to->func.retType))
             return false;
         bool isNameFuncParam =
             (to->flags & flgFuncTypeParam) && !(from->flags & flgClosure);
@@ -127,8 +124,7 @@ bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from)
             return false;
         }
         for (u64 i = 0; i < count; i++) {
-            if (!isTypeAssignableFrom(table,
-                                      to->func.params[i + isNameFuncParam],
+            if (!isTypeAssignableFrom(to->func.params[i + isNameFuncParam],
                                       from->func.params[i]))
                 return false;
         }
@@ -136,16 +132,16 @@ bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from)
     }
     case typEnum:
         return from->tag == typEnum &&
-               isTypeAssignableFrom(table, to->tEnum.base, from->tEnum.base);
+               isTypeAssignableFrom(to->tEnum.base, from->tEnum.base);
     default:
         return false;
     }
 }
 
-bool isTypeCastAssignable(TypeTable *table, const Type *to, const Type *from)
+bool isTypeCastAssignable(const Type *to, const Type *from)
 {
-    to = resolveType(table, to);
-    from = resolveType(table, from);
+    to = resolveType(to);
+    from = resolveType(from);
 
     if (to->tag == from->tag) {
         if (to->tag != typPrimitive)
@@ -163,10 +159,10 @@ bool isTypeCastAssignable(TypeTable *table, const Type *to, const Type *from)
 #define f(I, ...) case prt##I:
             INTEGER_TYPE_LIST(f)
             FLOAT_TYPE_LIST(f)
-            return isNumericType(table, from);
+            return isNumericType(from);
 #undef f
         case prtChar:
-            return isUnsignedType(table, from) && from->size <= 4;
+            return isUnsignedType(from) && from->size <= 4;
         case prtBool:
             return from->primitive.id == prtBool;
         default:
@@ -178,9 +174,9 @@ bool isTypeCastAssignable(TypeTable *table, const Type *to, const Type *from)
     }
 }
 
-bool isIntegerType(TypeTable *table, const Type *type)
+bool isIntegerType(const Type *type)
 {
-    type = resolveType(table, type);
+    type = resolveType(type);
 
     if (!type || type->tag != typPrimitive)
         return false;
@@ -194,9 +190,9 @@ bool isIntegerType(TypeTable *table, const Type *type)
     }
 }
 
-bool isSignedType(TypeTable *table, const Type *type)
+bool isSignedType(const Type *type)
 {
-    type = resolveType(table, type);
+    type = resolveType(type);
 
     if (!type || type->tag != typPrimitive)
         return false;
@@ -211,9 +207,9 @@ bool isSignedType(TypeTable *table, const Type *type)
     }
 }
 
-bool isUnsignedType(TypeTable *table, const Type *type)
+bool isUnsignedType(const Type *type)
 {
-    type = resolveType(table, type);
+    type = resolveType(type);
 
     if (!type || type->tag != typPrimitive)
         return false;
@@ -227,9 +223,9 @@ bool isUnsignedType(TypeTable *table, const Type *type)
     }
 }
 
-bool isFloatType(TypeTable *table, const Type *type)
+bool isFloatType(const Type *type)
 {
-    type = resolveType(table, type);
+    type = resolveType(type);
 
     if (!type || type->tag != typPrimitive)
         return false;
@@ -243,7 +239,7 @@ bool isFloatType(TypeTable *table, const Type *type)
     }
 }
 
-bool isNumericType(TypeTable *table, const Type *type)
+bool isNumericType(const Type *type)
 {
     if (type->tag != typPrimitive || type->primitive.id == prtBool)
         return false;

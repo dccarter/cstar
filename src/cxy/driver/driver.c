@@ -4,10 +4,10 @@
 #include "core/utils.h"
 #include "driver/options.h"
 #include "lang/ast.h"
-#include "lang/check.h"
 #include "lang/codegen.h"
 #include "lang/lexer.h"
 #include "lang/parser.h"
+#include "lang/semantics.h"
 #include "lang/ttable.h"
 
 #include <errno.h>

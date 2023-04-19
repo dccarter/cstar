@@ -89,88 +89,102 @@ typedef struct EnumOption {
     u64 value;
 } EnumOption;
 
-typedef struct Type {
-    TTag tag;
-    u64 size;
-    u64 index;
-    u64 flags;
-    cstring name;
+#define CXY_TYPE_HEAD                                                          \
+    TTag tag;                                                                  \
+    u64 size;                                                                  \
+    u64 index;                                                                 \
+    u64 flags;                                                                 \
+    cstring name;                                                              \
     cstring namespace;
 
-    struct {
-        PrtId id;
-    } primitive;
+typedef struct Type {
+    union {
+        struct {
+            CXY_TYPE_HEAD
+        };
+        struct {
+            CXY_TYPE_HEAD
+        } _head;
+    };
 
-    struct {
-        const Type *pointed;
-    } pointer;
+    union {
+        struct {
+        } _body;
 
-    struct {
-        const Type *that;
-    } this;
+        struct {
+            PrtId id;
+        } primitive;
 
-    struct {
-        u64 size;
-        const Type *elementType;
-    } array;
+        struct {
+            const Type *pointed;
+        } pointer;
 
-    struct {
-        const Type *key;
-        const Type *value;
-    } map;
+        struct {
+            const Type *that;
+        } this;
 
-    struct {
-        const Type *aliased;
-    } alias;
+        struct {
+            u64 size;
+            const Type *elementType;
+        } array;
 
-    struct {
-        const Type *target;
-    } optional;
+        struct {
+            const Type *key;
+            const Type *value;
+        } map;
 
-    struct {
-        u64 count;
-        const Type **members;
-    } tUnion;
+        struct {
+            const Type *aliased;
+        } alias;
 
-    struct {
-        u64 count;
-        const Type **members;
-    } tuple;
+        struct {
+            const Type *target;
+        } optional;
 
-    struct {
-        u32 paramsCount;
-        u32 capturedNamesCount;
-        u32 defaultValuesCount;
-        const Type *retType;
-        const Type **params;
-        const char **captureNames;
-        AstNode *decl;
-    } func;
+        struct {
+            u64 count;
+            const Type **members;
+        } tUnion;
 
-    struct {
-        const Type *base;
-        EnumOption *options;
-        u64 count;
-        Env *env;
-    } tEnum;
+        struct {
+            u64 count;
+            const Type **members;
+        } tuple;
 
-    struct {
-        const Type *base;
-        StructField *fields;
-        u64 fieldsCount;
-        Env *env;
-    } tStruct;
+        struct {
+            u32 paramsCount;
+            u32 capturedNamesCount;
+            u32 defaultValuesCount;
+            const Type *retType;
+            const Type **params;
+            const char **captureNames;
+            AstNode *decl;
+        } func;
 
-    struct {
-        const Type *member;
+        struct {
+            const Type *base;
+            EnumOption *options;
+            u64 count;
+            Env *env;
+        } tEnum;
+
+        struct {
+            const Type *base;
+            StructField *fields;
+            u64 fieldsCount;
+            Env *env;
+        } tStruct;
     };
 } Type;
 
-bool isTypeAssignableFrom(TypeTable *table, const Type *to, const Type *from);
-bool isTypeCastAssignable(TypeTable *table, const Type *to, const Type *from);
-bool isIntegerType(TypeTable *table, const Type *type);
-bool isSignedType(TypeTable *table, const Type *type);
-bool isUnsignedType(TypeTable *table, const Type *type);
-bool isFloatType(TypeTable *table, const Type *type);
-bool isNumericType(TypeTable *table, const Type *type);
+#define CYX_TYPE_BODY_SIZE (sizeof(Type) - sizeof(((Type *)0)->_head))
+#define typeIs(T, TAG) ((T)->tag == typ##TAG)
+
+bool isTypeAssignableFrom(const Type *to, const Type *from);
+bool isTypeCastAssignable(const Type *to, const Type *from);
+bool isIntegerType(const Type *type);
+bool isSignedType(const Type *type);
+bool isUnsignedType(const Type *type);
+bool isFloatType(const Type *type);
+bool isNumericType(const Type *type);
 void printType(FormatState *state, const Type *type);

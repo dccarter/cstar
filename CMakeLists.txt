@@ -38,20 +38,44 @@ set(CXY_CORE_SOURCES
         src/cxy/core/strpool.c
         src/cxy/core/utils.c)
 
+set(CXY_LANG_NODE_SOURCES
+        src/cxy/lang/nodes/array.c
+        src/cxy/lang/nodes/assign.c
+        src/cxy/lang/nodes/binary.c
+        src/cxy/lang/nodes/block.c
+        src/cxy/lang/nodes/builtins.c
+        src/cxy/lang/nodes/call.c
+        src/cxy/lang/nodes/closure.c
+        src/cxy/lang/nodes/enum.c
+        src/cxy/lang/nodes/forstmt.c
+        src/cxy/lang/nodes/function.c
+        src/cxy/lang/nodes/if.c
+        src/cxy/lang/nodes/index.c
+        src/cxy/lang/nodes/literals.c
+        src/cxy/lang/nodes/member.c
+        src/cxy/lang/nodes/new.c
+        src/cxy/lang/nodes/path.c
+        src/cxy/lang/nodes/range.c
+        src/cxy/lang/nodes/return.c
+        src/cxy/lang/nodes/strexpr.c
+        src/cxy/lang/nodes/struct.c
+        src/cxy/lang/nodes/ternary.c
+        src/cxy/lang/nodes/tuple.c
+        src/cxy/lang/nodes/type.c
+        src/cxy/lang/nodes/unary.c
+        src/cxy/lang/nodes/variables.c
+        src/cxy/lang/nodes/while.c)
+
 set(CXY_LANG_SOURCES
         src/cxy/lang/ast.c
         src/cxy/lang/capture.c
         src/cxy/lang/codegen.c
         src/cxy/lang/lexer.c
         src/cxy/lang/parser.c
-        src/cxy/lang/check.c
         src/cxy/lang/scope.c
         src/cxy/lang/ttable.c
         src/cxy/lang/types.c
-        src/cxy/lang/ccodegen/epilogue.c
-        src/cxy/lang/ccodegen/generate.c
-        src/cxy/lang/ccodegen/prologue.c
-        src/cxy/lang/ccodegen/stringexpr.c)
+        src/cxy/lang/semantics.c)
 
 set(CXY_DRIVER_SOURCES
         src/cxy/driver/driver.c
@@ -61,6 +85,7 @@ add_executable(cxy
         src/cxy/driver/main.c
         ${CXY_CORE_SOURCES}
         ${CXY_LANG_SOURCES}
+        ${CXY_LANG_NODE_SOURCES}
         ${CXY_DRIVER_SOURCES})
 
 target_compile_definitions(cxy PRIVATE

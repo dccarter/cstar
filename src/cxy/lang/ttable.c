@@ -28,12 +28,6 @@ typedef struct TypeTable {
     const Type *primitiveTypes[prtCOUNT];
 } TypeTable;
 
-const Type *autoType;
-const Type *voidType;
-const Type *nullType;
-const Type *errorType;
-const Type *primitiveTypes[prtCOUNT];
-
 static HashCode hashTypes(HashCode hash, const Type **types, u64 count)
 {
     for (u64 i = 0; i < count; i++)
@@ -140,7 +134,8 @@ static bool compareTypes(const Type *left, const Type *right)
     case typOpaque:
         return strcmp(left->name, right->name) == 0;
     case typThis:
-        return left->this.that == right;
+        return typeIs(right, This) ? (left == right) : left->this.that == right;
+
     case typTuple:
     case typUnion:
         return (left->tUnion.count == right->tUnion.count) &&
@@ -245,12 +240,24 @@ void freeTypeTable(TypeTable *table)
     free(table);
 }
 
-const Type *resolveType(TypeTable *table, const Type *type)
+void removeFromTypeTable(TypeTable *table, const Type *type)
+{
+    u32 hash = hashType(hashInit(), type);
+    const Type **found = findInHashTable(&table->types, //
+                                         &type,
+                                         hash,
+                                         sizeof(Type *),
+                                         compareTypesWrapper);
+    if (found)
+        removeFromHashTable(&table->types, found, sizeof(Type *));
+}
+
+const Type *resolveType(const Type *type)
 {
     while (true) {
         switch (type->tag) {
         case typAlias:
-            type = resolveType(table, type->alias.aliased);
+            type = resolveType(type->alias.aliased);
             break;
         default:
             return type;
@@ -258,12 +265,12 @@ const Type *resolveType(TypeTable *table, const Type *type)
     }
 }
 
-const Type *stripPointer(TypeTable *table, const Type *type)
+const Type *stripPointer(const Type *type)
 {
     while (true) {
-        switch (resolveType(table, type)->tag) {
+        switch (resolveType(type)->tag) {
         case typPointer:
-            type = stripPointer(table, type->pointer.pointed);
+            type = stripPointer(type->pointer.pointed);
             break;
         default:
             return type;
@@ -290,7 +297,7 @@ const Type *makeNullType(TypeTable *table) { return table->nullType; }
 
 const Type *makeStringType(TypeTable *table) { return table->stringType; }
 
-const Type *makePrimitiveType(TypeTable *table, PrtId id)
+const Type *getPrimitiveType(TypeTable *table, PrtId id)
 {
     csAssert(id != prtCOUNT, "");
     return table->primitiveTypes[id];
@@ -430,15 +437,6 @@ const Type *makeStruct(TypeTable *table, const Type *init)
     return ret.s;
 }
 
-const Type *makeRangeType(TypeTable *table)
-{
-    const Type *members[] = {makePrimitiveType(table, prtI64),
-                             makePrimitiveType(table, prtI64),
-                             makePrimitiveType(table, prtI64),
-                             makePrimitiveType(table, prtI64)};
-    return makeTupleType(table, members, 4, flgNone);
-}
-
 u64 getTypesCount(TypeTable *table) { return table->typeCount; }
 
 u64 sortedByInsertionOrder(TypeTable *table, const Type **types, u64 size)
@@ -461,8 +459,8 @@ void enumerateTypeTable(TypeTable *table,
 
 const Type *promoteType(TypeTable *table, const Type *left, const Type *right)
 {
-    left = resolveType(table, left);
-    right = resolveType(table, right);
+    left = resolveType(left);
+    right = resolveType(right);
 
     if (left == right)
         return left;
@@ -472,26 +470,25 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right)
         switch (left->primitive.id) {
 #define f(T, ...) case prt##T:
             INTEGER_TYPE_LIST(f)
-            if (isIntegerType(table, right))
+            if (isIntegerType(right))
                 return left->size >= right->size ? left : right;
-            if (isFloatType(table, right))
+            if (isFloatType(right))
                 return right;
             if (right->primitive.id == prtChar)
-                return left->size >= 4 ? left
-                                       : makePrimitiveType(table, prtU32);
+                return left->size >= 4 ? left : getPrimitiveType(table, prtU32);
             return NULL;
 
             FLOAT_TYPE_LIST(f)
-            if (isFloatType(table, right))
+            if (isFloatType(right))
                 return left->size >= right->size ? left : right;
-            if (isIntegerType(table, right) || right->tag == prtChar)
+            if (isIntegerType(right) || right->tag == prtChar)
                 return left;
 
 #undef f
         case prtChar:
-            if (isIntegerType(table, right))
+            if (isIntegerType(right))
                 return right->size >= 4 ? right
-                                        : makePrimitiveType(table, prtU32);
+                                        : getPrimitiveType(table, prtU32);
             return NULL;
         default:
             return NULL;

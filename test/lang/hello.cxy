@@ -38,14 +38,36 @@ struct Account : Base {
 
     const func `+`(other: &const Account) => Account{name: name, balance: balance + other.balance}
 
-    func `..`(cb: func(amount: f64) -> void) => cb(balance)
+    func `..`(cb: func(amount: f64) -> void) => {
+        var i = 0.5;
+        while (i < 10) {
+            cb(balance + i)
+            i += 0.5
+        }
+    }
+
+    func `[]`(x: i32) => &balance
+
+    func `[]=`(x: i32, y: f32) => balance = y
+
+    func `()`(x: f32 = 100) => balance += x
+
+    func `<<`(s: string) {
+        puts(s)
+    }
 }
 
 func main(args: [string]) {
-    var acc1 = Account{name: "Checking", balance: 100};
-    var acc2 = Account{name: "Savings", balance: 100};
-    var acc3 = acc1 + acc2;
-    const all  = [&acc1, &acc2, &acc3];
-    acc1.deposit(1000)
-    puts(f"${all}")
+    var acc1 = new auto Account{};
+    defer delete acc1;
+
+    acc1(10)
+
+    for (const b: acc1) {
+        puts(f"${b}")
+    }
+
+    acc1.[10] = 10;
+
+    acc1 << "Hello World"
 }
