@@ -46,16 +46,28 @@ struct Account : Base {
         }
     }
 
-    func `[]`(x: f32) => &balance
+    func `[]`(x: i32) => &balance
+
+    func `[]=`(x: i32, y: f32) => balance = y
 
     func `()`(x: f32 = 100) => balance += x
+
+    func `<<`(s: string) {
+        puts(s)
+    }
 }
 
 func main(args: [string]) {
     var acc1 = new auto Account{};
+    defer delete acc1;
+
     acc1(10)
 
     for (const b: acc1) {
         puts(f"${b}")
     }
+
+    acc1.[10] = 10;
+
+    acc1 << "Hello World"
 }

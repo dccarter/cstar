@@ -234,8 +234,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
 
         if (type == ERROR_TYPE(ctx)) {
             node->type = ERROR_TYPE(ctx);
-            free(members);
-            return;
+            goto checkStructDecl_cleanup;
         }
 
         if (member->tag == astFuncDecl) {
@@ -294,6 +293,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
         ctx->env = tmp;
     }
 
+checkStructDecl_cleanup:
     unHookStructEnvironments(ctx, base);
 
     environmentFree(&ctx->env);

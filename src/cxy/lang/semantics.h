@@ -30,18 +30,36 @@ typedef struct {
 
 #define ERROR_TYPE(CTX) makeErrorType((CTX)->typeTable)
 
+void semanticsCheck(AstNode *program,
+                    Log *L,
+                    MemPool *pool,
+                    StrPool *strPool,
+                    TypeTable *typeTable);
+
 const Type *evalType(AstVisitor *visitor, AstNode *node);
+
 u64 checkMany(AstVisitor *visitor, AstNode *node);
 void addTopLevelDecl(SemanticsContext *ctx, cstring name, AstNode *node);
+void transformToMemberCallExpr(SemanticsContext *ctx,
+                               AstNode *node,
+                               AstNode *func,
+                               AstNode *target,
+                               cstring member,
+                               AstNode *args);
+void initializeBuiltins(SemanticsContext *ctx);
 AstNode *findSymbolByPath(SemanticsContext *ctx, const Env *env, AstNode *node);
 AstNode *findSymbolByNode(SemanticsContext *ctx, const Env *env, AstNode *node);
 
 void checkPathElement(AstVisitor *visitor, AstNode *node);
 void checkPath(AstVisitor *visitor, AstNode *node);
+void checkBlock(AstVisitor *visitor, AstNode *node);
 
 void checkLiterals(AstVisitor *visitor, AstNode *node);
 void checkStringExpr(AstVisitor *visitor, AstNode *node);
 void checkForStmt(AstVisitor *visitor, AstNode *node);
+void checkReturnStmt(AstVisitor *visitor, AstNode *node);
+void checkIfStmt(AstVisitor *visitor, AstNode *node);
+void checkWhileStmt(AstVisitor *visitor, AstNode *node);
 void checkMember(AstVisitor *visitor, AstNode *node);
 void checkClosure(AstVisitor *visitor, AstNode *node);
 void checkMethodDeclBody(AstVisitor *visitor, AstNode *node);
@@ -56,7 +74,10 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node);
 void checkArrayExpr(AstVisitor *visitor, AstNode *node);
 void checkIndex(AstVisitor *visitor, AstNode *node);
 void checkBinaryExpr(AstVisitor *visitor, AstNode *node);
-void checkUnary(AstVisitor *visitor, AstNode *node);
+void checkUnaryExpr(AstVisitor *visitor, AstNode *node);
+void checkAddressOfExpr(AstVisitor *visitor, AstNode *node);
+void checkAssignExpr(AstVisitor *visitor, AstNode *node);
+void checkTernaryExpr(AstVisitor *visitor, AstNode *node);
 void checkVarDecl(AstVisitor *visitor, AstNode *node);
 void checkTypeDecl(AstVisitor *visitor, AstNode *node);
 void checkUnionDecl(AstVisitor *visitor, AstNode *node);

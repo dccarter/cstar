@@ -40,28 +40,12 @@ static void checkIndexOperator(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    AstNode *callee = makeAstNode(
-        ctx->pool,
-        &node->indexExpr.target->loc,
-        &(AstNode){.tag = astMemberExpr,
-                   .flags = node->indexExpr.target->flags,
-                   .type = node->indexExpr.target->type,
-                   .memberExpr = {.target = node->indexExpr.target,
-                                  .member = makeAstNode(
-                                      ctx->pool,
-                                      &node->indexExpr.target->loc,
-                                      &(AstNode){.tag = astIdentifier,
-                                                 .flags = func->type->flags,
-                                                 .type = func->type,
-                                                 .ident.value = "op_idx"})}});
-
-    AstNode *arg = node->indexExpr.index;
-    memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);
-    node->tag = astCallExpr;
-    node->type = NULL;
-    node->callExpr.callee = callee;
-    node->callExpr.args = arg;
-
+    transformToMemberCallExpr(ctx,
+                              node,
+                              func,
+                              node->indexExpr.target,
+                              "op_idx",
+                              node->indexExpr.index);
     evalType(visitor, node);
 }
 

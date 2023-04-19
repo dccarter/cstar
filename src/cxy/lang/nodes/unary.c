@@ -81,6 +81,13 @@ static const Type *checkPrefixExpr(SemanticsContext *ctx,
     return operand;
 }
 
+void generateAddressOfExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    format(ctx->state, "&", NULL);
+    astConstVisit(visitor, node->unaryExpr.operand);
+}
+
 void generateUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -112,7 +119,16 @@ void generateUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
     }
 }
 
-void checkUnary(AstVisitor *visitor, AstNode *node)
+void checkAddressOfExpr(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    const Type *operand = evalType(visitor, node->unaryExpr.operand);
+    node->flags |= node->unaryExpr.operand->flags;
+    node->type = makePointerType(
+        ctx->typeTable, operand, node->unaryExpr.operand->flags);
+}
+
+void checkUnaryExpr(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *operand = evalType(visitor, node->unaryExpr.operand);

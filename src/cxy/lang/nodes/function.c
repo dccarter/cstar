@@ -39,7 +39,7 @@ static inline const Type *makeFunctionDeclType(SemanticsContext *ctx,
 static const Type *transformFuncTypeParam(SemanticsContext *ctx,
                                           const Type *type)
 {
-    // change (i32) => X, (&void, i32) => X
+    // change (i32) => X to (&void, i32) => X
     const Type **newParams =
         mallocOrDie(sizeof(Type *) * type->func.paramsCount + 1);
     newParams[0] = makeVoidPointerType(ctx->typeTable, flgNone);
@@ -114,6 +114,76 @@ static const Type **checkFunctionParams(AstVisitor *visitor,
     }
 
     return params;
+}
+
+static bool validateOperatorOverloadFunc(SemanticsContext *ctx, AstNode *node)
+{
+    u64 count = countAstNodes(node->funcDecl.params);
+    Operator op = node->funcDecl.operatorOverload;
+    FileLoc loc = fileposSubrange(&node->loc, &node->funcDecl.body->loc);
+    switch (op) {
+#define f(OP, ...) case op##OP:
+        AST_BINARY_EXPR_LIST(f)
+        if (count != 1) {
+            logError(
+                ctx->L,
+                &loc,
+                "unexpected binary operator `{s}` overload parameter count, "
+                "expecting '1', got '{u64}'",
+                (FormatArg[]){{.s = getBinaryOpString(op)}, {.u64 = count}});
+            return false;
+        }
+        break;
+#undef f
+
+    case opIndexOverload:
+        if (count != 1) {
+            logError(ctx->L,
+                     &loc,
+                     "unexpected index operator `[]` overload parameter count, "
+                     "expecting '1', got '{u64}'",
+                     (FormatArg[]){{.u64 = count}});
+            return false;
+        }
+        break;
+
+    case opIndexAssignOverload:
+        if (count != 2) {
+            logError(ctx->L,
+                     &loc,
+                     "unexpected index assign operator `[]=` overload "
+                     "parameter count, expecting '2', got '{u64}'",
+                     (FormatArg[]){{.u64 = count}});
+            return false;
+        }
+        break;
+
+    case opDelete:
+        if (count != 0) {
+            logError(ctx->L,
+                     &loc,
+                     "unexpected delete operator `delete` overload "
+                     "parameter count, expecting '0', got '{u64}'",
+                     (FormatArg[]){{.u64 = count}});
+            return false;
+        }
+        break;
+
+    case opStringOverload:
+        if (count != 0) {
+            logError(ctx->L,
+                     &loc,
+                     "unexpected string operator `str` overload "
+                     "parameter count, expecting '0', got '{u64}'",
+                     (FormatArg[]){{.u64 = count}});
+            return false;
+        }
+        break;
+    default:
+        break;
+    }
+
+    return true;
 }
 
 void generateFuncParam(ConstAstVisitor *visitor, const AstNode *node)
@@ -268,6 +338,11 @@ const Type *checkMethodDeclSignature(AstVisitor *visitor, AstNode *node)
     bool withDefaultValues = false;
 
     defineSymbol(&ctx->env, ctx->L, node->funcDecl.name, node);
+    if (node->funcDecl.operatorOverload != opInvalid) {
+        if (!validateOperatorOverloadFunc(ctx, node)) {
+            return node->type = ERROR_TYPE(ctx);
+        }
+    }
 
     pushScope(&ctx->env, node);
     params =
@@ -344,8 +419,7 @@ void checkMethodDeclBody(AstVisitor *visitor, AstNode *node)
                                           type->func.params,
                                           type->func.paramsCount,
                                           type->func.defaultValuesCount);
-        if (typeIs(type, Func))
-            removeFromTypeTable(ctx->typeTable, type);
+        removeFromTypeTable(ctx->typeTable, type);
     }
 
     popScope(&ctx->env);

@@ -65,37 +65,8 @@ static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    const Type *right = evalType(visitor, node->binaryExpr.rhs);
-    AstNode *callee = makeAstNode(
-        ctx->pool,
-        &node->binaryExpr.lhs->loc,
-        &(AstNode){
-            .tag = astMemberExpr,
-            .type = overload->type,
-            .memberExpr = {.target = node->binaryExpr.lhs,
-                           .member = makeAstNode(
-                               ctx->pool,
-                               &node->binaryExpr.lhs->loc,
-                               &(AstNode){.tag = astIdentifier,
-                                          .type = overload->type,
-                                          .flags = node->binaryExpr.lhs->flags,
-                                          .ident.value = name})}});
-    AstNode *args =
-        right->tag == typPointer
-            ? node->binaryExpr.rhs
-            : makeAstNode(
-                  ctx->pool,
-                  &node->binaryExpr.rhs->loc,
-                  &(AstNode){.tag = astAddressOf,
-                             .flags = node->binaryExpr.rhs->flags,
-                             .unaryExpr = {.op = opAddrOf,
-                                           .operand = node->binaryExpr.rhs,
-                                           .isPrefix = true}});
-
-    memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);
-    node->tag = astCallExpr;
-    node->callExpr.callee = callee;
-    node->callExpr.args = args;
+    transformToMemberCallExpr(
+        ctx, node, overload, node->binaryExpr.lhs, name, node->binaryExpr.rhs);
     evalType(visitor, node);
 }
 

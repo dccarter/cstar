@@ -134,7 +134,8 @@ static bool compareTypes(const Type *left, const Type *right)
     case typOpaque:
         return strcmp(left->name, right->name) == 0;
     case typThis:
-        return left->this.that == right;
+        return typeIs(right, This) ? (left == right) : left->this.that == right;
+
     case typTuple:
     case typUnion:
         return (left->tUnion.count == right->tUnion.count) &&
@@ -247,7 +248,8 @@ void removeFromTypeTable(TypeTable *table, const Type *type)
                                          hash,
                                          sizeof(Type *),
                                          compareTypesWrapper);
-    removeFromHashTable(&table->types, found, sizeof(Type *));
+    if (found)
+        removeFromHashTable(&table->types, found, sizeof(Type *));
 }
 
 const Type *resolveType(const Type *type)

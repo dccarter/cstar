@@ -11,6 +11,91 @@
 #include "semantics.h"
 #include "lang/ttable.h"
 
+#include <memory.h>
+
+static void checkProgram(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    pushScope(&ctx->env, node);
+
+    initializeBuiltins(ctx);
+
+    ctx->previousTopLevelDecl = node->program.decls;
+    for (AstNode *decl = node->program.decls; decl; decl = decl->next) {
+        ctx->currentTopLevelDecl = decl;
+        astVisit(visitor, decl);
+        ctx->previousTopLevelDecl = decl;
+    }
+}
+
+static void checkFallback(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+
+    switch (node->tag) {
+    case astExprStmt:
+        node->type = evalType(visitor, node->exprStmt.expr);
+        break;
+    case astStmtExpr:
+        node->type = evalType(visitor, node->stmtExpr.stmt);
+        break;
+    case astGroupExpr:
+        node->type = evalType(visitor, node->groupExpr.expr);
+        break;
+    default:
+        node->type = makeVoidType(ctx->typeTable);
+    }
+}
+
+static void checkCastExpr(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    const Type *expr = evalType(visitor, node->castExpr.expr);
+    const Type *target = evalType(visitor, node->castExpr.to);
+    if (!isTypeCastAssignable(target, expr)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "type '{t}' cannot be cast to type '{t}'",
+                 (FormatArg[]){{.t = expr}, {.t = target}});
+    }
+    node->type = target;
+}
+
+static void checkIdentifier(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    AstNode *symbol =
+        findSymbol(&ctx->env, ctx->L, node->ident.value, &node->loc);
+    if (symbol == NULL)
+        node->type = ERROR_TYPE(ctx);
+    else
+        node->type = symbol->type;
+}
+
+static void checkDeferStmt(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+
+    if (node->parentScope == NULL || node->parentScope->tag != astBlockStmt) {
+        logError(ctx->L,
+                 &node->loc,
+                 "use of 'defer' statement outside of a block",
+                 NULL);
+    }
+
+    node->type = evalType(visitor, node->deferStmt.expr);
+}
+
+static void checkBreakContinueStmt(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    findEnclosingLoop(&ctx->env,
+                      ctx->L,
+                      node->tag == astBreakStmt ? "break" : "continue",
+                      &node->loc);
+    node->type = makeVoidType(ctx->typeTable);
+}
+
 const Type *evalType(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
@@ -85,4 +170,106 @@ AstNode *findSymbolByNode(SemanticsContext *ctx, const Env *env, AstNode *node)
     default:
         return NULL;
     }
+}
+
+void transformToMemberCallExpr(SemanticsContext *ctx,
+                               AstNode *node,
+                               AstNode *func,
+                               AstNode *target,
+                               cstring member,
+                               AstNode *args)
+{
+    AstNode *callee = makeAstNode(
+        ctx->pool,
+        &target->loc,
+        &(AstNode){.tag = astMemberExpr,
+                   .flags = target->flags,
+                   .type = target->type,
+                   .memberExpr = {.target = target,
+                                  .member = makeAstNode(
+                                      ctx->pool,
+                                      &target->loc,
+                                      &(AstNode){.tag = astIdentifier,
+                                                 .flags = func->type->flags,
+                                                 .type = func->type,
+                                                 .ident.value = member})}});
+
+    memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);
+    node->tag = astCallExpr;
+    node->type = NULL;
+    node->callExpr.callee = callee;
+    node->callExpr.args = args;
+}
+
+void semanticsCheck(AstNode *program,
+                    Log *L,
+                    MemPool *pool,
+                    StrPool *strPool,
+                    TypeTable *typeTable)
+{
+    SemanticsContext context = {.L = L,
+                                .typeTable = typeTable,
+                                .pool = pool,
+                                .strPool = strPool,
+                                .env = {NULL}};
+    environmentInit(&context.env);
+
+    // clang-format off
+    AstVisitor visitor = makeAstVisitor(&context,
+    {
+        [astProgram] = checkProgram,
+        [astPathElem] = checkPathElement,
+        [astPath] = checkPath,
+        [astNullLit] = checkLiterals,
+        [astBoolLit] = checkLiterals,
+        [astCharLit] = checkLiterals,
+        [astIntegerLit] = checkLiterals,
+        [astFloatLit] = checkLiterals,
+        [astStringLit] = checkLiterals,
+        [astStringExpr] = checkStringExpr,
+        [astFuncParam] = checkFuncParam,
+        [astFuncDecl] = checkFunctionDecl,
+        [astVarDecl] = checkVarDecl,
+        [astIdentifier] = checkIdentifier,
+        [astBinaryExpr] = checkBinaryExpr,
+        [astAssignExpr] = checkAssignExpr,
+        [astUnaryExpr] = checkUnaryExpr,
+        [astAddressOf] = checkAddressOfExpr,
+        [astIndexExpr] = checkIndex,
+        [astMemberExpr] = checkMember,
+        [astArrayExpr] = checkArrayExpr,
+        [astTupleExpr] = checkTupleExpr,
+        [astStructExpr] = checkStructExpr,
+        [astCallExpr] = checkCall,
+        [astClosureExpr] = checkClosure,
+        [astCastExpr] = checkCastExpr,
+        [astRangeExpr] = checkRangeExpr,
+        [astTernaryExpr] = checkTernaryExpr,
+        [astNewExpr] = checkNewExpr,
+        [astBlockStmt] = checkBlock,
+        [astReturnStmt] = checkReturnStmt,
+        [astDeferStmt] = checkDeferStmt,
+        [astBreakStmt] = checkBreakContinueStmt,
+        [astContinueStmt] = checkBreakContinueStmt,
+        [astIfStmt] = checkIfStmt,
+        [astWhileStmt] = checkWhileStmt,
+        [astForStmt] = checkForStmt,
+        [astPrimitiveType] = checkPrimitiveType,
+        [astArrayType] = checkArrayType,
+        [astPointerType] = checkPointerType,
+        [astTypeDecl] = checkTypeDecl,
+        [astUnionDecl] = checkUnionDecl,
+        [astTupleType] = checkTupleType,
+        [astFuncType] = checkFuncType,
+        [astVoidType] = checkBuiltinType,
+        [astStringType] = checkBuiltinType,
+        [astOptionalType] = checkOptionalType,
+        [astEnumDecl] = checkEnumDecl,
+        [astStructDecl] = checkStructDecl,
+        [astStructField] = checkStructField
+    },
+
+    .fallback = checkFallback);
+    // clang-format off
+    astVisit(&visitor, program);
 }
