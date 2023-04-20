@@ -167,6 +167,15 @@ static void *cxy_default_alloc(u64 size)
     return CXY_MEMORY_POINTER(hdr);
 }
 
+static void *cxy_default_realloc(void *ptr, u64 size)
+{
+    cxy_memory_hdr_t *hdr =
+        realloc(CXY_MEMORY_HEADER(ptr), size + CXY_MEMORY_HEADER_SIZE);
+    hdr->magic = CXY_MEMORY_MAGIC(HEAP);
+    hdr->refs = 1;
+    return CXY_MEMORY_POINTER(hdr);
+}
+
 static void cxy_default_dealloc(void *ctx)
 {
     cxy_memory_hdr_t *hdr = CXY_MEMORY_HEADER(ctx);
@@ -180,9 +189,21 @@ static void cxy_default_dealloc(void *ctx)
 #define __builtin_alloc(T, n) cxy_alloc(sizeof(T) * n)
 #endif
 
+#ifndef __builtin_realloc
+#define __builtin_realloc(T, P, n) cxy_realloc((P), (sizeof(T) * n))
+#endif
+
 #ifndef __builtin_alloc_slice
 #define __builtin_alloc_slice(T, n)                                            \
     (T) { .data = __builtin_alloc((*((T *)0)->data), (n)), .len = n }
+#endif
+
+#ifndef __builtin_realloc_slice
+#define __builtin_realloc_slice(T, P, n)                                       \
+    (T)                                                                        \
+    {                                                                          \
+        .data = __builtin_realloc((*((T *)0)->data), (P).data, (n)), .len = n  \
+    }
 #endif
 
 static attr(noreturn)

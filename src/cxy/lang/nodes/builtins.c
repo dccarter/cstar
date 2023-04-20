@@ -73,7 +73,7 @@ static inline bool typeSupportsLenProperty(const Type *type)
     case typArray:
         return isSliceType(type);
     default:
-        false;
+        return false;
     }
 }
 
@@ -99,6 +99,16 @@ void initializeBuiltins(SemanticsContext *ctx)
                        2);
     }
     {
+        const Type *params[] = {makeAutoType(ctx->typeTable),
+                                makeVoidPointerType(ctx->typeTable, flgNone),
+                                getPrimitiveType(ctx->typeTable, prtU64)};
+        addBuiltinFunc(ctx,
+                       "__builtin_realloc",
+                       makeVoidPointerType(ctx->typeTable, flgNone),
+                       params,
+                       3);
+    }
+    {
         const Type *params[] = {
             makeTypeInfo(ctx->typeTable, getAnySliceType(ctx->typeTable)),
             getPrimitiveType(ctx->typeTable, prtU64)};
@@ -108,6 +118,19 @@ void initializeBuiltins(SemanticsContext *ctx)
                        getAnySliceType(ctx->typeTable),
                        params,
                        2);
+    }
+
+    {
+        const Type *params[] = {
+            makeTypeInfo(ctx->typeTable, getAnySliceType(ctx->typeTable)),
+            getAnySliceType(ctx->typeTable),
+            getPrimitiveType(ctx->typeTable, prtU64)};
+
+        addBuiltinFunc(ctx,
+                       "__builtin_realloc_slice",
+                       getAnySliceType(ctx->typeTable),
+                       params,
+                       3);
     }
 
     {

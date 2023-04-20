@@ -299,7 +299,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
         }
     }
 
-    if (ctx->env.scope->next) {
+    if (ctx->env.scope && ctx->env.scope->next) {
         Env tmp = {.first = ctx->env.first->next};
         ctx->env.first->next = NULL;
         ctx->env = tmp;

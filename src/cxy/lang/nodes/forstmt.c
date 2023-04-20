@@ -32,8 +32,8 @@ static void checkForStmtGenerator(AstVisitor *visitor, AstNode *node)
                *bodyFunc = NULL;
 
     if (callee->tag != typFunc || callee->func.paramsCount == 0 ||
-        callee->func.params[callee->func.paramsCount - 1]->flags !=
-            flgFuncTypeParam) {
+        !hasFlag(callee->func.params[callee->func.paramsCount - 1],
+                 FuncTypeParam)) {
         logError(ctx->L,
                  &range->callExpr.callee->loc,
                  "for range expression is not a generator function",

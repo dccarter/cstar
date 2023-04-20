@@ -16,9 +16,9 @@ pub func println(str: string) => puts(str)
 func allocSlice[T](n: u64) => <[T]> __builtin_alloc_slice(#[T], n)
 
 @inline
-func reallocSlice[T](data: [T], n: u64) => <[T]> __builtin_alloc_slice(#[T], n)
+func reallocSlice[T](data: [T], n: u64) => <[T]> __builtin_realloc_slice(#[T], data, n)
 
-struct Vector[T, U] {
+struct Vector[T] {
     - data: [T]
     - len: u64
     - capacity: u64
@@ -27,6 +27,17 @@ struct Vector[T, U] {
         data = allocSlice[T](initialCapacity)
         len = 0
         capacity = initialCapacity
+    }
+
+    func push(item: T) {
+        grow()
+        data.[len++] = item
+    }
+
+    func `..`(cb: func(item: T) -> void) {
+        var i = 0;
+        while(i < len)
+            cb(data.[i++])
     }
 
     - func grow() {
@@ -39,6 +50,12 @@ struct Vector[T, U] {
 
 func main(args: [string]) {
     var arr = new Vector[i32, u8](10);
+    arr.push(10)
+    arr.push(20)
+    arr.push(100)
+    for (const x: arr) {
+        println(f"${x}")
+    }
 
-    __builtin_alloc_slice(#[i32], 10)
+    delete arr
 }

@@ -88,12 +88,6 @@ static const Type *functionTypeParamToCall(SemanticsContext *ctx,
     return type->tuple.members[1];
 }
 
-static const Type *structInitializerCall(SemanticsContext *ctx,
-                                         const Type *type,
-                                         AstNode *node)
-{
-}
-
 static const Type *structCallToFunctionCall(SemanticsContext *ctx,
                                             const Type *type,
                                             AstNode *node)
@@ -256,7 +250,7 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
                 astConstVisit(visitor, arg->type->func.decl);
                 format(ctx->state, "_fwd}", NULL);
             }
-            else if (isSliceType(param)) {
+            else if (isSliceType(param) && !isSliceType(arg->type)) {
                 format(ctx->state, "(", NULL);
                 writeTypename(ctx, param);
                 format(ctx->state, "){{.data = ", NULL);

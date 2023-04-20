@@ -105,7 +105,7 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     node->pathElement.name = name;
 
     substitute->next = NULL;
-    Env saveEnv = {ctx->env.first->next, ctx->env.scope};
+    Env saveEnv = {.first = ctx->env.first->next, .scope = ctx->env.scope};
     __typeof(ctx->stack) saveStack = ctx->stack;
 
     ctx->env.first->next = NULL;
@@ -146,7 +146,7 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
         }
     }
 
-    Env env = {ctx->env.first->next};
+    Env env = {.first = ctx->env.first->next};
     environmentFree(&env);
     ctx->env.first->next = saveEnv.first;
     ctx->env.scope = saveEnv.scope;

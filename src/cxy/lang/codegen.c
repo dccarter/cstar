@@ -172,6 +172,7 @@ static void prologue(ConstAstVisitor *visitor, const AstNode *node)
            "#ifndef cxy_alloc\n"
            "#define cxy_alloc cxy_default_alloc\n"
            "#define cxy_free  cxy_default_dealloc\n"
+           "#define cxy_realloc cxy_default_realloc\n"
            "#endif\n",
            NULL);
 
