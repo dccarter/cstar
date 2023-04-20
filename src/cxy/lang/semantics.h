@@ -53,6 +53,10 @@ void transformToMemberCallExpr(SemanticsContext *ctx,
                                cstring member,
                                AstNode *args);
 void initializeBuiltins(SemanticsContext *ctx);
+const Type *checkBuiltinTypeProperty(SemanticsContext *ctx,
+                                     AstNode *target,
+                                     cstring name);
+
 AstNode *findSymbolByPath(SemanticsContext *ctx, const Env *env, AstNode *node);
 AstNode *findSymbolByNode(SemanticsContext *ctx, const Env *env, AstNode *node);
 

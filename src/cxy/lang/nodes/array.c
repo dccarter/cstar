@@ -51,7 +51,7 @@ void generateForStmtArray(ConstAstVisitor *visitor, const AstNode *node)
     else
         format(ctx->state,
                "{u64}",
-               (FormatArg[]){{.u64 = range->type->array.size}});
+               (FormatArg[]){{.u64 = range->type->array.len}});
 
     format(ctx->state, "; _i_{s}++, ", (FormatArg[]){{.s = name}});
 
@@ -89,7 +89,7 @@ void generateArrayDeclaration(CodegenContext *context, const Type *type)
         generateTypeUsage(context, type->array.elementType);
         format(state, " ", NULL);
         writeTypename(context, type);
-        format(state, "[{u64}]", (FormatArg[]){{.u64 = type->array.size}});
+        format(state, "[{u64}]", (FormatArg[]){{.u64 = type->array.len}});
     }
 }
 
@@ -100,7 +100,7 @@ void checkArrayType(AstVisitor *visitor, AstNode *node)
 
     u64 size = UINT64_MAX;
     if (node->arrayType.dim) {
-        // TODO evaluate size
+        // TODO evaluate len
         evalType(visitor, node->arrayType.dim);
         csAssert0(node->arrayType.dim->tag == astIntegerLit);
         size = node->arrayType.dim->intLiteral.value;

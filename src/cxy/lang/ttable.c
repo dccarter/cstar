@@ -24,6 +24,7 @@ typedef struct TypeTable {
     const Type *nullType;
     const Type *errorType;
     const Type *stringType;
+    const Type *anySliceType;
     const Type *primitiveTypes[prtCOUNT];
 } TypeTable;
 
@@ -58,7 +59,7 @@ static HashCode hashType(HashCode hash, const Type *type)
         break;
     case typArray:
         hash = hashType(hash, type->array.elementType);
-        hash = hashUint64(hash, type->array.size);
+        hash = hashUint64(hash, type->array.len);
         break;
     case typMap:
         hash = hashType(hash, type->map.key);
@@ -71,6 +72,7 @@ static HashCode hashType(HashCode hash, const Type *type)
         hash = hashStr(hash, type->name);
         break;
     case typOptional:
+    case typInfo:
         hash = hashType(hash, type->optional.target);
         break;
     case typUnion:
@@ -129,7 +131,7 @@ static bool compareTypes(const Type *left, const Type *right)
         return ((left->flags & flgConst) == (right->flags & flgConst)) &&
                compareTypes(left->pointer.pointed, right->pointer.pointed);
     case typArray:
-        return (left->array.size == right->array.size) &&
+        return (left->array.len == right->array.len) &&
                compareTypes(left->array.elementType, right->array.elementType);
     case typMap:
         return compareTypes(left->map.key, right->map.key) &&
@@ -163,6 +165,7 @@ static bool compareTypes(const Type *left, const Type *right)
     case typEnum:
     case typStruct:
     case typGeneric:
+    case typInfo:
         return left == right;
 
     default:
@@ -243,6 +246,14 @@ TypeTable *newTypeTable(MemPool *pool, StrPool *strPool)
     table->_nullType = getOrInsertType(table, &make(Type, .tag = typNull)).s;
     table->nullType = makePointerType(table, table->_nullType, flgNone);
     table->stringType = getOrInsertType(table, &make(Type, .tag = typString)).s;
+    table->anySliceType =
+        getOrInsertType(
+            table,
+            &make(Type,
+                  .tag = typArray,
+                  .flags = flgBuiltin,
+                  .array = {.elementType = table->autoType, .len = UINT64_MAX}))
+            .s;
 
     return table;
 }
@@ -316,13 +327,22 @@ const Type *getPrimitiveType(TypeTable *table, PrtId id)
     return table->primitiveTypes[id];
 }
 
+const Type *getAnySliceType(TypeTable *table) { return table->anySliceType; }
+
 const Type *makeArrayType(TypeTable *table,
                           const Type *elementType,
                           const u64 size)
 {
     Type type = make(Type,
                      .tag = typArray,
-                     .array = {.elementType = elementType, .size = size});
+                     .array = {.elementType = elementType, .len = size});
+
+    return getOrInsertType(table, &type).s;
+}
+
+const Type *makeTypeInfo(TypeTable *table, const Type *target)
+{
+    Type type = make(Type, .tag = typInfo, .info = {.target = target});
 
     return getOrInsertType(table, &type).s;
 }

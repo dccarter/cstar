@@ -51,6 +51,7 @@ void checkBlock(AstVisitor *visitor, AstNode *node)
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *stmt = node->blockStmt.stmts;
     AstNode *prev = stmt;
+    node->blockStmt.last = stmt;
     for (; stmt; stmt = stmt->next) {
         stmt->parentScope = node;
         const Type *type = evalType(visitor, stmt);
@@ -67,6 +68,7 @@ void checkBlock(AstVisitor *visitor, AstNode *node)
     }
 
     if (node->type == NULL) {
+        node->blockStmt.last = prev;
         node->type = makeVoidType(ctx->typeTable);
     }
 }

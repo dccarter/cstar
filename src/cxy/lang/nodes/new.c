@@ -7,6 +7,8 @@
 
 #include "lang/ttable.h"
 
+#include <memory.h>
+
 static inline bool isSupportedOnAuto(AstNode *node)
 {
     switch (node->tag) {
@@ -25,12 +27,119 @@ static inline bool isSupportedOnAuto(AstNode *node)
     }
 }
 
+static const Type *checkNewInitializerOverload(AstVisitor *visitor,
+                                               AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    AstNode *init = node->newExpr.init;
+    AstNode *callee = init->callExpr.callee;
+    // turn new S(...) => ({ var tmp = new S{}; tmp.init(...); })
+
+    cstring name = makeAnonymousVariable(ctx->strPool, "_new_tmp");
+    // new S{}
+    AstNode *newExpr = makeAstNode(ctx->pool,
+                                   &callee->loc,
+                                   &(AstNode){.tag = astNewExpr,
+                                              .flags = callee->flags,
+                                              .newExpr = {.type = callee}});
+    // var name = new S{}
+    AstNode *varDecl = makeAstNode(
+        ctx->pool,
+        &callee->loc,
+        &(AstNode){
+            .tag = astVarDecl,
+            .flags = callee->flags,
+            .varDecl = {.names = makeAstNode(ctx->pool,
+                                             &callee->loc,
+                                             &(AstNode){.tag = astIdentifier,
+                                                        .ident.value = name}),
+                        .init = newExpr}});
+
+    // tmp.init
+    AstNode *newCallee = makeAstNode(
+        ctx->pool,
+        &callee->loc,
+        &(AstNode){
+            .tag = astMemberExpr,
+            .flags = callee->flags,
+            .memberExpr = {
+                .target = makeAstNode(ctx->pool,
+                                      &init->loc,
+                                      &(AstNode){.tag = astIdentifier,
+                                                 .flags = callee->flags,
+                                                 .ident.value = name}),
+                .member = makeAstNode(ctx->pool,
+                                      &init->loc,
+                                      &(AstNode){.tag = astIdentifier,
+                                                 .flags = callee->flags,
+                                                 .ident.value = "op_new"})}});
+
+    AstNode *ret =
+        makeAstNode(ctx->pool,
+                    &init->loc,
+                    &(AstNode){.tag = astExprStmt,
+                               .flags = init->flags,
+                               .exprStmt.expr = makeAstNode(
+                                   ctx->pool,
+                                   &init->loc,
+                                   &(AstNode){.tag = astIdentifier,
+                                              .flags = init->flags,
+                                              .ident.value = name})});
+
+    //     name.init
+    varDecl->next =
+        makeAstNode(ctx->pool,
+                    &init->loc,
+                    &(AstNode){.tag = astCallExpr,
+                               .flags = init->flags,
+                               .callExpr = {.callee = newCallee,
+                                            .args = init->callExpr.args},
+                               .next = ret});
+
+    AstNode *block = makeAstNode(
+        ctx->pool,
+        &init->loc,
+        &(AstNode){.tag = astBlockStmt, .blockStmt.stmts = varDecl});
+
+    memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);
+    node->tag = astStmtExpr;
+    node->stmtExpr.stmt = block;
+
+    return evalType(visitor, node);
+}
+
 static const Type *checkNewInitializerExpr(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
+    AstNode *init = node->newExpr.init;
 
-    if (isSupportedOnAuto(node))
-        return evalType(visitor, node);
+    if (isSupportedOnAuto(init))
+        return evalType(visitor, init);
+
+    if (nodeIs(init, CallExpr)) {
+        if (!hasFlag(init->callExpr.callee, TypeAst)) {
+            logError(ctx->L,
+                     &init->callExpr.callee->loc,
+                     "only types can be created using the new expression",
+                     NULL);
+
+            return NULL;
+        }
+
+        const Type *callee = evalType(visitor, init->callExpr.callee);
+        if (typeIs(callee, Struct)) {
+            if (!findSymbolOnly(callee->tStruct.env, "op_new")) {
+                logError(ctx->L,
+                         &init->callExpr.callee->loc,
+                         "cannot use `new` constructor expression on type "
+                         "'{t}', structure does not overload new operator",
+                         (FormatArg[]){{.t = callee}});
+                return NULL;
+            }
+
+            return checkNewInitializerOverload(visitor, node);
+        }
+    }
 
     return NULL;
 }
@@ -75,7 +184,7 @@ void checkNewExpr(AstVisitor *visitor, AstNode *node)
         type = evalType(visitor, node->newExpr.type);
 
     if (node->newExpr.init) {
-        init = checkNewInitializerExpr(visitor, node->newExpr.init);
+        init = checkNewInitializerExpr(visitor, node);
         if (init == NULL) {
             logError(ctx->L,
                      &node->loc,
@@ -84,6 +193,8 @@ void checkNewExpr(AstVisitor *visitor, AstNode *node)
             node->type = ERROR_TYPE(ctx);
             return;
         }
+        if (nodeIs(node, StmtExpr))
+            return;
     }
 
     if (type == NULL) {

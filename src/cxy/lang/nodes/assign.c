@@ -64,7 +64,7 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
             checkIndexExprAssignment(visitor, node);
             return;
         }
-        
+
         if (typeIs(target, Error)) {
             node->type = target;
             return;
@@ -83,7 +83,7 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
                  (FormatArg[]){{.t = lhs}});
         node->type = ERROR_TYPE(ctx);
     }
-    else if (rhs->tag == typArray) {
+    else if (typeIs(rhs, Array) && rhs->array.len != UINT64_MAX) {
         if (isLeftAuto)
             logError(ctx->L,
                      &node->loc,

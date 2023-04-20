@@ -58,7 +58,8 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
     const Type *value = NULL;
     if (node->varDecl.init) {
         value = evalType(visitor, node->varDecl.init);
-        if (value->tag == typArray && node->varDecl.init->tag != astArrayExpr) {
+        if (typeIs(value, Array) && !isSliceType(value) &&
+            !nodeIs(node->varDecl.init, ArrayExpr)) {
             logError(ctx->L,
                      &node->varDecl.init->loc,
                      "initializer for array declaration can only be an array "

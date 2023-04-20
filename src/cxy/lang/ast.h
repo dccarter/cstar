@@ -184,7 +184,8 @@ enum {
     flgMember = BIT(16),
     flgAddThis = BIT(17),
     flgAddSuper = BIT(18),
-    flgNewAllocated = BIT(19),
+    flgTypeinfo = BIT(19),
+    flgNewAllocated = BIT(20),
 };
 
 typedef struct AstNode AstNode;
@@ -464,6 +465,7 @@ struct AstNode {
         struct {
             struct AstNodeList epilogue;
             struct AstNode *stmts;
+            struct AstNode *last;
         } blockStmt;
 
         struct {

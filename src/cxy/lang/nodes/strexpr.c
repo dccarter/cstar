@@ -90,7 +90,7 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
 
     case typArray:
         format(ctx->state, "cxy_string_builder_append_char(&sb, '[');\n", NULL);
-        for (u64 i = 0; i < type->array.size; i++) {
+        for (u64 i = 0; i < type->array.len; i++) {
             // Create a temporary member access expression
             AstNode index = {.tag = astIntegerLit,
                              .type = getPrimitiveType(ctx->types, prtI32),

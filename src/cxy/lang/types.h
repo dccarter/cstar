@@ -56,6 +56,7 @@ typedef enum {
     typAuto,
     typVoid,
     typNull,
+    typInfo,
     typThis,
     typPrimitive,
     typString,
@@ -130,7 +131,7 @@ typedef struct Type {
         } this;
 
         struct {
-            u64 size;
+            u64 len;
             const Type *elementType;
         } array;
 
@@ -145,7 +146,7 @@ typedef struct Type {
 
         struct {
             const Type *target;
-        } optional;
+        } optional, info;
 
         struct {
             u64 count;
@@ -209,5 +210,5 @@ bool isNumericType(const Type *type);
 void printType(FormatState *state, const Type *type);
 static inline bool isSliceType(const Type *type)
 {
-    return type && typeIs(type, Array) && type->array.size == UINT64_MAX;
+    return type && typeIs(type, Array) && type->array.len == UINT64_MAX;
 }

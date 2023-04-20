@@ -88,6 +88,12 @@ static const Type *functionTypeParamToCall(SemanticsContext *ctx,
     return type->tuple.members[1];
 }
 
+static const Type *structInitializerCall(SemanticsContext *ctx,
+                                         const Type *type,
+                                         AstNode *node)
+{
+}
+
 static const Type *structCallToFunctionCall(SemanticsContext *ctx,
                                             const Type *type,
                                             AstNode *node)
@@ -262,7 +268,7 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
                 astConstVisit(visitor, arg);
                 format(ctx->state,
                        ", .len = {u64}}",
-                       (FormatArg[]){{.u64 = arg->type->array.size}});
+                       (FormatArg[]){{.u64 = arg->type->array.len}});
             }
             else {
                 astConstVisit(visitor, arg);
@@ -290,7 +296,7 @@ void checkCall(AstVisitor *visitor, AstNode *node)
             node->type = ERROR_TYPE(ctx);
             return;
         }
-        paramsEvaluated = false;
+        paramsEvaluated = true;
     }
 
     if (callee->flags & flgFuncTypeParam) {

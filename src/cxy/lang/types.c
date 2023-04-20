@@ -108,12 +108,16 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
 #define f(I, ...) case prt##I:
             SIGNED_INTEGER_TYPE_LIST(f)
 #undef f
-            return isIntegerType(from) && isSignedType(from) &&
-                   to->size >= from->size;
+            if (isIntegerType(from)) {
+                if (isUnsignedType(from))
+                    return to->size >= from->size;
+                return to->size > from->size;
+            }
+            return false;
 #define f(I, ...) case prt##I:
             UNSIGNED_INTEGER_TYPE_LIST(f)
 #undef f
-            return isIntegerType(from) && isUnsignedType(from) &&
+            return isIntegerType(from) && isSignedType(from) &&
                    to->size >= from->size;
 #define f(I, ...) case prt##I:
             FLOAT_TYPE_LIST(f)
@@ -175,6 +179,9 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
                isTypeAssignableFrom(to->tEnum.base, from->tEnum.base);
     case typStruct:
         return typeIs(from, This) && to == from->this.that;
+    case typInfo:
+        return typeIs(from, Info) &&
+               isTypeAssignableFrom(to->info.target, from->info.target);
     default:
         return false;
     }
@@ -212,7 +219,7 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
         }
 
     default:
-        return false;
+        return isTypeAssignableFrom(to, from);
     }
 }
 
@@ -324,8 +331,8 @@ void printType(FormatState *state, const Type *type)
     case typArray:
         format(state, "[", NULL);
         printType(state, type->array.elementType);
-        if (type->array.size != UINT64_MAX)
-            format(state, ", {u64}", (FormatArg[]){{.u64 = type->array.size}});
+        if (type->array.len != UINT64_MAX)
+            format(state, ", {u64}", (FormatArg[]){{.u64 = type->array.len}});
         format(state, "]", NULL);
         break;
     case typMap:
@@ -388,6 +395,12 @@ void printType(FormatState *state, const Type *type)
         }
         format(state, "where )", NULL);
         break;
+    case typInfo:
+        format(state, "@typeof(", NULL);
+        printType(state, type->info.target);
+        format(state, ")", NULL);
+        break;
+
     default:
         unreachable("TODO");
     }

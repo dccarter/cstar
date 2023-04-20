@@ -20,6 +20,7 @@ const Type *resolveType(const Type *type);
 const Type *stripPointer(const Type *type);
 const Type *arrayToPointer(TypeTable *table, const Type *type);
 const Type *getPrimitiveType(TypeTable *table, PrtId id);
+const Type *getAnySliceType(TypeTable *table);
 
 void removeFromTypeTable(TypeTable *table, const Type *type);
 const Type *makeErrorType(TypeTable *table);
@@ -29,6 +30,7 @@ const Type *makeNullType(TypeTable *table);
 const Type *makeStringType(TypeTable *table);
 const Type *makePointerType(TypeTable *table, const Type *pointed, u64 flags);
 const Type *makeOptionalType(TypeTable *table, const Type *target, u64 flags);
+const Type *makeTypeInfo(TypeTable *table, const Type *target);
 const Type *makeArrayType(TypeTable *table, const Type *elementType, u64 size);
 
 static inline const Type *makeVoidPointerType(TypeTable *table, u64 flags)

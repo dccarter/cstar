@@ -16,6 +16,13 @@ void generateTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
         generateTypeUsage(ctx, node->type);
 }
 
+void generateTypeinfo(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    csAssert0((hasFlag(node, Typeinfo)));
+    writeTypename(ctx, node->type->info.target);
+}
+
 void checkTypeDecl(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
@@ -53,6 +60,7 @@ void checkUnionDecl(AstVisitor *visitor, AstNode *node)
 void checkBuiltinType(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
+
     switch (node->tag) {
     case astVoidType:
         node->type = makeVoidType(ctx->typeTable);

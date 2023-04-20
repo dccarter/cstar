@@ -176,6 +176,15 @@ static void cxy_default_dealloc(void *ctx)
     }
 }
 
+#ifndef __builtin_alloc
+#define __builtin_alloc(T, n) cxy_alloc(sizeof(T) * n)
+#endif
+
+#ifndef __builtin_alloc_slice
+#define __builtin_alloc_slice(T, n)                                            \
+    (T) { .data = __builtin_alloc((*((T *)0)->data), (n)), .len = n }
+#endif
+
 static attr(noreturn)
     attr(format, printf, 1, 2) void cxyAbort(const char *fmt, ...)
 {

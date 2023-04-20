@@ -526,7 +526,7 @@ bool cmdParseByteSize(CmdParser *P,
         default:
         unsupportedDataSizeUnit:
             sprintf(P->error,
-                    "'%s' is not a supported data size unit "
+                    "'%s' is not a supported data len unit "
                     "(use g,G for gigabytes, m,M for megabytes, "
                     "k,K for kilobytes or b, B for bytes)",
                     end);

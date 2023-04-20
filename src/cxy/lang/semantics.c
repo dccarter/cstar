@@ -38,6 +38,11 @@ static void checkFallback(AstVisitor *visitor, AstNode *node)
         break;
     case astStmtExpr:
         node->type = evalType(visitor, node->stmtExpr.stmt);
+        if (typeIs(node->type, Void) &&
+            nodeIs(node->stmtExpr.stmt, BlockStmt) &&
+            node->stmtExpr.stmt->blockStmt.last) {
+            node->type = node->stmtExpr.stmt->blockStmt.last->type;
+        }
         break;
     case astGroupExpr:
         node->type = evalType(visitor, node->groupExpr.expr);
@@ -100,7 +105,10 @@ const Type *evalType(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     astVisit(visitor, node);
-    return resolveType(node->type);
+    const Type *type = resolveType(node->type);
+    if (hasFlag(node, Typeinfo))
+        return node->type = makeTypeInfo(ctx->typeTable, node->type);
+    return type;
 }
 
 u64 checkMany(AstVisitor *visitor, AstNode *node)

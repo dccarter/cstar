@@ -75,7 +75,7 @@ static inline Token *advance(Parser *parser)
 
 static inline Token *peek(Parser *parser, u32 index)
 {
-    csAssert(index <= 2, "size out of bounds");
+    csAssert(index <= 2, "len out of bounds");
     return &parser->ahead[1 + index];
 }
 
@@ -323,7 +323,9 @@ static AstNode *postfix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
             break;
         case tokDot: {
             const Token tok = *advance(P);
+            bool isBuiltin = match(P, tokHash) != NULL;
             operand = member(P, &tok.fileLoc.begin, operand);
+            operand->flags |= (isBuiltin ? flgBuiltin : flgNone);
             continue;
         }
         case tokIndexExpr: {
@@ -370,7 +372,7 @@ static AstNode *newOperator(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
     else {
         type = parseType(P);
         if (match(P, tokLParen)) {
-            init = parseMany(P, tokRParen, tokComma, functionParam);
+            init = parseMany(P, tokRParen, tokComma, expressionWithStructs);
             consume0(P, tokRParen);
         }
 
@@ -827,9 +829,15 @@ static AstNode *parsePath(Parser *P)
 
     do {
         listAddAstNode(&parts, pathElement(P));
+
         if (!check(P, tokDot) || peek(P, 1)->tag != tokIdent)
             break;
         consume0(P, tokDot);
+        if (match(P, tokHash)) {
+            listAddAstNode(&parts, pathElement(P));
+            parts.last->flags |= flgBuiltin;
+            break;
+        }
     } while (!isEoF(P));
 
     return newAstNode(
@@ -868,6 +876,29 @@ static AstNode *structExpr(Parser *P,
                    .structExpr = {.left = lhs, .fields = fields}});
 }
 
+static AstNode *untypedExpr(Parser *P, bool allowStructs)
+{
+    AstNode *expr = NULL;
+    const Token tok = *consume0(P, tokHash);
+    if (match(P, tokHash)) {
+        logWarning(P->L,
+                   &previous(P)->fileLoc,
+                   "multiple `#` expression markers not necessary",
+                   NULL);
+        while (match(P, tokHash))
+            ;
+    }
+
+    if (check(P, tokIdent)) {
+        expr = parsePath(P);
+    }
+    else
+        expr = parseType(P);
+
+    expr->flags |= flgTypeinfo;
+    return expr;
+}
+
 static AstNode *primary(Parser *P, bool allowStructs)
 {
     switch (current(P)->tag) {
@@ -892,6 +923,8 @@ static AstNode *primary(Parser *P, bool allowStructs)
         return block(P);
     case tokLBracket:
         return array(P);
+    case tokHash:
+        return untypedExpr(P, allowStructs);
     case tokIdent: {
         AstNode *path = parsePath(P);
         if (allowStructs && check(P, tokLBrace))
@@ -1459,6 +1492,7 @@ static AstNode *parseType(Parser *P)
             &(AstNode){.tag = astOptionalType, .optionalType.type = type});
     }
 
+    type->flags |= flgTypeAst;
     return type;
 }
 

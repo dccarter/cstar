@@ -53,6 +53,7 @@ void generateCode(FormatState *state,
 void codegenPrologue(CodegenContext *context, const AstNode *prog);
 void codegenEpilogue(CodegenContext *context, const AstNode *prog);
 
+void generateTypeinfo(ConstAstVisitor *visitor, const AstNode *node);
 void generateFuncParam(ConstAstVisitor *visitor, const AstNode *node);
 void generatePath(ConstAstVisitor *visitor, const AstNode *node);
 void generatePathElement(ConstAstVisitor *visitor, const AstNode *node);

@@ -12,6 +12,8 @@
 
 #include "lang/ttable.h"
 
+#include <string.h>
+
 static void addBuiltinFunc(SemanticsContext *ctx,
                            cstring name,
                            const Type *ret,
@@ -65,6 +67,16 @@ static void addBuiltinType(SemanticsContext *ctx,
                                         .type = type}));
 }
 
+static inline bool typeSupportsLenProperty(const Type *type)
+{
+    switch (stripPointer(type)->tag) {
+    case typArray:
+        return isSliceType(type);
+    default:
+        false;
+    }
+}
+
 void initializeBuiltins(SemanticsContext *ctx)
 {
     {
@@ -77,6 +89,26 @@ void initializeBuiltins(SemanticsContext *ctx)
         addBuiltinFunc(
             ctx, "ptr", getPrimitiveType(ctx->typeTable, prtU64), params, 1);
     }
+    {
+        const Type *params[] = {makeAutoType(ctx->typeTable),
+                                getPrimitiveType(ctx->typeTable, prtU64)};
+        addBuiltinFunc(ctx,
+                       "__builtin_alloc",
+                       makeVoidPointerType(ctx->typeTable, flgNone),
+                       params,
+                       2);
+    }
+    {
+        const Type *params[] = {
+            makeTypeInfo(ctx->typeTable, getAnySliceType(ctx->typeTable)),
+            getPrimitiveType(ctx->typeTable, prtU64)};
+
+        addBuiltinFunc(ctx,
+                       "__builtin_alloc_slice",
+                       getAnySliceType(ctx->typeTable),
+                       params,
+                       2);
+    }
 
     {
         addBuiltinType(
@@ -86,5 +118,28 @@ void initializeBuiltins(SemanticsContext *ctx)
                        "cxy_range_t",
                        flgNative,
                        makeOpaqueType(ctx->typeTable, "cxy_range_t"));
+    }
+}
+
+const Type *checkBuiltinTypeProperty(SemanticsContext *ctx,
+                                     AstNode *target,
+                                     cstring name)
+{
+    if (strcmp(name, "len") == 0) {
+        if (typeSupportsLenProperty(target->type)) {
+            logError(
+                ctx->L,
+                &target->loc,
+                "target type '{t}' does not support builtin `#len` property",
+                (FormatArg[]){{.t = target->type}});
+        }
+        return getPrimitiveType(ctx->typeTable, prtU64);
+    }
+    else {
+        logError(ctx->L,
+                 &target->loc,
+                 "unknown type builtin property `{s}`",
+                 (FormatArg[]){{.s = name}});
+        return ERROR_TYPE(ctx);
     }
 }

@@ -18,13 +18,14 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
     AstNode *symbol = findSymbolAndScope(
         &ctx->env, ctx->L, node->pathElement.name, &node->loc, &scope);
 
-    if (symbol != NULL && nodeIs(symbol, GenericDecl)) {
-        symbol = checkGenericDeclReference(visitor, symbol, node);
-    }
     u64 flags = flgNone;
     if (symbol == NULL) {
         node->type = ERROR_TYPE(ctx);
         return ERROR_TYPE(ctx);
+    }
+
+    if (nodeIs(symbol, GenericDecl)) {
+        symbol = checkGenericDeclReference(visitor, symbol, node);
     }
 
     if (scope->node && scope->node->tag == astStructDecl) {
@@ -34,7 +35,7 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
     }
 
     node->type = symbol->type;
-    flags = (symbol->flags & (flgConst | flgAddThis));
+    flags = (symbol->flags & (flgConst | flgAddThis | flgTypeAst));
     node->flags |= flags;
     if (closure == NULL)
         // We are outside a closure

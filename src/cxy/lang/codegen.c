@@ -27,6 +27,8 @@
 static void generateType(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
+    if (hasFlags(type, flgBuiltin))
+        return;
 
     switch (type->tag) {
     case typArray:
@@ -81,7 +83,10 @@ static void generateIdentifier(ConstAstVisitor *visitor, const AstNode *node)
 
 static void generateStatementExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    format(ctx->state, "(", NULL);
     astConstVisit(visitor, node->stmtExpr.stmt);
+    format(ctx->state, ")", NULL);
 }
 
 static void generateGroupExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -364,6 +369,9 @@ void generateCode(FormatState *state,
     {
         [astPathElem] = generatePathElement,
         [astPath] = generatePath,
+        [astPrimitiveType] = generateTypeinfo,
+        [astVoidType] = generateTypeinfo,
+        [astArrayType] = generateTypeinfo,
         [astIdentifier] = generateIdentifier,
         [astNullLit] = generateLiteral,
         [astBoolLit] = generateLiteral,
