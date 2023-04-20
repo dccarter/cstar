@@ -54,14 +54,22 @@ void generateIndexExpr(ConstAstVisitor *visitor, const AstNode *node)
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     const Type *target = node->indexExpr.target->type;
     const Type *stripped = stripPointer(target);
-    if (target->tag == typPointer && stripped->tag == typArray) {
+
+    if (typeIs(target, Pointer) && typeIs(stripped, Array))
         format(ctx->state, "(*", NULL);
-        astConstVisit(visitor, node->indexExpr.target);
+
+    astConstVisit(visitor, node->indexExpr.target);
+
+    if (isSliceType(target)) {
+        if (typeIs(target, Pointer))
+            format(ctx->state, "->data", NULL);
+        else
+            format(ctx->state, ".data", NULL);
+    }
+
+    if (typeIs(target, Pointer) && typeIs(stripped, Array))
         format(ctx->state, ")", NULL);
-    }
-    else {
-        astConstVisit(visitor, node->indexExpr.target);
-    }
+
     format(ctx->state, "[", NULL);
     astConstVisit(visitor, node->indexExpr.index);
     format(ctx->state, "]", NULL);

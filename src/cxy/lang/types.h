@@ -70,7 +70,6 @@ typedef enum {
     typFunc,
     typEnum,
     typStruct,
-    typMember
 } TTag;
 
 typedef struct Type Type;
@@ -188,3 +187,7 @@ bool isUnsignedType(const Type *type);
 bool isFloatType(const Type *type);
 bool isNumericType(const Type *type);
 void printType(FormatState *state, const Type *type);
+static inline bool isSliceType(const Type *type)
+{
+    return type && typeIs(type, Array) && type->array.size == UINT64_MAX;
+}

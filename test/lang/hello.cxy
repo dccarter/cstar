@@ -12,77 +12,17 @@ pub native func fgets(data: &char, size: i32, stream: &FILE) : &char;
 
 pub func println(str: string) => puts(str)
 
-struct Node {
-    left: &Node
-    right: &Node
-    value: i64
-
-    func `delete`() {
-        if (ptr(left) != ptr(null)) {
-            delete left
-            left  = null
-        }
-        if (ptr(right) != ptr(null)) {
-            delete right
-            right = null
-        }
-    }
+struct Base {
+    value: i32
+    func add(x: i32) => value += x
 }
 
-struct BinaryTree {
-    root: &Node
-    func add(value: i64) {
-        var node = new auto Node{left: null, right: null, value: value};
-        if (ptr(root) == ptr(null)) {
-            root = node
-            return;
-        }
-
-        var curr = root;
-        while (ptr(curr) != ptr(node)) {
-            if (value < curr.value) {
-                if (ptr(curr.left) == ptr(null)) {
-                    curr.left = node
-                }
-                curr = curr.left
-            }
-            else {
-                if (ptr(curr.right) == ptr(null)) {
-                    curr.right = node
-                }
-                curr = curr.right
-            }
-        }
-    }
-
-    func `..`(cb: func(value: i64) -> void) {
-        traverse(root, cb)
-    }
-
-    func traverse(node: &const Node, cb: func(value: i64) -> void) {
-        if (ptr(node) == ptr(null))
-            return;
-
-        cb(node.value)
-        traverse(node.left, cb)
-        traverse(node.right, cb)
-    }
-
-    func `delete`() {
-        if (ptr(root) != ptr(null)) {
-            delete root
-            root = null
-        }
-    }
+struct Calculator : Base {
+    func `+`(x: i32) => add(x)
 }
 
 func main(args: [string]) {
-    var tree = BinaryTree{};
-    tree.add(10)
-    tree.add(100)
-    tree.add(0)
-
-    for (const a: tree) {
-        puts(f"${a}")
+    for (const arg: args) {
+        puts(arg)
     }
 }

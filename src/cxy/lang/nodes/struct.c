@@ -282,6 +282,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
             checkMethodDeclBody(visitor, member);
             if (member == node->structDecl.members) {
                 node->structDecl.members = member->next;
+                prev = node->structDecl.members;
             }
             else {
                 prev->next = member->next;
@@ -290,6 +291,8 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
             member->next = NULL;
             addTopLevelDecl(ctx, NULL, member);
             member = prev;
+            if (member == NULL)
+                break;
         }
         else {
             prev = member;

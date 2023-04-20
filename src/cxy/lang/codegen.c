@@ -18,6 +18,7 @@
 #define CXY_ANONYMOUS_TUPLE "cxy_anonymous_tuple"
 #define CXY_ANONYMOUS_STRUCT "cxy_anonymous_struct"
 #define CXY_ANONYMOUS_ARRAY "cxy_anonymous_array"
+#define CXY_ANONYMOUS_SLICE "cxy_anonymous_slice"
 #define CXY_ANONYMOUS_ENUM "cxy_anonymous_enum"
 
 #define CXY_EPILOGUE_SRC_FILE CXY_SOURCE_LANG_DIR "/native/epilogue.cxy.c"
@@ -136,7 +137,7 @@ static void epilogue(ConstAstVisitor *visitor, const AstNode *node)
            "\n",
            NULL);
 
-    generateManyAsts(visitor, "\n\n", node->program.decls);
+    generateManyAsts(visitor, "\n", node->program.decls);
 
     format(ctx->state,
            "\n"
@@ -243,9 +244,14 @@ void writeTypename(CodegenContext *ctx, const Type *type)
                    (FormatArg[]){{.u64 = type->index}});
             break;
         case typArray:
-            format(state,
-                   CXY_ANONYMOUS_ARRAY "{u64}_t",
-                   (FormatArg[]){{.u64 = type->index}});
+            if (isSliceType(type))
+                format(state,
+                       CXY_ANONYMOUS_SLICE "{u64}_t",
+                       (FormatArg[]){{.u64 = type->index}});
+            else
+                format(state,
+                       CXY_ANONYMOUS_ARRAY "{u64}_t",
+                       (FormatArg[]){{.u64 = type->index}});
             break;
         case typEnum:
             format(state,
@@ -302,8 +308,9 @@ void generateManyAsts(ConstAstVisitor *visitor,
     CodegenContext *context = getConstAstVisitorContext(visitor);
     for (const AstNode *node = nodes; node; node = node->next) {
         astConstVisit(visitor, node);
-        if (node->next)
+        if (node->next) {
             format(context->state, sep, NULL);
+        }
     }
 }
 

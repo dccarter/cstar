@@ -212,6 +212,9 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
     }
 
     if (!isMember && hasFlag(node, Main)) {
+        format(ctx->state, "typedef ", NULL);
+        writeTypename(ctx, node->type->func.params[0]);
+        format(ctx->state, " cxy_main_args_t;\n", NULL);
         if (isIntegerType(node->type->func.retType)) {
             format(ctx->state,
                    "#define CXY_MAIN_INVOKE(...) return "

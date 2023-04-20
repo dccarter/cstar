@@ -178,15 +178,16 @@ void checkForStmt(AstVisitor *visitor, AstNode *node)
 
         if (range->tag == typArray) {
             const Type *elementType = range->array.elementType;
-            node->forStmt.range = makeAstNode(
-                ctx->pool,
-                &node->forStmt.range->loc,
-                &(AstNode){.tag = astUnaryExpr,
-                           .type = range,
-                           .flags = node->forStmt.range->flags,
-                           .unaryExpr = {.op = opDeref,
-                                         .operand = node->forStmt.range,
-                                         .isPrefix = true}});
+            //            node->forStmt.range = makeAstNode(
+            //                ctx->pool,
+            //                &node->forStmt.range->loc,
+            //                &(AstNode){.tag = astUnaryExpr,
+            //                           .type = range,
+            //                           .flags = node->forStmt.range->flags,
+            //                           .unaryExpr = {.op = opDeref,
+            //                                         .operand =
+            //                                         node->forStmt.range,
+            //                                         .isPrefix = true}});
             if (type->tag != typAuto &&
                 !isTypeAssignableFrom(elementType, type)) {
                 logError(ctx->L,

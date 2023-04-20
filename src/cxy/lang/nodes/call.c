@@ -9,6 +9,11 @@
 
 #include <memory.h>
 
+// static bool isBaseFunction(const Type *target, const AstNode *node)
+//{
+//     if ()
+// }
+
 static const Type *wrapFuncArgInClosure(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
@@ -189,7 +194,10 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
              (callee->tag == astPath && callee->path.elements->next == NULL));
 
         if (needsThis) {
-            format(ctx->state, "(this", NULL);
+            if (hasFlag(node->callExpr.callee, AddSuper))
+                format(ctx->state, "(&(this->super)", NULL);
+            else
+                format(ctx->state, "(this", NULL);
         }
         else {
             format(ctx->state, "(", NULL);
@@ -241,6 +249,20 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
                        (FormatArg[]){{.s = name}, {.u64 = i + 1}});
                 astConstVisit(visitor, arg->type->func.decl);
                 format(ctx->state, "_fwd}", NULL);
+            }
+            else if (isSliceType(param)) {
+                format(ctx->state, "(", NULL);
+                writeTypename(ctx, param);
+                format(ctx->state, "){{.data = ", NULL);
+                if (nodeIs(arg, ArrayExpr)) {
+                    format(ctx->state, "(", NULL);
+                    writeTypename(ctx, arg->type);
+                    format(ctx->state, ")", NULL);
+                }
+                astConstVisit(visitor, arg);
+                format(ctx->state,
+                       ", .len = {u64}}",
+                       (FormatArg[]){{.u64 = arg->type->array.size}});
             }
             else {
                 astConstVisit(visitor, arg);

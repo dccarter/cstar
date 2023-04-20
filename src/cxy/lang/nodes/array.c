@@ -28,7 +28,10 @@ void generateForStmtArray(ConstAstVisitor *visitor, const AstNode *node)
 
     format(ctx->state, " _arr_{s} = ", (FormatArg[]){{.s = name}});
     astConstVisit(visitor, range);
-    format(ctx->state, ";\n", NULL);
+    if (isSliceType(range->type))
+        format(ctx->state, ".data;\n", NULL);
+    else
+        format(ctx->state, ";\n", NULL);
 
     // create index variable
     format(ctx->state, "u64 _i_{s} = 0;\n", (FormatArg[]){{.s = name}});
@@ -39,10 +42,19 @@ void generateForStmtArray(ConstAstVisitor *visitor, const AstNode *node)
     astConstVisit(visitor, var->varDecl.names);
     format(ctx->state, " = _arr_{s}[0];\n", (FormatArg[]){{.s = name}});
 
-    format(ctx->state,
-           "for (; _i_{s} < {u64}; _i_{s}++, ",
-           (FormatArg[]){
-               {.s = name}, {.u64 = range->type->array.size}, {.s = name}});
+    format(ctx->state, "for (; _i_{s} < ", (FormatArg[]){{.s = name}});
+
+    if (isSliceType(range->type)) {
+        astConstVisit(visitor, range);
+        format(ctx->state, ".len", NULL);
+    }
+    else
+        format(ctx->state,
+               "{u64}",
+               (FormatArg[]){{.u64 = range->type->array.size}});
+
+    format(ctx->state, "; _i_{s}++, ", (FormatArg[]){{.s = name}});
+
     astConstVisit(visitor, var->varDecl.names);
     format(ctx->state,
            " = _arr_{s}[_i_{s}]",
@@ -63,15 +75,22 @@ void generateArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
 void generateArrayDeclaration(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
-    format(state, "typedef ", NULL);
-    generateTypeUsage(context, type->array.elementType);
-    format(state, " ", NULL);
-    writeTypename(context, type);
-    if (type->array.size != UINT64_MAX) {
+    if (isSliceType(type)) {
+        format(state, "typedef struct ", NULL);
+        writeTypename(context, type);
+        format(state, " {{{>}\n", NULL);
+        generateTypeUsage(context, type->array.elementType);
+        format(state, " *data;\n", NULL);
+        format(state, "u64 len;{<}\n} ", NULL);
+        writeTypename(context, type);
+    }
+    else {
+        format(state, "typedef ", NULL);
+        generateTypeUsage(context, type->array.elementType);
+        format(state, " ", NULL);
+        writeTypename(context, type);
         format(state, "[{u64}]", (FormatArg[]){{.u64 = type->array.size}});
     }
-    else
-        format(state, "[]", NULL);
 }
 
 void checkArrayType(AstVisitor *visitor, AstNode *node)
@@ -119,4 +138,3 @@ void checkArrayExpr(AstVisitor *visitor, AstNode *node)
         node->type = makeArrayType(ctx->typeTable, elementType, count);
     }
 }
-
