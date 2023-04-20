@@ -49,6 +49,7 @@ set(CXY_LANG_NODE_SOURCES
         src/cxy/lang/nodes/enum.c
         src/cxy/lang/nodes/forstmt.c
         src/cxy/lang/nodes/function.c
+        src/cxy/lang/nodes/generics.c
         src/cxy/lang/nodes/if.c
         src/cxy/lang/nodes/index.c
         src/cxy/lang/nodes/literals.c

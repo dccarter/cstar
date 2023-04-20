@@ -12,17 +12,16 @@ pub native func fgets(data: &char, size: i32, stream: &FILE) : &char;
 
 pub func println(str: string) => puts(str)
 
-struct Base {
-    value: i32
-    func add(x: i32) => value += x
-}
+struct Vector[T, U] {
+    - data: [T]
+    - len: u64
+    - capacity: u64
 
-struct Calculator : Base {
-    func `+`(x: i32) => add(x)
+    func push[U](item: U) {
+    }
 }
 
 func main(args: [string]) {
-    for (const arg: args) {
-        puts(arg)
-    }
+    var arr = Vector[i32, u8]{};
+    arr.push[i32](100)
 }

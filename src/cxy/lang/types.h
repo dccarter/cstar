@@ -70,6 +70,8 @@ typedef enum {
     typFunc,
     typEnum,
     typStruct,
+    typGeneric,
+    typApplied
 } TTag;
 
 typedef struct Type Type;
@@ -82,6 +84,11 @@ typedef struct StructField {
     const Type *type;
     const AstNode *decl;
 } StructField;
+
+typedef struct GenericParam {
+    const char *name;
+    const AstNode *decl;
+} GenericParam;
 
 typedef struct EnumOption {
     const char *name;
@@ -173,6 +180,19 @@ typedef struct Type {
             u64 fieldsCount;
             Env *env;
         } tStruct;
+
+        struct {
+            GenericParam *params;
+            u64 paramsCount;
+            AstNode *decl;
+        } generic;
+
+        struct {
+            const Type **args;
+            u64 argsCount;
+            const Type *generated;
+            const Type *from;
+        } applied;
     };
 } Type;
 

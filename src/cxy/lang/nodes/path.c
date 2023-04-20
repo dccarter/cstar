@@ -17,6 +17,10 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
 
     AstNode *symbol = findSymbolAndScope(
         &ctx->env, ctx->L, node->pathElement.name, &node->loc, &scope);
+
+    if (symbol != NULL && nodeIs(symbol, GenericDecl)) {
+        symbol = checkGenericDeclReference(visitor, symbol, node);
+    }
     u64 flags = flgNone;
     if (symbol == NULL) {
         node->type = ERROR_TYPE(ctx);
@@ -139,6 +143,9 @@ void checkPathElement(AstVisitor *visitor, AstNode *node)
 
     AstNode *symbol =
         findSymbol(env, ctx->L, node->pathElement.name, &node->loc);
+    if (symbol != NULL && nodeIs(symbol, GenericDecl)) {
+        symbol = checkGenericDeclReference(visitor, symbol, node);
+    }
 
     if (symbol == NULL) {
         node->type = ERROR_TYPE(ctx);

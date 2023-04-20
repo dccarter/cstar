@@ -11,6 +11,7 @@
 #include <lang/types.h>
 
 typedef struct TypeTable TypeTable;
+typedef Pair(bool, const Type *) GetOrInset;
 
 TypeTable *newTypeTable(MemPool *pool, StrPool *strPool);
 void freeTypeTable(TypeTable *table);
@@ -55,6 +56,10 @@ const Type *makeFuncType(TypeTable *table, const Type *init);
 const Type *makeStruct(TypeTable *table, const Type *init);
 
 const Type *makeEnum(TypeTable *table, const Type *init);
+
+const Type *makeGenericType(TypeTable *table, const Type *init);
+
+GetOrInset makeAppliedType(TypeTable *table, const Type *init);
 
 u64 getTypesCount(TypeTable *table);
 

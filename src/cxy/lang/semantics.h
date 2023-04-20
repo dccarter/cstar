@@ -19,13 +19,19 @@ typedef struct {
     StrPool *strPool;
     TypeTable *typeTable;
     Env env;
-    Scope *closure;
     AstNode *previousTopLevelDecl;
     AstNode *currentTopLevelDecl;
     AstNode *program;
-    const AstNode *lastReturn;
     u64 anonymousDeclsIndex;
     bool mainOptimized : 1;
+    union {
+        Scope *closure;
+        const AstNode *lastReturn;
+        struct {
+            Scope *closure;
+            const AstNode *lastReturn;
+        } stack;
+    };
 } SemanticsContext;
 
 #define ERROR_TYPE(CTX) makeErrorType((CTX)->typeTable)
@@ -50,6 +56,11 @@ void initializeBuiltins(SemanticsContext *ctx);
 AstNode *findSymbolByPath(SemanticsContext *ctx, const Env *env, AstNode *node);
 AstNode *findSymbolByNode(SemanticsContext *ctx, const Env *env, AstNode *node);
 
+AstNode *checkGenericDeclReference(AstVisitor *visitor,
+                                   AstNode *node,
+                                   AstNode *path);
+void checkGenericParam(AstVisitor *visitor, AstNode *node);
+void checkGenericDecl(AstVisitor *visitor, AstNode *node);
 void checkPathElement(AstVisitor *visitor, AstNode *node);
 void checkPath(AstVisitor *visitor, AstNode *node);
 void checkBlock(AstVisitor *visitor, AstNode *node);

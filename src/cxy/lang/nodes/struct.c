@@ -78,7 +78,7 @@ void generateStructDefinition(CodegenContext *context, const Type *type)
 
     for (u64 i = 0; i < type->tStruct.fieldsCount; i++) {
         const StructField *field = &type->tStruct.fields[i];
-        if (field->type->tag == typFunc)
+        if (typeIs(field->type, Func) || typeIs(field->type, Generic))
             continue;
 
         if (i != 0)

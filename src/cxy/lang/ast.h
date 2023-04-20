@@ -97,6 +97,7 @@ typedef enum {
     astPathElem,
     astPath,
     astGenericParam,
+    astGenericDecl,
     astIdentifier,
     /* Types */
     astVoidType,
@@ -268,7 +269,6 @@ struct AstNode {
         } optionalType;
 
         struct {
-            struct AstNode *genericParams;
             struct AstNode *params;
             struct AstNode *ret;
         } funcType;
@@ -317,6 +317,11 @@ struct AstNode {
         } genericParam;
 
         struct {
+            struct AstNode *params;
+            struct AstNode *decl;
+        } genericDecl;
+
+        struct {
             const char *name;
             struct AstNode *args;
             u64 index;
@@ -330,7 +335,6 @@ struct AstNode {
         struct {
             Operator operatorOverload;
             const char *name;
-            struct AstNode *genericParams;
             struct AstNode *params;
             struct AstNode *ret;
             struct AstNode *body;
@@ -357,13 +361,11 @@ struct AstNode {
 
         struct {
             const char *name;
-            struct AstNode *genericParams;
             struct AstNode *aliased;
         } typeDecl;
 
         struct {
             const char *name;
-            struct AstNode *genericParams;
             struct AstNode *members;
         } unionDecl;
 
@@ -389,7 +391,6 @@ struct AstNode {
         struct {
             const char *name;
             struct AstNode *base;
-            struct AstNode *genericParams;
             struct AstNode *members;
         } structDecl;
 

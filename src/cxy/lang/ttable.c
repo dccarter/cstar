@@ -13,8 +13,6 @@
 
 #include <memory.h>
 
-typedef Pair(bool, const Type *) GetOrInset;
-
 typedef struct TypeTable {
     HashTable types;
     MemPool *memPool;
@@ -85,9 +83,17 @@ static HashCode hashType(HashCode hash, const Type *type)
         break;
     case typEnum:
     case typStruct:
-        hash = hashUint64(hash, type->index);
         if (type->name)
             hash = hashStr(hash, type->name);
+        break;
+    case typGeneric:
+        hash = hashUint64(hash, type->generic.paramsCount);
+        if (type->name)
+            hash = hashStr(hash, type->name);
+        break;
+    case typApplied:
+        hash = hashType(hash, type->applied.from);
+        hash = hashTypes(hash, type->applied.args, type->applied.argsCount);
         break;
     default:
         csAssert0("invalid type");
@@ -136,7 +142,6 @@ static bool compareTypes(const Type *left, const Type *right)
         return strcmp(left->name, right->name) == 0;
     case typThis:
         return typeIs(right, This) ? (left == right) : left->this.that == right;
-
     case typTuple:
     case typUnion:
         return (left->tUnion.count == right->tUnion.count) &&
@@ -150,8 +155,14 @@ static bool compareTypes(const Type *left, const Type *right)
                compareManyTypes(left->func.params,
                                 right->func.params,
                                 right->func.paramsCount);
+    case typApplied:
+        return compareTypes(left->applied.from, right->applied.from) &&
+               compareManyTypes(left->applied.args,
+                                left->applied.args,
+                                right->applied.argsCount);
     case typEnum:
     case typStruct:
+    case typGeneric:
         return left == right;
 
     default:
@@ -420,6 +431,36 @@ const Type *makeEnum(TypeTable *table, const Type *init)
     }
 
     return ret.s;
+}
+
+const Type *makeGenericType(TypeTable *table, const Type *init)
+{
+    GetOrInset ret = getOrInsertType(table, init);
+    if (!ret.f) {
+        Type *generic = (Type *)ret.s;
+        generic->generic.params = allocFromMemPool(
+            table->memPool, sizeof(GenericParam) * init->generic.paramsCount);
+        memcpy(generic->generic.params,
+               init->generic.params,
+               sizeof(GenericParam) * init->generic.paramsCount);
+    }
+
+    return ret.s;
+}
+
+GetOrInset makeAppliedType(TypeTable *table, const Type *init)
+{
+    GetOrInset ret = getOrInsertType(table, init);
+    if (!ret.f) {
+        Type *applied = (Type *)ret.s;
+        applied->applied.args = allocFromMemPool(
+            table->memPool, sizeof(Type) * init->applied.argsCount);
+        memcpy(applied->applied.args,
+               init->applied.args,
+               sizeof(Type) * init->applied.argsCount);
+    }
+
+    return ret;
 }
 
 const Type *makeStruct(TypeTable *table, const Type *init)

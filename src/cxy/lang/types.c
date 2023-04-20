@@ -20,6 +20,35 @@ static void printManyTypes(FormatState *state,
     }
 }
 
+static void printGenericType(FormatState *state, const Type *type)
+{
+    if (nodeIs(type->generic.decl, StructDecl)) {
+        printKeyword(state, "struct");
+        format(state,
+               " {s}[",
+               (FormatArg[]){{.s = type->generic.decl->structDecl.name}});
+    }
+    else if (nodeIs(type->generic.decl, TypeDecl)) {
+        printKeyword(state, "type");
+        format(state,
+               " {s}[",
+               (FormatArg[]){{.s = type->generic.decl->typeDecl.name}});
+    }
+    else {
+        printKeyword(state, "func ");
+        format(state,
+               " {s}[",
+               (FormatArg[]){{.s = type->generic.decl->funcDecl.name}});
+    }
+
+    for (u64 i = 0; i < type->generic.paramsCount; i++) {
+        if (i != 0)
+            format(state, ", ", NULL);
+        format(state, type->generic.params[i].name, NULL);
+    }
+    format(state, "]", NULL);
+}
+
 bool isPrimitiveType(TokenTag tag)
 {
     switch (tag) {
@@ -338,6 +367,26 @@ void printType(FormatState *state, const Type *type)
         if (type->name) {
             format(state, " {s}", (FormatArg[]){{.s = type->name}});
         }
+        break;
+    case typGeneric:
+        printGenericType(state, type);
+        break;
+    case typApplied:
+        printType(state, type->applied.generated);
+        format(state, " aka ", NULL);
+        printType(state, type->applied.from);
+        format(state, "where (", NULL);
+        for (u64 i = 0; i < type->applied.argsCount; i++) {
+            if (i != 0)
+                format(state, ", ", NULL);
+
+            format(state,
+                   "{s} = ",
+                   (FormatArg[]){
+                       {.s = type->applied.from->generic.params[i].name}});
+            printType(state, type->applied.args[i]);
+        }
+        format(state, "where )", NULL);
         break;
     default:
         unreachable("TODO");

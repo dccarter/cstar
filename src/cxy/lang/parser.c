@@ -677,13 +677,20 @@ static AstNode *parseFuncType(Parser *P)
     consume0(P, tokThinArrow);
     ret = parseType(P);
 
-    return newAstNode(P,
-                      &tok.fileLoc.begin,
-                      &(AstNode){.tag = astFuncType,
-                                 .flags = flags,
-                                 .funcType = {.genericParams = gParams,
-                                              .params = params,
-                                              .ret = ret}});
+    AstNode *func =
+        newAstNode(P,
+                   &tok.fileLoc.begin,
+                   &(AstNode){.tag = astFuncType,
+                              .flags = flags,
+                              .funcType = {.params = params, .ret = ret}});
+    if (gParams) {
+        return newAstNode(
+            P,
+            &tok.fileLoc.begin,
+            &(AstNode){.tag = astGenericDecl,
+                       .genericDecl = {.params = gParams, .decl = func}});
+    }
+    return func;
 }
 
 static AstNode *createTupleOrGroupExpression(Parser *P,
@@ -1177,16 +1184,23 @@ static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative)
                 NULL);
     }
 
-    return newAstNode(P,
-                      &tok.fileLoc.begin,
-                      &(AstNode){.tag = astFuncDecl,
-                                 .flags = flags,
-                                 .funcDecl = {.name = name,
-                                              .operatorOverload = op,
-                                              .genericParams = gParams,
-                                              .params = params,
-                                              .ret = ret,
-                                              .body = body}});
+    AstNode *func = newAstNode(P,
+                               &tok.fileLoc.begin,
+                               &(AstNode){.tag = astFuncDecl,
+                                          .flags = flags,
+                                          .funcDecl = {.name = name,
+                                                       .operatorOverload = op,
+                                                       .params = params,
+                                                       .ret = ret,
+                                                       .body = body}});
+    if (gParams) {
+        return newAstNode(
+            P,
+            &tok.fileLoc.begin,
+            &(AstNode){.tag = astGenericDecl,
+                       .genericDecl = {.params = gParams, .decl = func}});
+    }
+    return func;
 }
 
 static AstNode *ifStatement(Parser *P)
@@ -1534,14 +1548,22 @@ static AstNode *structDecl(Parser *P, bool isPublic)
     }
     consume0(P, tokRBrace);
 
-    return newAstNode(P,
-                      &tok.fileLoc.begin,
-                      &(AstNode){.tag = astStructDecl,
-                                 .flags = isPublic ? flgPublic : flgNone,
-                                 .structDecl = {.name = name,
-                                                .base = base,
-                                                .genericParams = gParams,
-                                                .members = members.first}});
+    AstNode *node = newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astStructDecl,
+                   .flags = isPublic ? flgPublic : flgNone,
+                   .structDecl = {
+                       .name = name, .base = base, .members = members.first}});
+
+    if (gParams) {
+        return newAstNode(
+            P,
+            &tok.fileLoc.begin,
+            &(AstNode){.tag = astGenericDecl,
+                       .genericDecl = {.params = gParams, .decl = node}});
+    }
+    return node;
 }
 
 static AstNode *enumOption(Parser *P)

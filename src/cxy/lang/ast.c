@@ -6,6 +6,7 @@
 typedef struct {
     FormatState *state;
     u32 isWithinStruct;
+    const AstNode *parent;
 } AstPrintContext;
 
 static inline void printManyAsts(ConstAstVisitor *visitor,
@@ -448,6 +449,13 @@ static void printGenericParam(ConstAstVisitor *visitor, const AstNode *node)
     }
 }
 
+static void printGenericDecl(ConstAstVisitor *visitor, const AstNode *node)
+{
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
+    context->parent = node;
+    astConstVisit(visitor, node->genericDecl.decl);
+}
+
 static void printPathElement(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
@@ -479,9 +487,10 @@ static void printFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
 
     printKeyword(context->state, "func");
     format(context->state, " {s}", (FormatArg[]){{.s = node->funcDecl.name}});
-    if (node->funcDecl.genericParams) {
+    if (context->parent && nodeIs(context->parent, GenericDecl) &&
+        context->parent->genericDecl.params) {
         printManyAstsWithDelim(
-            visitor, "[", ",", "]", node->funcDecl.genericParams);
+            visitor, "[", ",", "]", context->parent->genericDecl.params);
     }
     printManyAstsWithinParen(visitor, node->funcDecl.params);
 
@@ -554,9 +563,10 @@ static void printTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
 
     printKeyword(context->state, "type");
     format(context->state, " {s}", (FormatArg[]){{.s = node->typeDecl.name}});
-    if (node->typeDecl.genericParams) {
+    if (context->parent && nodeIs(context->parent, GenericDecl) &&
+        context->parent->genericDecl.params) {
         printManyAstsWithDelim(
-            visitor, "[", ",", "]", node->typeDecl.genericParams);
+            visitor, "[", ",", "]", context->parent->genericDecl.params);
     }
 
     if (node->typeDecl.aliased) {
@@ -578,9 +588,10 @@ static void printUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
 
     printKeyword(context->state, "type");
     format(context->state, " {s}", (FormatArg[]){{.s = node->unionDecl.name}});
-    if (node->unionDecl.genericParams) {
+    if (context->parent && nodeIs(context->parent, GenericDecl) &&
+        context->parent->genericDecl.params) {
         printManyAstsWithDelim(
-            visitor, "[", ",", "]", node->unionDecl.genericParams);
+            visitor, "[", ",", "]", context->parent->genericDecl.params);
     }
 
     if (node->unionDecl.members) {
@@ -662,9 +673,10 @@ static void printStructDecl(ConstAstVisitor *visitor, const AstNode *node)
 
     printKeyword(context->state, "struct");
     format(context->state, " {s}", (FormatArg[]){{.s = node->structDecl.name}});
-    if (node->structDecl.genericParams) {
+    if (context->parent && nodeIs(context->parent, GenericDecl) &&
+        context->parent->genericDecl.params) {
         printManyAstsWithDelim(
-            visitor, "[", ",", "]", node->structDecl.genericParams);
+            visitor, "[", ",", "]", context->parent->genericDecl.params);
     }
 
     if (node->structDecl.base) {
@@ -858,6 +870,7 @@ void printAst(FormatState *state, const AstNode *node)
         [astPathElem] = printPathElement,
         [astPath] = printPath,
         [astGenericParam] = printGenericParam,
+        [astGenericDecl] = printGenericDecl,
         [astIdentifier] = printIdentifier,
         [astTupleType] = printTupleType,
         [astArrayType] = printArrayType,
@@ -1040,6 +1053,10 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
     case astGenericParam:
         CLONE_MANY(genericParam, constraints);
         break;
+    case astGenericDecl:
+        CLONE_MANY(genericDecl, params);
+        CLONE_ONE(genericDecl, decl);
+        break;
     case astTupleType:
         CLONE_MANY(tupleType, args);
         break;
@@ -1053,14 +1070,12 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
     case astFuncType:
         CLONE_ONE(funcType, ret);
         CLONE_MANY(funcType, params);
-        CLONE_MANY(funcType, genericParams);
         break;
     case astFuncParam:
         CLONE_ONE(funcParam, type);
         CLONE_ONE(funcParam, def);
         break;
     case astFuncDecl:
-        CLONE_MANY(funcDecl, genericParams);
         CLONE_MANY(funcDecl, params);
         CLONE_ONE(funcDecl, ret);
         CLONE_ONE(funcDecl, body);
@@ -1076,12 +1091,10 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         CLONE_MANY(varDecl, names);
         break;
     case astTypeDecl:
-        CLONE_MANY(typeDecl, genericParams);
         CLONE_ONE(typeDecl, aliased);
         break;
     case astUnionDecl:
         CLONE_MANY(unionDecl, members);
-        CLONE_MANY(unionDecl, genericParams);
         break;
 
     case astEnumOption:
