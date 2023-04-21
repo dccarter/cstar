@@ -441,7 +441,7 @@ static AstNode *binary(Parser *P,
             break;
 
         int nextPrecedence = getBinaryOpPrecedence(op);
-        if (nextPrecedence > prec)
+        if (nextPrecedence >= prec)
             break;
 
         advance(P);

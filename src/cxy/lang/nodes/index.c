@@ -40,7 +40,7 @@ static void checkIndexOperator(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    transformToMemberCallExpr(ctx,
+    transformToMemberCallExpr(visitor,
                               node,
                               func,
                               node->indexExpr.target,

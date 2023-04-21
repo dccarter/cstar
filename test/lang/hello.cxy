@@ -18,6 +18,7 @@ func allocSlice[T](n: u64) => <[T]> __builtin_alloc_slice(#[T], n)
 @inline
 func reallocSlice[T](data: [T], n: u64) => <[T]> __builtin_realloc_slice(#[T], data, n)
 
+
 struct Vector[T] {
     - data: [T]
     - len: u64
@@ -34,6 +35,16 @@ struct Vector[T] {
         data.[len++] = item
     }
 
+    func `[]`(index: u64) {
+        assert(index < len)
+        return data.[index]
+    }
+
+    func `[]=`(index: u64, item: T) {
+        assert(index < len)
+        return data.[index] = item
+    }
+
     func `..`(cb: func(item: T) -> void) {
         var i = 0;
         while(i < len)
@@ -48,14 +59,25 @@ struct Vector[T] {
     }
 }
 
-func main(args: [string]) {
-    var arr = new Vector[i32, u8](10);
-    arr.push(10)
-    arr.push(20)
-    arr.push(100)
-    for (const x: arr) {
-        println(f"${x}")
-    }
+struct OStream {
+    fp: &FILE
 
-    delete arr
+    func `<<`[T](x: T) {
+        fputs(f"${x}", fp)
+        return this
+    }
+}
+
+struct Base {
+    x: i32
+}
+
+struct Child : Base {
+    func `str`() { puts(f"${x}")}
+}
+
+func main(args: [string]) {
+    var os = OStream{fp: stdout};
+    os << 10 << 10
+    os << 10
 }

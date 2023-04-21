@@ -14,6 +14,47 @@
 
 #include <string.h>
 
+AstNode *makeFilenameNode(SemanticsContext *ctx)
+{
+    return makeAstNode(
+        ctx->pool,
+        builtinLoc(),
+        &(AstNode){.tag = astStringLit,
+                   .stringLiteral.value = ctx->current->loc.fileName});
+}
+
+AstNode *makeLineNumberNode(SemanticsContext *ctx)
+{
+    return makeAstNode(
+        ctx->pool,
+        builtinLoc(),
+        &(AstNode){.tag = astIntegerLit,
+                   .type = getPrimitiveType(ctx->typeTable, prtU64),
+                   .intLiteral.value = ctx->current->loc.begin.row});
+}
+
+AstNode *makeColumnNumberNode(SemanticsContext *ctx)
+{
+    return makeAstNode(
+        ctx->pool,
+        builtinLoc(),
+        &(AstNode){.tag = astIntegerLit,
+                   .type = getPrimitiveType(ctx->typeTable, prtU64),
+                   .intLiteral.value = ctx->current->loc.begin.col});
+}
+
+AstNode *makeTypeReferenceNode(SemanticsContext *ctx, const Type *type)
+{
+    if (typeIs(type, Primitive))
+        return makeAstNode(ctx->pool,
+                           builtinLoc(),
+                           &(AstNode){.tag = astPrimitiveType,
+                                      .type = type,
+                                      .primitiveType.id = type->primitive.id});
+
+    unreachable("TODO");
+}
+
 static void addBuiltinFunc(SemanticsContext *ctx,
                            cstring name,
                            const Type *ret,
@@ -131,6 +172,22 @@ void initializeBuiltins(SemanticsContext *ctx)
                        getAnySliceType(ctx->typeTable),
                        params,
                        3);
+    }
+    {
+        // __builtin_assert
+        const Type *params[] = {getPrimitiveType(ctx->typeTable, prtBool),
+                                makeStringType(ctx->typeTable),
+                                getPrimitiveType(ctx->typeTable, prtU64),
+                                getPrimitiveType(ctx->typeTable, prtU64)};
+
+        addBuiltinFunc(
+            ctx, "__builtin_assert", makeVoidType(ctx->typeTable), params, 4);
+    }
+    {
+        // #assert
+        const Type *params[] = {getPrimitiveType(ctx->typeTable, prtBool)};
+
+        addBuiltinFunc(ctx, "assert", makeVoidType(ctx->typeTable), params, 1);
     }
 
     {

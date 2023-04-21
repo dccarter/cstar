@@ -28,9 +28,14 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
         symbol = checkGenericDeclReference(visitor, symbol, node);
     }
 
+    if (symbol == NULL) {
+        node->type = ERROR_TYPE(ctx);
+        return ERROR_TYPE(ctx);
+    }
+
     if (scope->node && scope->node->tag == astStructDecl) {
         node->flags = flgAddThis;
-        if (scope != ctx->env.first)
+        if (scope != ctx->env.first && nodeIs(ctx->env.first->node, StructDecl))
             node->flags |= flgAddSuper;
     }
 

@@ -26,9 +26,11 @@ typedef struct {
     bool mainOptimized : 1;
     union {
         Scope *closure;
+        AstNode *current;
         const AstNode *lastReturn;
         struct {
             Scope *closure;
+            AstNode *current;
             const AstNode *lastReturn;
         } stack;
     };
@@ -44,9 +46,10 @@ void semanticsCheck(AstNode *program,
 
 const Type *evalType(AstVisitor *visitor, AstNode *node);
 
+AstNode *makeTypeReferenceNode(SemanticsContext *ctx, const Type *type);
 u64 checkMany(AstVisitor *visitor, AstNode *node);
 void addTopLevelDecl(SemanticsContext *ctx, cstring name, AstNode *node);
-void transformToMemberCallExpr(SemanticsContext *ctx,
+void transformToMemberCallExpr(AstVisitor *visitor,
                                AstNode *node,
                                AstNode *func,
                                AstNode *target,

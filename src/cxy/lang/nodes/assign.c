@@ -38,7 +38,7 @@ static void checkIndexExprAssignment(AstVisitor *visitor, AstNode *node)
     args->next = node->assignExpr.rhs;
 
     transformToMemberCallExpr(
-        ctx, node, func, left->indexExpr.target, "op_idx_assign", args);
+        visitor, node, func, left->indexExpr.target, "op_idx_assign", args);
     evalType(visitor, node);
 }
 

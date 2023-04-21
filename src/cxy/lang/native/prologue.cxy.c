@@ -206,6 +206,14 @@ static void cxy_default_dealloc(void *ctx)
     }
 #endif
 
+#ifndef __builtin_assert
+#define __builtin_assert(cond, file, line, pos)                                \
+    if (!(cond))                                                               \
+    cxyAbort("assertion failed" #cond " : %s:%d%d", file, line, pos)
+
+#define assert(cond) __builtin_assert((cond), __FILE_NAME__, __LINE__, 0)
+#endif
+
 static attr(noreturn)
     attr(format, printf, 1, 2) void cxyAbort(const char *fmt, ...)
 {

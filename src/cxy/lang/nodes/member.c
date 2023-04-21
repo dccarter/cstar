@@ -54,7 +54,8 @@ void generateMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
 void checkMember(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
-    const Type *target = evalType(visitor, node->memberExpr.target);
+    const Type *target = node->memberExpr.target->type
+                             ?: evalType(visitor, node->memberExpr.target);
     const Type *rawTarget = stripPointer(target);
 
     AstNode *member = node->memberExpr.member;
@@ -111,7 +112,19 @@ void checkMember(AstVisitor *visitor, AstNode *node)
             node->type = ERROR_TYPE(ctx);
             return;
         }
+
         AstNode *symbol = findSymbolByNode(ctx, rawTarget->tStruct.env, member);
+        if (symbol != NULL && nodeIs(member, Path) &&
+            nodeIs(symbol, GenericDecl)) {
+            symbol = checkGenericDeclReference(
+                visitor, symbol, member->path.elements);
+        }
+
+        if (symbol == NULL) {
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+
         if (symbol == NULL)
             node->type = ERROR_TYPE(ctx);
         else

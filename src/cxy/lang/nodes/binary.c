@@ -66,7 +66,7 @@ static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
     }
 
     transformToMemberCallExpr(
-        ctx, node, overload, node->binaryExpr.lhs, name, node->binaryExpr.rhs);
+        visitor, node, overload, node->binaryExpr.lhs, name, node->binaryExpr.rhs);
     evalType(visitor, node);
 }
 
@@ -84,7 +84,9 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *left = evalType(visitor, node->binaryExpr.lhs);
-    
+    if (typeIs(left, This))
+        left = left->this.that;
+
     if (stripPointer(left)->tag == typStruct) {
         checkBinaryOperatorOverload(visitor, node);
         return;

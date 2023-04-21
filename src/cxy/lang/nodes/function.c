@@ -230,6 +230,9 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
     }
 
     generateTypeUsage(ctx, node->type->func.retType);
+    if (typeIs(node->type->func.retType, This))
+        format(ctx->state, "*", NULL);
+
     if (isMember) {
         format(ctx->state, " ", NULL);
         writeTypename(ctx, parent->type);
@@ -283,7 +286,10 @@ void generateFuncDeclaration(CodegenContext *context, const Type *type)
 
     format(state, ";\n", NULL);
     generateTypeUsage(context, type->func.retType);
-    format(state, " ", NULL);
+    if (typeIs(type->func.retType, This))
+        format(context->state, " *", NULL);
+    else
+        format(state, " ", NULL);
     writeTypename(context, parent->type);
     format(state, "__{s}", (FormatArg[]){{.s = type->name}});
     format(state, "(", NULL);
@@ -371,9 +377,11 @@ void checkMethodDeclBody(AstVisitor *visitor, AstNode *node)
     AstNode *param = node->funcDecl.params;
     csAssert0(node->parentScope && nodeIs(node->parentScope, StructDecl));
 
-    const Type *parent = makeThisType(ctx->typeTable,
-                                      node->parentScope->structDecl.name,
-                                      node->flags & flgConst);
+    const Type *parent = typeIs(node->parentScope->type, This)
+                             ? node->parentScope->type
+                             : makePointerType(ctx->typeTable,
+                                               node->parentScope->type,
+                                               node->parentScope->type->flags);
 
     const AstNode *lastReturn = ctx->lastReturn;
     ctx->lastReturn = NULL;

@@ -180,27 +180,49 @@ AstNode *findSymbolByNode(SemanticsContext *ctx, const Env *env, AstNode *node)
     }
 }
 
-void transformToMemberCallExpr(SemanticsContext *ctx,
+void transformToMemberCallExpr(AstVisitor *visitor,
                                AstNode *node,
                                AstNode *func,
                                AstNode *target,
                                cstring member,
                                AstNode *args)
 {
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    AstNode *funcMember = NULL;
+    if (typeIs(func->type, Generic)) {
+        // infer the argument
+        const Type *arg = evalType(visitor, args);
+        funcMember = makeAstNode(
+            ctx->pool,
+            &target->loc,
+            &(AstNode){
+                .tag = astPathElem,
+                .flags = args->flags,
+                .pathElement = {.name = member,
+                                .args = makeTypeReferenceNode(ctx, arg)}});
+    }
+    else {
+        funcMember = makeAstNode(ctx->pool,
+                                 &target->loc,
+                                 &(AstNode){.tag = astPathElem,
+                                            .flags = args->flags,
+                                            .pathElement = {.name = member}});
+    }
+
+    AstNode *path = makeAstNode(ctx->pool,
+                                &target->loc,
+                                &(AstNode){.tag = astPath,
+                                           .flags = target->flags,
+                                           .type = target->type,
+                                           .path = {.elements = funcMember}});
+
     AstNode *callee = makeAstNode(
         ctx->pool,
         &target->loc,
         &(AstNode){.tag = astMemberExpr,
                    .flags = target->flags,
                    .type = target->type,
-                   .memberExpr = {.target = target,
-                                  .member = makeAstNode(
-                                      ctx->pool,
-                                      &target->loc,
-                                      &(AstNode){.tag = astIdentifier,
-                                                 .flags = func->type->flags,
-                                                 .type = func->type,
-                                                 .ident.value = member})}});
+                   .memberExpr = {.target = target, .member = path}});
 
     memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);
     node->tag = astCallExpr;
