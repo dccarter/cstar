@@ -1761,6 +1761,73 @@ static void synchronize(Parser *P)
     }
 }
 
+static AstNode *parseModuleName(Parser *P)
+{
+    AstNode *name = parseIdentifier(P), *next = name;
+    while (match(P, tokDot)) {
+        next->next = parseIdentifier(P);
+        next = next->next;
+    }
+    return name;
+}
+
+static AstNode *parseModuleDecl(Parser *P)
+{
+    Token tok = *consume0(P, tokModule);
+    AstNode *module = parseModuleName(P);
+
+    return makeAstNode(
+        P->memPool,
+        &tok.fileLoc,
+        &(AstNode){.tag = astModuleDecl, .moduleDecl = {.name = module}});
+}
+
+static AstNode *parseImportDecl(Parser *P)
+{
+    Token tok = *consume0(P, tokImport);
+    AstNode *module = parseModuleName(P);
+
+    return makeAstNode(
+        P->memPool,
+        &tok.fileLoc,
+        &(AstNode){.tag = astImportDecl, .import = {.module = module}});
+}
+
+static AstNode *parseCCode(Parser *P)
+{
+    Token tok = *previous(P);
+    consume0(P, tokCCode);
+    consume0(P, tokLParen);
+    AstNode *code = parseString(P);
+    consume0(P, tokRParen);
+
+    return makeAstNode(P->memPool,
+                       &tok.fileLoc,
+                       &(AstNode){.tag = astCCode, .cCode.source = code});
+}
+
+static AstNode *parseImportsDecl(Parser *P)
+{
+    AstNode *imports = parseImportDecl(P), *next = imports;
+    while (check(P, tokImport)) {
+        next->next = parseImportDecl(P);
+        next = next->next;
+    }
+
+    return imports;
+}
+
+static AstNode *parseTopLevelDecl(Parser *P)
+{
+    if (check(P, tokImport))
+        return parseImportDecl(P);
+    else if (match(P, tokAt) && check(P, tokCCode)) {
+        return parseCCode(P);
+    }
+    else
+        csAssert0(false);
+}
+
 static void synchronizeUntil(Parser *P, TokenTag tag)
 {
     while (!check(P, tag, tokEoF))
@@ -1782,14 +1849,27 @@ AstNode *parseProgram(Parser *P)
     Token tok = *current(P);
 
     AstNodeList decls = {NULL};
+    AstNode *module = NULL;
+    AstNodeList topLevel = {NULL};
+
+    if (check(P, tokModule))
+        module = parseModuleDecl(P);
+
+    while (check(P, tokModule) || (match(P, tokAt) && check(P, tokCCode))) {
+        E4C_TRY_BLOCK(
+            { advance(P); } E4C_CATCH(ParserException) { synchronize(P); })
+    }
+
     while (!isEoF(P)) {
         E4C_TRY_BLOCK({
             listAddAstNode(&decls, declaration(P));
         } E4C_CATCH(ParserException) { synchronize(P); })
     }
 
-    return newAstNode(
-        P,
-        &tok.fileLoc.begin,
-        &(AstNode){.tag = astProgram, .program = {.decls = decls.first}});
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astProgram,
+                                 .program = {.module = module,
+                                             .top = topLevel.first,
+                                             .decls = decls.first}});
 }

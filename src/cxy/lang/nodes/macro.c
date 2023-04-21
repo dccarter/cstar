@@ -253,6 +253,50 @@ static AstNode *makeAssertNode(AstVisitor *visitor,
                 .args = args}});
 }
 
+static AstNode *makeUncheckedNode(AstVisitor *visitor,
+                                  const AstNode *node,
+                                  AstNode *args)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 2))
+        return NULL;
+    AstNode *expr = args, *next = args->next;
+    const Type *type = next->type ?: evalType(visitor, next);
+    if (!typeIs(type, Info)) {
+        logError(ctx->L,
+                 &next->loc,
+                 "invalid `unchecked!` macro parameter, expecting a "
+                 "`@typeinfo`, got '{t}'",
+                 (FormatArg[]){{.t = type}});
+        return NULL;
+    }
+
+    expr->type = type->info.target;
+    return expr;
+}
+
+static AstNode *makeTypeofNode(AstVisitor *visitor,
+                               const AstNode *node,
+                               AstNode *args)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
+        return NULL;
+
+    const Type *type = args->type ?: evalType(visitor, args);
+    if (typeIs(type, Info)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "invalid `typeof!` macro argument, argument is already an "
+                 "`@typeinfo` object",
+                 (FormatArg[]){{.t = type}});
+        return NULL;
+    }
+
+    args->type = makeTypeInfo(ctx->typeTable, type);
+    return args;
+}
+
 static int compareBuiltinMacros(const void *lhs, const void *rhs)
 {
     return strcmp(((BuiltinMacro *)lhs)->name, ((BuiltinMacro *)rhs)->name);
@@ -265,6 +309,8 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "len", makeLenNode},
     {.name = "line", makeLineNumberNode},
     {.name = "sizeof", makeSizeofNode},
+    {.name = "typeof", makeTypeofNode},
+    {.name = "unchecked", makeUncheckedNode},
 };
 
 #define CXY_BUILTIN_MACROS_COUNT sizeof__(builtinMacros)

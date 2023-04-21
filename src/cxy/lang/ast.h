@@ -93,6 +93,7 @@ typedef enum {
 typedef enum {
     astError,
     astProgram,
+    astCCode,
     astAttr,
     astPathElem,
     astPath,
@@ -126,6 +127,8 @@ typedef enum {
     astEnumDecl,
     astStructField,
     astStructDecl,
+    astModuleDecl,
+    astImportDecl,
     /* Expressions */
     astGroupExpr,
     astUnaryExpr,
@@ -209,6 +212,8 @@ typedef struct CaptureSet {
     struct AstNode *next;                                                      \
     struct AstNode *attrs;
 
+typedef enum { iptModule, iptPath } ImportKind;
+
 struct AstNode {
     union {
         struct {
@@ -222,9 +227,30 @@ struct AstNode {
     union {
         struct {
         } _body;
+
         struct {
+            struct AstNode *module;
+            struct AstNode *top;
             struct AstNode *decls;
         } program;
+
+        struct {
+            AstNode *source;
+        } cCode;
+
+        struct {
+            ImportKind kind;
+            struct AstNode *module;
+        } import;
+
+        struct {
+            struct AstNode *entity;
+            struct AstNode *alias;
+        } importEntity;
+
+        struct {
+            struct AstNode *name;
+        } moduleDecl;
 
         struct {
             cstring value;

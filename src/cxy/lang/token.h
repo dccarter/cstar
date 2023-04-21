@@ -101,6 +101,9 @@
     f(String, "string")             \
     f(CChar,  "char")               \
     f(Range,  "range")              \
+    f(Module, "module")             \
+    f(Import, "import")             \
+    f(CCode,  "cCode")              \
     PRIM_TYPE_LIST(f)
 
 #define SPECIAL_TOKEN_LIST(f)                   \
