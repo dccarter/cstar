@@ -41,6 +41,7 @@ set(CXY_CORE_SOURCES
 set(CXY_LANG_NODE_SOURCES
         src/cxy/lang/nodes/array.c
         src/cxy/lang/nodes/assign.c
+        src/cxy/lang/nodes/attributes.c
         src/cxy/lang/nodes/binary.c
         src/cxy/lang/nodes/block.c
         src/cxy/lang/nodes/builtins.c
@@ -53,6 +54,7 @@ set(CXY_LANG_NODE_SOURCES
         src/cxy/lang/nodes/if.c
         src/cxy/lang/nodes/index.c
         src/cxy/lang/nodes/literals.c
+        src/cxy/lang/nodes/macro.c
         src/cxy/lang/nodes/member.c
         src/cxy/lang/nodes/new.c
         src/cxy/lang/nodes/path.c

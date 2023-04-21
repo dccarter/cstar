@@ -14,45 +14,32 @@
 
 #include <string.h>
 
-AstNode *makeFilenameNode(SemanticsContext *ctx)
-{
-    return makeAstNode(
-        ctx->pool,
-        builtinLoc(),
-        &(AstNode){.tag = astStringLit,
-                   .stringLiteral.value = ctx->current->loc.fileName});
-}
-
-AstNode *makeLineNumberNode(SemanticsContext *ctx)
-{
-    return makeAstNode(
-        ctx->pool,
-        builtinLoc(),
-        &(AstNode){.tag = astIntegerLit,
-                   .type = getPrimitiveType(ctx->typeTable, prtU64),
-                   .intLiteral.value = ctx->current->loc.begin.row});
-}
-
-AstNode *makeColumnNumberNode(SemanticsContext *ctx)
-{
-    return makeAstNode(
-        ctx->pool,
-        builtinLoc(),
-        &(AstNode){.tag = astIntegerLit,
-                   .type = getPrimitiveType(ctx->typeTable, prtU64),
-                   .intLiteral.value = ctx->current->loc.begin.col});
-}
-
 AstNode *makeTypeReferenceNode(SemanticsContext *ctx, const Type *type)
 {
-    if (typeIs(type, Primitive))
+    switch (type->tag) {
+    case typPrimitive:
         return makeAstNode(ctx->pool,
                            builtinLoc(),
                            &(AstNode){.tag = astPrimitiveType,
                                       .type = type,
                                       .primitiveType.id = type->primitive.id});
+    case typString:
+        return makeAstNode(ctx->pool,
+                           builtinLoc(),
+                           &(AstNode){.tag = astStringType, .type = type});
 
-    unreachable("TODO");
+    case typVoid:
+        return makeAstNode(ctx->pool,
+                           builtinLoc(),
+                           &(AstNode){.tag = astVoidType, .type = type});
+
+    case typArray:
+        return makeAstNode(ctx->pool,
+                           builtinLoc(),
+                           &(AstNode){.tag = astArrayType, .type = type});
+    default:
+        unreachable("TODO");
+    }
 }
 
 static void addBuiltinFunc(SemanticsContext *ctx,
@@ -184,10 +171,13 @@ void initializeBuiltins(SemanticsContext *ctx)
             ctx, "__builtin_assert", makeVoidType(ctx->typeTable), params, 4);
     }
     {
-        // #assert
-        const Type *params[] = {getPrimitiveType(ctx->typeTable, prtBool)};
+        const Type *params[] = {makeAutoType(ctx->typeTable)};
 
-        addBuiltinFunc(ctx, "assert", makeVoidType(ctx->typeTable), params, 1);
+        addBuiltinFunc(ctx,
+                       "__builtin_sizeof",
+                       getPrimitiveType(ctx->typeTable, prtU64),
+                       params,
+                       1);
     }
 
     {

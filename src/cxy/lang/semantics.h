@@ -18,6 +18,7 @@ typedef struct {
     MemPool *pool;
     StrPool *strPool;
     TypeTable *typeTable;
+    HashTable builtinMacros;
     Env env;
     AstNode *previousTopLevelDecl;
     AstNode *currentTopLevelDecl;
@@ -35,6 +36,8 @@ typedef struct {
         } stack;
     };
 } SemanticsContext;
+
+typedef AstNode *(*EvaluateMacro)(AstVisitor *, const AstNode *, AstNode *);
 
 #define ERROR_TYPE(CTX) makeErrorType((CTX)->typeTable)
 
@@ -96,6 +99,7 @@ void checkUnaryExpr(AstVisitor *visitor, AstNode *node);
 void checkAddressOfExpr(AstVisitor *visitor, AstNode *node);
 void checkAssignExpr(AstVisitor *visitor, AstNode *node);
 void checkTernaryExpr(AstVisitor *visitor, AstNode *node);
+void checkMacroExpr(AstVisitor *visitor, AstNode *node);
 void checkVarDecl(AstVisitor *visitor, AstNode *node);
 void checkTypeDecl(AstVisitor *visitor, AstNode *node);
 void checkUnionDecl(AstVisitor *visitor, AstNode *node);

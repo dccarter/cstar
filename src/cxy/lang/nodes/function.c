@@ -36,6 +36,11 @@ static inline const Type *makeFunctionDeclType(SemanticsContext *ctx,
                          .defaultValuesCount = hasDefaultValues}});
 }
 
+static inline bool isInlineFunction(const AstNode *node)
+{
+    return findAttribute(node, "inline") != NULL;
+}
+
 static const Type *transformFuncTypeParam(SemanticsContext *ctx,
                                           const Type *type)
 {
@@ -229,6 +234,9 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         }
     }
 
+    if (isInlineFunction(node))
+        format(ctx->state, "attr(always_inline)\n", NULL);
+    
     generateTypeUsage(ctx, node->type->func.retType);
     if (typeIs(node->type->func.retType, This))
         format(ctx->state, "*", NULL);

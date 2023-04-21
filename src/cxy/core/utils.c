@@ -145,6 +145,29 @@ char *readFile(const char *fileName, size_t *file_size)
     return file_data;
 }
 
+int binarySearch(const void *arr,
+                 u64 len,
+                 const void *x,
+                 u64 size,
+                 int (*compare)(const void *, const void *))
+{
+    int lower = 0;
+    int upper = (int)len - 1;
+    const u8 *ptr = arr;
+    while (lower <= upper) {
+        int mid = lower + (upper - lower) / 2;
+        int res = compare(x, ptr + (size * mid));
+        if (res == 0)
+            return mid;
+
+        if (res > 0)
+            lower = mid + 1;
+        else
+            upper = mid - 1;
+    }
+    return -1;
+}
+
 void cxyAbort(const char *fmt, ...)
 {
     va_list args;

@@ -841,22 +841,28 @@ AstNode *copyAstNode(MemPool *pool, const AstNode *node)
 
 void astVisit(AstVisitor *visitor, AstNode *node)
 {
+    AstNode *stack = visitor->current;
+    visitor->current = node;
     if (visitor->visitors[node->tag]) {
         visitor->visitors[node->tag](visitor, node);
     }
     else if (visitor->fallback) {
         visitor->fallback(visitor, node);
     }
+    visitor->current = stack;
 }
 
 void astConstVisit(ConstAstVisitor *visitor, const AstNode *node)
 {
+    const AstNode *stack = visitor->current;
+    visitor->current = node;
     if (visitor->visitors[node->tag]) {
         visitor->visitors[node->tag](visitor, node);
     }
     else if (visitor->fallback) {
         visitor->fallback(visitor, node);
     }
+    visitor->current = stack;
 }
 
 void printAst(FormatState *state, const AstNode *node)
@@ -1030,7 +1036,6 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         return NULL;
 
     AstNode *clone = copyAstNode(pool, node);
-    clone->attrs = cloneManyAstNodes(pool, node->attrs);
 
 #define CLONE_MANY(AST, MEMBER)                                                \
     clone->AST.MEMBER = cloneManyAstNodes(pool, node->AST.MEMBER);

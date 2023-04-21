@@ -13,6 +13,10 @@
 #include <errno.h>
 #include <unistd.h>
 
+#define BYTES_TO_GB(B) (((double)(B)) / 1000000000)
+#define BYTES_TO_MB(B) (((double)(B)) / 1000000)
+#define BYTES_TO_KB(B) (((double)(B)) / 1000)
+
 static AstNode *parseFile(const char *fileName, MemPool *memPool, Log *log)
 {
     size_t file_size = 0;
@@ -87,7 +91,12 @@ bool compileFile(const char *fileName, const Options *options, Log *log)
         }
     }
 
+    MemPoolStats stats;
+    getMemPoolStats(&memPool, &stats);
+    printf("\tMemory usage: blocks: %zu, allocated: %f kb, used: %f kb\n",
+           stats.numberOfBlocks,
+           BYTES_TO_KB(stats.totalAllocated),
+           BYTES_TO_KB(stats.totalUsed));
     freeTypeTable(table);
-
     return program;
 }

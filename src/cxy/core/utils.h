@@ -245,6 +245,11 @@ static inline unsigned ilog2(uintmax_t i)
 size_t convertEscapeSeq(const char *str, size_t n, u32 *res);
 bool isColorSupported(FILE *);
 char *readFile(const char *fileName, size_t *file_size);
+int binarySearch(const void *arr,
+                 u64 len,
+                 const void *x,
+                 u64 size,
+                 int (*compare)(const void *, const void *));
 
 #ifdef __cplusplus
 }

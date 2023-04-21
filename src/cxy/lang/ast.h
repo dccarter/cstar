@@ -495,13 +495,14 @@ struct AstNode {
 
 typedef struct AstVisitor {
     void *context;
-
+    AstNode *current;
     void (*visitors[COUNT])(struct AstVisitor *, AstNode *node);
     void (*fallback)(struct AstVisitor *, AstNode *);
 } AstVisitor;
 
 typedef struct ConstAstVisitor {
     void *context;
+    const AstNode *current;
 
     void (*visitors[COUNT])(struct ConstAstVisitor *, const AstNode *node);
     void (*fallback)(struct ConstAstVisitor *, const AstNode *);
@@ -567,6 +568,9 @@ const char *getDeclName(const AstNode *node);
 int getMaxBinaryOpPrecedence(void);
 
 int getBinaryOpPrecedence(Operator op);
+
+const AstNode *findAttribute(const AstNode *node, cstring name);
+const AstNode *findAttributeArgument(const AstNode *attr, cstring name);
 
 Operator tokenToUnaryOperator(TokenTag tag);
 Operator tokenToBinaryOperator(TokenTag tag);

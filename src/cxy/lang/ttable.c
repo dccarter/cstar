@@ -160,7 +160,7 @@ static bool compareTypes(const Type *left, const Type *right)
     case typApplied:
         return compareTypes(left->applied.from, right->applied.from) &&
                compareManyTypes(left->applied.args,
-                                left->applied.args,
+                                right->applied.args,
                                 right->applied.argsCount);
     case typEnum:
     case typStruct:

@@ -31,7 +31,8 @@ void generateMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
 
     if (scope) {
         writeTypename(ctx, scope);
-        format(ctx->state, "__{s}", (FormatArg[]){{.s = member->ident.value}});
+        format(ctx->state, "__", NULL);
+        astConstVisit(visitor, member);
     }
     else {
         astConstVisit(visitor, target);

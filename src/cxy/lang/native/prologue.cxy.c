@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 typedef uint8_t u8;
 typedef uint16_t u16;
@@ -209,9 +210,11 @@ static void cxy_default_dealloc(void *ctx)
 #ifndef __builtin_assert
 #define __builtin_assert(cond, file, line, pos)                                \
     if (!(cond))                                                               \
-    cxyAbort("assertion failed" #cond " : %s:%d%d", file, line, pos)
+    cxyAbort("assertion failed (" #cond ") : %s:%d:%d\n", file, line, pos)
+#endif
 
-#define assert(cond) __builtin_assert((cond), __FILE_NAME__, __LINE__, 0)
+#ifndef __builtin_sizeof
+#define __builtin_sizeof(X) sizeof(X)
 #endif
 
 static attr(noreturn)

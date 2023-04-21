@@ -15,7 +15,14 @@ typedef struct MemPool {
     struct MemBlock *cur;
 } MemPool;
 
+typedef struct {
+    size_t totalAllocated;
+    size_t totalUsed;
+    size_t numberOfBlocks;
+} MemPoolStats;
+
 MemPool newMemPool(void);
 void *allocFromMemPool(MemPool *, size_t);
 void resetMemPool(MemPool *);
 void freeMemPool(MemPool *);
+void getMemPoolStats(const MemPool *, MemPoolStats *);

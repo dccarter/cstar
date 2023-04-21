@@ -101,6 +101,7 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     cstring name = makeAnonymousVariable(ctx->strPool,
                                          genericDeclName(target->generic.decl));
     AstNode *substitute = cloneAstNode(ctx->pool, target->generic.decl);
+    substitute->attrs = generic->attrs;
     setDeclName(substitute, name);
     node->pathElement.name = name;
 
