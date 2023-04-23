@@ -11,7 +11,7 @@ extern "C" {
 
 /*
  * The log object is used to report messages from various passes of the
- * compiler. It also caches source files, so as to print error diagnostics
+ * compiler. It also caches what files, so as to print error diagnostics
  * efficiently.
  */
 

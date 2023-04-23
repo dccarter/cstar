@@ -103,7 +103,9 @@
     f(Range,  "range")              \
     f(Module, "module")             \
     f(Import, "import")             \
-    f(CCode,  "cCode")              \
+    f(CDefine, "cDefine")           \
+    f(CInclude,"cInclude")          \
+    f(As,      "as")                \
     PRIM_TYPE_LIST(f)
 
 #define SPECIAL_TOKEN_LIST(f)                   \

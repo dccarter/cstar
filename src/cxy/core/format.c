@@ -343,6 +343,22 @@ void writeFormatState(FormatState *state, FILE *file)
         fwrite(buf->data, 1, buf->size, file);
 }
 
+char *formatStateToString(FormatState *state)
+{
+    u64 size = 0;
+    for (FormatBuf *buf = state->firstBuf; buf; buf = buf->next)
+        size += buf->size;
+
+    char *str = mallocOrDie(size + 1);
+    u64 copied = 0;
+    for (FormatBuf *buf = state->firstBuf; buf; buf = buf->next) {
+        memcpy(&str[copied], buf->data, buf->size);
+        copied += buf->size;
+    }
+    str[copied] = '\0';
+    return str;
+}
+
 void append(FormatState *state, const char *s, size_t bytes)
 {
     write(state, s, bytes);

@@ -13,6 +13,8 @@
 #include "ttable.h"
 
 #include "core/alloc.h"
+#include "main.inc.h"
+#include "setup.inc.h"
 
 #define CXY_ANONYMOUS_FUNC "cxy_anonymous_func"
 #define CXY_ANONYMOUS_TUPLE "cxy_anonymous_tuple"
@@ -135,22 +137,12 @@ static void generateBreakContinue(ConstAstVisitor *visitor, const AstNode *node)
 static void epilogue(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    size_t bytes = 0;
-    format(ctx->state,
-           "\n"
-           "/* --------------------- Generated EPILOGUE --------------*/\n"
-           "\n",
-           NULL);
-
     generateManyAsts(visitor, "\n", node->program.decls);
-
     format(ctx->state,
            "\n"
-           "/* --------------------- epilogue.cxy.c --------------*/\n"
            "\n",
            NULL);
-
-    append(ctx->state, readFile(CXY_EPILOGUE_SRC_FILE, &bytes), bytes);
+    append(ctx->state, CXY_MAIN_CODE, CXY_MAIN_CODE_SIZE);
     format(ctx->state, "\n", NULL);
 }
 
@@ -158,31 +150,19 @@ static void prologue(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
 
-    size_t bytes = 0;
     format(ctx->state,
            "/**\n"
            " * Generated from cxy compile\n"
            " */\n"
-           "\n"
-           "/* --------------------- epilogue.cxy.c --------------*/\n"
            "\n",
            NULL);
 
-    format(ctx->state,
-           "#ifndef cxy_alloc\n"
-           "#define cxy_alloc cxy_default_alloc\n"
-           "#define cxy_free  cxy_default_dealloc\n"
-           "#define cxy_realloc cxy_default_realloc\n"
-           "#endif\n",
-           NULL);
+    append(ctx->state, CXY_SETUP_CODE, CXY_SETUP_CODE_SIZE);
+    format(ctx->state, "\n\n", NULL);
 
-    append(ctx->state, readFile(CXY_PROLOGUE_SRC_FILE, &bytes), bytes);
+    generateManyAsts(visitor, "\n", node->program.top);
 
-    format(ctx->state,
-           "\n"
-           "/* --------------------- Generated PROLOGUE --------------*/\n"
-           "\n",
-           NULL);
+    format(ctx->state, "\n", NULL);
 
     generateAllTypes(ctx);
 }
@@ -368,6 +348,7 @@ void generateCode(FormatState *state,
     // clang-format off
     ConstAstVisitor visitor = makeConstAstVisitor(&context,
     {
+        [astCCode] = generateCCode,
         [astPathElem] = generatePathElement,
         [astPath] = generatePath,
         [astPrimitiveType] = generateTypeinfo,

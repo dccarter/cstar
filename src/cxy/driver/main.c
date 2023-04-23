@@ -9,17 +9,18 @@
 int main(int argc, char **argv)
 {
     FormatState state = newFormatState("    ", !isColorSupported(stderr));
+    CompilerDriver driver;
     Log log = newLog(&state);
     bool status = true;
 
-    Options options = default_options;
-    if (!parse_options(&argc, argv, &options, &log)) {
+    initCompilerDriver(&driver, &log);
+    if (!parse_options(&argc, argv, &driver.options, &log)) {
         status = false;
         goto exit;
     }
 
     for (int i = 1; i < argc && status; ++i)
-        status &= compileFile(argv[i], &options, &log);
+        status &= compileFile(argv[i], &driver);
 
 exit:
     writeFormatState(&state, stderr);

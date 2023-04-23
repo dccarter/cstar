@@ -46,6 +46,7 @@ set(CXY_LANG_NODE_SOURCES
         src/cxy/lang/nodes/block.c
         src/cxy/lang/nodes/builtins.c
         src/cxy/lang/nodes/call.c
+        src/cxy/lang/nodes/ccode.c
         src/cxy/lang/nodes/closure.c
         src/cxy/lang/nodes/enum.c
         src/cxy/lang/nodes/forstmt.c
@@ -81,6 +82,7 @@ set(CXY_LANG_SOURCES
         src/cxy/lang/semantics.c)
 
 set(CXY_DRIVER_SOURCES
+        src/cxy/driver/cc.c
         src/cxy/driver/driver.c
         src/cxy/driver/options.c)
 
@@ -91,7 +93,23 @@ add_executable(cxy
         ${CXY_LANG_NODE_SOURCES}
         ${CXY_DRIVER_SOURCES})
 
+add_executable(escape src/tools/escape.c src/cxy/core/utils.c)
+
 target_compile_definitions(cxy PRIVATE
         -DCXY_VERSION="${CXY_VERSION}"
         -DCXY_SOURCE_LANG_DIR="${CMAKE_SOURCE_DIR}/src/cxy/lang")
 
+file(MAKE_DIRECTORY DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/generated)
+
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/generated)
+
+add_custom_target(
+        cxy-code ALL
+        COMMAND ./escape ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/setup.h generated/setup.inc.h CXY_SETUP
+        COMMAND ./escape ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/main.c.h generated/main.inc.h CXY_MAIN
+        DEPENDS ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/setup.h
+                ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/main.c.h
+                escape
+)
+
+add_dependencies(cxy cxy-code)

@@ -1,5 +1,13 @@
-@c(define: "")
-@c(include: )
+import stdlib/Array
+@cInclude("<unistd.h>")
 
-func main(args: [string]) {
-}
+
+pub native func write(fd: i32, data: &const void, size: u64) : i64;
+
+const STDOUT = unchecked!(STDOUT_FILENO, #i32);
+const STDERR = unchecked!(STDERR_FILENO, #i32);
+const STDIN  = unchecked!(STDERR_FILENO, #i32);
+
+//func main(args: [string]) {
+//   write(STDOUT, cstr!("Hello World!\n"), 13)
+//}

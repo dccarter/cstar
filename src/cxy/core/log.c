@@ -59,7 +59,7 @@ static FILE *getCachedFile(Log *log, const char *fileName)
                            hash,
                            sizeof(FileEntry),
                            compareFileEntries))
-        assert(false && "cannot insert file in source file cache");
+        assert(false && "cannot insert file in what file cache");
     return file;
 }
 

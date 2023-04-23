@@ -275,6 +275,28 @@ static AstNode *makeUncheckedNode(AstVisitor *visitor,
     return expr;
 }
 
+static AstNode *makeCstrNode(AstVisitor *visitor,
+                             const AstNode *node,
+                             AstNode *args)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
+        return NULL;
+
+    const Type *type = args->type ?: evalType(visitor, args);
+    if (!typeIs(type, String)) {
+        logError(ctx->L,
+                 &args->loc,
+                 "unexpected expression type passed `cstr!` macro, expecting 'string', got {t}",
+                 (FormatArg[]){{.t = type}});
+        return NULL;
+    }
+
+    args->type = makePointerType(ctx->typeTable,
+                                 getPrimitiveType(ctx->typeTable, prtI8), flgConst);
+    return args;
+}
+
 static AstNode *makeTypeofNode(AstVisitor *visitor,
                                const AstNode *node,
                                AstNode *args)
@@ -305,7 +327,8 @@ static int compareBuiltinMacros(const void *lhs, const void *rhs)
 static const BuiltinMacro builtinMacros[] = {
     {.name = "assert", makeAssertNode},
     {.name = "column", makeColumnNumberNode},
-    {.name = "file", makeFilenameNode},
+    {.name = "column", makeColumnNumberNode},
+    {.name = "cstr", makeCstrNode},
     {.name = "len", makeLenNode},
     {.name = "line", makeLineNumberNode},
     {.name = "sizeof", makeSizeofNode},

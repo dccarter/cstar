@@ -89,6 +89,7 @@ void printWithStyle(FormatState *, const char *, FormatStyle);
 void printKeyword(FormatState *, const char *);
 void printUtf8(FormatState *state, uint32_t);
 void writeFormatState(FormatState *, FILE *);
+char *formatStateToString(FormatState *);
 
 #ifdef __cplusplus
 }

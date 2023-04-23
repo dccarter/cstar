@@ -213,6 +213,7 @@ typedef struct CaptureSet {
     struct AstNode *attrs;
 
 typedef enum { iptModule, iptPath } ImportKind;
+typedef enum { cInclude, cDefine } CCodeKind;
 
 struct AstNode {
     union {
@@ -235,18 +236,16 @@ struct AstNode {
         } program;
 
         struct {
-            AstNode *source;
+            CCodeKind kind;
+            AstNode *what;
         } cCode;
 
         struct {
             ImportKind kind;
             struct AstNode *module;
-        } import;
-
-        struct {
-            struct AstNode *entity;
+            struct AstNode *entities;
             struct AstNode *alias;
-        } importEntity;
+        } import;
 
         struct {
             struct AstNode *name;

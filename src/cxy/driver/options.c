@@ -21,12 +21,20 @@ Command(dev,
             Def("")));
 
 Command(build,
-        "transpiles the given cxy source file and builds it using gcc",
+        "transpiles the given cxy what file and builds it using gcc",
         Positionals(),
         Str(Name("output"),
             Sf('o'),
-            Help("output file for the compile binary"),
-            Def("")));
+            Help("output file for the compiled binary (default: app)"),
+            Def("app")),
+        Str(Name("lib"),
+            Sf('L'),
+            Help("root directory where cxy standard library is installed"),
+            Def("")),
+        Str(Name("build-dir"),
+            Help("the build directory, used as the working directory for the "
+                 "compiler"),
+            Def(".build")));
 
 // clang-format off
 #define BUILD_COMMANDS(f)                                                      \
@@ -40,7 +48,9 @@ Command(build,
     f(output, Local, String, 2, ##__VA_ARGS__)
 
 #define BUILD_CMD_LAYOUT(f, ...)                                               \
-    f(output, Local, String, 0, ##__VA_ARGS__)
+    f(output, Local, String, 0, ##__VA_ARGS__)                                 \
+    f(libDir, Local, String, 1, ##__VA_ARGS__)                                 \
+    f(buildDir, Local, String, 2, ##__VA_ARGS__)
 
 // clang-format on
 

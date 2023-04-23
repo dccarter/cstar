@@ -1,0 +1,2 @@
+
+pub native func write(fd: i32, data: [void], size: u64) : i64

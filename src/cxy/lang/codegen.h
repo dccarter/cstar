@@ -50,9 +50,7 @@ void generateCode(FormatState *state,
                   StrPool *strPool,
                   const AstNode *prog);
 
-void codegenPrologue(CodegenContext *context, const AstNode *prog);
-void codegenEpilogue(CodegenContext *context, const AstNode *prog);
-
+void generateCCode(ConstAstVisitor *visitor, const AstNode *node);
 void generateTypeinfo(ConstAstVisitor *visitor, const AstNode *node);
 void generateFuncParam(ConstAstVisitor *visitor, const AstNode *node);
 void generatePath(ConstAstVisitor *visitor, const AstNode *node);

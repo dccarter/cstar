@@ -88,6 +88,22 @@ static Token *parserCheck(Parser *parser, const TokenTag tags[], u32 count)
     return NULL;
 }
 
+static Token *parserCheckPeek(Parser *parser,
+                              u32 index,
+                              const TokenTag tags[],
+                              u32 count)
+{
+    Token *tok = peek(parser, index);
+    if (tok == NULL)
+        return tok;
+
+    for (u32 i = 0; i < count; i++) {
+        if (tok->tag == tags[i])
+            return tok;
+    }
+    return NULL;
+}
+
 static Token *parserMatch(Parser *parser, TokenTag tags[], u32 count)
 {
     if (parserCheck(parser, tags, count))
@@ -98,6 +114,9 @@ static Token *parserMatch(Parser *parser, TokenTag tags[], u32 count)
 // clang-format off
 #define check(P, ...) \
 ({ TokenTag LINE_VAR(tags)[] = { __VA_ARGS__, tokEoF }; parserCheck((P), LINE_VAR(tags), sizeof__(LINE_VAR(tags))-1); })
+
+#define checkPeek(P, I, ...) \
+({ TokenTag LINE_VAR(tags)[] = { __VA_ARGS__, tokEoF }; parserCheckPeek((P), (I), LINE_VAR(tags), sizeof__(LINE_VAR(tags))-1); })
 
 #define match(P, ...) \
 ({ TokenTag LINE_VAR(mtags)[] = { __VA_ARGS__, tokEoF }; parserMatch((P), LINE_VAR(mtags), sizeof__(LINE_VAR(mtags))-1); })
@@ -1673,10 +1692,38 @@ static AstNode *aliasDecl(Parser *P, bool isPublic, bool isNative)
     }
 }
 
+static AstNode *parseCCode(Parser *P)
+{
+    Token tok = *previous(P);
+    if (!match(P, tokCDefine, tokCInclude)) {
+        parserError(
+            P,
+            &tok.fileLoc,
+            "unexpected attribute, expecting either `@cDefine` or `@cInclude`",
+            NULL);
+    }
+    bool isInclude = previous(P)->tag == tokCInclude;
+    consume0(P, tokLParen);
+    AstNode *code = parseString(P);
+    consume0(P, tokRParen);
+
+    return makeAstNode(
+        P->memPool,
+        &tok.fileLoc,
+        &(AstNode){
+            .tag = astCCode,
+            .cCode = {.what = code, .kind = isInclude ? cInclude : cDefine}});
+}
+
 static AstNode *declaration(Parser *P)
 {
     Token tok = *current(P);
     AstNode *attrs = NULL, *decl = NULL;
+    if (check(P, tokAt) && peek(P, 1)->tag == tokCDefine) {
+        advance(P);
+        return parseCCode(P);
+    }
+
     if (check(P, tokAt))
         attrs = attributes(P);
     bool isPublic = match(P, tokPub) != NULL;
@@ -1764,7 +1811,8 @@ static void synchronize(Parser *P)
 static AstNode *parseModuleName(Parser *P)
 {
     AstNode *name = parseIdentifier(P), *next = name;
-    while (match(P, tokDot)) {
+    if (check(P, tokDiv) && checkPeek(P, 1, tokIdent)) {
+        consume0(P, tokDiv);
         next->next = parseIdentifier(P);
         next = next->next;
     }
@@ -1787,23 +1835,23 @@ static AstNode *parseImportDecl(Parser *P)
     Token tok = *consume0(P, tokImport);
     AstNode *module = parseModuleName(P);
 
-    return makeAstNode(
-        P->memPool,
-        &tok.fileLoc,
-        &(AstNode){.tag = astImportDecl, .import = {.module = module}});
-}
+    AstNode *entities = NULL, *alias = NULL;
 
-static AstNode *parseCCode(Parser *P)
-{
-    Token tok = *previous(P);
-    consume0(P, tokCCode);
-    consume0(P, tokLParen);
-    AstNode *code = parseString(P);
-    consume0(P, tokRParen);
+    if (match(P, tokDiv) && match(P, tokLBrace)) {
+        entities = parseAtLeastOne(
+            P, "module declarations", tokRBrace, tokComma, parseIdentifier);
+        consume0(P, tokRBrace);
+    }
+
+    if (match(P, tokAs))
+        alias = parseIdentifier(P);
 
     return makeAstNode(P->memPool,
                        &tok.fileLoc,
-                       &(AstNode){.tag = astCCode, .cCode.source = code});
+                       &(AstNode){.tag = astImportDecl,
+                                  .import = {.module = module,
+                                             .entities = entities,
+                                             .alias = alias}});
 }
 
 static AstNode *parseImportsDecl(Parser *P)
@@ -1821,7 +1869,7 @@ static AstNode *parseTopLevelDecl(Parser *P)
 {
     if (check(P, tokImport))
         return parseImportDecl(P);
-    else if (match(P, tokAt) && check(P, tokCCode)) {
+    else if (check(P, tokCDefine, tokCInclude)) {
         return parseCCode(P);
     }
     else
@@ -1855,9 +1903,12 @@ AstNode *parseProgram(Parser *P)
     if (check(P, tokModule))
         module = parseModuleDecl(P);
 
-    while (check(P, tokModule) || (match(P, tokAt) && check(P, tokCCode))) {
-        E4C_TRY_BLOCK(
-            { advance(P); } E4C_CATCH(ParserException) { synchronize(P); })
+    while (check(P, tokImport) ||
+           (check(P, tokAt) && checkPeek(P, 1, tokCDefine, tokCInclude) &&
+            match(P, tokAt))) {
+        E4C_TRY_BLOCK({
+            listAddAstNode(&topLevel, parseTopLevelDecl(P));
+        } E4C_CATCH(ParserException) { synchronize(P); })
     }
 
     while (!isEoF(P)) {

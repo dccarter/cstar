@@ -1,9 +1,18 @@
 
 #pragma once
 
-#include <stdbool.h>
+#include <driver/options.h>
+#include <lang/ttable.h>
 
-typedef struct Log Log;
-typedef struct Options Options;
+typedef struct CompilerDriver {
+    Options options;
+    MemPool memPool;
+    StrPool strPool;
+    HashTable importsCache;
+    Log *L;
+    TypeTable *typeTable;
+} CompilerDriver;
 
-bool compileFile(const char *fileName, const Options *options, Log *log);
+void makeDirectoryForPath(CompilerDriver *driver, cstring path);
+void initCompilerDriver(CompilerDriver *compiler, Log *log);
+bool compileFile(const char *fileName, CompilerDriver *driver);
