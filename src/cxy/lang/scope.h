@@ -29,11 +29,14 @@ typedef struct Scope {
 struct Env {
     Scope *scope;
     Scope *first;
-    struct Env *up;
+    const struct Env *up;
 };
 
 void environmentInit(Env *env);
-static inline void environmentAttachUp(Env *env, Env *up) { env->up = up; }
+static inline void environmentAttachUp(Env *env, const Env *up)
+{
+    env->up = up;
+}
 static inline void environmentDetachUp(Env *env) { env->up = NULL; }
 void environmentFree(Env *env);
 void releaseScope(Env *env, Env *into);

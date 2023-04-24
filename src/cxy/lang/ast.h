@@ -189,7 +189,8 @@ enum {
     flgAddSuper = BIT(18),
     flgTypeinfo = BIT(19),
     flgNewAllocated = BIT(20),
-    flgAppendNS = BIT(21)
+    flgAppendNS = BIT(21),
+    flgTopLevelDecl = BIT(22),
 };
 
 typedef struct AstNode AstNode;
@@ -250,6 +251,7 @@ struct AstNode {
 
         struct {
             cstring name;
+            Env *env;
         } moduleDecl;
 
         struct {

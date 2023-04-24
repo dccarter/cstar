@@ -1,5 +1,6 @@
 import "stdlib/io.cxy" as io
 
 func main(args: [string]) {
-   io.println("Hello World")
+   io.println(f"Hello World ${io.STDOUT}")
+   io.prints[i32](10)
 }

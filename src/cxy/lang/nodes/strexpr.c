@@ -156,7 +156,6 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
 void checkStringExpr(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
-    checkMany(visitor, node->stringExpr.parts);
     AstNode *part = node->stringExpr.parts;
     for (; part; part = part->next) {
         part->type = evalType(visitor, part);

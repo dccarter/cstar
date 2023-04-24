@@ -104,8 +104,8 @@ void checkMember(AstVisitor *visitor, AstNode *node)
         else
             node->type = target;
     }
-    else if (stripPointer(target)->tag == typStruct) {
-        if (member->tag != astIdentifier && member->tag != astPath) {
+    else if (typeIs(stripPointer(target), Struct)) {
+        if (!nodeIs(member, Identifier) && !nodeIs(member, Path)) {
             logError(ctx->L,
                      &member->loc,
                      "unexpected member expression, expecting a struct member",
@@ -118,7 +118,7 @@ void checkMember(AstVisitor *visitor, AstNode *node)
         if (symbol != NULL && nodeIs(member, Path) &&
             nodeIs(symbol, GenericDecl)) {
             symbol = checkGenericDeclReference(
-                visitor, symbol, member->path.elements);
+                visitor, symbol, member->path.elements, rawTarget->tStruct.env);
         }
 
         if (symbol == NULL) {
@@ -132,7 +132,7 @@ void checkMember(AstVisitor *visitor, AstNode *node)
             node->type = symbol->type;
     }
     else {
-        csAssert(member->tag == astIdentifier, "TODO");
+        csAssert(nodeIs(member, Identifier), "TODO");
         node->type = ERROR_TYPE(ctx);
     }
 }

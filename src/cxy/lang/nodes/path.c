@@ -24,8 +24,13 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
         return ERROR_TYPE(ctx);
     }
 
+    if (nodeIs(symbol, ModuleDecl)) {
+        node->parentScope = symbol;
+        return node->type = symbol->type;
+    }
+
     if (nodeIs(symbol, GenericDecl)) {
-        symbol = checkGenericDeclReference(visitor, symbol, node);
+        symbol = checkGenericDeclReference(visitor, symbol, node, &ctx->env);
     }
 
     if (symbol == NULL) {
@@ -41,7 +46,7 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
 
     node->type = symbol->type;
     flags = (symbol->flags & (flgConst | flgAddThis | flgTypeAst));
-    if (symbol->flags & flgPublic)
+    if (hasFlag(symbol, TopLevelDecl))
         flags |= isInSameEnv(scope, ctx->env.first) ? flgAppendNS : flgNone;
 
     node->flags |= flags;
@@ -110,8 +115,12 @@ void generatePath(ConstAstVisitor *visitor, const AstNode *node)
     }
     else {
         const AstNode *elem = node->path.elements;
-        if (hasFlag(elem, AppendNS))
-            writeNamespace(ctx, NULL);
+        if (hasFlag(elem, AppendNS)) {
+            if (node->type && node->type->namespace)
+                writeDeclNamespace(ctx, node->type->namespace, NULL);
+            else
+                writeNamespace(ctx, NULL);
+        }
 
         for (; elem; elem = elem->next) {
             astConstVisit(visitor, elem);
@@ -132,7 +141,8 @@ void checkPathElement(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     csAssert0(node->parentScope);
-    const Type *scope = stripPointer(node->parentScope->type);
+    AstNode *parent = node->parentScope;
+    const Type *scope = stripPointer(parent->type);
 
     const Env *env = NULL;
     Env thisEnv = {};
@@ -144,7 +154,7 @@ void checkPathElement(AstVisitor *visitor, AstNode *node)
         env = scope->tStruct.env;
         break;
     case typModule:
-        env = scope->module.exports;
+        env = parent->parentScope->moduleDecl.env;
         break;
     case typThis:
         thisEnv = (Env){.first = ctx->env.first, .scope = ctx->env.first};
@@ -162,7 +172,7 @@ void checkPathElement(AstVisitor *visitor, AstNode *node)
     AstNode *symbol =
         findSymbol(env, ctx->L, node->pathElement.name, &node->loc);
     if (symbol != NULL && nodeIs(symbol, GenericDecl)) {
-        symbol = checkGenericDeclReference(visitor, symbol, node);
+        symbol = checkGenericDeclReference(visitor, symbol, node, env);
     }
 
     if (symbol == NULL) {

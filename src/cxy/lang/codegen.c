@@ -198,6 +198,15 @@ void writeNamespace(CodegenContext *ctx, cstring sep)
     }
 }
 
+void writeDeclNamespace(CodegenContext *ctx, cstring namespace, cstring sep)
+{
+    if (namespace) {
+        format(ctx->state,
+               "{s}{s}",
+               (FormatArg[]){{.s = namespace}, {.s = sep ?: "__"}});
+    }
+}
+
 void writeEnumPrefix(CodegenContext *ctx, const Type *type)
 {
     FormatState *state = ctx->state;
@@ -219,7 +228,7 @@ void writeTypename(CodegenContext *ctx, const Type *type)
     FormatState *state = ctx->state;
 
     if (!isBuiltinType(type))
-        writeNamespace(ctx, NULL);
+        writeDeclNamespace(ctx, type->namespace, NULL);
 
     if (type->name) {
         if (type->tag == typFunc)

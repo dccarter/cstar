@@ -72,7 +72,7 @@ const Type *makeFuncType(TypeTable *table, const Type *init);
 
 const Type *makeStruct(TypeTable *table, const Type *init);
 
-const Type *makeModuleType(TypeTable *table, cstring name, const Env *env);
+const Type *makeModuleType(TypeTable *table, cstring name);
 
 const Type *makeEnum(TypeTable *table, const Type *init);
 

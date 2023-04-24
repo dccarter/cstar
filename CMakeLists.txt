@@ -57,6 +57,7 @@ set(CXY_LANG_NODE_SOURCES
         src/cxy/lang/nodes/literals.c
         src/cxy/lang/nodes/macro.c
         src/cxy/lang/nodes/member.c
+        src/cxy/lang/nodes/module.c
         src/cxy/lang/nodes/new.c
         src/cxy/lang/nodes/path.c
         src/cxy/lang/nodes/range.c
@@ -104,18 +105,23 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/stdlib)
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/generated)
 
-set(CXY_STD_LIB_SOURCES
-        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/io.cxy)
-
 add_custom_target(
         cxy-code ALL
         COMMAND ./escape ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/setup.h generated/setup.inc.h CXY_SETUP
         COMMAND ./escape ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/main.c.h generated/main.inc.h CXY_MAIN
-        COMMAND cp -rf ${CXY_STD_LIB_SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/stdlib/
         DEPENDS ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/setup.h
                 ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/main.c.h
-                ${CXY_STD_LIB_SOURCES}
                 escape
 )
 
-add_dependencies(cxy cxy-code)
+set(CXY_STD_LIB_SOURCES
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/io.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/string.cxy)
+
+add_custom_target(
+        cxy-stdlib ALL
+        COMMAND cp -rf ${CXY_STD_LIB_SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/stdlib/
+        DEPENDS ${CXY_STD_LIB_SOURCES}
+)
+
+add_dependencies(cxy cxy-code cxy-stdlib)

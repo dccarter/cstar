@@ -49,7 +49,9 @@ void semanticsCheck(AstNode *program,
                     TypeTable *typeTable);
 
 const Type *evalType(AstVisitor *visitor, AstNode *node);
-void exportNode(SemanticsContext *ctx, AstNode *node, cstring name);
+void addModuleExport(SemanticsContext *ctx, AstNode *node, cstring name);
+void initializeModule(AstVisitor *visitor, AstNode *node);
+void finalizeModule(AstVisitor *visitor, AstNode *node, cstring namespace);
 
 AstNode *makeTypeReferenceNode(SemanticsContext *ctx, const Type *type);
 u64 checkMany(AstVisitor *visitor, AstNode *node);
@@ -70,7 +72,8 @@ AstNode *findSymbolByNode(SemanticsContext *ctx, const Env *env, AstNode *node);
 
 AstNode *checkGenericDeclReference(AstVisitor *visitor,
                                    AstNode *node,
-                                   AstNode *path);
+                                   AstNode *path,
+                                   const Env *env);
 void checkGenericParam(AstVisitor *visitor, AstNode *node);
 void checkGenericDecl(AstVisitor *visitor, AstNode *node);
 void checkPathElement(AstVisitor *visitor, AstNode *node);
@@ -108,6 +111,7 @@ void checkUnionDecl(AstVisitor *visitor, AstNode *node);
 void checkStructField(AstVisitor *visitor, AstNode *node);
 void checkStructDecl(AstVisitor *visitor, AstNode *node);
 void checkEnumDecl(AstVisitor *visitor, AstNode *node);
+void checkImportDecl(AstVisitor *visitor, AstNode *node);
 void checkFuncType(AstVisitor *visitor, AstNode *node);
 void checkTupleType(AstVisitor *visitor, AstNode *node);
 void checkBuiltinType(AstVisitor *visitor, AstNode *node);

@@ -55,7 +55,8 @@ static void setDeclName(AstNode *decl, cstring name)
 
 AstNode *checkGenericDeclReference(AstVisitor *visitor,
                                    AstNode *generic,
-                                   AstNode *node)
+                                   AstNode *node,
+                                   const Env *env)
 {
     SemanticsContext *ctx = getConstAstVisitorContext(visitor);
     u64 count = countAstNodes(node->pathElement.args);
@@ -105,6 +106,9 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     setDeclName(substitute, name);
     node->pathElement.name = name;
 
+    cstring namespace = ctx->typeTable->currentNamespace;
+    ctx->typeTable->currentNamespace = target->namespace;
+
     substitute->next = NULL;
     Env saveEnv = {.first = ctx->env.first->next, .scope = ctx->env.scope};
     __typeof(ctx->stack) saveStack = ctx->stack;
@@ -122,9 +126,11 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     }
 
     addTopLevelDecl(ctx, name, substitute);
+    if (&ctx->env != env) {
+        environmentAttachUp(&ctx->env, env);
+    }
+
     if (isMember) {
-        environmentAttachUp(
-            &ctx->env, target->generic.decl->parentScope->type->tStruct.env);
         substitute->parentScope = target->generic.decl->parentScope;
         checkMethodDeclSignature(visitor, substitute);
         checkMethodDeclBody(visitor, substitute);
@@ -134,6 +140,12 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     else {
         node->type = evalType(visitor, substitute);
     }
+
+    if (&ctx->env != env) {
+        environmentDetachUp(&ctx->env);
+    }
+
+    ctx->typeTable->currentNamespace = namespace;
 
     ((Type *)(goi.s))->applied.generated = node->type;
     Type *generated = (Type *)goi.s->applied.generated;
@@ -147,8 +159,8 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
         }
     }
 
-    Env env = {.first = ctx->env.first->next};
-    environmentFree(&env);
+    Env tmp = {.first = ctx->env.first->next};
+    environmentFree(&tmp);
     ctx->env.first->next = saveEnv.first;
     ctx->env.scope = saveEnv.scope;
     ctx->stack = saveStack;
@@ -177,6 +189,8 @@ void checkGenericDecl(AstVisitor *visitor, AstNode *node)
         node->type = ERROR_TYPE(ctx);
         return;
     }
+    addModuleExport(ctx, node, name);
+
     node->genericDecl.decl->parentScope = node->parentScope;
     u64 count = countAstNodes(param);
     GenericParam *params = mallocOrDie(sizeof(GenericParam) * count);

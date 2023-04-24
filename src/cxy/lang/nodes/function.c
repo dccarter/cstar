@@ -489,7 +489,7 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
     bool withDefaultValues = false;
 
     defineSymbol(&ctx->env, ctx->L, node->funcDecl.name, node);
-    exportNode(ctx, node, node->funcDecl.name);
+    addModuleExport(ctx, node, node->funcDecl.name);
 
     if (!ctx->mainOptimized) {
         node->flags |=

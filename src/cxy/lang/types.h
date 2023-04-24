@@ -184,10 +184,6 @@ typedef struct Type {
         } tStruct;
 
         struct {
-            const Env *exports;
-        } module;
-
-        struct {
             GenericParam *params;
             u64 paramsCount;
             AstNode *decl;

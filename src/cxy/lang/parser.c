@@ -1251,6 +1251,7 @@ static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative)
             P,
             &tok.fileLoc.begin,
             &(AstNode){.tag = astGenericDecl,
+                       .flags = flags,
                        .genericDecl = {.params = gParams, .decl = func}});
     }
     return func;
@@ -1615,6 +1616,7 @@ static AstNode *structDecl(Parser *P, bool isPublic)
             P,
             &tok.fileLoc.begin,
             &(AstNode){.tag = astGenericDecl,
+                       .flags = isPublic ? flgPublic : flgNone,
                        .genericDecl = {.params = gParams, .decl = node}});
     }
     return node;
@@ -1783,6 +1785,7 @@ static AstNode *declaration(Parser *P)
 
 #undef isNative
 
+    decl->flags |= flgTopLevelDecl;
     decl->attrs = attrs;
     return decl;
 }

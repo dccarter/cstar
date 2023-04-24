@@ -494,21 +494,10 @@ const Type *makeStruct(TypeTable *table, const Type *init)
     return ret.s;
 }
 
-const Type *makeModuleType(TypeTable *table, cstring name, const Env *env)
+const Type *makeModuleType(TypeTable *table, cstring name)
 {
-    Type type = make(Type,
-                     .tag = typModule,
-                     .name = name,
-                     .flags = flgNone,
-                     .module.exports = env);
+    Type type = make(Type, .tag = typModule, .name = name, .flags = flgNone);
     GetOrInset ret = getOrInsertType(table, &type);
-    if (!ret.f) {
-        Type *module = (Type *)ret.s;
-        Env *exports = allocFromMemPool(table->memPool, sizeof(Env));
-        *exports = *env;
-        module->module.exports = exports;
-    }
-
     return ret.s;
 }
 
