@@ -10,7 +10,22 @@
 #include <core/strpool.h>
 #include <lang/types.h>
 
-typedef struct TypeTable TypeTable;
+typedef struct TypeTable {
+    HashTable types;
+    MemPool *memPool;
+    StrPool *strPool;
+    cstring currentNamespace;
+    u64 typeCount;
+    const Type *autoType;
+    const Type *voidType;
+    const Type *_nullType;
+    const Type *nullType;
+    const Type *errorType;
+    const Type *stringType;
+    const Type *anySliceType;
+    const Type *primitiveTypes[prtCOUNT];
+} TypeTable;
+
 typedef Pair(bool, const Type *) GetOrInset;
 
 TypeTable *newTypeTable(MemPool *pool, StrPool *strPool);
@@ -56,6 +71,8 @@ const Type *makeThisType(TypeTable *table, cstring name, u64 flags);
 const Type *makeFuncType(TypeTable *table, const Type *init);
 
 const Type *makeStruct(TypeTable *table, const Type *init);
+
+const Type *makeModuleType(TypeTable *table, cstring name, const Env *env);
 
 const Type *makeEnum(TypeTable *table, const Type *init);
 

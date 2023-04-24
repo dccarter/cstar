@@ -99,16 +99,22 @@ target_compile_definitions(cxy PRIVATE
         -DCXY_VERSION="${CXY_VERSION}"
         -DCXY_SOURCE_LANG_DIR="${CMAKE_SOURCE_DIR}/src/cxy/lang")
 
-file(MAKE_DIRECTORY DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/generated)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/generated)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/stdlib)
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/generated)
+
+set(CXY_STD_LIB_SOURCES
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/io.cxy)
 
 add_custom_target(
         cxy-code ALL
         COMMAND ./escape ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/setup.h generated/setup.inc.h CXY_SETUP
         COMMAND ./escape ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/main.c.h generated/main.inc.h CXY_MAIN
+        COMMAND cp -rf ${CXY_STD_LIB_SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/stdlib/
         DEPENDS ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/setup.h
                 ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/main.c.h
+                ${CXY_STD_LIB_SOURCES}
                 escape
 )
 

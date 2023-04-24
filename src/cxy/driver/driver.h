@@ -2,17 +2,20 @@
 #pragma once
 
 #include <driver/options.h>
-#include <lang/ttable.h>
+
+#include <core/strpool.h>
+#include <lang/scope.h>
 
 typedef struct CompilerDriver {
     Options options;
     MemPool memPool;
     StrPool strPool;
-    HashTable importsCache;
+    HashTable modules;
     Log *L;
     TypeTable *typeTable;
 } CompilerDriver;
 
 void makeDirectoryForPath(CompilerDriver *driver, cstring path);
 void initCompilerDriver(CompilerDriver *compiler, Log *log);
-bool compileFile(const char *fileName, CompilerDriver *driver);
+bool compileSource(const char *fileName, CompilerDriver *driver);
+AstNode *compileModule(CompilerDriver *driver, const AstNode *source);

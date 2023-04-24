@@ -63,12 +63,13 @@ static void generateAllTypes(CodegenContext *ctx)
 
     u64 empty = 0;
     for (u64 i = 0; i < sorted; i++) {
-        if (types[i] && types[i]->tag == typStruct)
+        if (types[i] && types[i]->tag == typStruct &&
+            ctx->namespace == types[i]->namespace)
             generateStructTypedef(ctx, types[i]);
     }
 
     for (u64 i = 0; i < sorted; i++) {
-        if (types[i])
+        if (types[i] && ctx->namespace == types[i]->namespace)
             generateType(ctx, types[i]);
         else
             empty++;
@@ -134,6 +135,14 @@ static void generateBreakContinue(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, "continue;", NULL);
 }
 
+static void generateImportDecl(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    format(ctx->state,
+           "#include <{s}.c>",
+           (FormatArg[]){{.s = node->import.module->stringLiteral.value}});
+}
+
 static void epilogue(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -142,23 +151,28 @@ static void epilogue(ConstAstVisitor *visitor, const AstNode *node)
            "\n"
            "\n",
            NULL);
-    append(ctx->state, CXY_MAIN_CODE, CXY_MAIN_CODE_SIZE);
+
+    if (!ctx->importedFile) {
+        append(ctx->state, CXY_MAIN_CODE, CXY_MAIN_CODE_SIZE);
+    }
+
     format(ctx->state, "\n", NULL);
 }
 
 static void prologue(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    if (!ctx->importedFile) {
+        format(ctx->state,
+               "/**\n"
+               " * Generated from cxy compile\n"
+               " */\n"
+               "\n",
+               NULL);
 
-    format(ctx->state,
-           "/**\n"
-           " * Generated from cxy compile\n"
-           " */\n"
-           "\n",
-           NULL);
-
-    append(ctx->state, CXY_SETUP_CODE, CXY_SETUP_CODE_SIZE);
-    format(ctx->state, "\n\n", NULL);
+        append(ctx->state, CXY_SETUP_CODE, CXY_SETUP_CODE_SIZE);
+        format(ctx->state, "\n\n", NULL);
+    }
 
     generateManyAsts(visitor, "\n", node->program.top);
 
@@ -204,7 +218,8 @@ void writeTypename(CodegenContext *ctx, const Type *type)
 {
     FormatState *state = ctx->state;
 
-    writeNamespace(ctx, NULL);
+    if (!isBuiltinType(type))
+        writeNamespace(ctx, NULL);
 
     if (type->name) {
         if (type->tag == typFunc)
@@ -340,15 +355,19 @@ void generateManyAstsWithinBlock(ConstAstVisitor *visitor,
 void generateCode(FormatState *state,
                   TypeTable *table,
                   StrPool *strPool,
-                  const AstNode *prog)
+                  const AstNode *prog,
+                  bool isImported)
 {
-    CodegenContext context = {
-        .state = state, .types = table, .strPool = strPool};
+    CodegenContext context = {.state = state,
+                              .types = table,
+                              .strPool = strPool,
+                              .importedFile = isImported};
 
     // clang-format off
     ConstAstVisitor visitor = makeConstAstVisitor(&context,
     {
         [astCCode] = generateCCode,
+        [astImportDecl] = generateImportDecl,
         [astPathElem] = generatePathElement,
         [astPath] = generatePath,
         [astPrimitiveType] = generateTypeinfo,
@@ -393,6 +412,9 @@ void generateCode(FormatState *state,
     },
 
     .fallback = generateFallback);
+
+    if (prog->program.module)
+        context.namespace = prog->program.module->moduleDecl.name;
 
     prologue(&visitor, prog);
     epilogue(&visitor, prog);

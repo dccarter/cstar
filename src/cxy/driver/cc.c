@@ -10,18 +10,23 @@
 
 #include "cc.h"
 
-void cCompileToObject(CompilerDriver *driver,
-                      const char *sourceFile,
-                      const char *objFile)
+#include "lang/ast.h"
+
+#include <string.h>
+
+void compileCSourceFile(CompilerDriver *driver, const char *sourceFile)
 {
     const Options *options = &driver->options;
     FormatState state = newFormatState("    ", true);
-    makeDirectoryForPath(driver, objFile);
+
+    if (options->output)
+        makeDirectoryForPath(driver, options->output);
 
     format(&state,
-           "cc -c {s} -O3 -o {s} -I{s}/c/include",
-           (FormatArg[]){
-               {.s = sourceFile}, {.s = objFile}, {.s = options->buildDir}});
+           "cc {s} -O3 -o {s} -I{s}/c/imports",
+           (FormatArg[]){{.s = sourceFile},
+                         {.s = driver->options.output ?: "app"},
+                         {.s = options->buildDir}});
 
     if (options->rest) {
         format(&state, " {s}", (FormatArg[]){{.s = options->rest}});
@@ -31,9 +36,4 @@ void cCompileToObject(CompilerDriver *driver,
     freeFormatState(&state);
     system(cmd);
     free(cmd);
-}
-
-void cLinkObjects(CompilerDriver *driver, const AstNode *program)
-{
-    // links object files
 }

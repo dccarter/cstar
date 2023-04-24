@@ -3,13 +3,14 @@
  */
 
 #include "lang/parser.h"
+#include "lang/ast.h"
+#include "lang/lexer.h"
+
+#include "driver/driver.h"
 
 #include "core/alloc.h"
 #include "core/e4c.h"
 #include "core/mempool.h"
-
-#include "lang/ast.h"
-#include "lang/lexer.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -1822,36 +1823,38 @@ static AstNode *parseModuleName(Parser *P)
 static AstNode *parseModuleDecl(Parser *P)
 {
     Token tok = *consume0(P, tokModule);
-    AstNode *module = parseModuleName(P);
+    Token name = *consume0(P, tokIdent);
 
     return makeAstNode(
         P->memPool,
         &tok.fileLoc,
-        &(AstNode){.tag = astModuleDecl, .moduleDecl = {.name = module}});
+        &(AstNode){.tag = astModuleDecl,
+                   .moduleDecl = {.name = getTokenString(P, &name, false)}});
 }
 
 static AstNode *parseImportDecl(Parser *P)
 {
     Token tok = *consume0(P, tokImport);
-    AstNode *module = parseModuleName(P);
-
-    AstNode *entities = NULL, *alias = NULL;
-
-    if (match(P, tokDiv) && match(P, tokLBrace)) {
-        entities = parseAtLeastOne(
-            P, "module declarations", tokRBrace, tokComma, parseIdentifier);
-        consume0(P, tokRBrace);
-    }
+    AstNode *module = parseString(P);
+    AstNode *entities = NULL, *alias = NULL, *exports;
 
     if (match(P, tokAs))
         alias = parseIdentifier(P);
 
-    return makeAstNode(P->memPool,
-                       &tok.fileLoc,
-                       &(AstNode){.tag = astImportDecl,
-                                  .import = {.module = module,
-                                             .entities = entities,
-                                             .alias = alias}});
+    exports = compileModule(P->cc, module);
+    if (exports == NULL) {
+        parserError(P,
+                    &tok.fileLoc,
+                    "importing module {s} failed",
+                    (FormatArg[]){{.s = module->stringLiteral.value}});
+    }
+
+    return makeAstNode(
+        P->memPool,
+        &tok.fileLoc,
+        &(AstNode){
+            .tag = astImportDecl,
+            .import = {.module = module, .exports = exports, .alias = alias}});
 }
 
 static AstNode *parseImportsDecl(Parser *P)
@@ -1882,9 +1885,10 @@ static void synchronizeUntil(Parser *P, TokenTag tag)
         advance(P);
 }
 
-Parser makeParser(Lexer *lexer, MemPool *pool)
+Parser makeParser(Lexer *lexer, CompilerDriver *cc)
 {
-    Parser parser = {.lexer = lexer, .L = lexer->log, .memPool = pool};
+    Parser parser = {
+        .cc = cc, .lexer = lexer, .L = lexer->log, .memPool = &cc->memPool};
     parser.ahead[0] = (Token){.tag = tokEoF};
     for (u32 i = 1; i < TOKEN_BUFFER; i++)
         parser.ahead[i] = advanceLexer(lexer);

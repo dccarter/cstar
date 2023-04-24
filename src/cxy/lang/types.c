@@ -295,6 +295,20 @@ bool isNumericType(const Type *type)
     return true;
 }
 
+bool isBuiltinType(const Type *type)
+{
+    switch (type->tag) {
+    case typPrimitive:
+    case typVoid:
+    case typString:
+    case typAuto:
+    case typNull:
+        return true;
+    default:
+        return false;
+    }
+}
+
 void printType(FormatState *state, const Type *type)
 {
     switch (type->tag) {
@@ -399,6 +413,11 @@ void printType(FormatState *state, const Type *type)
         format(state, "@typeof(", NULL);
         printType(state, type->info.target);
         format(state, ")", NULL);
+        break;
+
+    case typModule:
+        printKeyword(state, "module");
+        format(state, " %s", (FormatArg[]){{.s = type->name}});
         break;
 
     default:

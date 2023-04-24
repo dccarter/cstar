@@ -1,13 +1,5 @@
-import stdlib/Array
-@cInclude("<unistd.h>")
+import "stdlib/io.cxy" as io
 
-
-pub native func write(fd: i32, data: &const void, size: u64) : i64;
-
-const STDOUT = unchecked!(STDOUT_FILENO, #i32);
-const STDERR = unchecked!(STDERR_FILENO, #i32);
-const STDIN  = unchecked!(STDERR_FILENO, #i32);
-
-//func main(args: [string]) {
-//   write(STDOUT, cstr!("Hello World!\n"), 13)
-//}
+func main(args: [string]) {
+   io.println("Hello World")
+}

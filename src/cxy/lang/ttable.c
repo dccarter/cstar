@@ -13,21 +13,6 @@
 
 #include <memory.h>
 
-typedef struct TypeTable {
-    HashTable types;
-    MemPool *memPool;
-    StrPool *strPool;
-    u64 typeCount;
-    const Type *autoType;
-    const Type *voidType;
-    const Type *_nullType;
-    const Type *nullType;
-    const Type *errorType;
-    const Type *stringType;
-    const Type *anySliceType;
-    const Type *primitiveTypes[prtCOUNT];
-} TypeTable;
-
 static HashCode hashTypes(HashCode hash, const Type **types, u64 count)
 {
     for (u64 i = 0; i < count; i++)
@@ -85,6 +70,7 @@ static HashCode hashType(HashCode hash, const Type *type)
         break;
     case typEnum:
     case typStruct:
+    case typModule:
         if (type->name)
             hash = hashStr(hash, type->name);
         break;
@@ -188,7 +174,7 @@ static bool compareTypesWrapper(const void *left, const void *right)
     return compareTypes(*(const Type **)left, *(const Type **)right);
 }
 
-static GetOrInset getOrInsertType(TypeTable *table, const Type *type)
+static GetOrInset getOrInsertTypeScoped(TypeTable *table, const Type *type)
 {
     u32 hash = hashType(hashInit(), type);
     const Type **found = findInHashTable(&table->types, //
@@ -209,6 +195,14 @@ static GetOrInset getOrInsertType(TypeTable *table, const Type *type)
     newType->index = table->typeCount++;
     return (GetOrInset){false, newType};
 }
+
+static GetOrInset getOrInsertType(TypeTable *table, const Type *type)
+{
+    Type tmp = *type;
+    tmp.namespace = table->currentNamespace;
+    return getOrInsertTypeScoped(table, &tmp);
+}
+
 typedef struct {
     const Type **types;
     u64 count;
@@ -495,6 +489,24 @@ const Type *makeStruct(TypeTable *table, const Type *init)
                sizeof(StructField) * init->tStruct.fieldsCount);
         tStruct->tStruct.env = allocFromMemPool(table->memPool, sizeof(Env));
         *tStruct->tStruct.env = *init->tStruct.env;
+    }
+
+    return ret.s;
+}
+
+const Type *makeModuleType(TypeTable *table, cstring name, const Env *env)
+{
+    Type type = make(Type,
+                     .tag = typModule,
+                     .name = name,
+                     .flags = flgNone,
+                     .module.exports = env);
+    GetOrInset ret = getOrInsertType(table, &type);
+    if (!ret.f) {
+        Type *module = (Type *)ret.s;
+        Env *exports = allocFromMemPool(table->memPool, sizeof(Env));
+        *exports = *env;
+        module->module.exports = exports;
     }
 
     return ret.s;

@@ -18,6 +18,7 @@ typedef struct {
     TypeTable *types;
     StrPool *strPool;
     cstring namespace;
+    bool importedFile;
 } CodegenContext;
 
 void writeNamespace(CodegenContext *ctx, cstring sep);
@@ -48,7 +49,8 @@ void generateManyAstsWithDelim(ConstAstVisitor *visitor,
 void generateCode(FormatState *state,
                   TypeTable *table,
                   StrPool *strPool,
-                  const AstNode *prog);
+                  const AstNode *prog,
+                  bool isImport);
 
 void generateCCode(ConstAstVisitor *visitor, const AstNode *node);
 void generateTypeinfo(ConstAstVisitor *visitor, const AstNode *node);

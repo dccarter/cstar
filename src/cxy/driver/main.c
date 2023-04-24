@@ -20,7 +20,7 @@ int main(int argc, char **argv)
     }
 
     for (int i = 1; i < argc && status; ++i)
-        status &= compileFile(argv[i], &driver);
+        status &= compileSource(argv[i], &driver);
 
 exit:
     writeFormatState(&state, stderr);

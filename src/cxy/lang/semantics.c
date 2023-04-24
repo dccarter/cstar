@@ -16,9 +16,18 @@
 static void checkProgram(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
-    pushScope(&ctx->env, node);
 
+    cstring namespace = ctx->typeTable->currentNamespace;
+    pushScope(&ctx->env, node);
     initializeBuiltins(ctx);
+
+    if (node->program.top)
+        checkMany(visitor, node->program.top);
+
+    ctx->typeTable->currentNamespace = NULL;
+    if (node->program.module)
+        ctx->typeTable->currentNamespace =
+            node->program.module->moduleDecl.name;
 
     ctx->previousTopLevelDecl = node->program.decls;
     for (AstNode *decl = node->program.decls; decl; decl = decl->next) {
@@ -26,6 +35,12 @@ static void checkProgram(AstVisitor *visitor, AstNode *node)
         astVisit(visitor, decl);
         ctx->previousTopLevelDecl = decl;
     }
+
+    // restore the namespace
+    if (node->program.module)
+        astVisit(visitor, node->program.module);
+    
+    ctx->typeTable->currentNamespace = namespace;
 }
 
 static void checkFallback(AstVisitor *visitor, AstNode *node)
@@ -99,6 +114,34 @@ static void checkBreakContinueStmt(AstVisitor *visitor, AstNode *node)
                       node->tag == astBreakStmt ? "break" : "continue",
                       &node->loc);
     node->type = makeVoidType(ctx->typeTable);
+}
+
+static void checkModuleDecl(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    node->type =
+        makeModuleType(ctx->typeTable, node->moduleDecl.name, &ctx->env);
+}
+
+static void checkImportDecl(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    AstNode *exports = node->import.exports;
+    if (node->import.alias) {
+        defineSymbol(
+            &ctx->env, ctx->L, node->import.alias->ident.value, exports);
+    }
+    else {
+        defineSymbol(&ctx->env, ctx->L, exports->moduleDecl.name, exports);
+    }
+}
+
+void exportNode(SemanticsContext *ctx, AstNode *node, cstring name)
+{
+    AstNode *exports = ctx->program->program.module;
+    if (exports && (node->flags & flgPublic)) {
+        defineSymbol(&ctx->exports, ctx->L, name, node);
+    }
 }
 
 const Type *evalType(AstVisitor *visitor, AstNode *node)
@@ -241,13 +284,22 @@ void semanticsCheck(AstNode *program,
                                 .typeTable = typeTable,
                                 .pool = pool,
                                 .strPool = strPool,
-                                .env = {NULL}};
+                                .program = program,
+                                .env = {NULL},
+                                .exports = {NULL}};
+
     environmentInit(&context.env);
+    if (program->program.module) {
+        environmentInit(&context.exports);
+        pushScope(&context.exports, program->program.module);
+    }
 
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context,
     {
         [astProgram] = checkProgram,
+        [astModuleDecl] = checkModuleDecl,
+        [astImportDecl] = checkImportDecl,
         [astPathElem] = checkPathElement,
         [astPath] = checkPath,
         [astGenericParam]= checkGenericParam,
@@ -303,6 +355,7 @@ void semanticsCheck(AstNode *program,
     },
 
     .fallback = checkFallback);
-    // clang-format off
+    // clang-format on
+
     astVisit(&visitor, program);
 }

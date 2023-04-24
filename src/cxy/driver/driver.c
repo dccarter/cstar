@@ -1,4 +1,6 @@
-#include "driver/driver.h"
+#include "driver.h"
+#include "cc.h"
+
 #include "core/log.h"
 #include "core/mempool.h"
 #include "core/utils.h"
@@ -18,20 +20,20 @@
 #define BYTES_TO_MB(B) (((double)(B)) / 1000000)
 #define BYTES_TO_KB(B) (((double)(B)) / 1000)
 
-static AstNode *parseFile(const char *fileName, MemPool *memPool, Log *log)
+static AstNode *parseFile(CompilerDriver *driver, const char *fileName)
 {
     size_t file_size = 0;
     char *fileData = readFile(fileName, &file_size);
     if (!fileData) {
-        logError(log,
+        logError(driver->L,
                  NULL,
                  "cannot open file '{s}'",
                  (FormatArg[]){{.s = fileName}});
         return NULL;
     }
 
-    Lexer lexer = newLexer(fileName, fileData, file_size, log);
-    Parser parser = makeParser(&lexer, memPool);
+    Lexer lexer = newLexer(fileName, fileData, file_size, driver->L);
+    Parser parser = makeParser(&lexer, driver);
     AstNode *program = parseProgram(&parser);
 
     freeLexer(&lexer);
@@ -47,9 +49,13 @@ static inline bool hasErrors(CompilerDriver *driver)
 
 static cstring getFilenameWithoutDirs(cstring fileName)
 {
-    const char *slash = strrchr(fileName, '/');
-    if (slash)
-        fileName = slash + 1;
+    if (fileName[0] == '/') {
+        const char *slash = strrchr(fileName, '/');
+        if (slash) {
+            fileName = slash + 1;
+        }
+    }
+    
     return fileName;
 }
 
@@ -93,11 +99,12 @@ void makeDirectoryForPath(CompilerDriver *driver, cstring path)
 
 static bool generateSourceFiles(CompilerDriver *driver,
                                 AstNode *program,
-                                cstring filePath)
+                                cstring filePath,
+                                bool isImport)
 {
     const Options *options = &driver->options;
-    char *sourceFile =
-        getGeneratedPath(&driver->options, "c/src", filePath, ".c");
+    char *sourceFile = getGeneratedPath(
+        &driver->options, isImport ? "c/imports" : "c/src", filePath, ".c");
 
     makeDirectoryForPath(driver, sourceFile);
 
@@ -112,20 +119,17 @@ static bool generateSourceFiles(CompilerDriver *driver,
     }
 
     FormatState state = newFormatState("  ", true);
-    generateCode(&state, driver->typeTable, &driver->strPool, program);
+    generateCode(
+        &state, driver->typeTable, &driver->strPool, program, isImport);
     writeFormatState(&state, output);
     freeFormatState(&state);
     fclose(output);
 
-    if (options->cmd == cmdBuild) {
-        char *objFile =
-            getGeneratedPath(&driver->options, "bin/objs", filePath, ".o");
-
-        invokeCCompiler(driver, sourceFile, objFile);
-
-        free(objFile);
-        free(sourceFile);
+    if (!isImport && options->cmd == cmdBuild) {
+        compileCSourceFile(driver, sourceFile);
     }
+
+    free(sourceFile);
 
     return true;
 }
@@ -149,10 +153,52 @@ void initCompilerDriver(CompilerDriver *compiler, Log *log)
     compiler->L = log;
 }
 
-bool compileFile(const char *fileName, CompilerDriver *driver)
+AstNode *compileModule(CompilerDriver *driver, const AstNode *source)
 {
     const Options *options = &driver->options;
-    AstNode *program = parseFile(fileName, &driver->memPool, driver->L);
+    AstNode *program = NULL;
+    cstring name = source->stringLiteral.value;
+
+    if (access(name, F_OK) != 0) {
+        logWarning(driver->L,
+                   &source->loc,
+                   "module source file '{s}' does not exist",
+                   (FormatArg[]){{.s = name}});
+        return NULL;
+    }
+
+    program = parseFile(driver, name);
+    if (program->program.module == NULL) {
+        logWarning(driver->L,
+                   &source->loc,
+                   "module source '{s}' is not declared as a module",
+                   (FormatArg[]){{.s = name}});
+        return NULL;
+    }
+
+    if (program == NULL)
+        return false;
+
+    if (options->cmd == cmdBuild ||
+        (!options->noTypeCheck && !hasErrors(driver))) {
+        semanticsCheck(program,
+                       driver->L,
+                       &driver->memPool,
+                       &driver->strPool,
+                       driver->typeTable);
+    }
+
+    if (!hasErrors(driver)) {
+        generateSourceFiles(driver, program, name, true);
+    }
+
+    return program->program.module;
+}
+
+bool compileSource(const char *fileName, CompilerDriver *driver)
+{
+    const Options *options = &driver->options;
+    AstNode *program = parseFile(driver, fileName);
 
     if (program == NULL)
         return false;
@@ -172,7 +218,7 @@ bool compileFile(const char *fileName, CompilerDriver *driver)
     }
 
     if (!hasErrors(driver)) {
-        generateSourceFiles(driver, program, fileName);
+        generateSourceFiles(driver, program, fileName, false);
     }
 
     MemPoolStats stats;

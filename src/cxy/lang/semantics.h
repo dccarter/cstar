@@ -20,6 +20,7 @@ typedef struct {
     TypeTable *typeTable;
     HashTable builtinMacros;
     Env env;
+    Env exports;
     AstNode *previousTopLevelDecl;
     AstNode *currentTopLevelDecl;
     AstNode *program;
@@ -48,6 +49,7 @@ void semanticsCheck(AstNode *program,
                     TypeTable *typeTable);
 
 const Type *evalType(AstVisitor *visitor, AstNode *node);
+void exportNode(SemanticsContext *ctx, AstNode *node, cstring name);
 
 AstNode *makeTypeReferenceNode(SemanticsContext *ctx, const Type *type);
 u64 checkMany(AstVisitor *visitor, AstNode *node);

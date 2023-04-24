@@ -1,2 +1,15 @@
+module io
 
-pub native func write(fd: i32, data: [void], size: u64) : i64
+@cInclude("<unistd.h>")
+
+pub const STDOUT = unchecked!(STDOUT_FILENO, #i32);
+pub const STDERR = unchecked!(STDERR_FILENO, #i32);
+pub const STDIN  = unchecked!(STDERR_FILENO, #i32);
+
+pub native func write(fd: i32, data: &const void, size: u64) : i64;
+
+@inline
+pub func println(s: string) {
+    write(STDOUT, cstr!(s), 10)
+    write(STDOUT, cstr!("\n"), 1)
+}

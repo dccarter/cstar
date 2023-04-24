@@ -70,6 +70,7 @@ typedef enum {
     typTuple,
     typFunc,
     typEnum,
+    typModule,
     typStruct,
     typGeneric,
     typApplied
@@ -183,6 +184,10 @@ typedef struct Type {
         } tStruct;
 
         struct {
+            const Env *exports;
+        } module;
+
+        struct {
             GenericParam *params;
             u64 paramsCount;
             AstNode *decl;
@@ -207,6 +212,8 @@ bool isSignedType(const Type *type);
 bool isUnsignedType(const Type *type);
 bool isFloatType(const Type *type);
 bool isNumericType(const Type *type);
+bool isBuiltinType(const Type *type);
+
 void printType(FormatState *state, const Type *type);
 static inline bool isSliceType(const Type *type)
 {

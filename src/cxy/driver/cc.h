@@ -12,6 +12,4 @@
 
 #include "driver.h"
 
-void cCompileToObject(CompilerDriver *driver,
-                      const char *sourceFile,
-                      const char *objFile);
+void compileCSourceFile(CompilerDriver *driver, const char *sourceFile);

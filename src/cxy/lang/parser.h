@@ -19,8 +19,10 @@
 typedef struct MemPool MemPool;
 typedef struct Lexer Lexer;
 typedef struct AstNode AstNode;
+typedef struct CompilerDriver CompilerDriver;
 
 typedef struct {
+    CompilerDriver *cc;
     Lexer *lexer;
     Log *L;
     MemPool *memPool;
@@ -28,5 +30,5 @@ typedef struct {
     Token ahead[TOKEN_BUFFER];
 } Parser;
 
-Parser makeParser(Lexer *, MemPool *);
+Parser makeParser(Lexer *, CompilerDriver *);
 AstNode *parseProgram(Parser *);

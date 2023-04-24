@@ -41,6 +41,9 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
 
     node->type = symbol->type;
     flags = (symbol->flags & (flgConst | flgAddThis | flgTypeAst));
+    if (symbol->flags & flgPublic)
+        flags |= isInSameEnv(scope, ctx->env.first) ? flgAppendNS : flgNone;
+
     node->flags |= flags;
     if (closure == NULL)
         // We are outside a closure
@@ -107,10 +110,16 @@ void generatePath(ConstAstVisitor *visitor, const AstNode *node)
     }
     else {
         const AstNode *elem = node->path.elements;
+        if (hasFlag(elem, AppendNS))
+            writeNamespace(ctx, NULL);
+
         for (; elem; elem = elem->next) {
             astConstVisit(visitor, elem);
             if (elem->next) {
-                if (elem->type->tag == typPointer || elem->type->tag == typThis)
+                if (typeIs(elem->type, Module))
+                    format(ctx->state, "__", NULL);
+                else if (typeIs(elem->type, Pointer) ||
+                         typeIs(elem->type, This))
                     format(ctx->state, "->", NULL);
                 else
                     format(ctx->state, ".", NULL);
@@ -133,6 +142,9 @@ void checkPathElement(AstVisitor *visitor, AstNode *node)
         break;
     case typStruct:
         env = scope->tStruct.env;
+        break;
+    case typModule:
+        env = scope->module.exports;
         break;
     case typThis:
         thisEnv = (Env){.first = ctx->env.first, .scope = ctx->env.first};
@@ -184,6 +196,11 @@ void checkPath(AstVisitor *visitor, AstNode *node)
 
     AstNode *elem = node->path.elements;
     const Type *type = checkFirstPathElement(visitor, elem);
+    if (type == NULL || typeIs(type, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
     u64 flags = elem->flags;
     AstNode *prev = elem;
     elem = elem->next;

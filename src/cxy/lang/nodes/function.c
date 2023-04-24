@@ -208,6 +208,14 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
 
     if (hasFlag(node, Native)) {
         // Generated on prologue statement
+        if (ctx->namespace) {
+            format(ctx->state, "#define ", NULL);
+            writeNamespace(ctx, NULL);
+            format(ctx->state,
+                   "{s} {s}",
+                   (FormatArg[]){{.s = node->funcDecl.name},
+                                 {.s = node->funcDecl.name}});
+        }
         return;
     }
 
@@ -236,13 +244,14 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
 
     if (isInlineFunction(node))
         format(ctx->state, "attr(always_inline)\n", NULL);
-    
+
     generateTypeUsage(ctx, node->type->func.retType);
     if (typeIs(node->type->func.retType, This))
         format(ctx->state, "*", NULL);
 
     if (isMember) {
         format(ctx->state, " ", NULL);
+        writeNamespace(ctx, NULL);
         writeTypename(ctx, parent->type);
         format(ctx->state, "__{s}", (FormatArg[]){{.s = node->funcDecl.name}});
     }
@@ -250,7 +259,9 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, " cxy_main", NULL);
     }
     else {
-        format(ctx->state, " {s}", (FormatArg[]){{.s = node->funcDecl.name}});
+        format(ctx->state, " ", NULL);
+        writeNamespace(ctx, NULL);
+        format(ctx->state, "{s}", (FormatArg[]){{.s = node->funcDecl.name}});
     }
 
     if (isMember) {
@@ -478,6 +489,8 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
     bool withDefaultValues = false;
 
     defineSymbol(&ctx->env, ctx->L, node->funcDecl.name, node);
+    exportNode(ctx, node, node->funcDecl.name);
+
     if (!ctx->mainOptimized) {
         node->flags |=
             (strcmp(node->funcDecl.name, "main") == 0) ? flgMain : flgNone;

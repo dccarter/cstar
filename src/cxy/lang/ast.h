@@ -189,6 +189,7 @@ enum {
     flgAddSuper = BIT(18),
     flgTypeinfo = BIT(19),
     flgNewAllocated = BIT(20),
+    flgAppendNS = BIT(21)
 };
 
 typedef struct AstNode AstNode;
@@ -243,12 +244,12 @@ struct AstNode {
         struct {
             ImportKind kind;
             struct AstNode *module;
-            struct AstNode *entities;
+            struct AstNode *exports;
             struct AstNode *alias;
         } import;
 
         struct {
-            struct AstNode *name;
+            cstring name;
         } moduleDecl;
 
         struct {
