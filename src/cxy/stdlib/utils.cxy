@@ -1,0 +1,14 @@
+module utils
+
+pub native func strlen(s: &const i8) : u64;
+
+@inline
+pub func slen(s: string) => strlen(unchecked!(s, #&const i8))
+
+@inline
+pub func allocSlice[T](count: u64) => <[T]> __builtin_alloc_slice(#[T], count)
+
+@inline
+pub func reallocSlice[T](data: [T], count: u64) => <[T]> __builtin_realloc_slice(#[T], data, count)
+
+

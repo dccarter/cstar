@@ -191,6 +191,8 @@ enum {
     flgNewAllocated = BIT(20),
     flgAppendNS = BIT(21),
     flgTopLevelDecl = BIT(22),
+    flgGenerated = BIT(23),
+    flgCodeGenerated = BIT(24)
 };
 
 typedef struct AstNode AstNode;

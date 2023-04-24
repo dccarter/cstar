@@ -2,7 +2,7 @@ module io
 
 @cInclude("<unistd.h>")
 
-import "stdlib/string.cxy" as String
+import "stdlib/utils.cxy"
 
 pub const STDOUT = unchecked!(STDOUT_FILENO, #i32);
 pub const STDERR = unchecked!(STDERR_FILENO, #i32);
@@ -12,8 +12,6 @@ pub native func write(fd: i32, data: &const void, size: u64) : i64;
 
 @inline
 pub func println(s: string) {
-    write(STDOUT, cstr!(s), String.len(s))
+    write(STDOUT, cstr!(s), utils.slen(s))
     write(STDOUT, cstr!("\n"), 1)
 }
-
-pub func prints[T](s: T) => println(f"${s} ${STDIN}")

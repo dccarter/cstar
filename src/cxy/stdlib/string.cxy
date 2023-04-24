@@ -1,7 +1,0 @@
-module String
-
-pub native func strlen(s: &const i8) : u64;
-
-@inline
-pub func len(s: string) => strlen(unchecked!(s, #&const i8))
-

@@ -1,6 +1,7 @@
 import "stdlib/io.cxy" as io
+import "stdlib/array.cxy"
 
 func main(args: [string]) {
+    var arr = new array.Array[i32](10);
    io.println(f"Hello World ${io.STDOUT}")
-   io.prints[i32](10)
 }

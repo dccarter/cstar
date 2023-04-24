@@ -26,14 +26,18 @@ void checkImportDecl(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *exports = node->import.exports;
+    cstring name = NULL;
     if (node->import.alias) {
         AstNode *alias = node->import.alias;
         csAssert0(nodeIs(alias, Identifier));
-
-        defineSymbol(&ctx->env, ctx->L, alias->ident.value, exports);
+        name = alias->ident.value;
     }
     else
-        defineSymbol(&ctx->env, ctx->L, exports->moduleDecl.name, exports);
+        name = exports->moduleDecl.name;
+
+    defineSymbol(&ctx->env, ctx->L, name, exports);
+    if (ctx->program->program.module)
+        defineSymbol(&ctx->exports, ctx->L, name, exports);
 }
 
 void finalizeModule(AstVisitor *visitor, AstNode *node, cstring namespace)

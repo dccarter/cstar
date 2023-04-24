@@ -63,14 +63,23 @@ static void generateAllTypes(CodegenContext *ctx)
 
     u64 empty = 0;
     for (u64 i = 0; i < sorted; i++) {
-        if (types[i] && types[i]->tag == typStruct &&
-            ctx->namespace == types[i]->namespace)
-            generateStructTypedef(ctx, types[i]);
+        if (types[i] == NULL)
+            continue;
+
+        if (typeIs(types[i], Struct)) {
+            if (!hasFlag(types[i], CodeGenerated))
+                generateStructTypedef(ctx, types[i]);
+        }
     }
 
     for (u64 i = 0; i < sorted; i++) {
-        if (types[i] && ctx->namespace == types[i]->namespace)
+        if (types[i] == NULL)
+            continue;
+
+        if (!hasFlag(types[i], CodeGenerated)) {
             generateType(ctx, types[i]);
+            ((Type *)types[i])->flags |= flgCodeGenerated;
+        }
         else
             empty++;
     }

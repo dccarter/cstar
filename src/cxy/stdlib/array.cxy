@@ -1,0 +1,20 @@
+module array
+
+import "stdlib/utils.cxy"
+
+pub struct Array[T] {
+    - data: [T]
+    - len: u64
+
+    - func grow() {
+        var capacity = len!(data);
+        if (len < capacity) {
+            capacity += (capacity / 2)
+            data = utils.reallocSlice[T](capacity)
+        }
+    }
+
+    func `new`(initialSize: u64) {
+        data = utils.allocSlice[T](initialSize)
+    }
+}

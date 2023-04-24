@@ -103,6 +103,7 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
                                          genericDeclName(target->generic.decl));
     AstNode *substitute = cloneAstNode(ctx->pool, target->generic.decl);
     substitute->attrs = generic->attrs;
+    substitute->flags |= flgGenerated;
     setDeclName(substitute, name);
     node->pathElement.name = name;
 
@@ -126,7 +127,7 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     }
 
     addTopLevelDecl(ctx, name, substitute);
-    if (&ctx->env != env) {
+    if (&ctx->env != env && ctx->env.up != env) {
         environmentAttachUp(&ctx->env, env);
     }
 
@@ -135,7 +136,6 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
         checkMethodDeclSignature(visitor, substitute);
         checkMethodDeclBody(visitor, substitute);
         node->type = substitute->type;
-        environmentDetachUp(&ctx->env);
     }
     else {
         node->type = evalType(visitor, substitute);
@@ -157,6 +157,9 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
                          target->generic.params[i].name,
                          param);
         }
+    }
+    if (env->scope->node && typeIs(env->scope->node->type, Module)) {
+        defineSymbol((Env *)env, ctx->L, name, substitute);
     }
 
     Env tmp = {.first = ctx->env.first->next};

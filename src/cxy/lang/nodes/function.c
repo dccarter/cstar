@@ -223,6 +223,9 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         generateClosureExpr(visitor, node);
         return;
     }
+    cstring namespace = ctx->namespace;
+    if (hasFlag(node, Generated))
+        ctx->namespace = node->type->namespace;
 
     if (!isMember && hasFlag(node, Main)) {
         format(ctx->state, "typedef ", NULL);
@@ -251,7 +254,10 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
 
     if (isMember) {
         format(ctx->state, " ", NULL);
-        writeNamespace(ctx, NULL);
+        if (hasFlag(node, Generated))
+            writeDeclNamespace(ctx, node->type->namespace, NULL);
+        else
+            writeNamespace(ctx, NULL);
         writeTypename(ctx, parent->type);
         format(ctx->state, "__{s}", (FormatArg[]){{.s = node->funcDecl.name}});
     }
@@ -260,7 +266,11 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
     }
     else {
         format(ctx->state, " ", NULL);
-        writeNamespace(ctx, NULL);
+        if (hasFlag(node, Generated))
+            writeDeclNamespace(ctx, node->type->namespace, NULL);
+        else
+            writeNamespace(ctx, NULL);
+
         format(ctx->state, "{s}", (FormatArg[]){{.s = node->funcDecl.name}});
     }
 
@@ -296,6 +306,8 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, ";", NULL);
         format(ctx->state, "{<}\n}", NULL);
     }
+
+    ctx->namespace = namespace;
 }
 
 void generateFuncDeclaration(CodegenContext *context, const Type *type)

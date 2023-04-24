@@ -46,8 +46,9 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
 
     node->type = symbol->type;
     flags = (symbol->flags & (flgConst | flgAddThis | flgTypeAst));
-    if (hasFlag(symbol, TopLevelDecl))
-        flags |= isInSameEnv(scope, ctx->env.first) ? flgAppendNS : flgNone;
+    if (hasFlag(symbol, TopLevelDecl) && isInSameEnv(scope, ctx->env.first)) {
+        flags |= flgAppendNS;
+    }
 
     node->flags |= flags;
     if (closure == NULL)
@@ -116,10 +117,7 @@ void generatePath(ConstAstVisitor *visitor, const AstNode *node)
     else {
         const AstNode *elem = node->path.elements;
         if (hasFlag(elem, AppendNS)) {
-            if (node->type && node->type->namespace)
-                writeDeclNamespace(ctx, node->type->namespace, NULL);
-            else
-                writeNamespace(ctx, NULL);
+            writeNamespace(ctx, NULL);
         }
 
         for (; elem; elem = elem->next) {

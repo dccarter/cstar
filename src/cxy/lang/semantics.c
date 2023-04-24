@@ -21,10 +21,10 @@ static void checkProgram(AstVisitor *visitor, AstNode *node)
     pushScope(&ctx->env, node);
     initializeBuiltins(ctx);
 
+    initializeModule(visitor, node);
+
     if (node->program.top)
         checkMany(visitor, node->program.top);
-
-    initializeModule(visitor, node);
 
     ctx->previousTopLevelDecl = node->program.decls;
     for (AstNode *decl = node->program.decls; decl; decl = decl->next) {
