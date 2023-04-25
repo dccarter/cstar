@@ -1,6 +1,9 @@
 module utils
 
 pub native func strlen(s: &const i8) : u64;
+pub native func memcpy(dst: &void, src: &const void, len: u64) : &void;
+pub native func memmove(dst: &void, src: &const void, len: u64) : &void;
+pub native func memset(dst: &void, ch: i32, len: u64) : &void;
 
 @inline
 pub func slen(s: string) => strlen(unchecked!(s, #&const i8))

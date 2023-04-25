@@ -95,7 +95,7 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
         // substitution already found
         node->type = goi.s->applied.generated;
         node->pathElement.name = node->type->name;
-        return findSymbolOnly(&ctx->env, node->type->name);
+        return findSymbolOnly(generic->genericDecl.env, node->type->name);
     }
 
     // Substitute
@@ -115,16 +115,17 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     __typeof(ctx->stack) saveStack = ctx->stack;
     ctx->env = *generic->genericDecl.env;
 
-    pushScope(&ctx->env, NULL);
     bool isMember = nodeIs(target->generic.decl, FuncDecl) &&
                     target->generic.decl->parentScope &&
                     nodeIs(target->generic.decl->parentScope, StructDecl);
 
+    pushScope(&ctx->env, NULL);
     param = node->pathElement.args;
     for (u64 i = 0; i < count; i++, param = param->next) {
         defineSymbol(&ctx->env, ctx->L, target->generic.params[i].name, param);
     }
 
+    addTopLevelDecl(ctx, name, substitute);
     if (isMember) {
         substitute->parentScope = target->generic.decl->parentScope;
         checkMethodDeclSignature(visitor, substitute);
@@ -135,7 +136,9 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
         node->type = evalType(visitor, substitute);
     }
 
-    pushScope(&ctx->env, NULL);
+    popScope(&ctx->env);
+    environmentFree(&(Env){.first = ctx->env.scope->next});
+    ctx->env.scope->next = NULL;
     ctx->env = saveEnv;
 
     ctx->typeTable->currentNamespace = namespace;

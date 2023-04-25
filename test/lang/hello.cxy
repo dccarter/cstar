@@ -1,7 +1,23 @@
 import "stdlib/io.cxy" as io
-import "stdlib/array.cxy"
+import "stdlib/vector.cxy"
 
 func main(args: [string]) {
-    var arr = new array.Array[i32](10);
-   io.println(f"Hello World ${io.STDOUT}")
+    var other = new vector.Vector[vector.Vector[i32]](10);
+    var arr = new vector.Vector[i32](10);
+
+    for (const i: 0..100)
+        arr.push(<i32>i)
+
+    for (const a : arr) {
+        io.println(f"${a}")
+    }
+
+    for (const i : 0..10) {
+        io.println(f"shift ${arr.shift()}")
+        io.println(f"pop ${arr.pop()}")
+    }
+
+    for (const i : 0..len!(arr)) {
+        io.println(f"${i} => ${arr.[<i32>i]}")
+    }
 }

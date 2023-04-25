@@ -1102,10 +1102,14 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         CLONE_MANY(unionDecl, members);
         break;
 
+    case astStructDecl:
+        CLONE_MANY(structDecl, members);
+        CLONE_ONE(structDecl, base);
+        break;
+
     case astEnumOption:
     case astEnumDecl:
     case astStructField:
-    case astStructDecl:
         break; // TODO
 
     case astGroupExpr:

@@ -24,8 +24,8 @@ static HashCode hashType(HashCode hash, const Type *type)
 {
     hash = hashUint32(hash, type->tag);
     hash = hashUint64(hash, type->flags);
-    if (type->namespace)
-        hash = hashStr(hash, type->namespace);
+    //    if (type->namespace)
+    //        hash = hashStr(hash, type->namespace);
 
     switch (type->tag) {
     case typAuto:
@@ -137,6 +137,13 @@ static bool compareTypes(const Type *left, const Type *right)
                                 right->tUnion.members,
                                 left->tUnion.count);
     case typFunc:
+        if (left->name && right->name && strcmp(left->name, right->name) != 0)
+            return false;
+        if (left->func.decl && right->func.decl &&
+            left->func.decl->parentScope && right->func.decl->parentScope &&
+            left->func.decl->parentScope != right->func.decl->parentScope)
+            return false;
+        
         return ((left->flags & flgVariadic) == (right->flags & flgVariadic)) &&
                (left->func.paramsCount == right->func.paramsCount) &&
                compareTypes(left->func.retType, right->func.retType) &&

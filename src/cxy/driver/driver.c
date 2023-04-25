@@ -55,7 +55,7 @@ static cstring getFilenameWithoutDirs(cstring fileName)
             fileName = slash + 1;
         }
     }
-    
+
     return fileName;
 }
 

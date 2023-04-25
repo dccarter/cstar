@@ -287,13 +287,14 @@ static AstNode *makeCstrNode(AstVisitor *visitor,
     if (!typeIs(type, String)) {
         logError(ctx->L,
                  &args->loc,
-                 "unexpected expression type passed `cstr!` macro, expecting 'string', got {t}",
+                 "unexpected expression type passed `cstr!` macro, expecting "
+                 "'string', got {t}",
                  (FormatArg[]){{.t = type}});
         return NULL;
     }
 
-    args->type = makePointerType(ctx->typeTable,
-                                 getPrimitiveType(ctx->typeTable, prtI8), flgConst);
+    args->type = makePointerType(
+        ctx->typeTable, getPrimitiveType(ctx->typeTable, prtI8), flgConst);
     return args;
 }
 
@@ -319,6 +320,49 @@ static AstNode *makeTypeofNode(AstVisitor *visitor,
     return args;
 }
 
+static AstNode *makePointerOfNode(AstVisitor *visitor,
+                                  const AstNode *node,
+                                  AstNode *args)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
+        return NULL;
+
+    Operator op = args->binaryExpr.op;
+    if (!nodeIs(args, BinaryExpr) || (op != opAdd && op != opMinus)) {
+        logError(ctx->L,
+                 &args->loc,
+                 "unexpected expression passed to `ptroff`, expecting binary "
+                 "`+` or `-` expression",
+                 NULL);
+        return NULL;
+    }
+    const Type *lhs =
+        args->binaryExpr.lhs->type ?: evalType(visitor, args->binaryExpr.lhs);
+    if (!typeIs(lhs, Pointer)) {
+        logError(ctx->L,
+                 &args->binaryExpr.lhs->loc,
+                 "unexpected expression passed to `ptroff`, expecting a "
+                 "pointer expression",
+                 NULL);
+        return NULL;
+    }
+
+    const Type *rhs =
+        args->binaryExpr.rhs->type ?: evalType(visitor, args->binaryExpr.rhs);
+    if (!isIntegerType(rhs)) {
+        logError(ctx->L,
+                 &args->binaryExpr.rhs->loc,
+                 "unexpected expression passed to `ptroff`, expecting an "
+                 "expression",
+                 NULL);
+        return NULL;
+    }
+
+    args->type = lhs;
+    return args;
+}
+
 static int compareBuiltinMacros(const void *lhs, const void *rhs)
 {
     return strcmp(((BuiltinMacro *)lhs)->name, ((BuiltinMacro *)rhs)->name);
@@ -331,6 +375,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "cstr", makeCstrNode},
     {.name = "len", makeLenNode},
     {.name = "line", makeLineNumberNode},
+    {.name = "ptroff", makePointerOfNode},
     {.name = "sizeof", makeSizeofNode},
     {.name = "typeof", makeTypeofNode},
     {.name = "unchecked", makeUncheckedNode},

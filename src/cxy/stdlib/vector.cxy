@@ -1,0 +1,69 @@
+module vector
+
+import "stdlib/utils.cxy"
+
+const DEFAULT_VECTOR_CAPACITY : u64 = 16;
+
+pub struct Vector[T] {
+    - data: [T]
+    - len: u64
+
+    - func grow() {
+        var capacity = len!(data);
+        if (len >= capacity) {
+            capacity += (capacity / 2)
+            data = utils.reallocSlice[T](data, capacity)
+        }
+    }
+
+    func `new`(initialSize: u64 = DEFAULT_VECTOR_CAPACITY) {
+        data = utils.allocSlice[T](initialSize)
+    }
+
+    func push(item: T) {
+        grow()
+        data.[len++] = item
+    }
+
+    func pop() {
+        assert!(len > 0)
+        len--;
+        return data.[len]
+    }
+
+    func shift() {
+        assert!(len > 0)
+        const item = data.[0];
+        var tmp = data;
+        len -= 1
+        utils.memmove(unchecked!(tmp.data, #&const T),
+                      ptroff!(unchecked!(tmp.data, #&T) + 1),
+                      sizeof!(item) * len)
+        return item
+    }
+
+    func resize(newSize: u64) {
+        data = utils.reallocSlice[T](data, newSize)
+        if (newSize < len)
+            len = newSize
+    }
+
+    @inline
+    func shrink() => resize(len)
+
+    func `[]`(index: i32) {
+        assert!(index < len)
+        return data.[index]
+    }
+
+    func `[]=`(index: i32, value: T) {
+        assert!(index < len!(data))
+        data.[index] = value
+    }
+
+    func `..`(cb: func(item: T) -> void) {
+        var i = 0;
+        while (i < len)
+            cb(data.[i++])
+    }
+}

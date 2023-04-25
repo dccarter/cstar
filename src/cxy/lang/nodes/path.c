@@ -123,10 +123,10 @@ void generatePath(ConstAstVisitor *visitor, const AstNode *node)
         for (; elem; elem = elem->next) {
             astConstVisit(visitor, elem);
             if (elem->next) {
-                if (typeIs(elem->type, Module))
+                if (elem->type && typeIs(elem->type, Module))
                     format(ctx->state, "__", NULL);
-                else if (typeIs(elem->type, Pointer) ||
-                         typeIs(elem->type, This))
+                else if (elem->type && (typeIs(elem->type, Pointer) ||
+                                        typeIs(elem->type, This)))
                     format(ctx->state, "->", NULL);
                 else
                     format(ctx->state, ".", NULL);

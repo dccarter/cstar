@@ -115,9 +115,9 @@ add_custom_target(
 )
 
 set(CXY_STD_LIB_SOURCES
-        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/array.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/io.cxy
-        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/utils.cxy)
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/utils.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/vector.cxy)
 
 add_custom_target(
         cxy-stdlib ALL
