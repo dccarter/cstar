@@ -111,11 +111,10 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     ctx->typeTable->currentNamespace = target->namespace;
 
     substitute->next = NULL;
-    Env saveEnv = {.first = ctx->env.first->next, .scope = ctx->env.scope};
+    Env saveEnv = ctx->env;
     __typeof(ctx->stack) saveStack = ctx->stack;
+    ctx->env = *generic->genericDecl.env;
 
-    ctx->env.first->next = NULL;
-    ctx->env.scope = ctx->env.first;
     pushScope(&ctx->env, NULL);
     bool isMember = nodeIs(target->generic.decl, FuncDecl) &&
                     target->generic.decl->parentScope &&
@@ -124,11 +123,6 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     param = node->pathElement.args;
     for (u64 i = 0; i < count; i++, param = param->next) {
         defineSymbol(&ctx->env, ctx->L, target->generic.params[i].name, param);
-    }
-
-    addTopLevelDecl(ctx, name, substitute);
-    if (&ctx->env != env && ctx->env.up != env) {
-        environmentAttachUp(&ctx->env, env);
     }
 
     if (isMember) {
@@ -141,9 +135,8 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
         node->type = evalType(visitor, substitute);
     }
 
-    if (&ctx->env != env) {
-        environmentDetachUp(&ctx->env);
-    }
+    pushScope(&ctx->env, NULL);
+    ctx->env = saveEnv;
 
     ctx->typeTable->currentNamespace = namespace;
 
@@ -162,10 +155,6 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
         defineSymbol((Env *)env, ctx->L, name, substitute);
     }
 
-    Env tmp = {.first = ctx->env.first->next};
-    environmentFree(&tmp);
-    ctx->env.first->next = saveEnv.first;
-    ctx->env.scope = saveEnv.scope;
     ctx->stack = saveStack;
 
     return substitute;
@@ -194,6 +183,7 @@ void checkGenericDecl(AstVisitor *visitor, AstNode *node)
     }
     addModuleExport(ctx, node, name);
 
+    node->genericDecl.env = environmentCopy(ctx->pool, &ctx->env);
     node->genericDecl.decl->parentScope = node->parentScope;
     u64 count = countAstNodes(param);
     GenericParam *params = mallocOrDie(sizeof(GenericParam) * count);

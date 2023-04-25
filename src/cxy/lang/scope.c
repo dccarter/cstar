@@ -262,4 +262,11 @@ void environmentInit(Env *env)
     env->scope = NULL;
 }
 
+Env *environmentCopy(MemPool *pool, const Env *env)
+{
+    Env *copy = allocFromMemPool(pool, sizeof(Env));
+    *copy = *env;
+    return copy;
+}
+
 void environmentFree(Env *env) { freeScopes(env->first); }

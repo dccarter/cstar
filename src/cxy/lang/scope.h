@@ -39,6 +39,7 @@ static inline void environmentAttachUp(Env *env, const Env *up)
 }
 static inline void environmentDetachUp(Env *env) { env->up = NULL; }
 void environmentFree(Env *env);
+Env *environmentCopy(MemPool *pool, const Env *env);
 void releaseScope(Env *env, Env *into);
 
 bool defineSymbol(Env *env, Log *L, const char *name, AstNode *node);

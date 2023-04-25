@@ -182,6 +182,8 @@ static void prologue(ConstAstVisitor *visitor, const AstNode *node)
         append(ctx->state, CXY_SETUP_CODE, CXY_SETUP_CODE_SIZE);
         format(ctx->state, "\n\n", NULL);
     }
+    else
+        format(ctx->state, "#pragma once\n\n", NULL);
 
     generateManyAsts(visitor, "\n", node->program.top);
 

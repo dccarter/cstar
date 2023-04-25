@@ -10,7 +10,7 @@ pub struct Array[T] {
         var capacity = len!(data);
         if (len < capacity) {
             capacity += (capacity / 2)
-            data = utils.reallocSlice[T](capacity)
+            data = utils.reallocSlice[T](data, capacity)
         }
     }
 

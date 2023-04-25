@@ -348,6 +348,7 @@ struct AstNode {
         } genericParam;
 
         struct {
+            Env *env;
             struct AstNode *params;
             struct AstNode *decl;
         } genericDecl;
