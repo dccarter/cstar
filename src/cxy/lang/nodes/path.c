@@ -10,13 +10,43 @@
 
 #include "core/alloc.h"
 
+static void substituteImportPath(AstVisitor *visitor,
+                                 AstNode *node,
+                                 AstNode *elem)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    AstNode *symbol = findSymbolOnly(&ctx->env, elem->pathElement.name);
+    csAssert0(symbol);
+
+    node->type = NULL;
+    elem->type = NULL;
+    elem->pathElement.alt = symbol->importEntity.path;
+    elem->pathElement.name = symbol->importEntity.module;
+
+    elem->next = makeAstNode(
+        ctx->pool,
+        &node->loc,
+        &(AstNode){.tag = astPathElem,
+                   .pathElement = {.name = symbol->importEntity.name,
+                                   .args = elem->pathElement.args},
+                   .next = NULL});
+    elem->pathElement.args = NULL;
+
+    node->type = evalType(visitor, node);
+    elem->pathElement.name = symbol->importEntity.module;
+}
+
 static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     Scope *scope = NULL, *closure = ctx->closure;
 
-    AstNode *symbol = findSymbolAndScope(
-        &ctx->env, ctx->L, node->pathElement.name, &node->loc, &scope);
+    AstNode *symbol =
+        findSymbolAndScope(&ctx->env,
+                           ctx->L,
+                           node->pathElement.alt ?: node->pathElement.name,
+                           &node->loc,
+                           &scope);
 
     u64 flags = flgNone;
     if (symbol == NULL) {
@@ -45,7 +75,8 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
     }
 
     node->type = symbol->type;
-    flags = (symbol->flags & (flgConst | flgAddThis | flgTypeAst));
+    flags =
+        (symbol->flags & (flgConst | flgAddThis | flgTypeAst | flgImportAlias));
     if (hasFlag(symbol, TopLevelDecl) && isInSameEnv(scope, ctx->env.first)) {
         flags |= flgAppendNS;
     }
@@ -203,13 +234,21 @@ void checkPath(AstVisitor *visitor, AstNode *node)
     SemanticsContext *ctx = getAstVisitorContext(visitor);
 
     AstNode *elem = node->path.elements;
+    u64 flags = node->flags, elemFlags = elem->flags;
     const Type *type = checkFirstPathElement(visitor, elem);
+    if (hasFlag(elem, ImportAlias)) {
+        node->flags = flags;
+        elem->flags = elemFlags;
+        substituteImportPath(visitor, node, elem);
+        return;
+    }
+
     if (type == NULL || typeIs(type, Error)) {
         node->type = ERROR_TYPE(ctx);
         return;
     }
 
-    u64 flags = elem->flags;
+    flags = elem->flags;
     AstNode *prev = elem;
     elem = elem->next;
     for (; elem; elem = elem->next) {

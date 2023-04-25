@@ -100,6 +100,7 @@ typedef enum {
     astGenericParam,
     astGenericDecl,
     astIdentifier,
+    astImportEntity,
     /* Types */
     astVoidType,
     astStringType,
@@ -192,7 +193,8 @@ enum {
     flgAppendNS = BIT(21),
     flgTopLevelDecl = BIT(22),
     flgGenerated = BIT(23),
-    flgCodeGenerated = BIT(24)
+    flgCodeGenerated = BIT(24),
+    flgImportAlias = BIT(25)
 };
 
 typedef struct AstNode AstNode;
@@ -249,7 +251,15 @@ struct AstNode {
             struct AstNode *module;
             struct AstNode *exports;
             struct AstNode *alias;
+            struct AstNode *entities;
         } import;
+
+        struct {
+            cstring alias;
+            cstring name;
+            cstring module;
+            cstring path;
+        } importEntity;
 
         struct {
             cstring name;
@@ -355,6 +365,7 @@ struct AstNode {
 
         struct {
             const char *name;
+            const char *alt;
             struct AstNode *args;
             u64 index;
         } pathElement;

@@ -106,6 +106,7 @@
     f(CDefine, "cDefine")           \
     f(CInclude,"cInclude")          \
     f(As,      "as")                \
+    f(From,    "from")              \
     PRIM_TYPE_LIST(f)
 
 #define SPECIAL_TOKEN_LIST(f)                   \

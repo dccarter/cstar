@@ -136,6 +136,16 @@ static void parserError(Parser *parser,
     E4C_THROW(ParserException, "");
 }
 
+static void parserWarnThrow(Parser *parser,
+                            const FileLoc *loc,
+                            cstring msg,
+                            FormatArg *args)
+{
+    advance(parser);
+    logWarning(parser->L, loc, msg, args);
+    E4C_THROW(ParserException, "");
+}
+
 static Token *consume(Parser *parser, TokenTag id, cstring msg, FormatArg *args)
 {
     Token *tok = check(parser, id);
@@ -1812,15 +1822,23 @@ static void synchronize(Parser *P)
     }
 }
 
-static AstNode *parseModuleName(Parser *P)
+static AstNode *parseImportEntity(Parser *P)
 {
-    AstNode *name = parseIdentifier(P), *next = name;
-    if (check(P, tokDiv) && checkPeek(P, 1, tokIdent)) {
-        consume0(P, tokDiv);
-        next->next = parseIdentifier(P);
-        next = next->next;
+    Token tok = *consume0(P, tokIdent);
+    cstring name = getTokenString(P, &tok, false), alias;
+    if (match(P, tokAs)) {
+        Token *aliasTok = consume0(P, tokIdent);
+        alias = getTokenString(P, aliasTok, false);
     }
-    return name;
+    else {
+        alias = name;
+    }
+
+    return makeAstNode(
+        P->memPool,
+        &tok.fileLoc,
+        &(AstNode){.tag = astImportEntity,
+                   .importEntity = {.alias = alias, .name = name}});
 }
 
 static AstNode *parseModuleDecl(Parser *P)
@@ -1838,26 +1856,40 @@ static AstNode *parseModuleDecl(Parser *P)
 static AstNode *parseImportDecl(Parser *P)
 {
     Token tok = *consume0(P, tokImport);
-    AstNode *module = parseString(P);
+    AstNode *module;
     AstNode *entities = NULL, *alias = NULL, *exports;
-
-    if (match(P, tokAs))
-        alias = parseIdentifier(P);
-
-    exports = compileModule(P->cc, module);
-    if (exports == NULL) {
-        parserError(P,
-                    &tok.fileLoc,
-                    "importing module {s} failed",
-                    (FormatArg[]){{.s = module->stringLiteral.value}});
+    if (check(P, tokIdent)) {
+        entities = parseImportEntity(P);
+    }
+    else if (match(P, tokLBrace)) {
+        entities = parseAtLeastOne(
+            P, "exported declaration", tokRBrace, tokComma, parseImportEntity);
+        consume0(P, tokRBrace);
     }
 
-    return makeAstNode(
-        P->memPool,
-        &tok.fileLoc,
-        &(AstNode){
-            .tag = astImportDecl,
-            .import = {.module = module, .exports = exports, .alias = alias}});
+    if (entities)
+        consume0(P, tokFrom);
+
+    module = parseString(P);
+
+    if (entities == NULL && match(P, tokAs))
+        alias = parseIdentifier(P);
+
+    exports = compileModule(P->cc, module, entities);
+    if (exports == NULL) {
+        parserWarnThrow(P,
+                        &tok.fileLoc,
+                        "importing module {s} failed",
+                        (FormatArg[]){{.s = module->stringLiteral.value}});
+    }
+
+    return makeAstNode(P->memPool,
+                       &tok.fileLoc,
+                       &(AstNode){.tag = astImportDecl,
+                                  .import = {.module = module,
+                                             .exports = exports,
+                                             .alias = alias,
+                                             .entities = entities}});
 }
 
 static AstNode *parseImportsDecl(Parser *P)

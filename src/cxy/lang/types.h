@@ -167,6 +167,7 @@ typedef struct Type {
             const Type **params;
             const char **captureNames;
             AstNode *decl;
+            Env *env;
         } func;
 
         struct {

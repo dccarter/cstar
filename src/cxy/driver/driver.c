@@ -153,26 +153,28 @@ void initCompilerDriver(CompilerDriver *compiler, Log *log)
     compiler->L = log;
 }
 
-AstNode *compileModule(CompilerDriver *driver, const AstNode *source)
+AstNode *compileModule(CompilerDriver *driver,
+                       const AstNode *source,
+                       const AstNode *entities)
 {
     const Options *options = &driver->options;
     AstNode *program = NULL;
     cstring name = source->stringLiteral.value;
 
     if (access(name, F_OK) != 0) {
-        logWarning(driver->L,
-                   &source->loc,
-                   "module source file '{s}' does not exist",
-                   (FormatArg[]){{.s = name}});
+        logError(driver->L,
+                 &source->loc,
+                 "module source file '{s}' does not exist",
+                 (FormatArg[]){{.s = name}});
         return NULL;
     }
 
     program = parseFile(driver, name);
     if (program->program.module == NULL) {
-        logWarning(driver->L,
-                   &source->loc,
-                   "module source '{s}' is not declared as a module",
-                   (FormatArg[]){{.s = name}});
+        logError(driver->L,
+                 &source->loc,
+                 "module source '{s}' is not declared as a module",
+                 (FormatArg[]){{.s = name}});
         return NULL;
     }
 
@@ -188,11 +190,28 @@ AstNode *compileModule(CompilerDriver *driver, const AstNode *source)
                        driver->typeTable);
     }
 
-    if (!hasErrors(driver)) {
-        generateSourceFiles(driver, program, name, true);
+    if (hasErrors(driver))
+        return NULL;
+
+    const AstNode *entity = entities;
+    AstNode *module = program->program.module;
+
+    for (; entity; entity = entity->next) {
+        if (!findSymbolOnly(module->moduleDecl.env,
+                            entity->importEntity.name)) {
+            logError(
+                driver->L,
+                &entity->loc,
+                "module {s} does export declaration with name '{s}'",
+                (FormatArg[]){{.s = name}, {.s = entity->importEntity.name}});
+        }
     }
 
-    return program->program.module;
+    if (hasErrors(driver))
+        return NULL;
+
+    generateSourceFiles(driver, program, name, true);
+    return module;
 }
 
 bool compileSource(const char *fileName, CompilerDriver *driver)

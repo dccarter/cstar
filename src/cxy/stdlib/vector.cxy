@@ -66,4 +66,6 @@ pub struct Vector[T] {
         while (i < len)
             cb(data.[i++])
     }
+
+    func `str`() => f"${data}"
 }

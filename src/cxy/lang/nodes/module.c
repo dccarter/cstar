@@ -26,18 +26,34 @@ void checkImportDecl(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *exports = node->import.exports;
-    cstring name = NULL;
-    if (node->import.alias) {
-        AstNode *alias = node->import.alias;
-        csAssert0(nodeIs(alias, Identifier));
-        name = alias->ident.value;
+    if (node->import.entities) {
+        AstNode *entity = node->import.entities;
+        for (; entity; entity = entity->next) {
+            entity->flags |= flgImportAlias;
+            entity->importEntity.module = exports->moduleDecl.name;
+            entity->importEntity.path =
+                node->import.module->stringLiteral.value;
+            defineSymbol(&ctx->env, ctx->L, entity->importEntity.alias, entity);
+        }
+        defineSymbol(&ctx->env,
+                     ctx->L,
+                     node->import.module->stringLiteral.value,
+                     exports);
     }
-    else
-        name = exports->moduleDecl.name;
+    else {
+        cstring name = NULL;
+        if (node->import.alias) {
+            AstNode *alias = node->import.alias;
+            csAssert0(nodeIs(alias, Identifier));
+            name = alias->ident.value;
+        }
+        else
+            name = exports->moduleDecl.name;
 
-    defineSymbol(&ctx->env, ctx->L, name, exports);
-    if (ctx->program->program.module)
-        defineSymbol(&ctx->exports, ctx->L, name, exports);
+        defineSymbol(&ctx->env, ctx->L, name, exports);
+        if (ctx->program->program.module)
+            defineSymbol(&ctx->exports, ctx->L, name, exports);
+    }
 }
 
 void finalizeModule(AstVisitor *visitor, AstNode *node, cstring namespace)

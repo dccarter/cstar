@@ -156,7 +156,7 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
 
-    const Type *type = node->callExpr.callee->type;
+    const Type *type = resolveType(node->callExpr.callee->type);
     const AstNode *parent =
         type->func.decl ? type->func.decl->parentScope : NULL;
 
