@@ -445,18 +445,49 @@ char *cxy_string_builder_release(cxy_string_builder_t *sb)
     return data;
 }
 
-typedef struct {
-    u64 value;
-    const char *name;
-} cxy_enum_names_t;
-
-const char *cxy_enum_find_name(const cxy_enum_names_t *names, u64 value)
+int cxy_binary_search(const void *arr,
+                      u64 len,
+                      const void *x,
+                      u64 size,
+                      int (*compare)(const void *, const void *))
 {
-    const cxy_enum_names_t *name = names;
-    for (; name->name != NULL; name++) {
-        if (name->value == value)
-            return name->name;
+    int lower = 0;
+    int upper = (int)len - 1;
+    const u8 *ptr = arr;
+    while (lower <= upper) {
+        int mid = lower + (upper - lower) / 2;
+        int res = compare(x, ptr + (size * mid));
+        if (res == 0)
+            return mid;
+
+        if (res > 0)
+            lower = mid + 1;
+        else
+            upper = mid - 1;
     }
+    return -1;
+}
+
+typedef struct {
+    i64 value;
+    const char *name;
+} cxy_enum_name_t;
+
+static int cxy_enum_name_compare(const void *lhs, const void *rhs)
+{
+    return (int)(((cxy_enum_name_t *)lhs)->value -
+                 ((cxy_enum_name_t *)rhs)->value);
+}
+
+const char *cxy_enum_find_name(const cxy_enum_name_t *names,
+                               u64 count,
+                               u64 value)
+{
+    cxy_enum_name_t name = {.value = value};
+    int index = cxy_binary_search(
+        names, count, &name, sizeof(name), cxy_enum_name_compare);
+    if (index >= 0)
+        return names[index].name;
 
     return "(Unknown)";
 }

@@ -256,8 +256,8 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, " ", NULL);
         if (hasFlag(node, Generated))
             writeDeclNamespace(ctx, node->type->namespace, NULL);
-        else
-            writeNamespace(ctx, NULL);
+        //        else
+        //            writeNamespace(ctx, NULL);
         writeTypename(ctx, parent->type);
         format(ctx->state, "__{s}", (FormatArg[]){{.s = node->funcDecl.name}});
     }

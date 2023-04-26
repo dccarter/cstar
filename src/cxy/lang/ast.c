@@ -951,6 +951,44 @@ bool isAssignableExpr(attr(unused) const AstNode *node)
     return false;
 }
 
+bool isLiteralExpr(const AstNode *node)
+{
+    switch (node->tag) {
+    case astStringLit:
+    case astIntegerLit:
+    case astBoolLit:
+    case astFloatLit:
+    case astCharLit:
+    case astNullLit:
+        return true;
+    default:
+        return isEnumLiteral(node);
+    }
+}
+
+bool isEnumLiteral(const AstNode *node)
+{
+    if (!typeIs(node->type, Enum) || !nodeIs(node, Path) ||
+        node->path.elements->next == NULL)
+        return false;
+
+    return (node->path.elements->next->flags & flgEnumLiteral) ==
+           flgEnumLiteral;
+}
+
+bool isIntegralLiteral(const AstNode *node)
+{
+    switch (node->tag) {
+    case astIntegerLit:
+    case astBoolLit:
+    case astFloatLit:
+    case astCharLit:
+        return true;
+    default:
+        return isEnumLiteral(node);
+    }
+}
+
 u64 countAstNodes(const AstNode *node)
 {
     u64 len = 0;

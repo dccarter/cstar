@@ -179,10 +179,13 @@ static inline AstNode *findEnclosingScope(Env *env,
                                           const char *context,
                                           AstTag firstTag,
                                           AstTag secondTag,
+                                          AstTag thirdTag,
                                           const FileLoc *loc)
 {
     for (Scope *scope = env->scope; scope; scope = scope->prev) {
-        if (scope->node->tag == firstTag || scope->node->tag == secondTag)
+        if (scope->node->tag == firstTag ||  //
+            scope->node->tag == secondTag || //
+            scope->node->tag == thirdTag)
             return scope->node;
     }
 
@@ -204,19 +207,40 @@ AstNode *findEnclosingLoop(Env *env,
                            const FileLoc *loc)
 {
     return findEnclosingScope(
-        env, L, keyword, "loop", astWhileStmt, astForStmt, loc);
+        env, L, keyword, "loop", astWhileStmt, astForStmt, astError, loc);
+}
+
+AstNode *findEnclosingLoopOrSwitch(Env *env,
+                                   Log *L,
+                                   const char *keyword,
+                                   const FileLoc *loc)
+{
+    return findEnclosingScope(env,
+                              L,
+                              keyword,
+                              "loop or switch",
+                              astWhileStmt,
+                              astForStmt,
+                              astSwitchStmt,
+                              loc);
 }
 
 AstNode *findEnclosingFunc(Env *env, Log *L, const FileLoc *loc)
 {
-    return findEnclosingScope(
-        env, L, "return", "function", astClosureExpr, astFuncDecl, loc);
+    return findEnclosingScope(env,
+                              L,
+                              "return",
+                              "function",
+                              astClosureExpr,
+                              astFuncDecl,
+                              astError,
+                              loc);
 }
 
 AstNode *findEnclosingBlock(Env *env, Log *L, const FileLoc *loc)
 {
     return findEnclosingScope(
-        env, L, "defer", "block", astBlockStmt, astBlockStmt, loc);
+        env, L, "defer", "block", astBlockStmt, astBlockStmt, astError, loc);
 }
 
 void pushScope(Env *env, AstNode *node)

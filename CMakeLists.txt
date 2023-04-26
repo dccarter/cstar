@@ -64,6 +64,7 @@ set(CXY_LANG_NODE_SOURCES
         src/cxy/lang/nodes/return.c
         src/cxy/lang/nodes/strexpr.c
         src/cxy/lang/nodes/struct.c
+        src/cxy/lang/nodes/switch.c
         src/cxy/lang/nodes/ternary.c
         src/cxy/lang/nodes/tuple.c
         src/cxy/lang/nodes/type.c

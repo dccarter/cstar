@@ -94,7 +94,7 @@ typedef struct GenericParam {
 
 typedef struct EnumOption {
     const char *name;
-    u64 value;
+    i64 value;
 } EnumOption;
 
 #define CXY_TYPE_HEAD                                                          \
@@ -200,11 +200,12 @@ typedef struct Type {
 } Type;
 
 #define CYX_TYPE_BODY_SIZE (sizeof(Type) - sizeof(((Type *)0)->_head))
-#define typeIs(T, TAG) ((T)->tag == typ##TAG)
+#define typeIs(T, TAG) ((T) && (T)->tag == typ##TAG)
 
 bool isTypeAssignableFrom(const Type *to, const Type *from);
 bool isTypeCastAssignable(const Type *to, const Type *from);
 bool isIntegerType(const Type *type);
+bool isIntegralType(const Type *type);
 bool isSignedType(const Type *type);
 bool isUnsignedType(const Type *type);
 bool isFloatType(const Type *type);

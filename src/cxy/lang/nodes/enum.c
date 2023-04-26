@@ -9,6 +9,11 @@
 
 #include "core/alloc.h"
 
+static int compareEnumOptionsByValue(const void *lhs, const void *rhs)
+{
+    return (int)(((EnumOption *)lhs)->value - ((EnumOption *)rhs)->value);
+}
+
 void generateEnumDefinition(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
@@ -30,7 +35,7 @@ void generateEnumDefinition(CodegenContext *context, const Type *type)
     writeTypename(context, type);
     format(state, ";\n", NULL);
 
-    format(state, "const cxy_enum_names_t ", NULL);
+    format(state, "const cxy_enum_name_t ", NULL);
     writeEnumPrefix(context, type);
     format(state, "_enum_names[] = {{{>}\n", NULL);
 
@@ -75,7 +80,7 @@ void checkEnumDecl(AstVisitor *visitor, AstNode *node)
     pushScope(&env, node);
 
     for (; option; option = option->next, i++) {
-        option->flags |= flgMember;
+        option->flags |= flgMember | flgEnumLiteral;
 
         if (!defineSymbol(&env, ctx->L, option->enumOption.name, option)) {
             node->type = ERROR_TYPE(ctx);
@@ -92,6 +97,7 @@ void checkEnumDecl(AstVisitor *visitor, AstNode *node)
     }
 
     environmentDetachUp(&env);
+    qsort(options, numOptions, sizeof(EnumOption), compareEnumOptionsByValue);
 
     node->type = makeEnum(ctx->typeTable,
                           &(Type){.tag = typEnum,

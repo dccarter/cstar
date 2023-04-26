@@ -239,6 +239,28 @@ bool isIntegerType(const Type *type)
     }
 }
 
+bool isIntegralType(const Type *type)
+{
+    type = resolveType(type);
+
+    if (typeIs(type, Enum))
+        return true;
+
+    if (!typeIs(type, Primitive))
+        return false;
+
+    switch (type->primitive.id) {
+#define f(I, ...) case prt##I:
+        INTEGER_TYPE_LIST(f)
+    case prtBool:
+    case prtChar:
+        return true;
+#undef f
+    default:
+        return false;
+    }
+}
+
 bool isSignedType(const Type *type)
 {
     type = resolveType(type);

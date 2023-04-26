@@ -88,15 +88,100 @@ static const Type *functionTypeParamToCall(SemanticsContext *ctx,
     return type->tuple.members[1];
 }
 
-static const Type *structCallToFunctionCall(SemanticsContext *ctx,
+static const Type *structConstructorToCall(AstVisitor *visitor,
+                                           const Type *type,
+                                           AstNode *node)
+{
+    // Struct(100)
+    // -> ({ var x = Struct{}; x.op_new(&x, 100), x; })
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    AstNode *callee = node->callExpr.callee;
+    // turn new S(...) => ({ var tmp = new S{}; tmp.init(...); })
+
+    cstring name = makeAnonymousVariable(ctx->strPool, "_new_tmp");
+    // S{}
+    AstNode *newExpr =
+        makeAstNode(ctx->pool,
+                    &callee->loc,
+                    &(AstNode){.tag = astStructExpr,
+                               .flags = callee->flags,
+                               .structExpr = {.left = callee, .fields = NULL}});
+    // var name = new S{}
+    AstNode *varDecl = makeAstNode(
+        ctx->pool,
+        &callee->loc,
+        &(AstNode){
+            .tag = astVarDecl,
+            .flags = callee->flags,
+            .varDecl = {.names = makeAstNode(ctx->pool,
+                                             &callee->loc,
+                                             &(AstNode){.tag = astIdentifier,
+                                                        .ident.value = name}),
+                        .init = newExpr}});
+
+    // tmp.init
+    AstNode *newCallee = makeAstNode(
+        ctx->pool,
+        &callee->loc,
+        &(AstNode){
+            .tag = astMemberExpr,
+            .flags = callee->flags,
+            .memberExpr = {
+                .target = makeAstNode(ctx->pool,
+                                      &node->loc,
+                                      &(AstNode){.tag = astIdentifier,
+                                                 .flags = callee->flags,
+                                                 .ident.value = name}),
+                .member = makeAstNode(ctx->pool,
+                                      &node->loc,
+                                      &(AstNode){.tag = astIdentifier,
+                                                 .flags = callee->flags,
+                                                 .ident.value = "op_new"})}});
+
+    AstNode *ret =
+        makeAstNode(ctx->pool,
+                    &node->loc,
+                    &(AstNode){.tag = astExprStmt,
+                               .flags = node->flags,
+                               .exprStmt.expr = makeAstNode(
+                                   ctx->pool,
+                                   &node->loc,
+                                   &(AstNode){.tag = astIdentifier,
+                                              .flags = node->flags,
+                                              .ident.value = name})});
+
+    //     name.init
+    varDecl->next =
+        makeAstNode(ctx->pool,
+                    &node->loc,
+                    &(AstNode){.tag = astCallExpr,
+                               .flags = node->flags,
+                               .callExpr = {.callee = newCallee,
+                                            .args = node->callExpr.args},
+                               .next = ret});
+
+    AstNode *block = makeAstNode(
+        ctx->pool,
+        &node->loc,
+        &(AstNode){.tag = astBlockStmt, .blockStmt.stmts = varDecl});
+
+    memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);
+    node->tag = astStmtExpr;
+    node->stmtExpr.stmt = block;
+
+    return evalType(visitor, node);
+}
+
+static const Type *structCallToFunctionCall(AstVisitor *visitor,
                                             const Type *type,
                                             AstNode *node)
 {
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *raw = stripPointer(type);
-    SymbolRef *sym = findSymbolRef(raw->tStruct.env, "op_call");
     AstNode *callee = node->callExpr.callee;
 
-    if (!sym) {
+    AstNode *symbol = findSymbolOnly(raw->tStruct.env, "op_call");
+    if (!symbol) {
         logError(ctx->L,
                  &callee->loc,
                  "call expression target of type '{t}' does not have a call "
@@ -111,17 +196,17 @@ static const Type *structCallToFunctionCall(SemanticsContext *ctx,
         &callee->loc,
         &(AstNode){.tag = astMemberExpr,
                    .flags = callee->flags,
-                   .type = sym->node->type,
+                   .type = symbol->type,
                    .memberExpr = {.target = callee,
                                   .member = makeAstNode(
                                       ctx->pool,
                                       &callee->loc,
                                       &(AstNode){.tag = astIdentifier,
                                                  .flags = callee->flags,
-                                                 .type = sym->node->type,
+                                                 .type = symbol->type,
                                                  .ident.value = "op_call"})}});
 
-    return sym->node->type;
+    return symbol->type;
 }
 
 static void generateClosureCapture(CodegenContext *ctx,
@@ -285,8 +370,17 @@ void checkCall(AstVisitor *visitor, AstNode *node)
     bool paramsEvaluated = false;
 
     if (typeIs(calleeRaw, Struct)) {
-        callee = structCallToFunctionCall(ctx, callee, node);
-        if (callee == NULL) {
+        if (nodeIs(node->callExpr.callee, Path)) {
+            AstNode *decl =
+                findSymbolOnlyByNode(&ctx->env, node->callExpr.callee);
+            if (decl && nodeIs(decl, StructDecl)) {
+                structConstructorToCall(visitor, callee, node);
+                return;
+            }
+        }
+
+        callee = structCallToFunctionCall(visitor, callee, node);
+        if (callee == NULL || typeIs(callee, Error)) {
             node->type = ERROR_TYPE(ctx);
             return;
         }

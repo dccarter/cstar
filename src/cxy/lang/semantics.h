@@ -67,8 +67,13 @@ const Type *checkBuiltinTypeProperty(SemanticsContext *ctx,
                                      AstNode *target,
                                      cstring name);
 
-AstNode *findSymbolByPath(SemanticsContext *ctx, const Env *env, AstNode *node);
-AstNode *findSymbolByNode(SemanticsContext *ctx, const Env *env, AstNode *node);
+AstNode *findSymbolByPath(SemanticsContext *ctx,
+                          const Env *env,
+                          const AstNode *node);
+AstNode *findSymbolByNode(SemanticsContext *ctx,
+                          const Env *env,
+                          const AstNode *node);
+AstNode *findSymbolOnlyByNode(const Env *env, const AstNode *node);
 
 AstNode *checkGenericDeclReference(AstVisitor *visitor,
                                    AstNode *node,
@@ -86,6 +91,8 @@ void checkForStmt(AstVisitor *visitor, AstNode *node);
 void checkReturnStmt(AstVisitor *visitor, AstNode *node);
 void checkIfStmt(AstVisitor *visitor, AstNode *node);
 void checkWhileStmt(AstVisitor *visitor, AstNode *node);
+void checkSwitchStmt(AstVisitor *visitor, AstNode *node);
+void checkCaseStmt(AstVisitor *visitor, AstNode *node);
 void checkMember(AstVisitor *visitor, AstNode *node);
 void checkClosure(AstVisitor *visitor, AstNode *node);
 void checkMethodDeclBody(AstVisitor *visitor, AstNode *node);

@@ -194,7 +194,8 @@ enum {
     flgTopLevelDecl = BIT(22),
     flgGenerated = BIT(23),
     flgCodeGenerated = BIT(24),
-    flgImportAlias = BIT(25)
+    flgImportAlias = BIT(25),
+    flgEnumLiteral = BIT(26),
 };
 
 typedef struct AstNode AstNode;
@@ -275,7 +276,7 @@ struct AstNode {
         } boolLiteral;
 
         struct {
-            u64 value;
+            i64 value;
             bool hasMinus;
         } intLiteral;
 
@@ -575,6 +576,9 @@ void printAst(FormatState *state, const AstNode *node);
 bool isTuple(const AstNode *node);
 
 bool isAssignableExpr(const AstNode *node);
+bool isLiteralExpr(const AstNode *node);
+bool isEnumLiteral(const AstNode *node);
+bool isIntegralLiteral(const AstNode *node);
 
 u64 countAstNodes(const AstNode *node);
 

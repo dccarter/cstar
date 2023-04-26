@@ -61,6 +61,10 @@ AstNode *findEnclosingLoop(Env *env,
                            Log *L,
                            const char *keyword,
                            const FileLoc *loc);
+AstNode *findEnclosingLoopOrSwitch(Env *env,
+                                   Log *L,
+                                   const char *keyword,
+                                   const FileLoc *loc);
 AstNode *findEnclosingFunc(Env *env, Log *L, const FileLoc *loc);
 AstNode *findEnclosingBlock(Env *env, Log *L, const FileLoc *loc);
 void pushScope(Env *env, AstNode *node);

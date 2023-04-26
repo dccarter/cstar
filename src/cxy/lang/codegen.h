@@ -75,6 +75,8 @@ void generateForStmtArray(ConstAstVisitor *visitor, const AstNode *node);
 void generateForStmtRange(ConstAstVisitor *visitor, const AstNode *node);
 void generateForStmt(ConstAstVisitor *visitor, const AstNode *node);
 void generateWhileStmt(ConstAstVisitor *visitor, const AstNode *node);
+void generateSwitchStmt(ConstAstVisitor *visitor, const AstNode *node);
+void generateCaseStmt(ConstAstVisitor *visitor, const AstNode *node);
 void generateIfStmt(ConstAstVisitor *visitor, const AstNode *node);
 void generateReturnStmt(ConstAstVisitor *visitor, const AstNode *node);
 void generateLiteral(ConstAstVisitor *visitor, const AstNode *node);

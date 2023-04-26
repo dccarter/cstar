@@ -102,10 +102,11 @@ static void checkDeferStmt(AstVisitor *visitor, AstNode *node)
 static void checkBreakContinueStmt(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
-    findEnclosingLoop(&ctx->env,
-                      ctx->L,
-                      node->tag == astBreakStmt ? "break" : "continue",
-                      &node->loc);
+    if (nodeIs(node, BreakStmt))
+        findEnclosingLoopOrSwitch(&ctx->env, ctx->L, "break", &node->loc);
+    else
+        findEnclosingLoop(&ctx->env, ctx->L, "continue", &node->loc);
+
     node->type = makeVoidType(ctx->typeTable);
 }
 
@@ -147,7 +148,9 @@ void addTopLevelDecl(SemanticsContext *ctx, cstring name, AstNode *node)
     ctx->previousTopLevelDecl = node;
 }
 
-AstNode *findSymbolByPath(SemanticsContext *ctx, const Env *env, AstNode *node)
+AstNode *findSymbolByPath(SemanticsContext *ctx,
+                          const Env *env,
+                          const AstNode *node)
 {
     AstNode *elem = node->path.elements;
     do {
@@ -176,13 +179,55 @@ AstNode *findSymbolByPath(SemanticsContext *ctx, const Env *env, AstNode *node)
     } while (true);
 }
 
-AstNode *findSymbolByNode(SemanticsContext *ctx, const Env *env, AstNode *node)
+static AstNode *findSymbolOnlyByPath(const Env *env, const AstNode *node)
+{
+    AstNode *elem = node->path.elements;
+    do {
+        const Type *type;
+        AstNode *sym = findSymbolOnly(
+            env, elem->pathElement.alt ?: elem->pathElement.name);
+        if (elem->next == NULL || sym == NULL)
+            return sym;
+
+        type = stripPointer(sym->type);
+        elem = elem->next;
+        switch (type->tag) {
+        case typEnum:
+            env = type->tEnum.env;
+            break;
+        case typStruct:
+            env = type->tStruct.env;
+            break;
+        case typModule:
+            env = sym->moduleDecl.env;
+            break;
+        default:
+            return NULL;
+        }
+    } while (true);
+}
+
+AstNode *findSymbolByNode(SemanticsContext *ctx,
+                          const Env *env,
+                          const AstNode *node)
 {
     switch (node->tag) {
     case astPath:
         return findSymbolByPath(ctx, env, node);
     case astIdentifier:
         return findSymbol(env, ctx->L, node->ident.value, &node->loc);
+    default:
+        return NULL;
+    }
+}
+
+AstNode *findSymbolOnlyByNode(const Env *env, const AstNode *node)
+{
+    switch (node->tag) {
+    case astPath:
+        return findSymbolOnlyByPath(env, node);
+    case astIdentifier:
+        return findSymbolOnly(env, node->ident.value);
     default:
         return NULL;
     }
@@ -303,6 +348,8 @@ void semanticsCheck(AstNode *program,
         [astIfStmt] = checkIfStmt,
         [astWhileStmt] = checkWhileStmt,
         [astForStmt] = checkForStmt,
+        [astSwitchStmt] = checkSwitchStmt,
+        [astCaseStmt] = checkCaseStmt,
         [astPrimitiveType] = checkPrimitiveType,
         [astArrayType] = checkArrayType,
         [astPointerType] = checkPointerType,

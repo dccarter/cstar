@@ -54,7 +54,7 @@ static void addCachedModule(CompilerDriver *driver,
     bool status = insertInHashTable(&driver->moduleCache,
                                     &module,
                                     hash,
-                                    sizeof(CachedModule *),
+                                    sizeof(CachedModule),
                                     compareCachedModules);
     csAssert0(status);
 }
@@ -189,6 +189,7 @@ void initCompilerDriver(CompilerDriver *compiler, Log *log)
     compiler->memPool = newMemPool();
     compiler->strPool = newStrPool(&compiler->memPool);
     compiler->typeTable = newTypeTable(&compiler->memPool, &compiler->strPool);
+    compiler->moduleCache = newHashTable(sizeof(CachedModule));
     compiler->L = log;
 }
 
@@ -199,11 +200,11 @@ AstNode *compileModule(CompilerDriver *driver,
     const Options *options = &driver->options;
     AstNode *program = NULL;
     cstring name = source->stringLiteral.value;
-    bool cached = false;
-    program = findCachedModule(driver, name);
 
+    program = findCachedModule(driver, name);
+    bool cached = true;
     if (program == NULL) {
-        cached = true;
+        cached = false;
 
         if (access(name, F_OK) != 0) {
             logError(driver->L,
