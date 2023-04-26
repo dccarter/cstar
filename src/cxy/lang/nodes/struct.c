@@ -222,6 +222,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
 
     node->type = this;
     defineSymbol(&ctx->env, ctx->L, node->structDecl.name, node);
+    addModuleExport(ctx, node, node->structDecl.name);
 
     Env env = ctx->env;
     environmentInit(&ctx->env);

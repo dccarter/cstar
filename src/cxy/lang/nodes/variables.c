@@ -20,7 +20,8 @@ void generateVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
     generateTypeUsage(ctx, node->type);
 
     format(ctx->state, " ", NULL);
-    writeNamespace(ctx, "__");
+    if (node->flags & flgTopLevelDecl)
+        writeNamespace(ctx, "__");
     astConstVisit(visitor, node->varDecl.names);
 
     if (node->varDecl.init) {

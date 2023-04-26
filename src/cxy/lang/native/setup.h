@@ -350,7 +350,7 @@ typedef struct {
     char *data;
 } cxy_string_builder_t;
 
-static void cxy_string_builder_grow(cxy_string_builder_t *sb, u64 size)
+void cxy_string_builder_grow(cxy_string_builder_t *sb, u64 size)
 {
     if (sb->data == NULL) {
         sb->data = malloc(size + 1);
@@ -364,36 +364,34 @@ static void cxy_string_builder_grow(cxy_string_builder_t *sb, u64 size)
     }
 }
 
-attr(always_inline) static void cxy_string_builder_init(
-    cxy_string_builder_t *sb)
+attr(always_inline) void cxy_string_builder_init(cxy_string_builder_t *sb)
 {
     cxy_string_builder_grow(sb, cxy_STRING_BUILDER_DEFAULT_CAPACITY);
 }
 
-static cxy_string_builder_t *cxy_string_builder_new()
+cxy_string_builder_t *cxy_string_builder_new()
 {
     cxy_string_builder_t *sb = calloc(1, sizeof(cxy_string_builder_t));
     cxy_string_builder_init(sb);
     return sb;
 }
 
-static void cxy_string_builder_deinit(cxy_string_builder_t *sb)
+void cxy_string_builder_deinit(cxy_string_builder_t *sb)
 {
     if (sb->data)
         free(sb->data);
     memset(sb, 0, sizeof(*sb));
 }
 
-attr(always_inline) static void cxy_string_builder_delete(
-    cxy_string_builder_t *sb)
+attr(always_inline) void cxy_string_builder_delete(cxy_string_builder_t *sb)
 {
     if (sb)
         free(sb);
 }
 
-static void cxy_string_builder_append_cstr0(cxy_string_builder_t *sb,
-                                            const char *cstr,
-                                            u64 len)
+void cxy_string_builder_append_cstr0(cxy_string_builder_t *sb,
+                                     const char *cstr,
+                                     u64 len)
 {
     cxy_string_builder_grow(sb, len);
     memmove(&sb->data[sb->size], cstr, len);
@@ -401,21 +399,21 @@ static void cxy_string_builder_append_cstr0(cxy_string_builder_t *sb,
     sb->data[sb->size] = '\0';
 }
 
-attr(always_inline) static void cxy_string_builder_append_cstr1(
+attr(always_inline) void cxy_string_builder_append_cstr1(
     cxy_string_builder_t *sb, const char *cstr)
 {
     cxy_string_builder_append_cstr0(sb, cstr, strlen(cstr));
 }
 
-attr(always_inline) static void cxy_string_builder_append_int(
-    cxy_string_builder_t *sb, i64 num)
+attr(always_inline) void cxy_string_builder_append_int(cxy_string_builder_t *sb,
+                                                       i64 num)
 {
     char data[32];
     i64 len = sprintf(data, "%lld", num);
     cxy_string_builder_append_cstr0(sb, data, len);
 }
 
-attr(always_inline) static void cxy_string_builder_append_float(
+attr(always_inline) void cxy_string_builder_append_float(
     cxy_string_builder_t *sb, f64 num)
 {
     char data[32];
@@ -423,14 +421,14 @@ attr(always_inline) static void cxy_string_builder_append_float(
     cxy_string_builder_append_cstr0(sb, data, len);
 }
 
-attr(always_inline) static void cxy_string_builder_append_char(
+attr(always_inline) void cxy_string_builder_append_char(
     cxy_string_builder_t *sb, wchar c)
 {
     cxy_stack_str_8_t s = cxy_wchar_str(c);
     cxy_string_builder_append_cstr0(sb, s.str, s.str[5]);
 }
 
-attr(always_inline) static void cxy_string_builder_append_bool(
+attr(always_inline) void cxy_string_builder_append_bool(
     cxy_string_builder_t *sb, bool v)
 {
     if (v)
@@ -439,7 +437,7 @@ attr(always_inline) static void cxy_string_builder_append_bool(
         cxy_string_builder_append_cstr0(sb, "false", 5);
 }
 
-static char *cxy_string_builder_release(cxy_string_builder_t *sb)
+char *cxy_string_builder_release(cxy_string_builder_t *sb)
 {
     char *data = sb->data;
     sb->data = NULL;
@@ -452,7 +450,7 @@ typedef struct {
     const char *name;
 } cxy_enum_names_t;
 
-static const char *cxy_enum_find_name(const cxy_enum_names_t *names, u64 value)
+const char *cxy_enum_find_name(const cxy_enum_names_t *names, u64 value)
 {
     const cxy_enum_names_t *name = names;
     for (; name->name != NULL; name++) {

@@ -1,8 +1,8 @@
 import { println } from "stdlib/io.cxy"
-import { Vector as Array } from "stdlib/vector.cxy"
+import { StringBuilder } from "stdlib/strlib.cxy"
+import { Vector } from "stdlib/vector.cxy"
 
 func main(args: [string]) {
-    const arr = Array[i32]{};
-    println("Hello World! ")
+//    var vec = Vector[i32]{};
 }
 

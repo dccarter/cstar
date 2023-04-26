@@ -37,6 +37,8 @@ static void generateType(CodegenContext *context, const Type *type)
         generateArrayDeclaration(context, type);
         break;
     case typFunc:
+        if (hasFlags(type, flgNative))
+            return;
         generateFunctionTypedef(context, type);
         break;
     case typTuple:
@@ -48,6 +50,15 @@ static void generateType(CodegenContext *context, const Type *type)
     case typStruct:
         generateStructDefinition(context, type);
         break;
+    case typOpaque:
+        if (type->namespace == NULL)
+            break;
+        format(state, "#ifndef ", NULL);
+        writeTypename(context, type);
+        format(state, "\n#define ", NULL);
+        writeTypename(context, type);
+        format(state, " {s} *\n#endif\n", (FormatArg[]){{.s = type->name}});
+        return;
     default:
         return;
     }

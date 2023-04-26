@@ -10,7 +10,7 @@ typedef struct CompilerDriver {
     Options options;
     MemPool memPool;
     StrPool strPool;
-    HashTable modules;
+    HashTable moduleCache;
     Log *L;
     TypeTable *typeTable;
 } CompilerDriver;

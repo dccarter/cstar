@@ -20,6 +20,45 @@
 #define BYTES_TO_MB(B) (((double)(B)) / 1000000)
 #define BYTES_TO_KB(B) (((double)(B)) / 1000)
 
+typedef struct CachedModule {
+    cstring path;
+    AstNode *program;
+} CachedModule;
+
+static bool compareCachedModules(const void *lhs, const void *rhs)
+{
+    return strcmp(((CachedModule *)lhs)->path, ((CachedModule *)rhs)->path) ==
+           0;
+}
+
+static AstNode *findCachedModule(CompilerDriver *driver, cstring path)
+{
+    u32 hash = hashStr(hashInit(), path);
+    CachedModule module = (CachedModule){.path = path};
+    CachedModule *found = findInHashTable(&driver->moduleCache, //
+                                          &module,
+                                          hash,
+                                          sizeof(CachedModule),
+                                          compareCachedModules);
+    if (found)
+        return found->program;
+    return NULL;
+}
+
+static void addCachedModule(CompilerDriver *driver,
+                            cstring path,
+                            AstNode *program)
+{
+    u32 hash = hashStr(hashInit(), path);
+    CachedModule module = (CachedModule){.path = path, .program = program};
+    bool status = insertInHashTable(&driver->moduleCache,
+                                    &module,
+                                    hash,
+                                    sizeof(CachedModule *),
+                                    compareCachedModules);
+    csAssert0(status);
+}
+
 static AstNode *parseFile(CompilerDriver *driver, const char *fileName)
 {
     size_t file_size = 0;
@@ -160,38 +199,44 @@ AstNode *compileModule(CompilerDriver *driver,
     const Options *options = &driver->options;
     AstNode *program = NULL;
     cstring name = source->stringLiteral.value;
+    bool cached = false;
+    program = findCachedModule(driver, name);
 
-    if (access(name, F_OK) != 0) {
-        logError(driver->L,
-                 &source->loc,
-                 "module source file '{s}' does not exist",
-                 (FormatArg[]){{.s = name}});
-        return NULL;
+    if (program == NULL) {
+        cached = true;
+
+        if (access(name, F_OK) != 0) {
+            logError(driver->L,
+                     &source->loc,
+                     "module source file '{s}' does not exist",
+                     (FormatArg[]){{.s = name}});
+            return NULL;
+        }
+
+        program = parseFile(driver, name);
+        if (program->program.module == NULL) {
+            logError(driver->L,
+                     &source->loc,
+                     "module source '{s}' is not declared as a module",
+                     (FormatArg[]){{.s = name}});
+            return NULL;
+        }
+
+        if (program == NULL)
+            return false;
+
+        if (options->cmd == cmdBuild ||
+            (!options->noTypeCheck && !hasErrors(driver))) {
+            semanticsCheck(program,
+                           driver->L,
+                           &driver->memPool,
+                           &driver->strPool,
+                           driver->typeTable);
+        }
+
+        if (hasErrors(driver))
+            return NULL;
     }
-
-    program = parseFile(driver, name);
-    if (program->program.module == NULL) {
-        logError(driver->L,
-                 &source->loc,
-                 "module source '{s}' is not declared as a module",
-                 (FormatArg[]){{.s = name}});
-        return NULL;
-    }
-
-    if (program == NULL)
-        return false;
-
-    if (options->cmd == cmdBuild ||
-        (!options->noTypeCheck && !hasErrors(driver))) {
-        semanticsCheck(program,
-                       driver->L,
-                       &driver->memPool,
-                       &driver->strPool,
-                       driver->typeTable);
-    }
-
-    if (hasErrors(driver))
-        return NULL;
 
     const AstNode *entity = entities;
     AstNode *module = program->program.module;
@@ -202,7 +247,7 @@ AstNode *compileModule(CompilerDriver *driver,
             logError(
                 driver->L,
                 &entity->loc,
-                "module {s} does export declaration with name '{s}'",
+                "module {s} does not export declaration with name '{s}'",
                 (FormatArg[]){{.s = name}, {.s = entity->importEntity.name}});
         }
     }
@@ -210,7 +255,11 @@ AstNode *compileModule(CompilerDriver *driver,
     if (hasErrors(driver))
         return NULL;
 
-    generateSourceFiles(driver, program, name, true);
+    if (!cached) {
+        generateSourceFiles(driver, program, name, true);
+        addCachedModule(driver, name, program);
+    }
+
     return module;
 }
 

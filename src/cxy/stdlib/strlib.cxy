@@ -1,0 +1,59 @@
+module strlib
+
+pub native type cxy_string_builder_t;
+
+pub native func cxy_string_builder_new(): cxy_string_builder_t;
+pub native func cxy_string_builder_delete(this: cxy_string_builder_t) : void;
+pub native func cxy_string_builder_release(this: cxy_string_builder_t) : &char;
+
+pub native func cxy_string_builder_append_cstr0(
+                    this: cxy_string_builder_t, str:  &const i8, len:  u64) : void;
+pub native func cxy_string_builder_append_int(
+                    this: cxy_string_builder_t, num: i64) : void;
+pub native func cxy_string_builder_append_float(
+                    this: cxy_string_builder_t, num: f64) : void;
+pub native func cxy_string_builder_append_char(
+                    this: cxy_string_builder_t, ch: wchar): void;
+pub native func cxy_string_builder_append_bool(
+                    this: cxy_string_builder_t, val: bool): void;
+
+pub native func strlen(s: &const i8) : u64;
+
+pub struct StringBuilder {
+    - sb: cxy_string_builder_t
+
+    @inline
+    func `new`() =>  sb = cxy_string_builder_new()
+
+    @inline
+    func `delete`() => cxy_string_builder_delete(sb)
+
+    @inline
+    func appendString(str: string) =>
+        cxy_string_builder_append_cstr0(sb, unchecked!(str, #&const i8), strlen(unchecked!(str, #&const i8)))
+
+    @inline
+    func appendInt(num: i64) =>
+        cxy_string_builder_append_int(sb, <i64> num)
+
+    @inline
+    func appendFloat(num: f64) =>
+        cxy_string_builder_append_float(sb, <f64> num)
+
+    @inline
+    func appendChar(ch: wchar) =>
+        cxy_string_builder_append_char(sb, ch)
+
+
+    @inline
+    func appendBool(val: bool) =>
+        cxy_string_builder_append_bool(sb, val)
+
+    @inline
+    func toString() {
+        var ret = cxy_string_builder_release(sb);
+        return unchecked!(ret, #string)
+    }
+
+    @inline func `str`() => toString()
+}

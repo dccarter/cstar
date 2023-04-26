@@ -90,23 +90,40 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
 
     case typArray:
         format(ctx->state, "cxy_string_builder_append_char(&sb, '[');\n", NULL);
-        for (u64 i = 0; i < type->array.len; i++) {
-            // Create a temporary member access expression
-            AstNode index = {.tag = astIntegerLit,
+        format(ctx->state, "for (u64 __cxy_i = 0; __cxy_i < ", NULL);
+        if (type->array.len == UINT64_MAX) {
+            AstNode index = {.tag = astIdentifier,
                              .type = getPrimitiveType(ctx->types, prtI32),
-                             .intLiteral.value = i};
+                             .ident.value = "len"};
+            AstNode arg = {
+                .tag = astMemberExpr,
+                .type = type->array.elementType,
+                .memberExpr = {.target = (AstNode *)node, .member = &index}};
+            astConstVisit(visitor, &arg);
+        }
+        else {
+            format(ctx->state, "sizeof__(", NULL);
+            writeTypename(ctx, type);
+            format(ctx->state, ")", NULL);
+        }
+
+        format(ctx->state, "; __cxy_i++) {{{>}\n", NULL);
+        format(
+            ctx->state,
+            "if (__cxy_i) cxy_string_builder_append_cstr0(&sb, \", \", 2);\n",
+            NULL);
+        {
+            AstNode index = {.tag = astIdentifier,
+                             .type = getPrimitiveType(ctx->types, prtI32),
+                             .ident.value = "__cxy_i"};
             AstNode arg = {
                 .tag = astIndexExpr,
                 .type = type->array.elementType,
                 .indexExpr = {.target = (AstNode *)node, .index = &index}};
 
-            if (i != 0)
-                format(ctx->state,
-                       "cxy_string_builder_append_cstr0(&sb, \", \", 2);\n",
-                       NULL);
-
             stringBuilderAppend(visitor, &arg);
         }
+        format(ctx->state, "{<}\n}\n", NULL);
         format(ctx->state, "cxy_string_builder_append_char(&sb, ']');\n", NULL);
         break;
 

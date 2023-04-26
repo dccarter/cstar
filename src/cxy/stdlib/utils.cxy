@@ -1,6 +1,7 @@
 module utils
 
 pub native func strlen(s: &const i8) : u64;
+
 pub native func memcpy(dst: &void, src: &const void, len: u64) : &void;
 pub native func memmove(dst: &void, src: &const void, len: u64) : &void;
 pub native func memset(dst: &void, ch: i32, len: u64) : &void;
@@ -13,5 +14,3 @@ pub func allocSlice[T](count: u64) => <[T]> __builtin_alloc_slice(#[T], count)
 
 @inline
 pub func reallocSlice[T](data: [T], count: u64) => <[T]> __builtin_realloc_slice(#[T], data, count)
-
-
