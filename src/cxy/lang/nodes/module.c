@@ -22,6 +22,36 @@ void addModuleExport(SemanticsContext *ctx, AstNode *node, cstring name)
     }
 }
 
+void defineDeclarationAliasName(SemanticsContext *ctx, AstNode *node)
+{
+    const AstNode *alias = findAttribute(node, "alias");
+    if (alias == NULL)
+        return;
+
+    if (!hasFlag(node, Native)) {
+        logWarning(ctx->L,
+                   &alias->loc,
+                   "`@alias` attribute can only be used with a public native "
+                   "declaration",
+                   NULL);
+        return;
+    }
+
+    const AstNode *name = findAttributeArgument(alias, "name");
+    if (name == NULL || !nodeIs(name, StringLit)) {
+        logWarning(
+            ctx->L,
+            &alias->loc,
+            "`@alias` accepts a name must be provided given in format `name: "
+            "\"AliasName\"",
+            NULL);
+        return;
+    }
+
+    defineSymbol(&ctx->env, ctx->L, name->stringLiteral.value, node);
+    addModuleExport(ctx, node, name->stringLiteral.value);
+}
+
 void checkImportDecl(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);

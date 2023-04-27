@@ -137,6 +137,34 @@ static AstNode *makeLenNode(AstVisitor *visitor,
     const Type *raw = stripPointer(type);
 
     switch (raw->tag) {
+    case typString: {
+        if (nodeIs(args, StringLit)) {
+            args->tag = astIntegerLit;
+            args->type = getPrimitiveType(ctx->typeTable, prtU64);
+            u64 len = strlen(args->stringLiteral.value);
+            memset(&args->stringLiteral, 0, sizeof(args->stringLiteral));
+            args->intLiteral.value = (i64)len;
+            return args;
+        }
+        else {
+            AstNode *strLen = findSymbolOnly(&ctx->env, "strlen");
+            return makeAstNode(
+                ctx->pool,
+                &node->loc,
+                &(AstNode){
+                    .tag = astCallExpr,
+                    .type = strLen->type->func.retType,
+                    .callExpr = {
+                        .callee = makeAstNode(
+                            ctx->pool,
+                            &node->loc,
+                            &(AstNode){.tag = astIdentifier,
+                                       .type = strLen->type,
+                                       .flags = strLen->flags | node->flags,
+                                       .ident.value = "strlen"}),
+                        .args = args}});
+        }
+    }
     case typArray:
         if (raw->array.len == UINT64_MAX) {
             return makeAstNode(

@@ -35,19 +35,28 @@ void generateEnumDefinition(CodegenContext *context, const Type *type)
     writeTypename(context, type);
     format(state, ";\n", NULL);
 
-    format(state, "const cxy_enum_name_t ", NULL);
+    format(state, "const char *", NULL);
     writeEnumPrefix(context, type);
-    format(state, "_enum_names[] = {{{>}\n", NULL);
-
+    format(state, "__get_name(", NULL);
+    writeEnumPrefix(context, type);
+    format(state, " value) {{{>}\n", NULL);
+    format(state, "switch((i64)value) {{{>}\n", NULL);
+    u64 prev = 0;
     for (u64 i = 0; i < type->tEnum.count; i++) {
         const EnumOption *option = &type->tEnum.options[i];
-        if (i != 0)
-            format(state, "\n", NULL);
+        if (i && option->value == prev)
+            continue;
+        format(state, "case ", NULL);
+        writeEnumPrefix(context, type);
         format(state,
-               "{{.value = {u64}, .name = \"{s}\"},",
-               (FormatArg[]){{.u64 = option->value}, {.s = option->name}});
+               "_{s}: return \"{s}.{s}\";\n",
+               (FormatArg[]){{.s = option->name},
+                             {.s = type->name ?: ""},
+                             {.s = option->name}});
+        prev = option->value;
     }
-    format(state, "{<}\n}", NULL);
+    format(state, "default: return \"(unknown)\";", NULL);
+    format(state, "{<}\n}{<}\n}", NULL);
 }
 
 void checkEnumDecl(AstVisitor *visitor, AstNode *node)
@@ -56,7 +65,7 @@ void checkEnumDecl(AstVisitor *visitor, AstNode *node)
     u64 numOptions = countAstNodes(node->enumDecl.options);
     EnumOption *options = mallocOrDie(sizeof(EnumOption) * numOptions);
     AstNode *option = node->enumDecl.options;
-    u64 lastValue = 0, i = 0;
+    i64 lastValue = 0, i = 0;
     const Type *base = NULL;
     Env env;
 
@@ -87,7 +96,7 @@ void checkEnumDecl(AstVisitor *visitor, AstNode *node)
             return;
         }
 
-        u64 value = option->enumOption.value
+        i64 value = option->enumOption.value
                         ? option->enumOption.value->intLiteral.value
                         : lastValue;
         options[i] =

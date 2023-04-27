@@ -137,21 +137,9 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
         break;
     }
     case typEnum:
-        if (type->name) {
-            format(ctx->state,
-                   "cxy_string_builder_append_cstr0(&sb, \"{s}{s}{s}.\", "
-                   "{u64});\n",
-                   (FormatArg[]){{.s = namespace},
-                                 {.s = scopeOp},
-                                 {.s = name},
-                                 {.u64 = scopedNameLen + 1}});
-        }
         format(ctx->state, "cxy_string_builder_append_cstr1(&sb, ", NULL);
-        format(ctx->state, "cxy_enum_find_name(", NULL);
         writeEnumPrefix(ctx, type);
-        format(ctx->state, "_enum_names, sizeof__(", NULL);
-        writeEnumPrefix(ctx, type);
-        format(ctx->state, "_enum_names), ", NULL);
+        format(ctx->state, "__get_name(", NULL);
         astConstVisit(visitor, node);
         format(ctx->state, "));\n", NULL);
         break;

@@ -89,13 +89,35 @@ void checkDuplicateCaseMatches(SemanticsContext *ctx,
 void generateCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getAstVisitorContext(visitor);
+    AstNode *cond = node->parentScope->switchStmt.cond;
+    u64 defaultTag = node->parentScope->switchStmt.index;
+
     if (node->caseStmt.match) {
+        const AstNode *match = node->caseStmt.match;
         format(ctx->state, "case ", NULL);
-        astConstVisit(visitor, node->caseStmt.match);
-        format(ctx->state, ":", NULL);
+        if (typeIs(match->type, String)) {
+            format(ctx->state,
+                   "{i64}:\n",
+                   (FormatArg[]){{.i64 = hashStr(hashInit(),
+                                                 match->stringLiteral.value)}});
+            format(ctx->state, "if (strcmp(", NULL);
+            astConstVisit(visitor, cond);
+            format(ctx->state,
+                   ", \"{s}\") != 0) goto __switch_default_{u64};",
+                   (FormatArg[]){{.s = match->stringLiteral.value},
+                                 {.u64 = defaultTag}});
+        }
+        else {
+            astConstVisit(visitor, node->caseStmt.match);
+            format(ctx->state, ":", NULL);
+        }
     }
     else {
         format(ctx->state, "default:", NULL);
+        if (typeIs(cond->type, String))
+            format(ctx->state,
+                   "\n__switch_default_{u64}:",
+                   (FormatArg[]){{.u64 = defaultTag}});
     }
 
     if (node->caseStmt.body == NULL) {
@@ -116,16 +138,29 @@ void generateSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getAstVisitorContext(visitor);
     format(ctx->state, "switch (", NULL);
+    bool isStringMatch = typeIs(node->switchStmt.cond->type, String);
+    if (isStringMatch)
+        format(ctx->state, "cxy_hash_string(cxy_hash_init(), ", NULL);
     astConstVisit(visitor, node->switchStmt.cond);
+
+    if (isStringMatch)
+        format(ctx->state, ")", NULL);
+
     format(ctx->state, ") {{{>}\n", NULL);
 
     const AstNode *case_ = node->switchStmt.cases;
+    bool hasDefault = false;
     for (; case_; case_ = case_->next) {
         astConstVisit(visitor, case_);
         if (case_->next)
             format(ctx->state, "\n", NULL);
+        hasDefault = case_->caseStmt.match == NULL;
     }
-
+    if (!hasDefault && isStringMatch) {
+        format(ctx->state,
+               "\ndefault:\n__switch_default_{u64}: break;",
+               (FormatArg[]){{.u64 = node->switchStmt.index}});
+    }
     format(ctx->state, "{<}\n}", NULL);
 }
 
@@ -169,7 +204,7 @@ void checkSwitchStmt(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *match = evalType(visitor, node->switchStmt.cond);
-    if (!isIntegralType(match)) {
+    if (!isIntegralType(match) && !typeIs(match, String)) {
         logError(
             ctx->L,
             &node->switchStmt.cond->loc,

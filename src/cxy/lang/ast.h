@@ -523,6 +523,7 @@ struct AstNode {
         } whileStmt;
 
         struct {
+            u64 index;
             struct AstNode *cond;
             struct AstNode *cases;
         } switchStmt;

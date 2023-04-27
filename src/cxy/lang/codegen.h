@@ -26,6 +26,7 @@ void writeDeclNamespace(CodegenContext *ctx, cstring namespace, cstring sep);
 void writeEnumPrefix(CodegenContext *ctx, const Type *type);
 void generateTypeUsage(CodegenContext *ctx, const Type *type);
 void writeTypename(CodegenContext *ctx, const Type *type);
+cstring getNativeDeclarationAliasName(const AstNode *node);
 
 void generateManyAstsWithinBlock(ConstAstVisitor *visitor,
                                  const char *sep,

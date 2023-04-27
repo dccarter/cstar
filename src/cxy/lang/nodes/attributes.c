@@ -32,5 +32,5 @@ const AstNode *findAttributeArgument(const AstNode *attr, cstring name)
             break;
         arg = arg->next;
     }
-    return arg;
+    return arg ? arg->fieldExpr.value : NULL;
 }

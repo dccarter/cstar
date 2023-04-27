@@ -50,6 +50,8 @@ void semanticsCheck(AstNode *program,
 
 const Type *evalType(AstVisitor *visitor, AstNode *node);
 void addModuleExport(SemanticsContext *ctx, AstNode *node, cstring name);
+void defineDeclarationAliasName(SemanticsContext *ctx, AstNode *node);
+
 void initializeModule(AstVisitor *visitor, AstNode *node);
 void finalizeModule(AstVisitor *visitor, AstNode *node, cstring namespace);
 

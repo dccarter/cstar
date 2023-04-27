@@ -181,6 +181,16 @@ void initializeBuiltins(SemanticsContext *ctx)
     }
 
     {
+        const Type *params[] = {makeStringType(ctx->typeTable)};
+
+        addBuiltinFunc(ctx,
+                       "strlen",
+                       getPrimitiveType(ctx->typeTable, prtU64),
+                       params,
+                       1);
+    }
+
+    {
         addBuiltinType(
             ctx, "char", flgNative, makeOpaqueType(ctx->typeTable, "char"));
 

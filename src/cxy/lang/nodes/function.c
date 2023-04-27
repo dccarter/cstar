@@ -216,6 +216,15 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
                    (FormatArg[]){{.s = node->funcDecl.name},
                                  {.s = node->funcDecl.name}});
         }
+        const char *name = getNativeDeclarationAliasName(node);
+        if (name) {
+            format(ctx->state, "\n#define ", NULL);
+            writeNamespace(ctx, NULL);
+            format(ctx->state,
+                   "{s} {s}",
+                   (FormatArg[]){{.s = name}, {.s = node->funcDecl.name}});
+        }
+
         return;
     }
 
@@ -502,6 +511,13 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
 
     defineSymbol(&ctx->env, ctx->L, node->funcDecl.name, node);
     addModuleExport(ctx, node, node->funcDecl.name);
+    defineDeclarationAliasName(ctx, node);
+
+    if (hasFlag(node, Native)) {
+        const AstNode *alias = findAttribute(node, "alias");
+        if (alias) {
+        }
+    }
 
     if (!ctx->mainOptimized) {
         node->flags |=

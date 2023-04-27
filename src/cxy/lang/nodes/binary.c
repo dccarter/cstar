@@ -8,6 +8,7 @@
 #include "lang/ttable.h"
 
 #include "core/alloc.h"
+#include "lang/eval.h"
 
 #include <memory.h>
 
@@ -65,8 +66,12 @@ static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    transformToMemberCallExpr(
-        visitor, node, overload, node->binaryExpr.lhs, name, node->binaryExpr.rhs);
+    transformToMemberCallExpr(visitor,
+                              node,
+                              overload,
+                              node->binaryExpr.lhs,
+                              name,
+                              node->binaryExpr.rhs);
     evalType(visitor, node);
 }
 
@@ -208,5 +213,18 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
     }
     default:
         unreachable("");
+    }
+}
+
+void evalBinaryExpr(AstVisitor *visitor, AstNode *node)
+{
+    EvaluatorContext *ctx = getAstVisitorContext(node);
+    AstNode *lhs = evaluate(visitor, node->binaryExpr.lhs);
+    AstNode *rhs = evaluate(visitor, node->binaryExpr.rhs);
+
+    BinaryOperatorKind kind = getBinaryOperatorKind(node->binaryExpr.op);
+
+    switch (kind) {
+
     }
 }

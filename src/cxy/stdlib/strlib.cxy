@@ -17,8 +17,6 @@ pub native func cxy_string_builder_append_char(
 pub native func cxy_string_builder_append_bool(
                     this: cxy_string_builder_t, val: bool): void;
 
-pub native func strlen(s: &const i8) : u64;
-
 pub struct StringBuilder {
     - sb: cxy_string_builder_t
 
@@ -30,7 +28,7 @@ pub struct StringBuilder {
 
     @inline
     func appendString(str: string) =>
-        cxy_string_builder_append_cstr0(sb, unchecked!(str, #&const i8), strlen(unchecked!(str, #&const i8)))
+        cxy_string_builder_append_cstr0(sb, unchecked!(str, #&const i8), len!(str))
 
     @inline
     func appendInt(num: i64) =>

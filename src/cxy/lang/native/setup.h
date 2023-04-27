@@ -2,6 +2,7 @@
 #define CXY_SETUP_CODE
 
 #include <stdarg.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -490,6 +491,62 @@ const char *cxy_enum_find_name(const cxy_enum_name_t *names,
         return names[index].name;
 
     return "(Unknown)";
+}
+
+typedef uint32_t cxy_hash_code_t;
+
+attr(always_inline) cxy_hash_code_t cxy_hash_init()
+{
+#define FNV_32_INIT UINT32_C(0x811c9dc5)
+    return FNV_32_INIT;
+#undef FNV_32_INIT
+}
+
+attr(always_inline) cxy_hash_code_t cxy_hash_uint8(cxy_hash_code_t h, uint8_t x)
+{
+#define FNV_32_PRIME 0x01000193
+    return (h ^ x) * FNV_32_PRIME;
+#undef FNV_32_PRIME
+}
+
+attr(always_inline) cxy_hash_code_t
+    cxy_hash_uint16(cxy_hash_code_t h, uint16_t x)
+{
+    return cxy_hash_uint8(cxy_hash_uint8(h, x), x >> 8);
+}
+
+attr(always_inline) cxy_hash_code_t
+    cxy_hash_uint32(cxy_hash_code_t h, cxy_hash_code_t x)
+{
+    return cxy_hash_uint16(cxy_hash_uint16(h, x), x >> 16);
+}
+
+attr(always_inline) cxy_hash_code_t
+    cxy_hash_uint64(cxy_hash_code_t h, uint64_t x)
+{
+    return cxy_hash_uint32(cxy_hash_uint32(h, x), x >> 32);
+}
+
+attr(always_inline) cxy_hash_code_t
+    cxy_hash_ptr(cxy_hash_code_t h, const void *ptr)
+{
+    return cxy_hash_uint64(h, (ptrdiff_t)ptr);
+}
+
+attr(always_inline) cxy_hash_code_t
+    cxy_hash_string(cxy_hash_code_t h, const char *str)
+{
+    while (*str)
+        h = cxy_hash_uint8(h, *(str++));
+    return h;
+}
+
+attr(always_inline) cxy_hash_code_t
+    cxy_hash_raw_bytes(cxy_hash_code_t h, const void *ptr, size_t size)
+{
+    for (size_t i = 0; i < size; ++i)
+        h = cxy_hash_uint8(h, ((char *)ptr)[i]);
+    return h;
 }
 
 #endif

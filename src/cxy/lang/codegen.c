@@ -58,6 +58,7 @@ static void generateType(CodegenContext *context, const Type *type)
         format(state, "\n#define ", NULL);
         writeTypename(context, type);
         format(state, " {s} *\n#endif\n", (FormatArg[]){{.s = type->name}});
+
         return;
     default:
         return;
@@ -381,6 +382,20 @@ void generateManyAstsWithinBlock(ConstAstVisitor *visitor,
         generateAstWithDelim(visitor, "{{ ", " }", nodes);
     else
         generateManyAstsWithDelim(visitor, "{{{>}\n", sep, "{<}\n}", nodes);
+}
+
+cstring getNativeDeclarationAliasName(const AstNode *node)
+{
+    if (!hasFlag(node, Native))
+        return NULL;
+    const AstNode *alias = findAttribute(node, "alias");
+
+    if (alias == NULL)
+        return NULL;
+
+    const AstNode *name = findAttributeArgument(alias, "name");
+
+    return (name && nodeIs(name, StringLit)) ? name->stringLiteral.value : NULL;
 }
 
 void generateCode(FormatState *state,
