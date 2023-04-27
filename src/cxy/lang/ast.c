@@ -1016,6 +1016,29 @@ AstNode *getNodeAtIndex(AstNode *node, u64 index)
     return NULL;
 }
 
+AstNode *findEnumOptionByName(AstNode *node, cstring name)
+{
+    AstNode *member = node->enumDecl.options;
+    while (member) {
+        if (member->enumOption.name == name)
+            return member;
+        member = member->next;
+    }
+    return NULL;
+}
+
+AstNode *findStructMemberByName(AstNode *node, cstring name)
+{
+    AstNode *member = node->structDecl.members;
+    while (member) {
+        if ((nodeIs(member, StructField) && member->structField.name == name) ||
+            (nodeIs(member, FuncDecl) && member->structField.name == name))
+            return member;
+        member = member->next;
+    }
+    return NULL;
+}
+
 AstNode *getParentScopeWithTag(AstNode *node, AstTag tag)
 {
     AstNode *parentScope = node->parentScope;

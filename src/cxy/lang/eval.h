@@ -11,4 +11,4 @@ typedef struct {
     AstNode *result;
 } EvaluatorContext;
 
-AstNode *evaluate(AstVisitor *visitor, AstNode *node);
+bool evaluate(AstVisitor *visitor, AstNode *node);

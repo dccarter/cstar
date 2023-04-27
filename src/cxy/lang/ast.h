@@ -298,6 +298,7 @@ struct AstNode {
         } attr;
 
         struct {
+            u64 len;
             struct AstNode *args;
         } tupleType, tupleExpr;
 
@@ -324,6 +325,7 @@ struct AstNode {
         } pointerType;
 
         struct {
+            u64 len;
             struct AstNode *elements;
         } arrayExpr;
 
@@ -585,6 +587,8 @@ u64 countAstNodes(const AstNode *node);
 
 AstNode *getLastAstNode(AstNode *node);
 AstNode *getNodeAtIndex(AstNode *node, u64 index);
+AstNode *findStructMemberByName(AstNode *node, cstring name);
+AstNode *findEnumOptionByName(AstNode *node, cstring name);
 
 AstNode *getParentScopeWithTag(AstNode *node, AstTag tag);
 

@@ -35,6 +35,7 @@ set(CXY_CORE_SOURCES
         src/cxy/core/htable.c
         src/cxy/core/log.c
         src/cxy/core/mempool.c
+        src/cxy/core/sb.c
         src/cxy/core/strpool.c
         src/cxy/core/utils.c)
 
@@ -76,6 +77,7 @@ set(CXY_LANG_SOURCES
         src/cxy/lang/ast.c
         src/cxy/lang/capture.c
         src/cxy/lang/codegen.c
+        src/cxy/lang/eval.c
         src/cxy/lang/lexer.c
         src/cxy/lang/parser.c
         src/cxy/lang/scope.c
