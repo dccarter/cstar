@@ -150,10 +150,10 @@ void checkForStmt(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    pushScope(&ctx->env, node);
+    pushScope(ctx->env, node);
     const Type *type = evalType(visitor, node->forStmt.var);
 
-    AstNode *symbol = findSymbol(&ctx->env,
+    AstNode *symbol = findSymbol(ctx->env,
                                  ctx->L,
                                  node->forStmt.var->varDecl.names->ident.value,
                                  &node->loc);
@@ -212,7 +212,7 @@ void checkForStmt(AstVisitor *visitor, AstNode *node)
 
     node->type = type == ERROR_TYPE(ctx) ? type : body;
 
-    popScope(&ctx->env);
+    popScope(ctx->env);
 }
 
 void generateForStmt(ConstAstVisitor *visitor, const AstNode *node)

@@ -14,28 +14,46 @@ StrPool newStrPool(MemPool *mem_pool)
 
 void freeStrPool(StrPool *str_pool) { freeHashTable(&str_pool->hash_table); }
 
-static bool compareStrs(const void *left, const void *right)
+typedef struct {
+    const char *s;
+    u64 len;
+} SizedString;
+
+static bool compareStrFind(const void *left, const void *right)
 {
-    return !strcmp(*(char **)left, *(char **)right);
+    SizedString *str = (SizedString *)right;
+    return !strncmp(*(char **)left, str->s, str->len);
+}
+
+static bool compareStrInsert(const void *left, const void *right)
+{
+    SizedString *str = (SizedString *)right;
+    return !strncmp(*(char **)left, str->s, str->len);
 }
 
 const char *makeString(StrPool *str_pool, const char *str)
 {
+    return makeStringSized(str_pool, str, strlen(str));
+}
+
+const char *makeStringSized(StrPool *pool, const char *str, u64 len)
+{
     if (!str)
         return NULL;
-    uint32_t hash = hashStr(hashInit(), str);
-    char **str_ptr = findInHashTable(
-        &str_pool->hash_table, &str, hash, sizeof(char *), compareStrs);
-    if (str_ptr)
-        return *str_ptr;
-    size_t len = strlen(str);
-    char *new_str = allocFromMemPool(str_pool->mem_pool, len + 1);
-    memcpy(new_str, str, len);
-    new_str[len] = 0;
+    uint32_t hash = hashRawBytes(hashInit(), str, len);
+    SizedString s = {.s = str, .len = len};
+    char **strPtr = findInHashTable(
+        &pool->hash_table, &s, hash, sizeof(char *), compareStrFind);
+    if (strPtr)
+        return *strPtr;
+
+    char *newStr = allocFromMemPool(pool->mem_pool, len + 1);
+    memcpy(newStr, str, len);
+    newStr[len] = 0;
     if (!insertInHashTable(
-            &str_pool->hash_table, &new_str, hash, sizeof(char *), compareStrs))
+            &pool->hash_table, &newStr, hash, sizeof(char *), compareStrInsert))
         assert(false && "cannot insert string in string pool");
-    return new_str;
+    return newStr;
 }
 
 const char *makeAnonymousVariable(StrPool *pool, const char *prefix)

@@ -39,7 +39,7 @@ static BinaryOperatorKind getBinaryOperatorKind(Operator op)
 
         AST_CMP_EXPR_LIST(f)
         return (op == opEq || op == opNe) ? optEquality : optComparison;
-
+#undef f
     case opRange:
         return optRange;
     default:
@@ -73,6 +73,399 @@ static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
                               name,
                               node->binaryExpr.rhs);
     evalType(visitor, node);
+}
+
+static inline bool isSupportedBinaryOperand(AstNode *node)
+{
+    return isLiteralExpr(node) || isTypeExpr(node);
+}
+
+bool verifyBinaryExprOperand(SemanticsContext *ctx, AstNode *node)
+{
+    AstNode *lhs = node->binaryExpr.lhs;
+    AstNode *rhs = node->binaryExpr.rhs;
+    if (!isSupportedBinaryOperand(lhs) || !isSupportedBinaryOperand(rhs)) {
+        logError(ctx->L,
+                 &lhs->loc,
+                 "operands of `{s}` must be either a literal or type at "
+                 "compile time",
+                 (FormatArg[]){{.s = getBinaryOpString(node->binaryExpr.op)}});
+        node->tag = astError;
+        return false;
+    }
+
+    return true;
+}
+
+static void evalAddOperation(SemanticsContext *ctx, AstNode *node)
+{
+    AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;
+    if (nodeIs(lhs, StringLit)) {
+        evalStringConcatenation(ctx, node, lhs, rhs);
+        return;
+    }
+
+    if (nodeIs(rhs, StringLit)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "RHS operand of comp-time `+` operation can only "
+                 "be a string when LHS is a string",
+                 NULL);
+
+        node->tag = astError;
+        return;
+    }
+
+    if (nodeIs(lhs, BoolLit) && nodeIs(rhs, BoolLit)) {
+        logWarning(
+            ctx->L,
+            &node->loc,
+            "comp-time addition between boolean operands doesn't make sense",
+            NULL);
+
+        node->tag = astError;
+        return;
+    }
+
+    f64 value = getNumericLiteral(lhs) + getNumericLiteral(rhs);
+    setNumericLiteralValue(node, lhs, rhs, value);
+}
+
+static void evalSubOperation(SemanticsContext *ctx, AstNode *node)
+{
+    AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;
+    if (nodeIs(lhs, StringLit) || nodeIs(rhs, StringLit)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "comp-time operands of `-` cannot be a string",
+                 NULL);
+
+        node->tag = astError;
+        return;
+    }
+
+    if (nodeIs(lhs, BoolLit) && nodeIs(rhs, BoolLit)) {
+        logWarning(
+            ctx->L,
+            &node->loc,
+            "comp-time subtraction between boolean operands doesn't make sense",
+            NULL);
+    }
+
+    f64 value = getNumericLiteral(lhs) - getNumericLiteral(rhs);
+    setNumericLiteralValue(node, lhs, rhs, value);
+}
+
+static void evalMulOperation(SemanticsContext *ctx, AstNode *node)
+{
+    AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;
+    if (nodeIs(lhs, StringLit) || nodeIs(rhs, StringLit)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "comp-time operands of `*` cannot be a string",
+                 NULL);
+
+        node->tag = astError;
+        return;
+    }
+
+    if (nodeIs(lhs, BoolLit) || nodeIs(rhs, BoolLit)) {
+        logWarning(ctx->L,
+                   &node->loc,
+                   "comp-time multiplication with boolean operands doesn't "
+                   "make sense",
+                   NULL);
+    }
+    else if (nodeIs(lhs, CharLit) || nodeIs(rhs, CharLit)) {
+        logWarning(ctx->L,
+                   &node->loc,
+                   "comp-time multiplication with character operands doesn't "
+                   "make sense",
+                   NULL);
+    }
+
+    f64 value = getNumericLiteral(lhs) * getNumericLiteral(rhs);
+    setNumericLiteralValue(node, lhs, rhs, value);
+}
+
+static void evalDivOperation(SemanticsContext *ctx, AstNode *node)
+{
+    AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;
+    if (nodeIs(lhs, StringLit) || nodeIs(rhs, StringLit)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "comp-time operands of `/` cannot be a string",
+                 NULL);
+
+        node->tag = astError;
+        return;
+    }
+
+    if (nodeIs(lhs, BoolLit) || nodeIs(rhs, BoolLit)) {
+        logWarning(ctx->L,
+                   &node->loc,
+                   "comp-time division with boolean operands doesn't "
+                   "make sense",
+                   NULL);
+    }
+    else if (nodeIs(lhs, CharLit) || nodeIs(rhs, CharLit)) {
+        logWarning(ctx->L,
+                   &node->loc,
+                   "comp-time division with character operands doesn't "
+                   "make sense",
+                   NULL);
+    }
+
+    if (nodeIs(lhs, FloatLit) || nodeIs(rhs, FloatLit)) {
+        node->tag = astFloatLit;
+        node->floatLiteral.value =
+            getNumericLiteral(lhs) / getNumericLiteral(rhs);
+    }
+    else {
+        i64 value = (i64)getNumericLiteral(lhs) / (i64)getNumericLiteral(rhs);
+        setNumericLiteralValue(node, lhs, rhs, (f64)value);
+    }
+}
+
+static void evalModOperation(SemanticsContext *ctx, AstNode *node)
+{
+    AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;
+    if (nodeIs(lhs, StringLit) || nodeIs(rhs, StringLit)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "comp-time operands of `%` cannot be a string",
+                 NULL);
+
+        node->tag = astError;
+        return;
+    }
+
+    if (nodeIs(lhs, FloatLit) || nodeIs(rhs, FloatLit)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "comp-time operand(s) of `%` cannot be float",
+                 NULL);
+
+        node->tag = astError;
+        return;
+    }
+
+    setNumericLiteralValue(
+        node,
+        lhs,
+        rhs,
+        (f64)((i64)getNumericLiteral(lhs) % (i64)getNumericLiteral(rhs)));
+}
+
+static bool checkBinaryBitOperation(SemanticsContext *ctx, AstNode *node)
+{
+    AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;
+    cstring name = getBinaryOpString(node->binaryExpr.op);
+    if (nodeIs(lhs, StringLit) || nodeIs(rhs, StringLit)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "comp-time operands of `{s}` cannot be of type string",
+                 (FormatArg[]){{.s = name}});
+
+        node->tag = astError;
+        return false;
+    }
+
+    if (nodeIs(lhs, FloatLit) || nodeIs(rhs, FloatLit)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "comp-time operands of `{s}` cannot be float",
+                 (FormatArg[]){{.s = name}});
+
+        node->tag = astError;
+        return false;
+    }
+
+    if (nodeIs(lhs, BoolLit) || nodeIs(rhs, BoolLit)) {
+        logWarning(
+            ctx->L,
+            &node->loc,
+            "comp-time binary operator `{s}' with boolean operands doesn't "
+            "make sense",
+            (FormatArg[]){{.s = name}});
+    }
+    else if (nodeIs(lhs, CharLit) || nodeIs(rhs, CharLit)) {
+        logWarning(
+            ctx->L,
+            &node->loc,
+            "comp-time binary operator '{s}' with character operands doesn't "
+            "make sense",
+            (FormatArg[]){{.s = name}});
+    }
+
+    return true;
+}
+
+#define CXY_DEFINE_BINARY_BIT_OPERATOR(Name, OP)                               \
+    static void eval##Name##Operation(SemanticsContext *ctx, AstNode *node)    \
+    {                                                                          \
+        AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;      \
+        if (!checkBinaryBitOperation(ctx, node))                               \
+            return;                                                            \
+                                                                               \
+        setNumericLiteralValue(node,                                           \
+                               lhs,                                            \
+                               rhs,                                            \
+                               (f64)((i64)getNumericLiteral(lhs) OP(i64)       \
+                                         getNumericLiteral(rhs)));             \
+    }
+
+CXY_DEFINE_BINARY_BIT_OPERATOR(Shl, <<)
+CXY_DEFINE_BINARY_BIT_OPERATOR(Shr, >>)
+CXY_DEFINE_BINARY_BIT_OPERATOR(BAnd, &)
+CXY_DEFINE_BINARY_BIT_OPERATOR(BOr, |)
+CXY_DEFINE_BINARY_BIT_OPERATOR(BXor, ^)
+
+static void evalLAndOperation(SemanticsContext *ctx, AstNode *node)
+{
+    AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;
+    if (nodeIs(lhs, StringLit) || nodeIs(rhs, StringLit)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "comp-time operands of `&&` cannot be of type string",
+                 NULL);
+
+        node->tag = astError;
+        return;
+    }
+
+    node->tag = astBoolLit;
+    node->boolLiteral.value = getNumericLiteral(lhs) && getNumericLiteral(rhs);
+}
+
+static void evalLOrOperation(SemanticsContext *ctx, AstNode *node)
+{
+    AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;
+    if (nodeIs(lhs, StringLit) || nodeIs(rhs, StringLit)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "comp-time operands of `&&` cannot be of type string",
+                 NULL);
+
+        node->tag = astError;
+        return;
+    }
+
+    node->tag = astBoolLit;
+    node->boolLiteral.value = getNumericLiteral(lhs) || getNumericLiteral(rhs);
+}
+
+static bool checkComparisonOperation(SemanticsContext *ctx, AstNode *node)
+{
+    AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;
+    if (nodeIs(lhs, StringLit) || nodeIs(rhs, StringLit)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "unsupported comp-time operation '{s}' between a string and a "
+                 "non-string literal",
+                 (FormatArg[]){{.s = getBinaryOpString(node->binaryExpr.op)}});
+
+        node->tag = astError;
+        return false;
+    }
+
+    if (isTypeExpr(lhs) || isTypeExpr(rhs)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "unsupported comp-time operation '{s}' between a type and a "
+                 "non type literal",
+                 (FormatArg[]){{.s = getBinaryOpString(node->binaryExpr.op)}});
+
+        node->tag = astError;
+        return false;
+    }
+
+    return true;
+}
+
+#define CXY_DEFINE_BINARY_EQ_COMP_OPERATOR(Name, OP)                           \
+    static void eval##Name##Operation(SemanticsContext *ctx, AstNode *node)    \
+    {                                                                          \
+        AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;      \
+        if (nodeIs(lhs, StringLit) && nodeIs(rhs, StringLit)) {                \
+            memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);                   \
+            node->tag = astBoolLit;                                            \
+            node->boolLiteral.value =                                          \
+                lhs->stringLiteral.value OP rhs->stringLiteral.value;          \
+            return;                                                            \
+        }                                                                      \
+        if (isTypeExpr(lhs) && isTypeExpr(rhs)) {                              \
+            memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);                   \
+            node->tag = astBoolLit;                                            \
+            node->boolLiteral.value = comptimeCompareTypes(lhs, rhs);          \
+            return;                                                            \
+        }                                                                      \
+                                                                               \
+        if (!checkComparisonOperation(ctx, node))                              \
+            return;                                                            \
+                                                                               \
+        memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);                       \
+        node->tag = astBoolLit;                                                \
+        node->boolLiteral.value =                                              \
+            getNumericLiteral(lhs) OP getNumericLiteral(rhs);                  \
+    }
+
+CXY_DEFINE_BINARY_EQ_COMP_OPERATOR(Eq, ==)
+CXY_DEFINE_BINARY_EQ_COMP_OPERATOR(Ne, !=)
+
+#undef CXY_DEFINE_BINARY_EQ_COMP_OPERATOR
+
+#define CXY_DEFINE_BINARY_COMP_OPERATOR(Name, OP)                              \
+    static void eval##Name##Operation(SemanticsContext *ctx, AstNode *node)    \
+    {                                                                          \
+        AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;      \
+        if (nodeIs(lhs, StringLit) && nodeIs(rhs, StringLit)) {                \
+            memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);                   \
+            node->tag = astBoolLit;                                            \
+            node->boolLiteral.value = strcmp(lhs->stringLiteral.value,         \
+                                             rhs->stringLiteral.value) OP 0;   \
+            return;                                                            \
+        }                                                                      \
+                                                                               \
+        if (nodeIs(lhs, StringLit) || nodeIs(rhs, StringLit)) {                \
+            logError(ctx->L,                                                   \
+                     &node->loc,                                               \
+                     "unsupported comp-time operation " #OP                    \
+                     " between a string and a "                                \
+                     "non-string literal",                                     \
+                     NULL);                                                    \
+                                                                               \
+            node->tag = astError;                                              \
+            return;                                                            \
+        }                                                                      \
+                                                                               \
+        memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);                       \
+        node->tag = astBoolLit;                                                \
+        node->boolLiteral.value =                                              \
+            getNumericLiteral(lhs) OP getNumericLiteral(rhs);                  \
+    }
+
+CXY_DEFINE_BINARY_COMP_OPERATOR(Lt, <)
+CXY_DEFINE_BINARY_COMP_OPERATOR(Gt, >)
+CXY_DEFINE_BINARY_COMP_OPERATOR(Leq, <=)
+CXY_DEFINE_BINARY_COMP_OPERATOR(Geq, >=)
+
+#undef CXY_DEFINE_BINARY_COMP_OPERATOR
+
+static void evalRangeOperation(SemanticsContext *ctx, AstNode *node)
+{
+    AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;
+    if (nodeIs(lhs, StringLit) || nodeIs(rhs, StringLit)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "unsupported comp-time operation '<=' between a string and a "
+                 "non-string literal",
+                 NULL);
+
+        node->tag = astError;
+        return;
+    }
+    unreachable("TODO");
 }
 
 void generateBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -218,13 +611,28 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
 
 void evalBinaryExpr(AstVisitor *visitor, AstNode *node)
 {
-    EvaluatorContext *ctx = getAstVisitorContext(node);
-    AstNode *lhs = evaluate(visitor, node->binaryExpr.lhs);
-    AstNode *rhs = evaluate(visitor, node->binaryExpr.rhs);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    if (!evaluate(visitor, node->binaryExpr.lhs)) {
+        node->tag = astError;
+        return;
+    }
 
-    BinaryOperatorKind kind = getBinaryOperatorKind(node->binaryExpr.op);
+    if (!evaluate(visitor, node->binaryExpr.rhs)) {
+        node->tag = astError;
+        return;
+    }
 
-    switch (kind) {
+    if (!verifyBinaryExprOperand(ctx, node))
+        return;
 
+    switch (node->binaryExpr.op) {
+#define f(O, ...)                                                              \
+    case op##O:                                                                \
+        eval##O##Operation(ctx, node);                                         \
+        break;
+        AST_BINARY_EXPR_LIST(f)
+#undef f
+    default:
+        unreachable("NOT supported binary operator")
     }
 }

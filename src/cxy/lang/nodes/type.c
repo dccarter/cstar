@@ -26,7 +26,7 @@ void generateTypeinfo(ConstAstVisitor *visitor, const AstNode *node)
 void checkTypeDecl(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
-    defineSymbol(&ctx->env, ctx->L, node->typeDecl.name, node);
+    defineSymbol(ctx->env, ctx->L, node->typeDecl.name, node);
     if (node->typeDecl.aliased) {
         const Type *ref = evalType(visitor, node->typeDecl.aliased);
         node->type = makeAliasType(ctx->typeTable, ref, node->typeDecl.name);
@@ -39,7 +39,7 @@ void checkTypeDecl(AstVisitor *visitor, AstNode *node)
 void checkUnionDecl(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
-    defineSymbol(&ctx->env, ctx->L, node->unionDecl.name, node);
+    defineSymbol(ctx->env, ctx->L, node->unionDecl.name, node);
 
     u64 count = countAstNodes(node->unionDecl.members);
     const Type **members = mallocOrDie(sizeof(Type *) * count);
@@ -94,4 +94,53 @@ void checkPointerType(AstVisitor *visitor, AstNode *node)
     node->type = makePointerType(ctx->typeTable,
                                  evalType(visitor, node->pointerType.pointed),
                                  node->flags & flgConst);
+}
+
+static bool comptimeCompareManyTypes(const AstNode *lhs, const AstNode *rhs)
+{
+    while (lhs && rhs) {
+        if (!comptimeCompareTypes(lhs, rhs))
+            return false;
+        lhs = lhs->next;
+        rhs = rhs->next;
+    }
+
+    return lhs == NULL && rhs == NULL;
+}
+
+bool comptimeCompareTypes(const AstNode *lhs, const AstNode *rhs)
+{
+    if (lhs->tag != rhs->tag)
+        return false;
+
+    switch (lhs->tag) {
+    case astStringType:
+    case astVoidType:
+        return true;
+    case astPrimitiveType:
+        return lhs->primitiveType.id == rhs->primitiveType.id;
+    case astArrayType:
+        return lhs->arrayType.dim == rhs->arrayType.dim &&
+               comptimeCompareTypes(lhs->arrayType.elementType,
+                                    rhs->arrayType.elementType);
+    case astTupleType:
+        return comptimeCompareManyTypes(lhs->tupleType.args,
+                                        rhs->tupleType.args);
+    case astPointerType:
+        return comptimeCompareTypes(lhs->pointerType.pointed,
+                                    rhs->pointerType.pointed);
+    case astOptionalType:
+        return comptimeCompareTypes(lhs->optionalType.type,
+                                    rhs->optionalType.type);
+    case astFuncType:
+        return comptimeCompareTypes(lhs->funcType.ret, rhs->funcType.params);
+    case astEnumDecl:
+        return lhs->enumDecl.name == rhs->enumDecl.name;
+    case astStructDecl:
+        return lhs->structDecl.name == rhs->structDecl.name;
+    case astFuncDecl:
+        return lhs->funcDecl.name == rhs->funcDecl.name;
+    default:
+        return false;
+    }
 }

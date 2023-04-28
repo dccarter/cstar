@@ -95,7 +95,7 @@ static AstNode *makeSizeofNode(AstVisitor *visitor,
     if (args->type == NULL)
         evalType(visitor, args);
 
-    AstNode *sizeOf = findSymbolOnly(&ctx->env, "__builtin_sizeof");
+    AstNode *sizeOf = findSymbolOnly(ctx->env, "__builtin_sizeof");
     csAssert0(sizeOf);
 
     return makeAstNode(
@@ -147,7 +147,7 @@ static AstNode *makeLenNode(AstVisitor *visitor,
             return args;
         }
         else {
-            AstNode *strLen = findSymbolOnly(&ctx->env, "strlen");
+            AstNode *strLen = findSymbolOnly(ctx->env, "strlen");
             return makeAstNode(
                 ctx->pool,
                 &node->loc,
@@ -256,7 +256,7 @@ static AstNode *makeAssertNode(AstVisitor *visitor,
                  (FormatArg[]){{.t = type}});
     }
 
-    AstNode *builtinAssert = findSymbolOnly(&ctx->env, "__builtin_assert");
+    AstNode *builtinAssert = findSymbolOnly(ctx->env, "__builtin_assert");
     csAssert0(builtinAssert);
     AstNode *next = args;
     next = next->next = makeFilenameNode(visitor, node, NULL);

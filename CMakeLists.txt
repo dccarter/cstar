@@ -49,6 +49,7 @@ set(CXY_LANG_NODE_SOURCES
         src/cxy/lang/nodes/call.c
         src/cxy/lang/nodes/ccode.c
         src/cxy/lang/nodes/closure.c
+        src/cxy/lang/nodes/comptime.c
         src/cxy/lang/nodes/enum.c
         src/cxy/lang/nodes/forstmt.c
         src/cxy/lang/nodes/function.c

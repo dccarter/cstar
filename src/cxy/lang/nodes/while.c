@@ -39,7 +39,7 @@ void generateWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
 void checkWhileStmt(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
-    pushScope(&ctx->env, node);
+    pushScope(ctx->env, node);
     const Type *cond = evalType(visitor, node->whileStmt.cond);
     const Type *body = evalType(visitor, node->whileStmt.body);
 
@@ -55,5 +55,5 @@ void checkWhileStmt(AstVisitor *visitor, AstNode *node)
     else {
         node->type = body;
     }
-    popScope(&ctx->env);
+    popScope(ctx->env);
 }

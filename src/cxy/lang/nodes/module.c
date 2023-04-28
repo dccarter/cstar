@@ -18,7 +18,7 @@ void addModuleExport(SemanticsContext *ctx, AstNode *node, cstring name)
 {
     AstNode *exports = ctx->program->program.module;
     if (exports && (node->flags & flgPublic)) {
-        defineSymbol(&ctx->exports, ctx->L, name, node);
+        defineSymbol(ctx->exports, ctx->L, name, node);
     }
 }
 
@@ -48,7 +48,7 @@ void defineDeclarationAliasName(SemanticsContext *ctx, AstNode *node)
         return;
     }
 
-    defineSymbol(&ctx->env, ctx->L, name->stringLiteral.value, node);
+    defineSymbol(ctx->env, ctx->L, name->stringLiteral.value, node);
     addModuleExport(ctx, node, name->stringLiteral.value);
 }
 
@@ -63,9 +63,9 @@ void checkImportDecl(AstVisitor *visitor, AstNode *node)
             entity->importEntity.module = exports->moduleDecl.name;
             entity->importEntity.path =
                 node->import.module->stringLiteral.value;
-            defineSymbol(&ctx->env, ctx->L, entity->importEntity.alias, entity);
+            defineSymbol(ctx->env, ctx->L, entity->importEntity.alias, entity);
         }
-        defineSymbol(&ctx->env,
+        defineSymbol(ctx->env,
                      ctx->L,
                      node->import.module->stringLiteral.value,
                      exports);
@@ -80,9 +80,9 @@ void checkImportDecl(AstVisitor *visitor, AstNode *node)
         else
             name = exports->moduleDecl.name;
 
-        defineSymbol(&ctx->env, ctx->L, name, exports);
+        defineSymbol(ctx->env, ctx->L, name, exports);
         if (ctx->program->program.module)
-            defineSymbol(&ctx->exports, ctx->L, name, exports);
+            defineSymbol(ctx->exports, ctx->L, name, exports);
     }
 }
 
@@ -94,8 +94,8 @@ void finalizeModule(AstVisitor *visitor, AstNode *node, cstring namespace)
         module->type = makeModuleType(ctx->typeTable,
                                       node->program.module->moduleDecl.name);
         module->moduleDecl.env = mallocOrDie(sizeof(Env));
-        *module->moduleDecl.env = ctx->exports;
-        ctx->exports = (Env){NULL, NULL};
+        module->moduleDecl.env = ctx->exports;
+        ctx->exports = NULL;
     }
     ctx->typeTable->currentNamespace = namespace;
 }

@@ -18,12 +18,18 @@ typedef struct {
     MemPool *pool;
     StrPool *strPool;
     TypeTable *typeTable;
-    HashTable builtinMacros;
-    Env env;
-    Env exports;
     AstNode *previousTopLevelDecl;
     AstNode *currentTopLevelDecl;
     AstNode *program;
+    HashTable builtinMacros;
+    Env *env;
+    Env *exports;
+
+    struct {
+        Env env;
+        AstVisitor *visitor;
+    } eval;
+
     u64 anonymousDeclsIndex;
     bool mainOptimized : 1;
     union {
@@ -86,6 +92,7 @@ void checkGenericDecl(AstVisitor *visitor, AstNode *node);
 void checkPathElement(AstVisitor *visitor, AstNode *node);
 void checkPath(AstVisitor *visitor, AstNode *node);
 void checkBlock(AstVisitor *visitor, AstNode *node);
+void checkComptime(AstVisitor *visitor, AstNode *node);
 
 void checkLiterals(AstVisitor *visitor, AstNode *node);
 void checkStringExpr(AstVisitor *visitor, AstNode *node);

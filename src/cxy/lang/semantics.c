@@ -9,6 +9,9 @@
  */
 
 #include "semantics.h"
+
+#include "eval.h"
+
 #include "lang/ttable.h"
 
 #include <memory.h>
@@ -18,7 +21,8 @@ static void checkProgram(AstVisitor *visitor, AstNode *node)
     SemanticsContext *ctx = getAstVisitorContext(visitor);
 
     cstring namespace = ctx->typeTable->currentNamespace;
-    pushScope(&ctx->env, node);
+    pushScope(ctx->env, node);
+
     initializeBuiltins(ctx);
 
     initializeModule(visitor, node);
@@ -78,7 +82,7 @@ static void checkIdentifier(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *symbol =
-        findSymbol(&ctx->env, ctx->L, node->ident.value, &node->loc);
+        findSymbol(ctx->env, ctx->L, node->ident.value, &node->loc);
     if (symbol == NULL)
         node->type = ERROR_TYPE(ctx);
     else
@@ -103,11 +107,19 @@ static void checkBreakContinueStmt(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     if (nodeIs(node, BreakStmt))
-        findEnclosingLoopOrSwitch(&ctx->env, ctx->L, "break", &node->loc);
+        findEnclosingLoopOrSwitch(ctx->env, ctx->L, "break", &node->loc);
     else
-        findEnclosingLoop(&ctx->env, ctx->L, "continue", &node->loc);
+        findEnclosingLoop(ctx->env, ctx->L, "continue", &node->loc);
 
     node->type = makeVoidType(ctx->typeTable);
+}
+
+static void semanticsDispatch(Visitor func, AstVisitor *visitor, AstNode *node)
+{
+    if (hasFlag(node, Comptime))
+        checkComptime(visitor, node);
+    else
+        func(visitor, node);
 }
 
 const Type *evalType(AstVisitor *visitor, AstNode *node)
@@ -132,7 +144,7 @@ u64 checkMany(AstVisitor *visitor, AstNode *node)
 void addTopLevelDecl(SemanticsContext *ctx, cstring name, AstNode *node)
 {
     if (name) {
-        Env env = {.first = ctx->env.first, .scope = ctx->env.first};
+        Env env = {.first = ctx->env->first, .scope = ctx->env->first};
         if (!defineSymbol(&env, ctx->L, name, node))
             return;
     }
@@ -295,13 +307,14 @@ void semanticsCheck(AstNode *program,
                                 .pool = pool,
                                 .strPool = strPool,
                                 .program = program,
-                                .env = {NULL},
-                                .exports = {NULL}};
+                                .env = NULL,
+                                .exports = NULL};
 
-    environmentInit(&context.env);
+    context.env = makeEnvironment(pool, NULL);
+
     if (program->program.module) {
-        environmentInit(&context.exports);
-        pushScope(&context.exports, program->program.module);
+        context.exports = makeEnvironment(pool, NULL);
+        pushScope(context.exports, program->program.module);
     }
 
     // clang-format off
@@ -365,8 +378,12 @@ void semanticsCheck(AstNode *program,
         [astStructField] = checkStructField
     },
 
-    .fallback = checkFallback);
+    .fallback = checkFallback,
+    .dispatch = semanticsDispatch);
+
     // clang-format on
+    AstVisitor evalVisitor = {};
+    initEvalVisitor(&evalVisitor, &context);
 
     astVisit(&visitor, program);
 }

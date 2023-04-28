@@ -26,7 +26,7 @@ typedef struct {
 
 const i64 *getEnumValue(SemanticsContext *ctx, const AstNode *node)
 {
-    AstNode *symbol = findSymbolOnlyByNode(&ctx->env, node);
+    AstNode *symbol = findSymbolOnlyByNode(ctx->env, node);
     csAssert0(symbol && nodeIs(symbol, EnumOption));
 
     return &symbol->enumOption.value->intLiteral.value;
@@ -214,7 +214,7 @@ void checkSwitchStmt(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    pushScope(&ctx->env, node);
+    pushScope(ctx->env, node);
     AstNode *case_ = node->switchStmt.cases;
     u64 count = countAstNodes(node->switchStmt.cases);
     NodeComparisonContext *matches =
@@ -234,7 +234,7 @@ void checkSwitchStmt(AstVisitor *visitor, AstNode *node)
             matches[i++] = (NodeComparisonContext){
                 .node = case_->caseStmt.match, .ctx = ctx};
     }
-    popScope(&ctx->env);
+    popScope(ctx->env);
     if (typeIs(node->type, Error)) {
         free(matches);
         return;

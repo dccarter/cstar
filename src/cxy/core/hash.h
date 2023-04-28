@@ -12,5 +12,5 @@ HashCode hashUint16(HashCode, uint16_t);
 HashCode hashUint32(HashCode, uint32_t);
 HashCode hashUint64(HashCode, uint64_t);
 HashCode hashStr(HashCode, const char *);
-HashCode hashRawBytes(HashCode, const void *, size_t);
 
+HashCode hashRawBytes(HashCode, const void *, size_t);

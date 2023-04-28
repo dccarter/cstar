@@ -27,7 +27,7 @@ void generateReturnStmt(ConstAstVisitor *visitor, const AstNode *node)
 void checkReturnStmt(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
-    AstNode *func = findEnclosingFunc(&ctx->env, ctx->L, &node->loc);
+    AstNode *func = findEnclosingFunc(ctx->env, ctx->L, &node->loc);
     node->type = node->returnStmt.expr
                      ? evalType(visitor, node->returnStmt.expr)
                      : makeVoidType(ctx->typeTable);

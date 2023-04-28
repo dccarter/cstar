@@ -47,7 +47,7 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    defineSymbol(&ctx->env, ctx->L, names->ident.value, node);
+    defineSymbol(ctx->env, ctx->L, names->ident.value, node);
     addModuleExport(ctx, node, names->ident.value);
 
     if (node->varDecl.type) {

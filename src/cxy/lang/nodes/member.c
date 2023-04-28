@@ -9,6 +9,7 @@
  */
 
 #include "lang/codegen.h"
+#include "lang/eval.h"
 #include "lang/semantics.h"
 
 #include "lang/ttable.h"
@@ -20,6 +21,61 @@ static inline const Type *isStructMethodRef(const AstNode *node)
             node->type->func.decl->parentScope->tag == astStructDecl)
                ? node->type->func.decl->parentScope->type
                : NULL;
+}
+
+static bool evalIntegerMemberExpr(SemanticsContext *ctx, AstNode *node)
+{
+    AstNode *target = node->memberExpr.target;
+    AstNode *member = node->memberExpr.member;
+
+    if (!nodeIs(target, TupleExpr) && !nodeIs(target, TupleType)) {
+        logError(ctx->L,
+                 &target->loc,
+                 "comp-time member expression operator only supported on tuple "
+                 "expressions or type declarations",
+                 NULL);
+        node->tag = astError;
+        return false;
+    }
+
+    i64 i = (i64)getNumericLiteral(member);
+    u64 len = target->tupleExpr.len;
+    if (i < 0 || i >= len) {
+        logError(ctx->L,
+                 &node->loc,
+                 "member out of bounds for comp-time integer member "
+                 "expression, requested index '{i64}', expecting '< {u64'}",
+                 (FormatArg[]){{.i64 = i}, {.u64 = len}});
+
+        node->tag = astError;
+        return false;
+    }
+
+    *node = *getNodeAtIndex(target->tupleExpr.args, i);
+    return true;
+}
+
+static bool evalStringMemberExpr(SemanticsContext *ctx, AstNode *node)
+{
+    AstNode *target = node->memberExpr.target;
+    AstNode *member = node->memberExpr.member;
+
+    if (!nodeIs(target, EnumDecl)) {
+        logError(ctx->L,
+                 &target->loc,
+                 "comp-time member expression operator only supported on enum "
+                 "types",
+                 NULL);
+        node->tag = astError;
+        return false;
+    }
+
+    AstNode *value = findEnumOptionByName(target, member->stringLiteral.value);
+    if (value == NULL)
+        node->tag = astNullLit;
+    else
+        *node = *value->enumOption.value;
+    return true;
 }
 
 void generateMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -134,5 +190,38 @@ void checkMember(AstVisitor *visitor, AstNode *node)
     else {
         csAssert(nodeIs(member, Identifier), "TODO");
         node->type = ERROR_TYPE(ctx);
+    }
+}
+
+void evalMemberExpr(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    AstNode *target = node->memberExpr.target;
+
+    if (!evaluate(visitor, target)) {
+        node->tag = astError;
+        return;
+    }
+
+    AstNode *member = node->memberExpr.member;
+    if (!evaluate(visitor, member)) {
+        node->tag = astError;
+        return;
+    };
+
+    if (nodeIs(member, IntegerLit)) {
+        evalIntegerMemberExpr(ctx, node);
+    }
+    else if (nodeIs(member, Identifier)) {
+        evalStringMemberExpr(ctx, node);
+    }
+    else {
+        logError(
+            ctx->L,
+            &node->loc,
+            "unexpected comp-time member expression, target can either be a "
+            "tuple expression or an enum type",
+            NULL);
+        node->tag = astError;
     }
 }

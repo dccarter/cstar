@@ -9,6 +9,7 @@
  */
 
 #include "lang/codegen.h"
+#include "lang/eval.h"
 #include "lang/semantics.h"
 
 #include "lang/ttable.h"
@@ -43,7 +44,7 @@ void generateIfStmt(ConstAstVisitor *visitor, const AstNode *node)
 void checkIfStmt(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
-    pushScope(&ctx->env, node);
+    pushScope(ctx->env, node);
 
     const Type *cond = evalType(visitor, node->ifStmt.cond);
     const Type *then = evalType(visitor, node->ifStmt.body);
@@ -65,5 +66,42 @@ void checkIfStmt(AstVisitor *visitor, AstNode *node)
         evalType(visitor, node->ifStmt.otherwise);
     }
 
-    popScope(&ctx->env);
+    popScope(ctx->env);
+}
+
+void evalIfStmt(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+
+    AstNode *cond = node->ifStmt.cond;
+    if (!evaluate(visitor, cond) || !evalBooleanCast(ctx, cond)) {
+        node->tag = astError;
+        return;
+    }
+
+    AstNode *next = node->next;
+    AstNode *parent = node->parentScope;
+
+    if (cond->boolLiteral.value) {
+        // select then branch & reclaim else branch if any
+        *node = *node->ifStmt.body;
+        node->next = next;
+        node->parentScope = parent;
+    }
+    else if (node->ifStmt.otherwise) {
+        // select otherwise, reclaim if branch
+        *node = *node->ifStmt.otherwise;
+        node->next = next;
+        node->parentScope = parent;
+    }
+    else {
+        // select next statement, reclaim if branch
+        if (node->next)
+            *node = *node->next;
+        else {
+            clearAstBody(node);
+            node->tag = astNop;
+            node->flags &= ~flgComptime;
+        }
+    }
 }

@@ -3,6 +3,7 @@
 //
 
 #include "lang/codegen.h"
+#include "lang/eval.h"
 #include "lang/semantics.h"
 
 #include "lang/ttable.h"
@@ -136,5 +137,16 @@ void checkArrayExpr(AstVisitor *visitor, AstNode *node)
     }
     else {
         node->type = makeArrayType(ctx->typeTable, elementType, count);
+    }
+}
+
+void evalArrayExpr(AstVisitor *visitor, AstNode *node)
+{
+    AstNode *arg = node->arrayExpr.elements;
+    for (; arg; arg = arg->next) {
+        if (!evaluate(visitor, arg)) {
+            node->tag = astError;
+            return;
+        }
     }
 }

@@ -132,9 +132,10 @@ AstNode *findSymbolAndScope(const Env *env,
                                          hash,
                                          sizeof(Symbol),
                                          compareSymbols);
-        *outScope = scope;
-        if (symbol)
+        if (symbol) {
+            *outScope = scope;
             return symbol->ref.node;
+        }
     }
 
     if (env->up) {
@@ -286,6 +287,14 @@ void environmentInit(Env *env)
     env->scope = NULL;
 }
 
+Env *makeEnvironment(MemPool *pool, Env *up)
+{
+    Env *env = allocFromMemPool(pool, sizeof(Env));
+    env->up = up;
+    environmentInit(env);
+    return env;
+}
+
 Env *environmentCopy(MemPool *pool, const Env *env)
 {
     Env *copy = allocFromMemPool(pool, sizeof(Env));
@@ -293,4 +302,8 @@ Env *environmentCopy(MemPool *pool, const Env *env)
     return copy;
 }
 
-void environmentFree(Env *env) { freeScopes(env->first); }
+void environmentFree(Env *env)
+{
+    if (env)
+        freeScopes(env->first);
+}

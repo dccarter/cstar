@@ -1,2 +1,31 @@
 import { println } from "stdlib/io.cxy"
+import { Vector } from "stdlib/vector.cxy"
 
+enum Enum {
+    X, Y
+}
+
+struct Done[T] {
+    # if (T == #i32) {
+        func generic[Y](x: T) {
+            # if (T == #i32 && Y == #f32) {
+                println(f"Bool and float")
+            }
+            else #if (T == #string) {
+                println(f"String")
+            }
+            var y: T = x;
+        }
+    }
+    else #if (T == #string) {
+        func generic[Y](x: T, y: Y) {
+            println(f"${x}, ${y}")
+        }
+    }
+}
+
+func main(args: [string]) {
+    var done = Done[string]{};
+    done.generic[i32](10, 1)
+    done.generic[f32](11, 1.0)
+}

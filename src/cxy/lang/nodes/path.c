@@ -15,7 +15,7 @@ static void substituteImportPath(AstVisitor *visitor,
                                  AstNode *elem)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
-    AstNode *symbol = findSymbolOnly(&ctx->env, elem->pathElement.name);
+    AstNode *symbol = findSymbolOnly(ctx->env, elem->pathElement.name);
     csAssert0(symbol);
 
     node->type = NULL;
@@ -42,7 +42,7 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
     Scope *scope = NULL, *closure = ctx->closure;
 
     AstNode *symbol =
-        findSymbolAndScope(&ctx->env,
+        findSymbolAndScope(ctx->env,
                            ctx->L,
                            node->pathElement.alt ?: node->pathElement.name,
                            &node->loc,
@@ -60,7 +60,7 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
     }
 
     if (nodeIs(symbol, GenericDecl)) {
-        symbol = checkGenericDeclReference(visitor, symbol, node, &ctx->env);
+        symbol = checkGenericDeclReference(visitor, symbol, node, ctx->env);
     }
 
     if (symbol == NULL) {
@@ -70,14 +70,15 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
 
     if (scope->node && scope->node->tag == astStructDecl) {
         node->flags = flgAddThis;
-        if (scope != ctx->env.first && nodeIs(ctx->env.first->node, StructDecl))
+        if (scope != ctx->env->first &&
+            nodeIs(ctx->env->first->node, StructDecl))
             node->flags |= flgAddSuper;
     }
 
     node->type = symbol->type;
     flags =
         (symbol->flags & (flgConst | flgAddThis | flgTypeAst | flgImportAlias));
-    if (hasFlag(symbol, TopLevelDecl) && isInSameEnv(scope, ctx->env.first)) {
+    if (hasFlag(symbol, TopLevelDecl) && isInSameEnv(scope, ctx->env->first)) {
         flags |= flgAppendNS;
     }
 
@@ -186,7 +187,7 @@ void checkPathElement(AstVisitor *visitor, AstNode *node)
         env = parent->parentScope->moduleDecl.env;
         break;
     case typThis:
-        thisEnv = (Env){.first = ctx->env.first, .scope = ctx->env.first};
+        thisEnv = (Env){.first = ctx->env->first, .scope = ctx->env->first};
         env = &thisEnv;
         break;
     default:
@@ -263,4 +264,52 @@ void checkPath(AstVisitor *visitor, AstNode *node)
 
     node->type = type;
     node->flags |= flags;
+}
+
+void evalPath(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    AstNode *elem = node->path.elements;
+    AstNode *symbol = findSymbolOnly(
+        &ctx->eval.env, elem->pathElement.alt ?: elem->pathElement.name);
+
+    if (symbol == NULL) {
+        logError(ctx->L,
+                 &elem->loc,
+                 "reference to undefined compile time symbol",
+                 NULL);
+        node->tag = astError;
+        return;
+    }
+
+    if (elem->next) {
+        elem = elem->next;
+        cstring name = elem->pathElement.alt ?: elem->pathElement.name;
+        if (nodeIs(symbol, EnumDecl)) {
+            AstNode *option = findEnumOptionByName(symbol, name);
+            if (option == NULL) {
+                logError(
+                    ctx->L,
+                    &node->loc,
+                    "enum {s} does not have an option named {s}",
+                    (FormatArg[]){{.s = symbol->enumDecl.name}, {.s = name}});
+
+                node->tag = astError;
+                return;
+            }
+            symbol = option->enumOption.value;
+        }
+        else {
+            logError(
+                ctx->L,
+                &node->loc,
+                "comptime member access only supported on enum declarations",
+                NULL);
+
+            node->tag = astError;
+            return;
+        }
+    }
+
+    *node = *symbol;
 }

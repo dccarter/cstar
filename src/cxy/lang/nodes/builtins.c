@@ -53,7 +53,7 @@ static void addBuiltinFunc(SemanticsContext *ctx,
         builtinLoc(),
         &(AstNode){.tag = astFuncDecl, .flags = flgBuiltin, .type = NULL});
 
-    defineSymbol(&ctx->env, ctx->L, name, node);
+    defineSymbol(ctx->env, ctx->L, name, node);
 
     node->type = makeFuncType(ctx->typeTable,
                               &(Type){.tag = typFunc,
@@ -70,7 +70,7 @@ static void addBuiltinVariable(SemanticsContext *ctx,
                                const Type *type,
                                AstNode *value)
 {
-    defineSymbol(&ctx->env,
+    defineSymbol(ctx->env,
                  ctx->L,
                  name,
                  makeAstNode(ctx->pool,
@@ -85,7 +85,7 @@ static void addBuiltinType(SemanticsContext *ctx,
                            u64 flags,
                            const Type *type)
 {
-    defineSymbol(&ctx->env,
+    defineSymbol(ctx->env,
                  ctx->L,
                  name,
                  makeAstNode(ctx->pool,

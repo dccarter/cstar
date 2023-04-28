@@ -313,10 +313,9 @@ static void printIntLiteral(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state,
-           "{$}{s}{u}{$}",
+           "{$}{i64}{$}",
            (FormatArg[]){{.style = literalStyle},
-                         {.s = node->intLiteral.hasMinus ? "-" : ""},
-                         {.u = node->intLiteral.value},
+                         {.i64 = node->intLiteral.value},
                          {.style = resetStyle}});
 }
 
@@ -830,6 +829,11 @@ AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *init)
     return node;
 }
 
+void clearAstBody(AstNode *node)
+{
+    memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);
+}
+
 AstNode *copyAstNode(MemPool *pool, const AstNode *node)
 {
     AstNode *copy = allocFromMemPool(pool, sizeof(AstNode));
@@ -841,27 +845,37 @@ AstNode *copyAstNode(MemPool *pool, const AstNode *node)
 
 void astVisit(AstVisitor *visitor, AstNode *node)
 {
+    Visitor func = visitor->visitors[node->tag] ?: visitor->fallback;
+
+    if (func == NULL)
+        return;
+
     AstNode *stack = visitor->current;
     visitor->current = node;
-    if (visitor->visitors[node->tag]) {
-        visitor->visitors[node->tag](visitor, node);
-    }
-    else if (visitor->fallback) {
-        visitor->fallback(visitor, node);
-    }
+
+    if (visitor->dispatch)
+        visitor->dispatch(func, visitor, node);
+    else
+        func(visitor, node);
+
     visitor->current = stack;
 }
 
 void astConstVisit(ConstAstVisitor *visitor, const AstNode *node)
 {
+    ConstVisitor func = visitor->visitors[node->tag] ?: visitor->fallback;
+
+    if (func == NULL)
+        return;
+
     const AstNode *stack = visitor->current;
     visitor->current = node;
-    if (visitor->visitors[node->tag]) {
-        visitor->visitors[node->tag](visitor, node);
-    }
-    else if (visitor->fallback) {
-        visitor->fallback(visitor, node);
-    }
+
+    if (visitor->dispatch)
+        visitor->dispatch(func, visitor, node);
+    else
+        func(visitor, node);
+
     visitor->current = stack;
 }
 
@@ -986,6 +1000,40 @@ bool isIntegralLiteral(const AstNode *node)
         return true;
     default:
         return isEnumLiteral(node);
+    }
+}
+
+bool isTypeExpr(const AstNode *node)
+{
+    switch (node->tag) {
+    case astVoidType:
+    case astStringType:
+    case astTupleType:
+    case astArrayType:
+    case astPointerType:
+    case astFuncType:
+    case astPrimitiveType:
+    case astOptionalType:
+    case astStructDecl:
+    case astEnumDecl:
+    case astUnionDecl:
+    case astFuncDecl:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool isBuiltinTypeExpr(const AstNode *node)
+{
+    switch (node->tag) {
+    case astVoidType:
+    case astStringType:
+    case astPrimitiveType:
+    case astOptionalType:
+        return true;
+    default:
+        return false;
     }
 }
 

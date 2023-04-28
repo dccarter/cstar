@@ -92,6 +92,7 @@ typedef enum {
 
 typedef enum {
     astError,
+    astNop,
     astProgram,
     astCCode,
     astAttr,
@@ -196,6 +197,8 @@ enum {
     flgCodeGenerated = BIT(24),
     flgImportAlias = BIT(25),
     flgEnumLiteral = BIT(26),
+    flgComptime = BIT(27),
+    flgVisited = BIT(28),
 };
 
 typedef struct AstNode AstNode;
@@ -422,6 +425,7 @@ struct AstNode {
         } enumOption;
 
         struct {
+            u64 len;
             const char *name;
             struct AstNode *base;
             struct AstNode *options;
@@ -539,19 +543,26 @@ struct AstNode {
 
 #define CXY_AST_NODE_BODY_SIZE (sizeof(AstNode) - sizeof(((AstNode *)0)->_head))
 
+typedef struct AstVisitor AstVisitor;
+typedef void (*Visitor)(struct AstVisitor *, AstNode *);
+
 typedef struct AstVisitor {
     void *context;
     AstNode *current;
     void (*visitors[COUNT])(struct AstVisitor *, AstNode *node);
     void (*fallback)(struct AstVisitor *, AstNode *);
+    void (*dispatch)(Visitor, struct AstVisitor *, AstNode *);
 } AstVisitor;
 
+typedef struct ConstAstVisitor ConstAstVisitor;
+typedef void (*ConstVisitor)(struct ConstAstVisitor *, const AstNode *);
 typedef struct ConstAstVisitor {
     void *context;
     const AstNode *current;
 
     void (*visitors[COUNT])(struct ConstAstVisitor *, const AstNode *node);
     void (*fallback)(struct ConstAstVisitor *, const AstNode *);
+    void (*dispatch)(ConstVisitor, struct ConstAstVisitor *, const AstNode *);
 } ConstAstVisitor;
 
 // clang-format off
@@ -565,8 +576,8 @@ void astVisit(AstVisitor *visitor, AstNode *node);
 
 void astConstVisit(ConstAstVisitor *visitor, const AstNode *node);
 
+void clearAstBody(AstNode *node);
 AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *node);
-
 AstNode *copyAstNode(MemPool *pool, const AstNode *node);
 AstNode *cloneAstNode(MemPool *pool, const AstNode *node);
 
@@ -582,6 +593,9 @@ bool isAssignableExpr(const AstNode *node);
 bool isLiteralExpr(const AstNode *node);
 bool isEnumLiteral(const AstNode *node);
 bool isIntegralLiteral(const AstNode *node);
+bool isTypeExpr(const AstNode *node);
+bool isBuiltinTypeExpr(const AstNode *node);
+bool comptimeCompareTypes(const AstNode *lhs, const AstNode *rhs);
 
 u64 countAstNodes(const AstNode *node);
 

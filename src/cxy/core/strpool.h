@@ -15,7 +15,7 @@ typedef struct MemPool MemPool;
 #define MAX_ANONYMOUS_PREFIX_SIZE 256
 #endif
 
-typedef struct {
+typedef struct StrPool {
     MemPool *mem_pool;
     HashTable hash_table;
 } StrPool;
@@ -24,4 +24,5 @@ StrPool newStrPool(MemPool *);
 void freeStrPool(StrPool *);
 
 const char *makeString(StrPool *, const char *);
+const char *makeStringSized(StrPool *, const char *, u64);
 const char *makeAnonymousVariable(StrPool *pool, const char *prefix);

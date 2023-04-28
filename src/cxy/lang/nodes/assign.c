@@ -109,7 +109,7 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
     if (isLeftAuto) {
         csAssert0(left->tag == astPath);
         const char *variable = left->path.elements->pathElement.name;
-        AstNode *symbol = findSymbol(&ctx->env, ctx->L, variable, &left->loc);
+        AstNode *symbol = findSymbol(ctx->env, ctx->L, variable, &left->loc);
         csAssert0(symbol);
         symbol->type = rhs;
         node->type = symbol->type;

@@ -111,18 +111,18 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     ctx->typeTable->currentNamespace = target->namespace;
 
     substitute->next = NULL;
-    Env saveEnv = ctx->env;
+    Env *saveEnv = ctx->env;
     __typeof(ctx->stack) saveStack = ctx->stack;
-    ctx->env = *generic->genericDecl.env;
+    ctx->env = generic->genericDecl.env;
 
     bool isMember = nodeIs(target->generic.decl, FuncDecl) &&
                     target->generic.decl->parentScope &&
                     nodeIs(target->generic.decl->parentScope, StructDecl);
 
-    pushScope(&ctx->env, NULL);
+    pushScope(ctx->env, NULL);
     param = node->pathElement.args;
     for (u64 i = 0; i < count; i++, param = param->next) {
-        defineSymbol(&ctx->env, ctx->L, target->generic.params[i].name, param);
+        defineSymbol(ctx->env, ctx->L, target->generic.params[i].name, param);
     }
 
     addTopLevelDecl(ctx, name, substitute);
@@ -136,9 +136,9 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
         node->type = evalType(visitor, substitute);
     }
 
-    popScope(&ctx->env);
-    environmentFree(&(Env){.first = ctx->env.scope->next});
-    ctx->env.scope->next = NULL;
+    popScope(ctx->env);
+    environmentFree(&(Env){.first = ctx->env->scope->next});
+    ctx->env->scope->next = NULL;
     ctx->env = saveEnv;
 
     ctx->typeTable->currentNamespace = namespace;
@@ -168,7 +168,7 @@ void checkGenericParam(AstVisitor *visitor, AstNode *node)
     SemanticsContext *ctx = getConstAstVisitorContext(visitor);
     // XXX: evaluate constraints
 
-    if (defineSymbol(&ctx->env, ctx->L, node->genericParam.name, node))
+    if (defineSymbol(ctx->env, ctx->L, node->genericParam.name, node))
         node->type = makeAutoType(ctx->typeTable);
     else
         node->type = ERROR_TYPE(ctx);
@@ -180,17 +180,22 @@ void checkGenericDecl(AstVisitor *visitor, AstNode *node)
     AstNode *param = node->genericDecl.params;
 
     cstring name = genericDeclName(node->genericDecl.decl);
-    if (!defineSymbol(&ctx->env, ctx->L, name, node)) {
+    if (!defineSymbol(ctx->env, ctx->L, name, node)) {
         node->type = ERROR_TYPE(ctx);
         return;
     }
     addModuleExport(ctx, node, name);
 
-    node->genericDecl.env = environmentCopy(ctx->pool, &ctx->env);
+    node->genericDecl.env = allocFromMemPool(ctx->pool, sizeof(Env));
+    environmentInit(node->genericDecl.env);
+    environmentAttachUp(node->genericDecl.env, ctx->env);
+    Env *saved = ctx->env;
+    ctx->env = node->genericDecl.env;
+
     node->genericDecl.decl->parentScope = node->parentScope;
     u64 count = countAstNodes(param);
     GenericParam *params = mallocOrDie(sizeof(GenericParam) * count);
-    pushScope(&ctx->env, node);
+    pushScope(ctx->env, node);
     for (u64 i = 0; param; param = param->next, i++) {
         const Type *type = evalType(visitor, param);
         if (typeIs(type, Error)) {
@@ -200,7 +205,6 @@ void checkGenericDecl(AstVisitor *visitor, AstNode *node)
         params[i].name = param->genericParam.name;
         params[i].decl = param;
     }
-    popScope(&ctx->env);
 
     if (node->type == NULL || !typeIs(node->type, Error)) {
         node->type = makeGenericType(
@@ -212,5 +216,6 @@ void checkGenericDecl(AstVisitor *visitor, AstNode *node)
                                 .decl = node->genericDecl.decl}});
     }
 
+    ctx->env = saved;
     free(params);
 }

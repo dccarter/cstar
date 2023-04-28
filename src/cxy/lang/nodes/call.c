@@ -372,7 +372,7 @@ void checkCall(AstVisitor *visitor, AstNode *node)
     if (typeIs(calleeRaw, Struct)) {
         if (nodeIs(node->callExpr.callee, Path)) {
             AstNode *decl =
-                findSymbolOnlyByNode(&ctx->env, node->callExpr.callee);
+                findSymbolOnlyByNode(ctx->env, node->callExpr.callee);
             if (decl && nodeIs(decl, StructDecl)) {
                 structConstructorToCall(visitor, callee, node);
                 return;

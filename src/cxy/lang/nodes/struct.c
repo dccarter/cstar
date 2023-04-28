@@ -15,10 +15,10 @@ static inline void hookStructEnvironments(SemanticsContext *ctx,
 {
     if (base) {
         environmentAttachUp((Env *)base->tStruct.env, root);
-        environmentAttachUp(&ctx->env, (Env *)base->tStruct.env);
+        environmentAttachUp(ctx->env, (Env *)base->tStruct.env);
     }
     else {
-        environmentAttachUp(&ctx->env, root);
+        environmentAttachUp(ctx->env, root);
     }
 }
 
@@ -27,10 +27,10 @@ static inline void unHookStructEnvironments(SemanticsContext *ctx,
 {
     if (base) {
         environmentDetachUp((Env *)base->tStruct.env);
-        environmentDetachUp(&ctx->env);
+        environmentDetachUp(ctx->env);
     }
     else {
-        environmentDetachUp(&ctx->env);
+        environmentDetachUp(ctx->env);
     }
 }
 
@@ -193,7 +193,7 @@ void checkStructField(AstVisitor *visitor, AstNode *node)
     }
 
     node->type = type;
-    defineSymbol(&ctx->env, ctx->L, node->structField.name, node);
+    defineSymbol(ctx->env, ctx->L, node->structField.name, node);
 }
 
 void checkStructDecl(AstVisitor *visitor, AstNode *node)
@@ -221,13 +221,13 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
         ctx->typeTable, node->structDecl.name, flgConst & node->flags);
 
     node->type = this;
-    defineSymbol(&ctx->env, ctx->L, node->structDecl.name, node);
+    defineSymbol(ctx->env, ctx->L, node->structDecl.name, node);
     addModuleExport(ctx, node, node->structDecl.name);
 
-    Env env = ctx->env;
-    environmentInit(&ctx->env);
-    pushScope(&ctx->env, node);
-    hookStructEnvironments(ctx, base, &env);
+    Env *env = ctx->env;
+    ctx->env = makeEnvironment(ctx->pool, NULL);
+    pushScope(ctx->env, node);
+    hookStructEnvironments(ctx, base, env);
 
     u64 i = 0;
     for (; member; member = member->next, i++) {
@@ -256,25 +256,15 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
         }
     }
 
-    unHookStructEnvironments(ctx, base);
-
-    Env structEnv = {NULL};
-    releaseScope(&ctx->env, &structEnv);
-
     node->type = makeStruct(ctx->typeTable,
                             &(Type){.tag = typStruct,
                                     .flags = node->flags,
                                     .name = node->structDecl.name,
-                                    .tStruct = {.env = &structEnv,
+                                    .tStruct = {.env = ctx->env,
                                                 .base = base,
                                                 .fields = members,
                                                 .fieldsCount = i}});
     ((Type *)this)->this.that = node->type;
-
-    environmentFree(&ctx->env);
-
-    ctx->env = structEnv;
-    hookStructEnvironments(ctx, base, &env);
 
     member = node->structDecl.members;
     AstNode *prev = member;
@@ -300,20 +290,13 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
         }
     }
 
-    if (ctx->env.scope && ctx->env.scope->next) {
-        Env tmp = {.first = ctx->env.first->next};
-        ctx->env.first->next = NULL;
-        ctx->env = tmp;
-    }
-    else {
-        ctx->env = (Env){.first = NULL};
+    if (ctx->env->scope->next) {
+        Env tmp = {.first = ctx->env->scope->next};
+        environmentFree(&tmp);
+        ctx->env->scope->next = NULL;
     }
 
 checkStructDecl_cleanup:
-    unHookStructEnvironments(ctx, base);
-
-    environmentFree(&ctx->env);
     ctx->env = env;
-
     free(members);
 }

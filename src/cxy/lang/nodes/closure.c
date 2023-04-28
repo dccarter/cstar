@@ -112,10 +112,10 @@ void checkClosure(AstVisitor *visitor, AstNode *node)
     AstNode *param = node->closureExpr.params;
     u64 i = 1;
 
-    pushScope(&ctx->env, node);
+    pushScope(ctx->env, node);
 
     Scope *stack = ctx->closure;
-    ctx->closure = ctx->env.scope;
+    ctx->closure = ctx->env->scope;
 
     params = mallocOrDie(sizeof(Type *) * paramsCount);
     for (; param; param = param->next, i++) {
@@ -137,7 +137,7 @@ void checkClosure(AstVisitor *visitor, AstNode *node)
 
     ctx->closure = stack;
 
-    popScope(&ctx->env);
+    popScope(ctx->env);
 
     // We need to create a tuple for the capture
     u64 index = node->closureExpr.capture.index;

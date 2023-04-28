@@ -386,14 +386,14 @@ const Type *checkMethodDeclSignature(AstVisitor *visitor, AstNode *node)
     u64 paramsCount = 0;
     bool withDefaultValues = false;
 
-    defineSymbol(&ctx->env, ctx->L, node->funcDecl.name, node);
+    defineSymbol(ctx->env, ctx->L, node->funcDecl.name, node);
     if (node->funcDecl.operatorOverload != opInvalid) {
         if (!validateOperatorOverloadFunc(ctx, node)) {
             return node->type = ERROR_TYPE(ctx);
         }
     }
 
-    pushScope(&ctx->env, node);
+    pushScope(ctx->env, node);
     params =
         checkFunctionParams(visitor, node, &paramsCount, &withDefaultValues);
 
@@ -405,7 +405,7 @@ const Type *checkMethodDeclSignature(AstVisitor *visitor, AstNode *node)
         ctx, node, ret, params, paramsCount, withDefaultValues);
 
     free((void *)params);
-    popScope(&ctx->env);
+    popScope(ctx->env);
 
     return node->type;
 }
@@ -426,8 +426,8 @@ void checkMethodDeclBody(AstVisitor *visitor, AstNode *node)
     const AstNode *lastReturn = ctx->lastReturn;
     ctx->lastReturn = NULL;
 
-    pushScope(&ctx->env, node);
-    defineSymbol(&ctx->env,
+    pushScope(ctx->env, node);
+    defineSymbol(ctx->env,
                  ctx->L,
                  "this",
                  makeAstNode(ctx->pool,
@@ -439,7 +439,7 @@ void checkMethodDeclBody(AstVisitor *visitor, AstNode *node)
 
     if (node->parentScope->structDecl.base) {
         defineSymbol(
-            &ctx->env,
+            ctx->env,
             ctx->L,
             "super",
             makeAstNode(
@@ -452,7 +452,7 @@ void checkMethodDeclBody(AstVisitor *visitor, AstNode *node)
     }
 
     for (; param; param = param->next) {
-        defineSymbol(&ctx->env, ctx->L, param->funcParam.name, param);
+        defineSymbol(ctx->env, ctx->L, param->funcParam.name, param);
     }
 
     node->funcDecl.body->parentScope = node;
@@ -473,14 +473,14 @@ void checkMethodDeclBody(AstVisitor *visitor, AstNode *node)
         removeFromTypeTable(ctx->typeTable, type);
     }
 
-    popScope(&ctx->env);
+    popScope(ctx->env);
 }
 
 void checkFuncParam(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     if (node->parentScope == NULL || node->parentScope->tag != astFuncType)
-        defineSymbol(&ctx->env, ctx->L, node->funcParam.name, node);
+        defineSymbol(ctx->env, ctx->L, node->funcParam.name, node);
 
     if (node->funcParam.type)
         node->type = evalType(visitor, node->funcParam.type);
@@ -509,7 +509,7 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
     u64 paramsCount = 0;
     bool withDefaultValues = false;
 
-    defineSymbol(&ctx->env, ctx->L, node->funcDecl.name, node);
+    defineSymbol(ctx->env, ctx->L, node->funcDecl.name, node);
     addModuleExport(ctx, node, node->funcDecl.name);
     defineDeclarationAliasName(ctx, node);
 
@@ -525,7 +525,7 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
         ctx->mainOptimized = node->flags & flgMain;
     }
 
-    pushScope(&ctx->env, node);
+    pushScope(ctx->env, node);
 
     params =
         checkFunctionParams(visitor, node, &paramsCount, &withDefaultValues);
@@ -556,7 +556,7 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
     ctx->lastReturn = lastReturn;
 
     free((void *)params);
-    popScope(&ctx->env);
+    popScope(ctx->env);
 }
 
 void checkFuncType(AstVisitor *visitor, AstNode *node)

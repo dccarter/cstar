@@ -3,6 +3,7 @@
 //
 
 #include "lang/codegen.h"
+#include "lang/eval.h"
 #include "lang/semantics.h"
 
 #include "lang/ttable.h"
@@ -62,7 +63,13 @@ void generateEnumDefinition(CodegenContext *context, const Type *type)
 void checkEnumDecl(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
-    u64 numOptions = countAstNodes(node->enumDecl.options);
+    checkComptime(visitor, node);
+    if (typeIs(node, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    u64 numOptions = node->enumDecl.len;
     EnumOption *options = mallocOrDie(sizeof(EnumOption) * numOptions);
     AstNode *option = node->enumDecl.options;
     i64 lastValue = 0, i = 0;
@@ -83,9 +90,9 @@ void checkEnumDecl(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    defineSymbol(&ctx->env, ctx->L, node->enumDecl.name, node);
+    defineSymbol(ctx->env, ctx->L, node->enumDecl.name, node);
     environmentInit(&env);
-    environmentAttachUp(&env, &ctx->env);
+    environmentAttachUp(&env, ctx->env);
     pushScope(&env, node);
 
     for (; option; option = option->next, i++) {
@@ -118,4 +125,24 @@ void checkEnumDecl(AstVisitor *visitor, AstNode *node)
                                             .env = &env}});
 
     free(options);
+}
+
+void evalEnumDecl(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    i64 value = 0, len = 0;
+    AstNode *option = node->enumDecl.options;
+    for (; option; option = option->next, len++) {
+        if (option->enumOption.value == NULL) {
+            option->enumOption.value = makeAstNode(
+                ctx->pool,
+                &option->loc,
+                &(AstNode){.tag = astIntegerLit, .intLiteral.value = value++});
+        }
+        else
+            value++;
+    }
+
+    node->enumDecl.len = len;
+    node->flags |= flgVisited;
 }

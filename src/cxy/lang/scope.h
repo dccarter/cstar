@@ -33,11 +33,18 @@ struct Env {
 };
 
 void environmentInit(Env *env);
+
+Env *makeEnvironment(MemPool *pool, Env *up);
+
 static inline void environmentAttachUp(Env *env, const Env *up)
 {
     env->up = up;
 }
-static inline void environmentDetachUp(Env *env) { env->up = NULL; }
+static inline void environmentDetachUp(Env *env)
+{
+    if (env)
+        env->up = NULL;
+}
 void environmentFree(Env *env);
 Env *environmentCopy(MemPool *pool, const Env *env);
 void releaseScope(Env *env, Env *into);

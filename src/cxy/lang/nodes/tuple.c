@@ -3,6 +3,7 @@
 //
 
 #include "lang/codegen.h"
+#include "lang/eval.h"
 #include "lang/semantics.h"
 
 #include "lang/ttable.h"
@@ -84,3 +85,15 @@ void checkTupleType(AstVisitor *visitor, AstNode *node)
     free(args);
 }
 
+void evalTupleExpr(AstVisitor *visitor, AstNode *node)
+{
+    u64 i = 0;
+    AstNode *arg = node->tupleExpr.args;
+    for (; arg; arg = arg->next, i++) {
+        if (!evaluate(visitor, arg)) {
+            node->tag = astError;
+            return;
+        }
+    }
+    node->tupleExpr.len = i;
+}

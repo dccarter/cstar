@@ -53,9 +53,7 @@ static inline const char *getTokenString(Parser *P, const Token *tok, bool trim)
     size_t start = tok->fileLoc.begin.byteOffset + trim;
     size_t size = tok->fileLoc.end.byteOffset - trim - start;
     char *name = allocFromMemPool(P->memPool, size + 1);
-    memcpy(name, &P->lexer->fileData[start], size);
-    name[size] = 0;
-    return name;
+    return makeStringSized(P->strPool, &P->lexer->fileData[start], size);
 }
 
 static inline Token *current(Parser *parser) { return &parser->ahead[1]; }
@@ -203,6 +201,18 @@ static AstNode *parseMany(Parser *P,
                                       {.s = token_tag_to_str(stop)},
                                       {.s = token_tag_to_str(sep)}});
         }
+    }
+
+    return list.first;
+}
+
+static inline AstNode *parseManyNoSeparator(Parser *P,
+                                            TokenTag stop,
+                                            AstNode *(with)(Parser *))
+{
+    AstNodeList list = {NULL};
+    while (!check(P, stop) && !isEoF(P)) {
+        listAddAstNode(&list, with(P));
     }
 
     return list.first;
@@ -1432,39 +1442,63 @@ static AstNode *continueStatement(Parser *P)
 
 static AstNode *statement(Parser *P)
 {
+    bool isComptime = match(P, tokHash) != NULL;
+    if (isComptime &&
+        !check(P, tokIf, tokFor, tokWhile, tokSwitch, tokConst, tokVar)) {
+        parserError(P,
+                    &current(P)->fileLoc,
+                    "current token is not a valid compile time statement",
+                    NULL);
+    }
+
+    AstNode *stmt = NULL;
+
     switch (current(P)->tag) {
     case tokIf:
-        return ifStatement(P);
+        stmt = ifStatement(P);
+        break;
     case tokFor:
-        return forStatement(P);
+        stmt = forStatement(P);
+        break;
     case tokSwitch:
-        return switchStatement(P);
+        stmt = switchStatement(P);
+        break;
     case tokWhile:
-        return whileStatement(P);
+        stmt = whileStatement(P);
+        break;
     case tokDefer:
-        return deferStatement(P);
+        stmt = deferStatement(P);
+        break;
     case tokReturn:
-        return returnStatement(P);
+        stmt = returnStatement(P);
+        break;
     case tokBreak:
     case tokContinue:
-        return continueStatement(P);
+        stmt = continueStatement(P);
+        break;
     case tokVar:
     case tokConst:
-        return variable(P, false, false, false, false);
+        stmt = variable(P, false, false, false, false);
+        break;
     case tokFunc:
-        return funcDecl(P, false, false);
+        stmt = funcDecl(P, false, false);
+        break;
     case tokLBrace:
-        return block(P);
+        stmt = block(P);
+        break;
     default: {
         AstNode *expr = expression(P, false);
-        expr = newAstNode(
+        stmt = newAstNode(
             P,
             &expr->loc.begin,
             &(AstNode){.tag = astExprStmt, .exprStmt = {.expr = expr}});
         match(P, tokSemicolon);
-        return expr;
+        break;
     }
     }
+
+    stmt->flags |= (isComptime ? flgComptime : flgNone);
+    return stmt;
 }
 
 static AstNode *parseType(Parser *P)
@@ -1591,6 +1625,116 @@ static AstNode *parseStructMember(Parser *P)
     return member;
 }
 
+static AstNode *comptime(Parser *P, AstNode *(*parser)(Parser *));
+
+static AstNode *parseComptimeIf(Parser *P, AstNode *(*parser)(Parser *))
+{
+    AstNode *cond;
+    Token tok = *consume0(P, tokIf);
+    consume0(P, tokLParen);
+    if (check(P, tokConst, tokVar)) {
+        cond = variable(P, false, false, true, false);
+    }
+    else {
+        cond = expression(P, true);
+    }
+    consume0(P, tokRParen);
+    consume0(P, tokLBrace);
+    AstNode *body = parseManyNoSeparator(P, tokRBrace, parser);
+    consume0(P, tokRBrace);
+
+    AstNode *otherwise = NULL;
+    if (match(P, tokElse)) {
+        if (match(P, tokLBrace)) {
+            otherwise = parseManyNoSeparator(P, tokRBrace, parser);
+            consume0(P, tokRBrace);
+        }
+        else {
+            consume0(P, tokHash);
+            otherwise = parseComptimeIf(P, parser);
+        }
+    }
+
+    return makeAstNode(
+        P->memPool,
+        &tok.fileLoc,
+        &(AstNode){
+            .tag = astIfStmt,
+            .flags = flgComptime,
+            .ifStmt = {.cond = cond, .body = body, .otherwise = otherwise}});
+}
+
+static AstNode *parseComptimeWhile(Parser *P, AstNode *(*parser)(Parser *))
+{
+    AstNode *cond;
+    Token tok = *consume0(P, tokWhile);
+    consume0(P, tokLParen);
+    if (check(P, tokConst, tokVar)) {
+        cond = variable(P, false, false, true, false);
+    }
+    else {
+        cond = expression(P, true);
+    }
+    consume0(P, tokRParen);
+    consume0(P, tokLBrace);
+    AstNode *body = parseManyNoSeparator(P, tokRBrace, parser);
+    consume0(P, tokRBrace);
+
+    return makeAstNode(P->memPool,
+                       &tok.fileLoc,
+                       &(AstNode){.tag = astWhileStmt,
+                                  .flags = flgComptime,
+                                  .whileStmt = {.cond = cond, .body = body}});
+}
+
+static AstNode *parseComptimeFor(Parser *P, AstNode *(*parser)(Parser *))
+{
+    Token tok = *consume0(P, tokWhile);
+    consume0(P, tokLParen);
+    AstNode *var = variable(P, false, false, true, true);
+    consume0(P, tokColon);
+    AstNode *range = expression(P, true);
+    consume0(P, tokRParen);
+
+    consume0(P, tokRParen);
+    consume0(P, tokLBrace);
+    AstNode *body = parseManyNoSeparator(P, tokRBrace, parser);
+    consume0(P, tokRBrace);
+
+    return makeAstNode(
+        P->memPool,
+        &tok.fileLoc,
+        &(AstNode){.tag = astForStmt,
+                   .flags = flgComptime,
+                   .forStmt = {.var = var, .range = range, .body = body}});
+}
+
+static AstNode *parseComptimeVarDecl(Parser *P, AstNode *(*parser)(Parser *)) {}
+
+static AstNode *comptime(Parser *P, AstNode *(*parser)(Parser *))
+{
+    if (!match(P, tokHash)) {
+        return parser(P);
+    }
+
+    switch (current(P)->tag) {
+    case tokIf:
+        return parseComptimeIf(P, parser);
+    case tokWhile:
+        return parseComptimeWhile(P, parser);
+    case tokFor:
+        return parseComptimeFor(P, parser);
+    case tokConst:
+        return parseComptimeVarDecl(P, parser);
+    default:
+        parserError(P,
+                    &current(P)->fileLoc,
+                    "current token is not a valid comptime statement",
+                    NULL);
+    }
+    unreachable("");
+}
+
 static AstNode *structDecl(Parser *P, bool isPublic)
 {
     AstNode *base = NULL, *gParams = NULL;
@@ -1609,7 +1753,7 @@ static AstNode *structDecl(Parser *P, bool isPublic)
 
     consume0(P, tokLBrace);
     while (!check(P, tokRBrace, tokEoF)) {
-        listAddAstNode(&members, parseStructMember(P));
+        listAddAstNode(&members, comptime(P, parseStructMember));
     }
     consume0(P, tokRBrace);
 
@@ -1922,8 +2066,11 @@ static void synchronizeUntil(Parser *P, TokenTag tag)
 
 Parser makeParser(Lexer *lexer, CompilerDriver *cc)
 {
-    Parser parser = {
-        .cc = cc, .lexer = lexer, .L = lexer->log, .memPool = &cc->memPool};
+    Parser parser = {.cc = cc,
+                     .lexer = lexer,
+                     .L = lexer->log,
+                     .memPool = &cc->memPool,
+                     .strPool = &cc->strPool};
     parser.ahead[0] = (Token){.tag = tokEoF};
     for (u32 i = 1; i < TOKEN_BUFFER; i++)
         parser.ahead[i] = advanceLexer(lexer);
@@ -1952,7 +2099,7 @@ AstNode *parseProgram(Parser *P)
 
     while (!isEoF(P)) {
         E4C_TRY_BLOCK({
-            listAddAstNode(&decls, declaration(P));
+            listAddAstNode(&decls, comptime(P, declaration));
         } E4C_CATCH(ParserException) { synchronize(P); })
     }
 

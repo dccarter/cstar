@@ -126,6 +126,7 @@
     SPECIAL_TOKEN_LIST(f)
 
 typedef enum {
+    tokInvalid,
 #define f(name, ...) tok##name,
     TOKEN_LIST(f)
 #undef f

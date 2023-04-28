@@ -143,7 +143,7 @@ static bool compareTypes(const Type *left, const Type *right)
             left->func.decl->parentScope && right->func.decl->parentScope &&
             left->func.decl->parentScope != right->func.decl->parentScope)
             return false;
-        
+
         return ((left->flags & flgVariadic) == (right->flags & flgVariadic)) &&
                (left->func.paramsCount == right->func.paramsCount) &&
                compareTypes(left->func.retType, right->func.retType) &&
@@ -494,8 +494,6 @@ const Type *makeStruct(TypeTable *table, const Type *init)
         memcpy(tStruct->tStruct.fields,
                init->tStruct.fields,
                sizeof(StructField) * init->tStruct.fieldsCount);
-        tStruct->tStruct.env = allocFromMemPool(table->memPool, sizeof(Env));
-        *tStruct->tStruct.env = *init->tStruct.env;
     }
 
     return ret.s;

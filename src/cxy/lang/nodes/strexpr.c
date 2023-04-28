@@ -12,7 +12,45 @@
 #include "lang/semantics.h"
 #include "lang/ttable.h"
 
+#include <core/sb.h>
+
 #include <string.h>
+
+void evalStringConcatenation(SemanticsContext *ctx,
+                             AstNode *node,
+                             AstNode *lhs,
+                             AstNode *rhs)
+{
+    StringBuilder sb;
+    stringBuilderInit(&sb);
+    stringBuilderAppendCstr1(&sb, lhs->stringLiteral.value);
+    switch (rhs->tag) {
+    case astStringLit:
+        stringBuilderAppendCstr1(&sb, rhs->stringLiteral.value);
+        break;
+    case astIntegerLit:
+        if (rhs->intLiteral.hasMinus)
+            stringBuilderAppendChar(&sb, '-');
+        stringBuilderAppendInt(&sb, rhs->intLiteral.value);
+        break;
+    case astFloatLit:
+        stringBuilderAppendFloat(&sb, rhs->floatLiteral.value);
+        break;
+    case astCharLit:
+        stringBuilderAppendChar(&sb, rhs->charLiteral.value);
+        break;
+    case astBoolLit:
+        stringBuilderAppendBool(&sb, rhs->boolLiteral.value);
+        break;
+    default:
+        unreachable("INVALID operand");
+    }
+
+    char *str = stringBuilderRelease(&sb);
+    node->tag = astStringLit;
+    node->stringLiteral.value = makeString(ctx->strPool, str);
+    free(str);
+}
 
 void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
 {

@@ -17,6 +17,7 @@
 #define TOKEN_BUFFER 4
 
 typedef struct MemPool MemPool;
+typedef struct StrPool StrPool;
 typedef struct Lexer Lexer;
 typedef struct AstNode AstNode;
 typedef struct CompilerDriver CompilerDriver;
@@ -26,6 +27,7 @@ typedef struct {
     Lexer *lexer;
     Log *L;
     MemPool *memPool;
+    StrPool *strPool;
     bool inCase : 1;
     Token ahead[TOKEN_BUFFER];
 } Parser;
