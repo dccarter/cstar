@@ -24,17 +24,43 @@ pub native func cxy_hash_string(init: HashCode, str: &const char): u32;
 @inline
 pub func hashString(init: HashCode, str: string) => cxy_hash_string(init, unchecked!(str, #&const char))
 
+
+pub func hash[T](val: T) {
+    #if (#T == #string) {
+        return hashString(hashInit(), val)
+    }
+    else #if (#T == #i8 || T == #u8) {
+        return hashUint8(hashInit(), <u8>val)
+    }
+    else #if (#T == #i16 || T == #u16) {
+        return hashUint16(hashInit(), <u16>val)
+    }
+    else #if (#T == #i32 || T == #u32) {
+        return hashUint32(hashInit(), <u32>val)
+    }
+    else #if (#T == #i64 || T == #u64) {
+        return hashUint64(hashInit(), <u64>val)
+    }
+    else {
+        assert!(false)
+    }
+}
+
 @inline
 pub func allocSlice[T](count: u64) => <[T]> __builtin_alloc_slice(#[T], count)
 
 @inline
 pub func reallocSlice[T](data: [T], count: u64) => <[T]> __builtin_realloc_slice(#[T], data, count)
 
-pub struct File {
-    fd: i32
+pub struct Optional[T] {
+    valid: bool = false
+    val: T
 }
 
-pub struct MoreFile[T] : File {
-    x: T
-}
+@inline
+pub func None[T]() => Optional[T]{valid: false}
+
+@inline
+pub func Some[T](val: T) => Optional[T]{valid: true, val: val}
+
 

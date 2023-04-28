@@ -372,6 +372,7 @@ struct AstNode {
         struct {
             const char *name;
             const char *alt;
+            const char *alt2;
             struct AstNode *args;
             u64 index;
         } pathElement;

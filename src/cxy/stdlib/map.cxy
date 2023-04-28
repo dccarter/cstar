@@ -1,15 +1,140 @@
 module map
 
-import { hashInit, allocSlice } from "stdlib/utils.cxy"
+import { hash as hashFunc,
+         allocSlice,
+         reallocSlice,
+         memset,
+         Optional,
+         Some,
+         None
+} from "stdlib/utils.cxy"
 
-const TABLE_LOAD_FACTOR = 0.9;
+struct MapNode[K, V] {
+    next: &This
+    hash: u32
+    key: K
+    value: V
 
-@constraint
-macro isHashable(T) => result = T == #string || isPrimitive(T) || hasMethod(T, hash, #u64, #())
+    func `new`(key: K, v: value) {
+        this.key = key
+        this.value = value
+        hash = hashFunc[K](key)
+    }
+}
 
-@isComparable
-macro isHashable(T) => result = T == #string || isPrimitive(T) || hasMethod(T, compare, #i32, #(T))
+pub struct PtrRef[T] {
+    ptr: &T
 
-pub struct HashMap[K:isComparable|isHashable, V] {
-    // On our way to great things
+    @inline
+    func deref() => *ptr
+}
+
+pub struct HashMap[K, V] {
+    x: MapNode[K, V]
+    buckets: [&MapNode[K, V]]
+    numBuckets: u64
+    numNodes: u64
+
+    @inline
+    - func bucketIndex(hash: u32) => hash & (numBuckets - 1)
+
+    - func addNode(node: &MapNode[K, V]) {
+        const n = bucketIndex(node.hash);
+        node.next = buckets.[n]
+        buckets.[n] = node
+    }
+
+    - func resize(count: u64) {
+        var nodes : &MapNode[K, V] = null;
+        var next;
+        var node;
+
+        var i = numBuckets;
+        while (i-- != 0) {
+            node = buckets.[i]
+            while (ptr(node) != ptr(null)) {
+                next = node.next
+                node.next = nodes
+                nodes = node
+                node = next
+            }
+        }
+
+        buckets = reallocSlice[&MapNode[K, V]](this.buckets, numBuckets)
+        __builtin_memset_slice(#[&MapNode[K, V]], buckets, 0)
+        this.buckets = buckets
+        node = nodes
+        while (ptr(node) != ptr(null)) {
+            next = node.next
+            addNode(node)
+            node = next
+        }
+    }
+
+    - func getNode(key: K) {
+        const hash = hashFunc[K](key);
+        var next = PtrRef[&MapNode[K, V]]{};
+
+        if (numBuckets > 0) {
+            next.ptr = &buckets.[bucketIndex(hash)]
+            while (ptr(next.deref()) != ptr(null)) {
+                var node = next.deref();
+                if (node.hash == hash && key == node.key)
+                    return node
+                next.ptr = &node.next
+            }
+        }
+
+        return unchecked!(null, #&MapNode[K, V])
+    }
+
+    func `delete`() {
+        var next;
+        var node;
+        var i = numBuckets;
+        while (i--) {
+            node = buckets.[i]
+            while (node) {
+                next = node.next
+                delete node
+                node = next
+            }
+        }
+
+        delete buckets
+    }
+
+    func get(key: K) : Optional[V] {
+        MapNode[K, V]{}
+        var node = getNode(key);
+        return ptr(node) == ptr(null) ?
+                None[V]() : Some[V](node.value)
+    }
+
+    @inline
+    func `[]`(key: K) => get(key)
+
+    func set(key: K, value: V) {
+        var next = getNode(key);
+        if (next) {
+            next.value = value
+            return;
+        }
+
+        var node = new MapNode[K, V](key, value);
+        const newSize = numBuckets > 0? numBuckets << 1 : 1;
+        resize(newSize)
+        addNode(node)
+        numNodes++
+    }
+
+    func remove(key: K) {
+        var node;
+        var next = getNode(key);
+        if (next) {
+            node = *next
+            *next = (*next).next
+            delete node
+        }
+    }
 }

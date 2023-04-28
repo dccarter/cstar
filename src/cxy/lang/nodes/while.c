@@ -43,8 +43,7 @@ void checkWhileStmt(AstVisitor *visitor, AstNode *node)
     const Type *cond = evalType(visitor, node->whileStmt.cond);
     const Type *body = evalType(visitor, node->whileStmt.body);
 
-    if (!isTypeAssignableFrom(getPrimitiveType(ctx->typeTable, prtBool),
-                              cond)) {
+    if (!isTruthyType(ctx->typeTable, cond)) {
         logError(ctx->L,
                  &node->ternaryExpr.cond->loc,
                  "unexpected type in while statement condition, expecting "

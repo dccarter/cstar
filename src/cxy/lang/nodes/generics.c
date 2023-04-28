@@ -94,6 +94,7 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     if (goi.f) {
         // substitution already found
         node->type = goi.s->applied.generated;
+        node->pathElement.alt2 = node->pathElement.name;
         node->pathElement.name = node->type->name;
         return findSymbolOnly(generic->genericDecl.env, node->type->name);
     }
@@ -116,7 +117,6 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     ctx->env = generic->genericDecl.env;
 
     bool isMember = nodeIs(target->generic.decl, FuncDecl) &&
-                    target->generic.decl->parentScope &&
                     nodeIs(target->generic.decl->parentScope, StructDecl);
 
     pushScope(ctx->env, NULL);

@@ -215,6 +215,15 @@ static void cxy_default_dealloc(void *ctx)
     }
 #endif
 
+#ifndef __builtin_memset_slice
+#define __builtin_memset_slice(T, P, C)                                        \
+    memset((P).data, (C), (sizeof(((T *)0)->data) * (P).len))
+#endif
+
+#ifndef __builtin_free_slice
+#define __builtin_free_slice(P) cxy_free((P).data)
+#endif
+
 #ifndef __builtin_assert
 #define __builtin_assert(cond, file, line, pos)                                \
     if (!(cond))                                                               \

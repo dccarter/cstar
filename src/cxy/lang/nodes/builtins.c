@@ -160,6 +160,20 @@ void initializeBuiltins(SemanticsContext *ctx)
                        params,
                        3);
     }
+
+    {
+        const Type *params[] = {
+            makeTypeInfo(ctx->typeTable, getAnySliceType(ctx->typeTable)),
+            getAnySliceType(ctx->typeTable),
+            getPrimitiveType(ctx->typeTable, prtI32)};
+
+        addBuiltinFunc(ctx,
+                       "__builtin_memset_slice",
+                       makeVoidType(ctx->typeTable),
+                       params,
+                       3);
+    }
+
     {
         // __builtin_assert
         const Type *params[] = {getPrimitiveType(ctx->typeTable, prtBool),
@@ -183,11 +197,8 @@ void initializeBuiltins(SemanticsContext *ctx)
     {
         const Type *params[] = {makeStringType(ctx->typeTable)};
 
-        addBuiltinFunc(ctx,
-                       "strlen",
-                       getPrimitiveType(ctx->typeTable, prtU64),
-                       params,
-                       1);
+        addBuiltinFunc(
+            ctx, "strlen", getPrimitiveType(ctx->typeTable, prtU64), params, 1);
     }
 
     {

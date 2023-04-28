@@ -217,3 +217,8 @@ static inline bool isSliceType(const Type *type)
 {
     return type && typeIs(type, Array) && type->array.len == UINT64_MAX;
 }
+
+static inline bool isTruthyType(TypeTable *table, const Type *type)
+{
+    return isIntegralType(type) || isFloatType(type) || typeIs(type, Pointer);
+}

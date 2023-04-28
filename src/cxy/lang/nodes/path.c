@@ -320,5 +320,43 @@ void evalPath(AstVisitor *visitor, AstNode *node)
         }
     }
 
-    *node = *symbol;
+    if (node->flags & flgTypeinfo) {
+        if (symbol->type == NULL) {
+            node->tag = astError;
+            return;
+        }
+
+        switch (symbol->type->tag) {
+        case typPrimitive:
+            node->tag = astPrimitiveType;
+            node->primitiveType.id = symbol->type->primitive.id;
+            break;
+        case typVoid:
+            node->tag = astVoidType;
+            break;
+        case typString:
+            node->tag = astStringType;
+            break;
+        case typEnum:
+        case typStruct:
+            symbol = findSymbolOnly(&ctx->eval.env, symbol->type->name);
+            if (symbol == NULL) {
+                logError(ctx->L,
+                         &node->loc,
+                         "should have existed since type exists",
+                         NULL);
+                node->tag = astError;
+                return;
+            }
+            *node = *symbol;
+            break;
+        default:
+            csAssert0(false);
+        }
+    }
+    else {
+        u64 flags = node->flags;
+        *node = *symbol;
+        node->flags |= flags;
+    }
 }

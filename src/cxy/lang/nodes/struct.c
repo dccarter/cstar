@@ -228,7 +228,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
     ctx->env = makeEnvironment(ctx->pool, NULL);
     pushScope(ctx->env, node);
     hookStructEnvironments(ctx, base, env);
-
+    defineSymbol(ctx->env, ctx->L, "This", node);
     u64 i = 0;
     for (; member; member = member->next, i++) {
         member->parentScope = node;

@@ -62,7 +62,7 @@ static const Type *checkPrefixExpr(SemanticsContext *ctx,
         }
         break;
     case opDelete:
-        if (operand->tag != typPointer) {
+        if (!typeIs(operand, Pointer) && !typeIs(operand, Array)) {
             logError(ctx->L,
                      &node->loc,
                      "cannot delete an none `new` allocated object",
@@ -94,7 +94,10 @@ void generateUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
     if (node->unaryExpr.isPrefix) {
         switch (node->unaryExpr.op) {
         case opDelete:
-            format(ctx->state, "cxy_free((void *)", NULL);
+            if (isSliceType(node->unaryExpr.operand->type))
+                format(ctx->state, "__builtin_free_slice(", NULL);
+            else
+                format(ctx->state, "cxy_free((void *)", NULL);
             astConstVisit(visitor, node->unaryExpr.operand);
             format(ctx->state, ")", NULL);
             break;

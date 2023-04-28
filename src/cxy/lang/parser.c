@@ -476,6 +476,9 @@ static AstNode *binary(Parser *P,
 
     while (!isEoF(P)) {
         const Token tok = *current(P);
+        if (tok.tag == tokMinus && checkPeek(P, 1, tokFunc))
+            break;
+
         Operator op = tokenToBinaryOperator(tok.tag);
         if (op == opInvalid)
             break;
@@ -1244,6 +1247,7 @@ static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative)
     if (!isNative) {
         if (match(P, tokFatArrow)) {
             body = expression(P, true);
+            match(P, tokSemicolon);
         }
         else {
             body = block(P);

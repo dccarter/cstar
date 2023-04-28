@@ -49,8 +49,7 @@ void checkIfStmt(AstVisitor *visitor, AstNode *node)
     const Type *cond = evalType(visitor, node->ifStmt.cond);
     const Type *then = evalType(visitor, node->ifStmt.body);
 
-    if (!isTypeAssignableFrom(getPrimitiveType(ctx->typeTable, prtBool),
-                              cond)) {
+    if (!isTruthyType(ctx->typeTable, cond)) {
         logError(ctx->L,
                  &node->ternaryExpr.cond->loc,
                  "unexpected type in if statement condition, expecting "

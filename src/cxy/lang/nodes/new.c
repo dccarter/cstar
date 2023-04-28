@@ -136,7 +136,11 @@ static const Type *checkNewInitializerExpr(AstVisitor *visitor, AstNode *node)
                          (FormatArg[]){{.t = callee}});
                 return NULL;
             }
-
+            AstNode *calleeNode = init->callExpr.callee;
+            if (nodeIs(calleeNode, Path) && hasFlag(callee, Generated)) {
+                calleeNode->path.elements->pathElement.name =
+                    calleeNode->path.elements->pathElement.alt2;
+            }
             return checkNewInitializerOverload(visitor, node);
         }
     }
