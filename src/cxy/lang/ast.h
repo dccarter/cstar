@@ -583,7 +583,7 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node);
 
 void printAst(FormatState *state, const AstNode *node);
 
-#define nodeIs(NODE, TAG) ((NODE)->tag == ast##TAG)
+#define nodeIs(NODE, TAG) ((NODE) && ((NODE)->tag == ast##TAG))
 #define hasFlag(ITEM, FLG) ((ITEM)->flags & (flg##FLG))
 #define hasFlags(ITEM, FLGS) ((ITEM)->flags & (FLGS))
 

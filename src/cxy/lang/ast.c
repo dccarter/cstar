@@ -1160,7 +1160,7 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         CLONE_ONE(castExpr, to);
         break;
     case astPathElem:
-        CLONE_ONE(pathElement, args);
+        CLONE_MANY(pathElement, args);
         break;
     case astPath:
         CLONE_MANY(path, elements);

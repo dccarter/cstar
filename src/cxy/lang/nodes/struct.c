@@ -151,7 +151,7 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
     }
 
     if (node->type != ERROR_TYPE(ctx)) {
-        for (u64 i = 0; i < target->tStruct.fieldsCount; i++) {
+        for (u64 i = 0; prev && i < target->tStruct.fieldsCount; i++) {
             const AstNode *targetField = target->tStruct.fields[i].decl;
             if (initialized[i] || targetField->type->tag == typFunc ||
                 targetField->structField.value == NULL)

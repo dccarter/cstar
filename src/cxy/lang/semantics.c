@@ -33,10 +33,11 @@ static void checkProgram(AstVisitor *visitor, AstNode *node)
     ctx->previousTopLevelDecl = node->program.decls;
     for (AstNode *decl = node->program.decls; decl; decl = decl->next) {
         ctx->currentTopLevelDecl = decl;
+        decl->parentScope = node;
         astVisit(visitor, decl);
         ctx->previousTopLevelDecl = decl;
     }
-
+    
     finalizeModule(visitor, node, namespace);
 }
 

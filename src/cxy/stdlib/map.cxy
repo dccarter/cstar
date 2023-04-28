@@ -1,0 +1,15 @@
+module map
+
+import { hashInit, allocSlice } from "stdlib/utils.cxy"
+
+const TABLE_LOAD_FACTOR = 0.9;
+
+@constraint
+macro isHashable(T) => result = T == #string || isPrimitive(T) || hasMethod(T, hash, #u64, #())
+
+@isComparable
+macro isHashable(T) => result = T == #string || isPrimitive(T) || hasMethod(T, compare, #i32, #(T))
+
+pub struct HashMap[K:isComparable|isHashable, V] {
+    // On our way to great things
+}

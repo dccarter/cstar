@@ -79,6 +79,7 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
     flags =
         (symbol->flags & (flgConst | flgAddThis | flgTypeAst | flgImportAlias));
     if (hasFlag(symbol, TopLevelDecl) && isInSameEnv(scope, ctx->env->first)) {
+        node->parentScope = symbol->parentScope;
         flags |= flgAppendNS;
     }
 
@@ -149,13 +150,21 @@ void generatePath(ConstAstVisitor *visitor, const AstNode *node)
     else {
         const AstNode *elem = node->path.elements;
         if (hasFlag(elem, AppendNS)) {
-            writeNamespace(ctx, NULL);
+            if (ctx->namespace == NULL && nodeIs(elem->parentScope, Program)) {
+                AstNode *module = elem->parentScope->program.module;
+                if (module) {
+                    writeDeclNamespace(ctx, module->moduleDecl.name, NULL);
+                }
+            }
+            else {
+                writeNamespace(ctx, NULL);
+            }
         }
 
         for (; elem; elem = elem->next) {
             astConstVisit(visitor, elem);
             if (elem->next) {
-                if (elem->type && typeIs(elem->type, Module))
+                if (typeIs(elem->type, Module))
                     format(ctx->state, "__", NULL);
                 else if (elem->type && (typeIs(elem->type, Pointer) ||
                                         typeIs(elem->type, This)))

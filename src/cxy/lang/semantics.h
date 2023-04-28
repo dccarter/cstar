@@ -33,9 +33,11 @@ typedef struct {
     u64 anonymousDeclsIndex;
     bool mainOptimized : 1;
     union {
-        Scope *closure;
-        AstNode *current;
-        const AstNode *lastReturn;
+        struct {
+            Scope *closure;
+            AstNode *current;
+            const AstNode *lastReturn;
+        };
         struct {
             Scope *closure;
             AstNode *current;
