@@ -55,6 +55,21 @@ pub func reallocSlice[T](data: [T], count: u64) => <[T]> __builtin_realloc_slice
 pub struct Optional[T] {
     valid: bool = false
     val: T
+
+    @inline
+    func `!!`() => valid
+
+    @inline
+    func `deref`() => val
+
+    @inline
+    func `str`() => valid? f"Some(${val})" : "None()";
+}
+
+pub struct PtrRef[T] {
+    ptr: &T = null
+    @inline
+    func deref() => *ptr
 }
 
 @inline

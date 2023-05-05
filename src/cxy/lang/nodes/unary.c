@@ -9,10 +9,11 @@
 
 #include "core/alloc.h"
 
-static const Type *checkPrefixExpr(SemanticsContext *ctx,
+static const Type *checkPrefixExpr(AstVisitor *visitor,
                                    const Type *operand,
                                    AstNode *node)
 {
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
     switch (node->unaryExpr.op) {
     case opPreDec:
     case opPreInc:
@@ -38,7 +39,7 @@ static const Type *checkPrefixExpr(SemanticsContext *ctx,
         }
         break;
     case opNot:
-        if (operand == getPrimitiveType(ctx->typeTable, prtBool)) {
+        if (operand != getPrimitiveType(ctx->typeTable, prtBool)) {
             logError(ctx->L,
                      &node->unaryExpr.operand->loc,
                      "logical '!' operator no supported on type '{t}', "
@@ -48,12 +49,15 @@ static const Type *checkPrefixExpr(SemanticsContext *ctx,
         }
         break;
     case opDeref:
-        if (operand->tag != typPointer) {
-            logError(ctx->L,
-                     &node->unaryExpr.operand->loc,
-                     "cannot not dereference an non-pointer type '{t}'",
-                     (FormatArg[]){{.t = operand}});
-            operand = ERROR_TYPE(ctx);
+        if (!typeIs(operand, Pointer)) {
+            if (!transformToDerefOperator(visitor, node)) {
+                logError(ctx->L,
+                         &node->unaryExpr.operand->loc,
+                         "cannot not dereference an non-pointer type '{t}'",
+                         (FormatArg[]){{.t = operand}});
+                operand = ERROR_TYPE(ctx);
+            }
+            operand = node->type;
         }
         else {
             node->flags |=
@@ -138,7 +142,7 @@ void checkUnaryExpr(AstVisitor *visitor, AstNode *node)
     node->flags |= node->unaryExpr.operand->flags;
 
     if (node->unaryExpr.isPrefix) {
-        node->type = checkPrefixExpr(ctx, operand, node);
+        node->type = checkPrefixExpr(visitor, operand, node);
         return;
     }
 

@@ -149,6 +149,11 @@ void checkIndex(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *target = evalType(visitor, node->indexExpr.target);
+    if (typeIs(target, Error)) {
+        node->type = target;
+        return;
+    }
+    
     node->flags |= node->indexExpr.target->flags;
 
     if (typeIs(target, Pointer)) {

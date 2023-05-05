@@ -47,7 +47,7 @@ static BinaryOperatorKind getBinaryOperatorKind(Operator op)
     }
 }
 
-static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
+static bool checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
 
@@ -57,13 +57,7 @@ static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
     AstNode *overload = findSymbolOnly(target->tStruct.env, name);
 
     if (overload == NULL) {
-        logError(ctx->L,
-                 &node->binaryExpr.lhs->loc,
-                 "binary operator '{s}' no overloaded on struct type '{t}'",
-                 (FormatArg[]){{.s = getBinaryOpString(node->binaryExpr.op)},
-                               {.t = target}});
-        node->type = ERROR_TYPE(ctx);
-        return;
+        return false;
     }
 
     transformToMemberCallExpr(visitor,
@@ -73,6 +67,8 @@ static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
                               name,
                               node->binaryExpr.rhs);
     evalType(visitor, node);
+
+    return true;
 }
 
 static inline bool isSupportedBinaryOperand(AstNode *node)
@@ -486,8 +482,8 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
         left = left->this.that;
 
     if (stripPointer(left)->tag == typStruct) {
-        checkBinaryOperatorOverload(visitor, node);
-        return;
+        if (checkBinaryOperatorOverload(visitor, node))
+            return;
     }
 
     Operator op = node->binaryExpr.op;

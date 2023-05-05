@@ -172,6 +172,9 @@ static void *cxy_default_alloc(u64 size)
 
 static void *cxy_default_realloc(void *ptr, u64 size)
 {
+    if (ptr == NULL)
+        return cxy_default_alloc(size);
+
     cxy_memory_hdr_t *hdr =
         realloc(CXY_MEMORY_HEADER(ptr), size + CXY_MEMORY_HEADER_SIZE);
     hdr->magic = CXY_MEMORY_MAGIC(HEAP);
@@ -221,7 +224,17 @@ static void cxy_default_dealloc(void *ctx)
 #endif
 
 #ifndef __builtin_free_slice
-#define __builtin_free_slice(P) cxy_free((P).data)
+#define __builtin_free_slice(P)                                                \
+    if ((P).data)                                                              \
+        cxy_free((P).data);                                                    \
+    (P).data = nullptr;                                                        \
+    (P).len = 0
+#endif
+
+#ifndef __builtin_init_slice
+#define __builtin_init_slice(P)                                                \
+    (P).data = nullptr;                                                        \
+    (P).len = 0;
 #endif
 
 #ifndef __builtin_assert
@@ -551,11 +564,53 @@ attr(always_inline) cxy_hash_code_t
 }
 
 attr(always_inline) cxy_hash_code_t
-    cxy_hash_raw_bytes(cxy_hash_code_t h, const void *ptr, size_t size)
+    cxy_hash_raw_bytes(cxy_hash_code_t h, const void *ptr, u64 size)
 {
-    for (size_t i = 0; i < size; ++i)
+    for (u64 i = 0; i < size; ++i)
         h = cxy_hash_uint8(h, ((char *)ptr)[i]);
     return h;
+}
+
+#define CXY_MIN_PRIME 7
+#define CXY_MAX_PRIME 1048583
+#define CXY_PRIMES(f)                                                          \
+    f(CXY_MIN_PRIME) f(17) f(31) f(67) f(257) f(1031) f(4093) f(8191) f(16381) \
+        f(32381) f(65539) f(131071) f(262147) f(524287) f(CXY_MAX_PRIME)
+
+static const u64 cxy_primes[] = {
+#define f(x) x,
+    CXY_PRIMES(f)
+#undef f
+};
+
+// Returns the prime that is strictly greater than the given value.
+// If there is no such prime in the list, returns MAX_PRIME.
+static u64 cxy_next_prime(u64 i)
+{
+    u64 j = 0, k = sizeof__(cxy_primes);
+    while (j < k) {
+        u64 m = (j + k) / 2;
+        u64 p = cxy_primes[m];
+        if (p <= i)
+            j = m + 1;
+        else
+            k = m;
+    }
+    return cxy_primes[k >= sizeof__(cxy_primes) ? sizeof__(cxy_primes) - 1 : k];
+}
+
+// Returns the modulus of a number i by a prime p.
+static u64 cxy_mod_prime(u64 i, u64 p)
+{
+    switch (p) {
+#define f(x)                                                                   \
+    case x:                                                                    \
+        return i % x;
+        CXY_PRIMES(f)
+#undef f
+    default:
+        return i % p;
+    }
 }
 
 #endif

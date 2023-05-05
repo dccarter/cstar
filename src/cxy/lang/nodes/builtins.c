@@ -175,6 +175,26 @@ void initializeBuiltins(SemanticsContext *ctx)
     }
 
     {
+        const Type *params[] = {getAnySliceType(ctx->typeTable)};
+
+        addBuiltinFunc(ctx,
+                       "__builtin_init_slice",
+                       makeVoidType(ctx->typeTable),
+                       params,
+                       1);
+    }
+
+    {
+        const Type *params[] = {getAnySliceType(ctx->typeTable)};
+
+        addBuiltinFunc(ctx,
+                       "__builtin_free_slice",
+                       makeVoidType(ctx->typeTable),
+                       params,
+                       1);
+    }
+
+    {
         // __builtin_assert
         const Type *params[] = {getPrimitiveType(ctx->typeTable, prtBool),
                                 makeStringType(ctx->typeTable),

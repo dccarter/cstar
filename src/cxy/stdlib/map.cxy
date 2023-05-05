@@ -6,135 +6,249 @@ import { hash as hashFunc,
          memset,
          Optional,
          Some,
-         None
+         None,
+         PtrRef
 } from "stdlib/utils.cxy"
 
-struct MapNode[K, V] {
-    next: &This
-    hash: u32
-    key: K
-    value: V
+# if (false) {
+    struct MapNode[K, V] {
+        next: &This
+        hash: u32
+        key: K
+        value: V
 
-    func `new`(key: K, v: value) {
-        this.key = key
-        this.value = value
-        hash = hashFunc[K](key)
+        func `new`(key: K, value: V) {
+            this.key = key
+            this.value = value
+            hash = hashFunc[K](key)
+        }
+    }
+
+    pub struct HashMap[K, V] {
+        x: MapNode[K, V]
+        buckets: [&MapNode[K, V]]
+        numBuckets: u64
+        numNodes: u64
+
+        @inline
+        - func bucketIndex(hash: u32) => hash & (numBuckets - 1)
+
+        - func addNode(node: &MapNode[K, V]) {
+            const n = bucketIndex(node.hash);
+            node.next = buckets.[n]
+            buckets.[n] = node
+        }
+
+        - func resize(count: u64) {
+            var nodes : &MapNode[K, V] = null;
+            var next;
+            var node;
+
+            var i = numBuckets;
+            while (i-- != 0) {
+                node = buckets.[i]
+                while (ptr(node) != ptr(null)) {
+                    next = node.next
+                    node.next = nodes
+                    nodes = node
+                    node = next
+                }
+            }
+
+            buckets = reallocSlice[&MapNode[K, V]](this.buckets, count)
+            __builtin_memset_slice(#[&MapNode[K, V]], buckets, 0)
+            this.buckets = buckets
+            this.numBuckets = count
+            node = nodes
+            while (ptr(node) != ptr(null)) {
+                next = node.next
+                addNode(node)
+                node = next
+            }
+        }
+
+        - func getNode(key: K) {
+            const hash = hashFunc[K](key);
+            var next = PtrRef[&MapNode[K, V]]{};
+
+            if (numBuckets > 0) {
+                next.ptr = &buckets.[bucketIndex(hash)]
+                while (ptr(next.deref()) != ptr(null)) {
+                    var node = next.deref();
+                    if (node.hash == hash && key == node.key)
+                        return next
+                    next.ptr = &node.next
+                }
+            }
+
+            return next
+        }
+
+        func `new`() {
+            __builtin_init_slice(buckets)
+            resize(16)
+        }
+
+        func `delete`() {
+            var next;
+            var node;
+            var i = numBuckets;
+            while (i--) {
+                node = buckets.[i]
+                while (node) {
+                    next = node.next
+                    delete node
+                    node = next
+                }
+            }
+
+            delete buckets
+        }
+
+        func get(key: K) : Optional[V] {
+            var node = getNode(key);
+            return ptr(node.deref()) == ptr(null) ?
+                    None[V]() : Some[V](node.deref().value)
+        }
+
+        @inline
+        func `[]`(key: K) => get(key)
+
+        func set(key: K, value: V) {
+            var next = getNode(key);
+            if (next.deref()) {
+                next.deref().value = value
+                return;
+            }
+
+            var node = new MapNode[K, V](key, value);
+            if (numNodes >= numBuckets) {
+                const newSize = numBuckets > 0? numBuckets << 1 : 1;
+                resize(newSize)
+            }
+            addNode(node)
+            numNodes++
+        }
+
+        @inline
+        func `[]=`(key: K, value: V) => set(key, value)
+
+        func remove(key: K) {
+            var node;
+            var next = getNode(key);
+            if (next.deref()) {
+                node = next.deref();
+                *next.ptr = next.deref().next;
+                delete node
+            }
+        }
+
+        func contains(key: K) {
+            var next = getNode(key);
+            return next.deref() != null
+        }
+
+        func `..`(cb: func (key: K, value: V) -> void) {
+            var i = 0;
+            while (i < numBuckets) {
+                var bucket = buckets.[i];
+                while (bucket) {
+                    cb(bucket.key, bucket.value)
+                    bucket = bucket.next
+                }
+                i++
+            }
+        }
     }
 }
 
-pub struct PtrRef[T] {
-    ptr: &T
+const OCCUPIED_MASK : u32  = 0x80000000;
+const DEFAULT_HASH_TABLE_CAPACITY = 4;
+const MAX_LOAD_FACTOR = 70; // %
 
-    @inline
-    func deref() => *ptr
+@inline
+func incrementWrap(index: u64, capacity: u64) => (index + 1 >= capacity) ? (<u64>0) : index + 1;
+
+@inline
+func isOccupiedHash(hash: u32) => (hash & OCCUPIED_MASK) == OCCUPIED_MASK;
+
+pub native func cxy_next_prime(i: u64) : u64;
+pub native func cxy_mod_prime(i: u64, p: u64) : u64;
+
+
+struct HashMapNode[K, V] {
+    - key: K
+    - value: V
+    - hash: u32
+
+    func `new`(key: K, value: V) {
+        this.key = key
+        this.value = value
+        this.hash = hashFunc[K](key)
+    }
 }
 
 pub struct HashMap[K, V] {
-    x: MapNode[K, V]
-    buckets: [&MapNode[K, V]]
-    numBuckets: u64
-    numNodes: u64
+    - elems: [HashMapNode[K, V]]
+    - hashes: [u32]
+    - size: u64 = 0
 
     @inline
-    - func bucketIndex(hash: u32) => hash & (numBuckets - 1)
+    - func needsRehash() => size * 100 >= len!(elems) * MAX_LOAD_FACTOR
 
-    - func addNode(node: &MapNode[K, V]) {
-        const n = bucketIndex(node.hash);
-        node.next = buckets.[n]
-        buckets.[n] = node
+    @inline
+    - func isBucketOccupied(bucket: u64) => isOccupiedHash(hashes.[bucket])
+
+    func rehashTable() {
+        var newCapacity = cxy_next_prime(len!(elems));
+        if (newCapacity <= len!(elems))
+            newCapacity = len!(elems) * 2 + 1;
+        var newElems = allocSlice[HashMapNode[K,V]](newCapacity);
+        var newHashes = allocSlice[u32](newCapacity);
+
+        var n = len!(elems);
+        for (const i: 0..n) {
+            const hash = hashes.[i];
+            if (!isOccupiedHash(hash))
+                continue;
+            var index = cxy_mod_prime(<u64>hash, newCapacity);
+            while (isOccupiedHash(newHashes.[index]))
+                index = incrementWrap(newCapacity, index);
+
+            newElems.[index] = elems.[i]
+            newHashes.[index] = hash;
+        }
+
+        __builtin_free_slice(hashes)
+        __builtin_free_slice(elems)
+        hashes = newHashes;
+        elems = newElems
     }
 
-    - func resize(count: u64) {
-        var nodes : &MapNode[K, V] = null;
-        var next;
-        var node;
-
-        var i = numBuckets;
-        while (i-- != 0) {
-            node = buckets.[i]
-            while (ptr(node) != ptr(null)) {
-                next = node.next
-                node.next = nodes
-                nodes = node
-                node = next
-            }
-        }
-
-        buckets = reallocSlice[&MapNode[K, V]](this.buckets, numBuckets)
-        __builtin_memset_slice(#[&MapNode[K, V]], buckets, 0)
-        this.buckets = buckets
-        node = nodes
-        while (ptr(node) != ptr(null)) {
-            next = node.next
-            addNode(node)
-            node = next
-        }
-    }
-
-    - func getNode(key: K) {
-        const hash = hashFunc[K](key);
-        var next = PtrRef[&MapNode[K, V]]{};
-
-        if (numBuckets > 0) {
-            next.ptr = &buckets.[bucketIndex(hash)]
-            while (ptr(next.deref()) != ptr(null)) {
-                var node = next.deref();
-                if (node.hash == hash && key == node.key)
-                    return node
-                next.ptr = &node.next
-            }
-        }
-
-        return unchecked!(null, #&MapNode[K, V])
+    func `new`(capacity: u64 = DEFAULT_HASH_TABLE_CAPACITY) {
+        elems = allocSlice[HashMapNode[K, V]](capacity)
     }
 
     func `delete`() {
-        var next;
-        var node;
-        var i = numBuckets;
-        while (i--) {
-            node = buckets.[i]
-            while (node) {
-                next = node.next
-                delete node
-                node = next
-            }
+        __builtin_free_slice(elems)
+    }
+
+    func insert(key: K, value: V) {
+        var hash = hashFunc[K](key) | OCCUPIED_MASK;
+        var index = modPrime(hash, len!(elems));
+        while (isBucketOccupied(hashTable, index)) {
+            if (hashTable->hashes[index] == hash &&
+                compare(elemAt(hashTable->elems, elemSize, index), elem))
+                return false;
+            index = incrementWrap(hashTable->capacity, index);
         }
-
-        delete buckets
+        memcpy(elemAt(hashTable->elems, elemSize, index), elem, elemSize);
+        hashTable->hashes[index] = hash;
+        hashTable->size++;
+        if (needsRehash(hashTable))
+            rehashTable(hashTable, elemSize);
+        return true;
     }
 
-    func get(key: K) : Optional[V] {
-        MapNode[K, V]{}
-        var node = getNode(key);
-        return ptr(node) == ptr(null) ?
-                None[V]() : Some[V](node.value)
-    }
 
-    @inline
-    func `[]`(key: K) => get(key)
-
-    func set(key: K, value: V) {
-        var next = getNode(key);
-        if (next) {
-            next.value = value
-            return;
-        }
-
-        var node = new MapNode[K, V](key, value);
-        const newSize = numBuckets > 0? numBuckets << 1 : 1;
-        resize(newSize)
-        addNode(node)
-        numNodes++
-    }
-
-    func remove(key: K) {
-        var node;
-        var next = getNode(key);
-        if (next) {
-            node = *next
-            *next = (*next).next
-            delete node
-        }
-    }
 }

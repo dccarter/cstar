@@ -117,6 +117,7 @@
     f(StringLiteral, "string literal")          \
     f(LString, "`(")                            \
     f(RString, ")`")                            \
+    f(LStrFmt, "${")                            \
     f(EoF, "end of file")                       \
     f(Error, "invalid token")
 

@@ -3,5 +3,5 @@ import { HashMap } from "stdlib/map.cxy"
 
 
 func main(args: [string]) {
-    HashMap[string, i32]{}
+    var map = HashMap[string, i32]();
 }

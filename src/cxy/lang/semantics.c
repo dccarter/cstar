@@ -37,7 +37,7 @@ static void checkProgram(AstVisitor *visitor, AstNode *node)
         astVisit(visitor, decl);
         ctx->previousTopLevelDecl = decl;
     }
-    
+
     finalizeModule(visitor, node, namespace);
 }
 
@@ -255,7 +255,7 @@ void transformToMemberCallExpr(AstVisitor *visitor,
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *funcMember = NULL;
-    if (typeIs(func->type, Generic)) {
+    if (typeIs(func->type, Generic) && args) {
         // infer the argument
         const Type *arg = evalType(visitor, args);
         funcMember = makeAstNode(
@@ -268,11 +268,12 @@ void transformToMemberCallExpr(AstVisitor *visitor,
                                 .args = makeTypeReferenceNode(ctx, arg)}});
     }
     else {
-        funcMember = makeAstNode(ctx->pool,
-                                 &target->loc,
-                                 &(AstNode){.tag = astPathElem,
-                                            .flags = args->flags,
-                                            .pathElement = {.name = member}});
+        funcMember =
+            makeAstNode(ctx->pool,
+                        &target->loc,
+                        &(AstNode){.tag = astPathElem,
+                                   .flags = args ? args->flags : flgNone,
+                                   .pathElement = {.name = member}});
     }
 
     AstNode *path = makeAstNode(ctx->pool,
@@ -295,6 +296,46 @@ void transformToMemberCallExpr(AstVisitor *visitor,
     node->type = NULL;
     node->callExpr.callee = callee;
     node->callExpr.args = args;
+}
+
+bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    const Type *type = node->type ?: evalType(visitor, node);
+    if (!typeIs(type, Struct))
+        return false;
+
+    AstNode *symbol = findSymbolOnly(type->tStruct.env, "op_truthy");
+    if (symbol == NULL)
+        return false;
+
+    transformToMemberCallExpr(visitor,
+                              node,
+                              symbol,
+                              cloneAstNode(ctx->pool, node),
+                              "op_truthy",
+                              NULL);
+
+    type = evalType(visitor, node);
+    return typeIs(type, Primitive);
+}
+
+bool transformToDerefOperator(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    const Type *type = node->type ?: evalType(visitor, node->unaryExpr.operand);
+    if (!typeIs(type, Struct))
+        return false;
+
+    AstNode *symbol = findSymbolOnly(type->tStruct.env, "op_deref");
+    if (symbol == NULL)
+        return false;
+
+    transformToMemberCallExpr(
+        visitor, node, symbol, node->unaryExpr.operand, "op_deref", NULL);
+
+    type = evalType(visitor, node);
+    return !typeIs(type, Error);
 }
 
 void semanticsCheck(AstNode *program,

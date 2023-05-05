@@ -279,7 +279,7 @@ void removeFromTypeTable(TypeTable *table, const Type *type)
 
 const Type *resolveType(const Type *type)
 {
-    while (true) {
+    while (type) {
         switch (type->tag) {
         case typAlias:
             type = resolveType(type->alias.aliased);
@@ -288,6 +288,7 @@ const Type *resolveType(const Type *type)
             return type;
         }
     }
+    return NULL;
 }
 
 const Type *stripPointer(const Type *type)
@@ -532,6 +533,8 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right)
     right = resolveType(right);
 
     if (left == right)
+        return left;
+    if (typeIs(left, Pointer) && typeIs(stripPointer(right), Null))
         return left;
 
     switch (left->tag) {

@@ -72,6 +72,9 @@ void transformToMemberCallExpr(AstVisitor *visitor,
                                AstNode *target,
                                cstring member,
                                AstNode *args);
+bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node);
+bool transformToDerefOperator(AstVisitor *visitor, AstNode *node);
+
 void initializeBuiltins(SemanticsContext *ctx);
 const Type *checkBuiltinTypeProperty(SemanticsContext *ctx,
                                      AstNode *target,

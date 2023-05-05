@@ -189,7 +189,7 @@ void checkStructField(AstVisitor *visitor, AstNode *node)
             node->type = ERROR_TYPE(ctx);
             return;
         }
-        type = value;
+        type = typeIs(type, Auto) ? value : type;
     }
 
     node->type = type;

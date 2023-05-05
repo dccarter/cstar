@@ -543,6 +543,10 @@ static AstNode *stringExpr(Parser *P)
     const Token tok = *consume0(P, tokLString);
     AstNodeList parts = {NULL};
     while (!check(P, tokRString) && !isEoF(P)) {
+        if (check(P, tokLStrFmt)) {
+            advance(P);
+            continue;
+        }
         listAddAstNode(&parts, expression(P, false));
     }
     consume0(P, tokRString);
@@ -1172,6 +1176,9 @@ static OperatorOverload operatorOverload(Parser *P)
         if (strcmp(name, "str") == 0) {
             op = (OperatorOverload){.f = opStringOverload, .s = "op_str"};
         }
+        else if (strcmp(name, "deref") == 0) {
+            op = (OperatorOverload){.f = opDeref, .s = "op_deref"};
+        }
         else {
             parserError(P,
                         &ident.fileLoc,
@@ -1187,12 +1194,19 @@ static OperatorOverload operatorOverload(Parser *P)
         case tokDelete:
             op = (OperatorOverload){.f = opDelete, .s = "op_delete"};
             break;
+        case tokLNot:
+            if (checkPeek(P, 1, tokLNot)) {
+                op = (OperatorOverload){.f = opTruthy, .s = "op_truthy"};
+                advance(P);
+            }
+            else
+                op = (OperatorOverload){.f = opNot, .s = "op_not"};
+            break;
 
 #define f(O, P, T, S, N)                                                       \
     case tok##T:                                                               \
         op = (OperatorOverload){.f = op##O, .s = "op_" N};                     \
         break;
-
             AST_BINARY_EXPR_LIST(f);
 
 #undef f
@@ -1713,7 +1727,11 @@ static AstNode *parseComptimeFor(Parser *P, AstNode *(*parser)(Parser *))
                    .forStmt = {.var = var, .range = range, .body = body}});
 }
 
-static AstNode *parseComptimeVarDecl(Parser *P, AstNode *(*parser)(Parser *)) {}
+static AstNode *parseComptimeVarDecl(Parser *P, AstNode *(*parser)(Parser *))
+{
+    E4C_THROW(ParserException, "Not Implemented");
+    unreachable();
+}
 
 static AstNode *comptime(Parser *P, AstNode *(*parser)(Parser *))
 {

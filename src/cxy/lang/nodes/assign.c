@@ -95,7 +95,8 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
                 ctx->L, &node->loc, "assign to an array is not allowed", NULL);
         node->type = ERROR_TYPE(ctx);
     }
-    else if (!isTypeAssignableFrom(lhs, rhs)) {
+    else if (!isTypeAssignableFrom(lhs, rhs) &&
+             !(typeIs(lhs, Pointer) && typeIs(rhs, Null))) {
         logError(ctx->L,
                  &node->assignExpr.rhs->loc,
                  "incompatible types on assigment expression, expecting '{t}', "

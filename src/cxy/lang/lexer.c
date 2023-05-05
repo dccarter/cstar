@@ -167,6 +167,11 @@ Token advanceLexer(Lexer *lexer)
         return makeToken(lexer, &lexer->filePos, tokRString);
     }
 
+    if (lexer->flags & lxReturnLStrFmt) {
+        lexer->flags &= ~lxReturnLStrFmt;
+        return makeToken(lexer, &lexer->filePos, tokLStrFmt);
+    }
+
     while (true) {
         bool parsingStringLiteral = false;
         FilePos begin = lexer->filePos;
@@ -352,9 +357,11 @@ Token advanceLexer(Lexer *lexer)
 
                 if (!parsingStringLiteral &&
                     (lexer->flags & lxContinueStringExpr)) {
-                    if (getCurChar(lexer) == '$' && peekNextChar(lexer)) {
+                    if (getCurChar(lexer) == '$' &&
+                        peekNextChar(lexer) == '{') {
                         skipChar(lexer); // skip $
                         Token tok = makeToken(lexer, &begin, tokStringLiteral);
+                        lexer->flags |= lxReturnLStrFmt;
                         skipChar(lexer); // skip {
                         return tok;
                     }
