@@ -1,5 +1,7 @@
 module strlib
 
+import { hashInit, hashStringSize } from "stdlib/utils.cxy"
+
 pub native type cxy_string_builder_t;
 
 pub native func cxy_string_builder_new(): cxy_string_builder_t;
@@ -48,10 +50,68 @@ pub struct StringBuilder {
         cxy_string_builder_append_bool(sb, val)
 
     @inline
+    func `<<`[U](val: U) {
+        #if (U == #string)
+            appendString(val)
+        else #if (U == #i8 || U == #u8 || U == #i16 || U == #u16 || U == #i32 || U == #u32 || U == #i64 || U == #u64)
+            appendInt(val)
+        else #if (U == #f32 || U == #f64)
+            appendFloat(val)
+        else #if (U == #bool)
+            appendBool(val)
+        else #if (U == #char)
+             appendChar(val)
+
+        return this
+    }
+
+    @inline
     func toString() {
         var ret = cxy_string_builder_release(sb);
         return unchecked!(ret, #string)
     }
 
     @inline func `str`() => toString()
+}
+
+pub struct String {
+    - s: string
+    - len: u64 = 0
+
+    func `new`(s: string = "") {
+        this.s = s
+        this.len = len!(s)
+    }
+
+    func compare(other: &const String) {
+        if (len != other.len)
+            return <i32>(len - other.len)
+
+        for (const i : 0..len) {
+            if (s.[i] != other.s.[i])
+                return <i32>s.[i] - <i32>other.s.[i]
+        }
+
+        return <i32>0
+    }
+
+    @inline
+    func `==`(other: &const String) => compare(other) == 0
+    @inline
+    func `!=`(other: &const String) => compare(other) != 0
+    @inline
+    func `<`(other: &const String) => compare(other) < 0
+    @inline
+    func `>`(other: &const String) => compare(other) > 0
+    @inline
+    func `<=`(other: &const String) => compare(other) <= 0
+    @inline
+    func `>=`(other: &const String) => compare(other) >= 0
+
+    @inline
+    func `str`() => s
+    @inline
+    func toString() => s
+    @inline
+    func hash() => hashStringSize(hashInit(), s, len)
 }

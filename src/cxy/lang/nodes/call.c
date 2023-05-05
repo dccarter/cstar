@@ -468,7 +468,7 @@ void checkCall(AstVisitor *visitor, AstNode *node)
             param = param->next;
         }
         else {
-            arg = node->callExpr.args;
+            arg = getLastAstNode(node->callExpr.args);
         }
 
         for (; param; param = param->next) {

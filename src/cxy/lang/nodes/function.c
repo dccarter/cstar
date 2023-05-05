@@ -263,8 +263,8 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
 
     if (isMember) {
         format(ctx->state, " ", NULL);
-        if (hasFlag(node, Generated))
-            writeDeclNamespace(ctx, node->type->namespace, NULL);
+        //        if (hasFlag(node, Generated))
+        //            writeDeclNamespace(ctx, node->type->namespace, NULL);
         //        else
         //            writeNamespace(ctx, NULL);
         writeTypename(ctx, parent->type);
@@ -427,15 +427,16 @@ void checkMethodDeclBody(AstVisitor *visitor, AstNode *node)
     ctx->lastReturn = NULL;
 
     pushScope(ctx->env, node);
-    defineSymbol(ctx->env,
-                 ctx->L,
-                 "this",
-                 makeAstNode(ctx->pool,
-                             &node->loc,
-                             &(AstNode){.tag = astIdentifier,
-                                        .flags = parent->flags,
-                                        .type = parent,
-                                        .ident.value = "this"}));
+    defineSymbol(
+        ctx->env,
+        ctx->L,
+        "this",
+        makeAstNode(ctx->pool,
+                    &node->loc,
+                    &(AstNode){.tag = astIdentifier,
+                               .flags = (parent->flags & ~flgTopLevelDecl),
+                               .type = parent,
+                               .ident.value = "this"}));
 
     if (node->parentScope->structDecl.base) {
         defineSymbol(

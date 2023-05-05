@@ -23,6 +23,8 @@ pub native func cxy_hash_bytes(init: HashCode, str: &const void, size: u64): u32
 pub native func cxy_hash_string(init: HashCode, str: &const char): u32;
 @inline
 pub func hashString(init: HashCode, str: string) => cxy_hash_string(init, unchecked!(str, #&const char))
+@inline
+pub func hashStringSize(init: HashCode, str: string, len: u64) => cxy_hash_bytes(init, unchecked!(str, #&const char), len)
 
 
 pub func hash[T](val: T) {

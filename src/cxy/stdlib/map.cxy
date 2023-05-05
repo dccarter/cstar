@@ -10,164 +10,12 @@ import { hash as hashFunc,
          PtrRef
 } from "stdlib/utils.cxy"
 
-# if (false) {
-    struct MapNode[K, V] {
-        next: &This
-        hash: u32
-        key: K
-        value: V
-
-        func `new`(key: K, value: V) {
-            this.key = key
-            this.value = value
-            hash = hashFunc[K](key)
-        }
-    }
-
-    pub struct HashMap[K, V] {
-        x: MapNode[K, V]
-        buckets: [&MapNode[K, V]]
-        numBuckets: u64
-        numNodes: u64
-
-        @inline
-        - func bucketIndex(hash: u32) => hash & (numBuckets - 1)
-
-        - func addNode(node: &MapNode[K, V]) {
-            const n = bucketIndex(node.hash);
-            node.next = buckets.[n]
-            buckets.[n] = node
-        }
-
-        - func resize(count: u64) {
-            var nodes : &MapNode[K, V] = null;
-            var next;
-            var node;
-
-            var i = numBuckets;
-            while (i-- != 0) {
-                node = buckets.[i]
-                while (ptr(node) != ptr(null)) {
-                    next = node.next
-                    node.next = nodes
-                    nodes = node
-                    node = next
-                }
-            }
-
-            buckets = reallocSlice[&MapNode[K, V]](this.buckets, count)
-            __builtin_memset_slice(#[&MapNode[K, V]], buckets, 0)
-            this.buckets = buckets
-            this.numBuckets = count
-            node = nodes
-            while (ptr(node) != ptr(null)) {
-                next = node.next
-                addNode(node)
-                node = next
-            }
-        }
-
-        - func getNode(key: K) {
-            const hash = hashFunc[K](key);
-            var next = PtrRef[&MapNode[K, V]]{};
-
-            if (numBuckets > 0) {
-                next.ptr = &buckets.[bucketIndex(hash)]
-                while (ptr(next.deref()) != ptr(null)) {
-                    var node = next.deref();
-                    if (node.hash == hash && key == node.key)
-                        return next
-                    next.ptr = &node.next
-                }
-            }
-
-            return next
-        }
-
-        func `new`() {
-            __builtin_init_slice(buckets)
-            resize(16)
-        }
-
-        func `delete`() {
-            var next;
-            var node;
-            var i = numBuckets;
-            while (i--) {
-                node = buckets.[i]
-                while (node) {
-                    next = node.next
-                    delete node
-                    node = next
-                }
-            }
-
-            delete buckets
-        }
-
-        func get(key: K) : Optional[V] {
-            var node = getNode(key);
-            return ptr(node.deref()) == ptr(null) ?
-                    None[V]() : Some[V](node.deref().value)
-        }
-
-        @inline
-        func `[]`(key: K) => get(key)
-
-        func set(key: K, value: V) {
-            var next = getNode(key);
-            if (next.deref()) {
-                next.deref().value = value
-                return;
-            }
-
-            var node = new MapNode[K, V](key, value);
-            if (numNodes >= numBuckets) {
-                const newSize = numBuckets > 0? numBuckets << 1 : 1;
-                resize(newSize)
-            }
-            addNode(node)
-            numNodes++
-        }
-
-        @inline
-        func `[]=`(key: K, value: V) => set(key, value)
-
-        func remove(key: K) {
-            var node;
-            var next = getNode(key);
-            if (next.deref()) {
-                node = next.deref();
-                *next.ptr = next.deref().next;
-                delete node
-            }
-        }
-
-        func contains(key: K) {
-            var next = getNode(key);
-            return next.deref() != null
-        }
-
-        func `..`(cb: func (key: K, value: V) -> void) {
-            var i = 0;
-            while (i < numBuckets) {
-                var bucket = buckets.[i];
-                while (bucket) {
-                    cb(bucket.key, bucket.value)
-                    bucket = bucket.next
-                }
-                i++
-            }
-        }
-    }
-}
-
 const OCCUPIED_MASK : u32  = 0x80000000;
 const DEFAULT_HASH_TABLE_CAPACITY = 4;
 const MAX_LOAD_FACTOR = 70; // %
 
 @inline
-func incrementWrap(index: u64, capacity: u64) => (index + 1 >= capacity) ? (<u64>0) : index + 1;
+func incrementWrap(capacity: u64, index: u64) => (index + 1 >= capacity) ? (<u64>0) : index + 1;
 
 @inline
 func isOccupiedHash(hash: u32) => (hash & OCCUPIED_MASK) == OCCUPIED_MASK;
@@ -179,34 +27,32 @@ pub native func cxy_mod_prime(i: u64, p: u64) : u64;
 struct HashMapNode[K, V] {
     - key: K
     - value: V
-    - hash: u32
 
     func `new`(key: K, value: V) {
         this.key = key
         this.value = value
-        this.hash = hashFunc[K](key)
     }
 }
 
 pub struct HashMap[K, V] {
-    - elems: [HashMapNode[K, V]]
+    - data: [HashMapNode[K, V]]
     - hashes: [u32]
     - size: u64 = 0
 
     @inline
-    - func needsRehash() => size * 100 >= len!(elems) * MAX_LOAD_FACTOR
+    - func needsRehash() => size * 100 >= len!(data) * MAX_LOAD_FACTOR
 
     @inline
     - func isBucketOccupied(bucket: u64) => isOccupiedHash(hashes.[bucket])
 
-    func rehashTable() {
-        var newCapacity = cxy_next_prime(len!(elems));
-        if (newCapacity <= len!(elems))
-            newCapacity = len!(elems) * 2 + 1;
-        var newElems = allocSlice[HashMapNode[K,V]](newCapacity);
+    - func rehash() {
+        var newCapacity = cxy_next_prime(len!(data));
+        if (newCapacity <= len!(data))
+            newCapacity = len!(data) * 2 + 1;
+        var newData = allocSlice[HashMapNode[K,V]](newCapacity);
         var newHashes = allocSlice[u32](newCapacity);
 
-        var n = len!(elems);
+        var n = len!(data);
         for (const i: 0..n) {
             const hash = hashes.[i];
             if (!isOccupiedHash(hash))
@@ -215,40 +61,119 @@ pub struct HashMap[K, V] {
             while (isOccupiedHash(newHashes.[index]))
                 index = incrementWrap(newCapacity, index);
 
-            newElems.[index] = elems.[i]
+            newData.[index] = data.[i]
             newHashes.[index] = hash;
         }
 
         __builtin_free_slice(hashes)
-        __builtin_free_slice(elems)
+        __builtin_free_slice(data)
         hashes = newHashes;
-        elems = newElems
+        data = newData
+    }
+
+    @inline
+    - func remoteAt(key: K, index: u64) {
+        var removed = Some[V](data.[index].value);
+
+        var next = incrementWrap(len!(data), index);
+        while (isBucketOccupied(next)) {
+            const nextHash = hashes.[next];
+            const desired = cxy_mod_prime(nextHash, len!(data));
+            if (desired <= index || desired > next) {
+                data.[index] = data.[next]
+                hashes.[index] = nextHash
+               index = next
+            }
+            next = incrementWrap(len!(data), index)
+        }
+        hashes.[index] = 0
+        size--
+
+        return removed
     }
 
     func `new`(capacity: u64 = DEFAULT_HASH_TABLE_CAPACITY) {
-        elems = allocSlice[HashMapNode[K, V]](capacity)
+        capacity = cxy_next_prime(capacity)
+        hashes = allocSlice[u32](capacity)
+        data = allocSlice[HashMapNode[K, V]](capacity)
     }
 
     func `delete`() {
-        __builtin_free_slice(elems)
+        __builtin_free_slice(data)
     }
 
-    func insert(key: K, value: V) {
+    func insert(key: K, value: V, replace: bool = true) {
         var hash = hashFunc[K](key) | OCCUPIED_MASK;
-        var index = modPrime(hash, len!(elems));
-        while (isBucketOccupied(hashTable, index)) {
-            if (hashTable->hashes[index] == hash &&
-                compare(elemAt(hashTable->elems, elemSize, index), elem))
+        var index = cxy_mod_prime(hash, len!(data));
+        while (isBucketOccupied(index)) {
+            if (hashes.[index] == hash && key == data.[index].key){
+                if (replace)
+                    data.[index].value = value
                 return false;
-            index = incrementWrap(hashTable->capacity, index);
+            }
+            index = incrementWrap(len!(data), index)
         }
-        memcpy(elemAt(hashTable->elems, elemSize, index), elem, elemSize);
-        hashTable->hashes[index] = hash;
-        hashTable->size++;
-        if (needsRehash(hashTable))
-            rehashTable(hashTable, elemSize);
+
+        data.[index] = HashMapNode[K, V]{key: key, value: value}
+        hashes.[index] = hash
+        size++
+
+        if (needsRehash())
+            rehash()
+
         return true;
     }
 
+    func get(key: K) {
+        const hash = hashFunc[K](key) | OCCUPIED_MASK;
+        var index = cxy_mod_prime(hash, len!(data));
+        while (isBucketOccupied(index)) {
+            if (hashes.[index] == hash && key == data.[index].key)
+                return Some[V](data.[index].value);
+            index = incrementWrap(len!(data), index)
+        }
+        return None[V]()
+    }
 
+    func remove(key: K) {
+        const hash = hashFunc[K](key) | OCCUPIED_MASK;
+        var index = cxy_mod_prime(hash, len!(data));
+        var found = false;
+        while (isBucketOccupied(index)) {
+            if (hashes.[index] == hash && key == data.[index].key) {
+                return remoteAt(key, index)
+            }
+            index = incrementWrap(len!(data), index)
+        }
+
+        return None[V]()
+    }
+
+    func clear() {
+        if (size == 0)
+            return;
+
+        for (const i : 0..len!(data)) {
+            if (isBucketOccupied(i))
+                delete &data.[i]
+        }
+
+        __builtin_memset_slice(#[u32], hashes, 0)
+    }
+
+    @inline
+    func `[]`(key: K) => get(key)
+
+    @inline
+    func `[]=`(key: K, value: V) => insert(key, value)
+
+    func `..`(body: func (key: K, value: &const V) -> void) {
+        var i = 0;
+        while (i < len!(data)) {
+            if (isOccupiedHash(hashes.[i]))
+                body(data.[i].key, &data.[i].value)
+
+            i++
+        }
+    }
 }

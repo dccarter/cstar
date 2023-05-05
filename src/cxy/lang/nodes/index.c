@@ -153,7 +153,7 @@ void checkIndex(AstVisitor *visitor, AstNode *node)
         node->type = target;
         return;
     }
-    
+
     node->flags |= node->indexExpr.target->flags;
 
     if (typeIs(target, Pointer)) {
@@ -169,22 +169,38 @@ void checkIndex(AstVisitor *visitor, AstNode *node)
                                      .isPrefix = true}});
     }
 
-    if (target->tag == typArray) {
+    if (typeIs(target, Array)) {
         astVisit(visitor, node->indexExpr.index);
         node->type = target->array.elementType;
     }
-    else if (target->tag == typMap) {
+    else if (typeIs(target, Map)) {
         astVisit(visitor, node->indexExpr.index);
         node->type = target->map.value;
     }
-    else if (target->tag == typStruct || target->tag == typUnion) {
+    else if (typeIs(target, Struct) || typeIs(target, Union)) {
         checkIndexOperator(visitor, node);
+    }
+    else if (typeIs(target, String)) {
+        const Type *type = evalType(visitor, node->indexExpr.index);
+        if (!isIntegerType(type)) {
+            logError(ctx->L,
+                     &node->loc,
+                     "unexpected index type on operator (.[]), expecting "
+                     "integer, got '{t}'",
+                     (FormatArg[]){{.t = type}});
+
+            node->type = ERROR_TYPE(ctx);
+        }
+        else
+            node->type = getPrimitiveType(ctx->typeTable, prtChar);
     }
     else {
         logError(ctx->L,
                  &node->loc,
                  "index operator (.[]) not supported on type '{t}'",
                  (FormatArg[]){{.t = target}});
+
+        node->type = ERROR_TYPE(ctx);
     }
 }
 

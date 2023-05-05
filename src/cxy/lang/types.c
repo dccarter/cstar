@@ -110,15 +110,14 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
 #undef f
             if (isIntegerType(from)) {
                 if (isUnsignedType(from))
-                    return to->size >= from->size;
-                return to->size > from->size;
+                    return to->size > from->size;
+                return to->size >= from->size;
             }
             return false;
 #define f(I, ...) case prt##I:
             UNSIGNED_INTEGER_TYPE_LIST(f)
 #undef f
-            return isIntegerType(from) && isSignedType(from) &&
-                   to->size >= from->size;
+            return isIntegerType(from) && to->size >= from->size;
 #define f(I, ...) case prt##I:
             FLOAT_TYPE_LIST(f)
 #undef f

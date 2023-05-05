@@ -1446,16 +1446,16 @@ static AstNode *returnStatement(Parser *P)
 
 static AstNode *continueStatement(Parser *P)
 {
-    Token *tok = match(P, tokBreak, tokContinue);
-    if (tok == NULL) {
+    Token tok = *current(P);
+    if (!match(P, tokBreak, tokContinue)) {
         reportUnexpectedToken(P, "continue/break");
     }
+
     match(P, tokSemicolon);
     return newAstNode(P,
-                      &tok->fileLoc.begin,
-                      &(AstNode){.tag = tok->tag == tokContinue
-                                            ? astContinueStmt
-                                            : astBreakStmt});
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = tok.tag == tokContinue ? astContinueStmt
+                                                               : astBreakStmt});
 }
 
 static AstNode *statement(Parser *P)
