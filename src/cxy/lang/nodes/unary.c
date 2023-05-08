@@ -85,6 +85,21 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
     return operand;
 }
 
+void generateDeleteExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    const Type *type = node->unaryExpr.operand->type, *raw = stripPointer(type);
+    if (isBuiltinType(raw)) {
+        format(ctx->state, "cxy_free((void *)", NULL);
+    }
+    else {
+        writeTypename(ctx, raw);
+        format(ctx->state, "__op_delete(", NULL);
+    }
+    astConstVisit(visitor, node->unaryExpr.operand);
+    format(ctx->state, ")", NULL);
+}
+
 void generateAddressOfExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -98,12 +113,7 @@ void generateUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
     if (node->unaryExpr.isPrefix) {
         switch (node->unaryExpr.op) {
         case opDelete:
-            if (isSliceType(node->unaryExpr.operand->type))
-                format(ctx->state, "__builtin_free_slice(", NULL);
-            else
-                format(ctx->state, "cxy_free((void *)", NULL);
-            astConstVisit(visitor, node->unaryExpr.operand);
-            format(ctx->state, ")", NULL);
+            generateDeleteExpr(visitor, node);
             break;
         case opDeref:
             format(ctx->state, "(*", NULL);

@@ -338,9 +338,11 @@ void evalPath(AstVisitor *visitor, AstNode *node)
             node->tag = astStringType;
             break;
         case typEnum:
-        case typStruct:
-            symbol = findSymbolOnly(&ctx->eval.env, symbol->type->name);
-            if (symbol == NULL) {
+        case typStruct: {
+            AstNode *decl = typeIs(symbol->type, Enum)
+                                ? symbol->type->tEnum.decl
+                                : symbol->type->tStruct.decl;
+            if (decl == NULL) {
                 logError(ctx->L,
                          &node->loc,
                          "should have existed since type exists",
@@ -348,8 +350,9 @@ void evalPath(AstVisitor *visitor, AstNode *node)
                 node->tag = astError;
                 return;
             }
-            *node = *symbol;
+            *node = *decl;
             break;
+        }
         default:
             csAssert0(false);
         }

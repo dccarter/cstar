@@ -103,6 +103,7 @@ typedef enum {
     astGenericDecl,
     astIdentifier,
     astImportEntity,
+    astTypeRef,
     /* Types */
     astVoidType,
     astStringType,
@@ -200,6 +201,8 @@ enum {
     flgEnumLiteral = BIT(26),
     flgComptime = BIT(27),
     flgVisited = BIT(28),
+    flgImplementsDelete = BIT(28),
+    flgImmediatelyReturned = BIT(29),
 };
 
 typedef struct AstNode AstNode;

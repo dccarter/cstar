@@ -51,15 +51,15 @@ pub struct StringBuilder {
 
     @inline
     func `<<`[U](val: U) {
-        #if (U == #string)
+        #if (#U == #string)
             appendString(val)
-        else #if (U == #i8 || U == #u8 || U == #i16 || U == #u16 || U == #i32 || U == #u32 || U == #i64 || U == #u64)
+        else #if (#U == #i8 || #U == #u8 || #U == #i16 || #U == #u16 || #U == #i32 || #U == #u32 || #U == #i64 || #U == #u64)
             appendInt(val)
-        else #if (U == #f32 || U == #f64)
+        else #if (#U == #f32 || #U == #f64)
             appendFloat(val)
-        else #if (U == #bool)
+        else #if (#U == #bool)
             appendBool(val)
-        else #if (U == #char)
+        else #if (#U == #char)
              appendChar(val)
 
         return this
@@ -81,6 +81,13 @@ pub struct String {
     func `new`(s: string = "") {
         this.s = s
         this.len = len!(s)
+    }
+
+    @inline
+    func `delete`() {
+        if (s != null)
+            __builtin_dealloc(s)
+        s = null
     }
 
     func compare(other: &const String) {
@@ -107,7 +114,6 @@ pub struct String {
     func `<=`(other: &const String) => compare(other) <= 0
     @inline
     func `>=`(other: &const String) => compare(other) >= 0
-
     @inline
     func `str`() => s
     @inline

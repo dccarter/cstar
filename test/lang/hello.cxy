@@ -1,28 +1,27 @@
 import { println } from "stdlib/io.cxy"
 import { HashMap } from "stdlib/map.cxy"
-import { StringBuilder } from "stdlib/strlib.cxy"
+import { String } from "stdlib/strlib.cxy"
 
 
 func main(args: [string]) {
-    var map = HashMap[string, i32]();
+    var map = HashMap[String, i32]();
+    defer delete &map;
+
     map.["Carter"] = 10
     map.["Megan"] = 12
+
     for (const i : 0..20) {
         map.[f"${i}"] = <i32>i
     }
 
-    var carter = map.["Carter"];
-    println(f"${carter}")
-
-    for (const (key, value): map) {
-        println(f"${key} -> ${value}")
-    }
-
-    for (const i : 6..20) {
+    for (const i : 6..14) {
         map.remove(f"${i}")
     }
-    println("-------------------------------------------------");
-    for (const (key, value): map) {
-        println(f"${key} -> ${value}")
+
+    for (const (key, value) : map) {
+        println(f"${key} => ${value}")
+    }
+    {
+        var map = 10;
     }
 }

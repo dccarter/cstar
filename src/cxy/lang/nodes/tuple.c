@@ -10,6 +10,44 @@
 
 #include "core/alloc.h"
 
+static void generateTupleDelete(CodegenContext *context, const Type *type)
+{
+    FormatState *state = context->state;
+    format(state, "attr(always_inline)\nstatic void ", NULL);
+    writeTypename(context, type);
+    format(state, "__op_delete(", NULL);
+    writeTypename(context, type);
+    format(state, " *this) {{{>}\n", NULL);
+
+    u64 y = 0;
+    for (u64 i = 0; i < type->tuple.count; i++) {
+        const Type *member = type->tuple.members[i];
+        if (typeIs(member, Func) || typeIs(member, Generic) ||
+            (isBuiltinType(member) && !typeIs(member, String)))
+            continue;
+
+        const Type *raw = stripPointer(member);
+        if (y++ != 0)
+            format(state, "\n", NULL);
+
+        if ((typeIs(member, Pointer) && isBuiltinType(raw)) ||
+            typeIs(member, String)) {
+            format(state,
+                   "cxy_free((void *)this->_{u64});",
+                   (FormatArg[]){{.u64 = i}});
+        }
+        else {
+            writeTypename(context, raw);
+            format(state,
+                   "__op_delete({s}this->_{u64});",
+                   (FormatArg[]){{.s = !typeIs(member, Pointer) ? "&" : ""},
+                                 {.u64 = i}});
+        }
+    }
+
+    format(state, "{<}\n}", NULL);
+}
+
 void generateTupleDefinition(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
@@ -23,6 +61,9 @@ void generateTupleDefinition(CodegenContext *context, const Type *type)
     }
     format(state, "{<}\n} ", NULL);
     writeTypename(context, type);
+
+    format(state, ";\n", NULL);
+    generateTupleDelete(context, type);
 }
 
 void generateTupleExpr(ConstAstVisitor *visitor, const AstNode *node)

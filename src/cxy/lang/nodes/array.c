@@ -8,6 +8,61 @@
 
 #include "lang/ttable.h"
 
+static void generateArrayDelete(CodegenContext *context, const Type *type)
+{
+    FormatState *state = context->state;
+    const Type *element = type->array.elementType;
+    const Type *raw = stripPointer(element);
+
+    format(state, "attr(always_inline)\nstatic void ", NULL);
+    writeTypename(context, type);
+    format(state, "__op_delete(", NULL);
+    if (isSliceType(type))
+        writeTypename(context, type);
+    else
+        writeTypename(context, type->array.elementType);
+    format(state, " *this) {{{>}\n", NULL);
+
+    if (!typeIs(element, Func) && !typeIs(element, Generic) &&
+        !(isBuiltinType(element) || typeIs(element, String))) {
+        format(state, "for (u64 i = 0; i < ", NULL);
+        if (isSliceType(type))
+            format(state, "this->len", NULL);
+        else
+            format(state, "{u64}", (FormatArg[]){{.u64 = type->array.len}});
+        format(state, "; i++) {{{>}\n", NULL);
+
+        if ((typeIs(element, Pointer) && isBuiltinType(raw)) ||
+            typeIs(element, String)) {
+            if (isSliceType(type))
+                format(state, "cxy_free((void *)this->data[i]);", NULL);
+            else
+                format(state, "cxy_free((void *)this[i]);", NULL);
+        }
+        else {
+            writeTypename(context, raw);
+            if (isSliceType(type))
+                format(
+                    state,
+                    "__op_delete({s}this->data[i]);",
+                    (FormatArg[]){{.s = !typeIs(element, Pointer) ? "&" : ""}});
+            else
+                format(
+                    state,
+                    "__op_delete({s}this[i]);",
+                    (FormatArg[]){{.s = !typeIs(element, Pointer) ? "&" : ""}});
+        }
+        format(state, "{<}\n};\n", NULL);
+    }
+
+    if (isSliceType(type))
+        format(state, "__builtin_free_slice(*this);\n", NULL);
+    else
+        format(state, "cxy_free(this);\n", NULL);
+
+    format(state, "{<}\n}", NULL);
+}
+
 void generateForStmtArray(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -92,6 +147,9 @@ void generateArrayDeclaration(CodegenContext *context, const Type *type)
         writeTypename(context, type);
         format(state, "[{u64}]", (FormatArg[]){{.u64 = type->array.len}});
     }
+
+    format(state, ";\n", NULL);
+    generateArrayDelete(context, type);
 }
 
 void checkArrayType(AstVisitor *visitor, AstNode *node)

@@ -99,6 +99,8 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
     switch (to->tag) {
     case typAuto:
         return from->tag != typError;
+    case typString:
+        return typeIs(from, String) || typeIs(stripPointer(from), Null);
     case typPrimitive:
         if (from->tag == typEnum) {
             return isTypeAssignableFrom(to, from->tEnum.base);

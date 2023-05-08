@@ -174,6 +174,7 @@ typedef struct Type {
             const Type *base;
             EnumOption *options;
             u64 count;
+            AstNode *decl;
             Env *env;
         } tEnum;
 
@@ -181,6 +182,7 @@ typedef struct Type {
             const Type *base;
             StructField *fields;
             u64 fieldsCount;
+            AstNode *decl;
             Env *env;
         } tStruct;
 

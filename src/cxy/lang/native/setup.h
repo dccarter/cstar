@@ -144,7 +144,7 @@ enum {
     CXY_ALLOC_STACK = 0b100
 };
 
-#define CXY_MEMORY_MAGIC(ALLOC) 0xbebebe00 | CXY_ALLOC_##ALLOC
+#define CXY_MEMORY_MAGIC(ALLOC) (0xbebebe00 | CXY_ALLOC_##ALLOC)
 
 typedef struct cxy_memory_hdr_t {
     union {
@@ -182,12 +182,14 @@ static void *cxy_default_realloc(void *ptr, u64 size)
     return CXY_MEMORY_POINTER(hdr);
 }
 
-static void cxy_default_dealloc(void *ctx)
+void cxy_default_dealloc(void *ctx)
 {
-    cxy_memory_hdr_t *hdr = CXY_MEMORY_HEADER(ctx);
-    if ((hdr->magic & CXY_MEMORY_MAGIC(HEAP)) && hdr->refs) {
-        hdr->hdr = 0;
-        free(hdr);
+    if (ctx) {
+        cxy_memory_hdr_t *hdr = CXY_MEMORY_HEADER(ctx);
+        if ((hdr->magic == CXY_MEMORY_MAGIC(HEAP)) && hdr->refs) {
+            hdr->hdr = 0;
+            free(hdr);
+        }
     }
 }
 
@@ -199,6 +201,10 @@ static void cxy_default_dealloc(void *ctx)
 
 #ifndef __builtin_alloc
 #define __builtin_alloc(T, n) cxy_alloc(sizeof(T) * n)
+#endif
+
+#ifndef __builtin_dealloc
+#define __builtin_dealloc(P) cxy_default_dealloc((void *)(P))
 #endif
 
 #ifndef __builtin_realloc
@@ -564,7 +570,7 @@ attr(always_inline) cxy_hash_code_t
 }
 
 attr(always_inline) cxy_hash_code_t
-    cxy_hash_raw_bytes(cxy_hash_code_t h, const void *ptr, u64 size)
+    cxy_hash_bytes(cxy_hash_code_t h, const void *ptr, u64 size)
 {
     for (u64 i = 0; i < size; ++i)
         h = cxy_hash_uint8(h, ((char *)ptr)[i]);

@@ -25,13 +25,8 @@ pub native func cxy_mod_prime(i: u64, p: u64) : u64;
 
 
 struct HashMapNode[K, V] {
-    - key: K
-    - value: V
-
-    func `new`(key: K, value: V) {
-        this.key = key
-        this.value = value
-    }
+    key: K
+    value: V
 }
 
 pub struct HashMap[K, V] {
@@ -84,7 +79,7 @@ pub struct HashMap[K, V] {
                 hashes.[index] = nextHash
                index = next
             }
-            next = incrementWrap(len!(data), index)
+            next = incrementWrap(len!(data), next)
         }
         hashes.[index] = 0
         size--
@@ -98,15 +93,11 @@ pub struct HashMap[K, V] {
         data = allocSlice[HashMapNode[K, V]](capacity)
     }
 
-    func `delete`() {
-        __builtin_free_slice(data)
-    }
-
     func insert(key: K, value: V, replace: bool = true) {
         var hash = hashFunc[K](key) | OCCUPIED_MASK;
         var index = cxy_mod_prime(hash, len!(data));
         while (isBucketOccupied(index)) {
-            if (hashes.[index] == hash && key == data.[index].key){
+            if (hashes.[index] == hash && key == &data.[index].key){
                 if (replace)
                     data.[index].value = value
                 return false;
@@ -128,7 +119,7 @@ pub struct HashMap[K, V] {
         const hash = hashFunc[K](key) | OCCUPIED_MASK;
         var index = cxy_mod_prime(hash, len!(data));
         while (isBucketOccupied(index)) {
-            if (hashes.[index] == hash && key == data.[index].key)
+            if (hashes.[index] == hash && key == &data.[index].key)
                 return Some[V](data.[index].value);
             index = incrementWrap(len!(data), index)
         }
@@ -140,7 +131,7 @@ pub struct HashMap[K, V] {
         var index = cxy_mod_prime(hash, len!(data));
         var found = false;
         while (isBucketOccupied(index)) {
-            if (hashes.[index] == hash && key == data.[index].key) {
+            if (hashes.[index] == hash && key == &data.[index].key) {
                 return remoteAt(key, index)
             }
             index = incrementWrap(len!(data), index)
@@ -159,6 +150,7 @@ pub struct HashMap[K, V] {
         }
 
         __builtin_memset_slice(#[u32], hashes, 0)
+        size = 0
     }
 
     @inline

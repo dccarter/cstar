@@ -534,7 +534,8 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right)
 
     if (left == right)
         return left;
-    if (typeIs(left, Pointer) && typeIs(stripPointer(right), Null))
+    if ((typeIs(left, String) || typeIs(left, Pointer)) &&
+        typeIs(stripPointer(right), Null))
         return left;
 
     switch (left->tag) {

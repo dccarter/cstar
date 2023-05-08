@@ -93,7 +93,7 @@ bool defineSymbol(Env *env, Log *L, const char *name, AstNode *node)
     u32 hash = hashStr(hashInit(), name);
     bool wasInserted = insertInHashTable(
         &env->scope->symbols, &symbol, hash, sizeof(Symbol), compareSymbols);
-    if (!wasInserted) {
+    if (!wasInserted && L) {
         logError(L,
                  &node->loc,
                  "symbol {s} already defined",

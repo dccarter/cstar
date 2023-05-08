@@ -9,6 +9,8 @@
 
 #include "core/alloc.h"
 
+#include <string.h>
+
 static inline void hookStructEnvironments(SemanticsContext *ctx,
                                           const Type *base,
                                           Env *root)
@@ -41,6 +43,130 @@ static inline AstNode *findStructField(const Type *type, cstring name)
     return findSymbolOnly(&env, name);
 }
 
+bool evalExplicitConstruction(AstVisitor *visitor,
+                              const Type *type,
+                              AstNode *node)
+{
+    const Type *source = node->type ?: evalType(visitor, node);
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+
+    if (isTypeAssignableFrom(type, source))
+        return true;
+
+    if (!typeIs(type, Struct))
+        return false;
+
+    AstNode *constructor = findSymbolOnly(type->tStruct.env, "op_new");
+    if (constructor == NULL || findAttribute(constructor, "explicit"))
+        return false;
+
+    if (constructor->type->func.paramsCount != 1)
+        return false;
+
+    const Type *param = constructor->type->func.params[0];
+    if (!evalExplicitConstruction(visitor, param, node))
+        return false;
+
+    AstNode *callee = makeAstNode(
+        ctx->pool,
+        &node->loc,
+        &(AstNode){
+            .tag = astPath,
+            .path = {.elements = makeAstNode(
+                         ctx->pool,
+                         &node->loc,
+                         &(AstNode){.tag = astPathElem,
+                                    .pathElement = {.name = type->name}})}});
+
+    return evalConstructorCall(
+               visitor, type, node, callee, copyAstNode(ctx->pool, node)) !=
+           NULL;
+}
+
+const Type *evalConstructorCall(AstVisitor *visitor,
+                                const Type *type,
+                                AstNode *node,
+                                AstNode *callee,
+                                AstNode *args)
+{
+    // Struct(100)
+    // -> ({ var x = Struct{}; x.op_new(&x, 100), x; })
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+
+    // turn new S(...) => ({ var tmp = new S{}; tmp.init(...); })
+    cstring name = makeAnonymousVariable(ctx->strPool, "_new_tmp");
+    // S{}
+    AstNode *newExpr =
+        makeAstNode(ctx->pool,
+                    &callee->loc,
+                    &(AstNode){.tag = astStructExpr,
+                               .flags = callee->flags,
+                               .structExpr = {.left = callee, .fields = NULL}});
+    // var name = new S{}
+    AstNode *varDecl = makeAstNode(
+        ctx->pool,
+        &callee->loc,
+        &(AstNode){
+            .tag = astVarDecl,
+            .flags = callee->flags | flgImmediatelyReturned,
+            .varDecl = {.names = makeAstNode(ctx->pool,
+                                             &callee->loc,
+                                             &(AstNode){.tag = astIdentifier,
+                                                        .ident.value = name}),
+                        .init = newExpr}});
+
+    // tmp.init
+    AstNode *newCallee = makeAstNode(
+        ctx->pool,
+        &callee->loc,
+        &(AstNode){
+            .tag = astMemberExpr,
+            .flags = callee->flags,
+            .memberExpr = {
+                .target = makeAstNode(ctx->pool,
+                                      &node->loc,
+                                      &(AstNode){.tag = astIdentifier,
+                                                 .flags = callee->flags,
+                                                 .ident.value = name}),
+                .member = makeAstNode(ctx->pool,
+                                      &node->loc,
+                                      &(AstNode){.tag = astIdentifier,
+                                                 .flags = callee->flags,
+                                                 .ident.value = "op_new"})}});
+
+    AstNode *ret =
+        makeAstNode(ctx->pool,
+                    &node->loc,
+                    &(AstNode){.tag = astExprStmt,
+                               .flags = node->flags,
+                               .exprStmt.expr = makeAstNode(
+                                   ctx->pool,
+                                   &node->loc,
+                                   &(AstNode){.tag = astIdentifier,
+                                              .flags = node->flags,
+                                              .ident.value = name})});
+
+    //     name.init
+    varDecl->next =
+        makeAstNode(ctx->pool,
+                    &node->loc,
+                    &(AstNode){.tag = astCallExpr,
+                               .flags = node->flags,
+                               .callExpr = {.callee = newCallee, .args = args},
+                               .next = ret});
+
+    AstNode *block = makeAstNode(
+        ctx->pool,
+        &node->loc,
+        &(AstNode){.tag = astBlockStmt, .blockStmt.stmts = varDecl});
+
+    memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);
+    node->tag = astStmtExpr;
+    node->stmtExpr.stmt = block;
+
+    return evalType(visitor, node);
+}
+
 void generateStructExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -65,6 +191,45 @@ void generateStructExpr(ConstAstVisitor *visitor, const AstNode *node)
     format(ctx->state, "}", NULL);
 }
 
+static void generateStructDelete(CodegenContext *context, const Type *type)
+{
+    FormatState *state = context->state;
+    format(state, "attr(always_inline)\nstatic void ", NULL);
+    writeTypename(context, type);
+    format(state, "__op_delete(", NULL);
+    writeTypename(context, type);
+    format(state, " *this) {{{>}\n", NULL);
+
+    u64 y = 0;
+    for (u64 i = 0; i < type->tStruct.fieldsCount; i++) {
+        const StructField *field = &type->tStruct.fields[i];
+        if (typeIs(field->type, Func) || typeIs(field->type, Generic) ||
+            (isBuiltinType(field->type) && !typeIs(field->type, String)))
+            continue;
+
+        const Type *raw = stripPointer(field->type);
+        if (y++ != 0)
+            format(state, "\n", NULL);
+
+        if ((typeIs(field->type, Pointer) && isBuiltinType(raw)) ||
+            typeIs(field->type, String)) {
+            format(state,
+                   "cxy_free((void *)this->{s});",
+                   (FormatArg[]){{.s = field->name}});
+        }
+        else {
+            writeTypename(context, raw);
+            format(
+                state,
+                "__op_delete({s}this->{s});",
+                (FormatArg[]){{.s = !typeIs(field->type, Pointer) ? "&" : ""},
+                              {.s = field->name}});
+        }
+    }
+
+    format(state, "{<}\n}", NULL);
+}
+
 void generateStructDefinition(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
@@ -76,18 +241,24 @@ void generateStructDefinition(CodegenContext *context, const Type *type)
         format(state, " super;\n", NULL);
     }
 
+    u64 y = 0;
     for (u64 i = 0; i < type->tStruct.fieldsCount; i++) {
         const StructField *field = &type->tStruct.fields[i];
         if (typeIs(field->type, Func) || typeIs(field->type, Generic))
             continue;
 
-        if (i != 0)
+        if (y++ != 0)
             format(state, "\n", NULL);
 
         generateTypeUsage(context, field->type);
         format(state, " {s};", (FormatArg[]){{.s = field->name}});
     }
+
     format(state, "{<}\n}", NULL);
+    if (!hasFlag(type, ImplementsDelete)) {
+        format(state, ";\n", NULL);
+        generateStructDelete(context, type);
+    }
 }
 
 void generateStructTypedef(CodegenContext *ctx, const Type *type)
@@ -235,6 +406,8 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
         const Type *type;
         if (member->tag == astFuncDecl) {
             type = checkMethodDeclSignature(visitor, member);
+            if (member->funcDecl.operatorOverload == opDelete)
+                node->flags |= flgImplementsDelete;
         }
         else {
             type = evalType(visitor, member);
@@ -263,7 +436,8 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
                                     .tStruct = {.env = ctx->env,
                                                 .base = base,
                                                 .fields = members,
-                                                .fieldsCount = i}});
+                                                .fieldsCount = i,
+                                                .decl = node}});
     ((Type *)this)->this.that = node->type;
 
     member = node->structDecl.members;

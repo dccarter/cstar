@@ -127,6 +127,11 @@ void initializeBuiltins(SemanticsContext *ctx)
                        2);
     }
     {
+        const Type *params[] = {makeAutoType(ctx->typeTable)};
+        addBuiltinFunc(
+            ctx, "__builtin_dealloc", makeVoidType(ctx->typeTable), params, 1);
+    }
+    {
         const Type *params[] = {makeAutoType(ctx->typeTable),
                                 makeVoidPointerType(ctx->typeTable, flgNone),
                                 getPrimitiveType(ctx->typeTable, prtU64)};

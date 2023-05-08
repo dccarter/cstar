@@ -72,6 +72,15 @@ void transformToMemberCallExpr(AstVisitor *visitor,
                                AstNode *target,
                                cstring member,
                                AstNode *args);
+const Type *evalConstructorCall(AstVisitor *visitor,
+                                const Type *type,
+                                AstNode *node,
+                                AstNode *callee,
+                                AstNode *args);
+bool evalExplicitConstruction(AstVisitor *visitor,
+                              const Type *type,
+                              AstNode *node);
+
 bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node);
 bool transformToDerefOperator(AstVisitor *visitor, AstNode *node);
 
