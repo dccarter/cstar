@@ -194,13 +194,16 @@ AstNode *findSymbolByPath(SemanticsContext *ctx,
 
 static SymbolRef *findSymbolRefByPath(SemanticsContext *ctx,
                                       const Env *env,
-                                      const AstNode *node)
+                                      const AstNode *node,
+                                      bool require)
 {
     AstNode *elem = node->path.elements;
     do {
         const Type *type;
-        SymbolRef *ref =
-            findSymbolRef(env, ctx->L, elem->pathElement.name, &elem->loc);
+        SymbolRef *ref = findSymbolRef(env,
+                                       require ? ctx->L : NULL,
+                                       elem->pathElement.name,
+                                       require ? &elem->loc : NULL);
         if (elem->next == NULL || ref == NULL)
             return ref;
 
@@ -225,13 +228,14 @@ static SymbolRef *findSymbolRefByPath(SemanticsContext *ctx,
 
 static SymbolRef *findSymbolRefMemberExpr(SemanticsContext *ctx,
                                           const Env *env,
-                                          const AstNode *node)
+                                          const AstNode *node,
+                                          bool require)
 {
     if (!nodeIs(node->memberExpr.member, Identifier))
         return NULL;
 
     AstNode *target = node->memberExpr.target;
-    SymbolRef *ref = findSymbolRefByNode(ctx, env, target);
+    SymbolRef *ref = findSymbolRefByNode(ctx, env, target, require);
     if (ref == NULL || ref->node->type == NULL)
         return ref;
 
@@ -251,7 +255,7 @@ static SymbolRef *findSymbolRefMemberExpr(SemanticsContext *ctx,
         return NULL;
     }
 
-    return findSymbolRefByNode(ctx, env, node->memberExpr.member);
+    return findSymbolRefByNode(ctx, env, node->memberExpr.member, require);
 }
 
 static AstNode *findSymbolOnlyByPath(const Env *env, const AstNode *node)
@@ -298,15 +302,19 @@ AstNode *findSymbolByNode(SemanticsContext *ctx,
 
 SymbolRef *findSymbolRefByNode(SemanticsContext *ctx,
                                const Env *env,
-                               const AstNode *node)
+                               const AstNode *node,
+                               bool require)
 {
     switch (node->tag) {
     case astPath:
-        return findSymbolRefByPath(ctx, env, node);
+        return findSymbolRefByPath(ctx, env, node, require);
     case astIdentifier:
-        return findSymbolRef(env, ctx->L, node->ident.value, &node->loc);
+        return findSymbolRef(env,
+                             require ? ctx->L : NULL,
+                             node->ident.value,
+                             require ? &node->loc : NULL);
     case astMemberExpr:
-        return findSymbolRefMemberExpr(ctx, env, node);
+        return findSymbolRefMemberExpr(ctx, env, node, require);
     default:
         return NULL;
     }
@@ -334,19 +342,6 @@ AstNode *findFunctionWithSignature(SemanticsContext *ctx,
     SymbolRef *ref = findSymbolRef(env, NULL, name, NULL);
     return ref ? symbolRefLookupFuncDeclBySignature(
                      ctx, ref, flags, params, paramsCount, NULL, true)
-               : NULL;
-}
-
-AstNode *findFunctionWithSignatureByNode(SemanticsContext *ctx,
-                                         const Env *env,
-                                         const AstNode *node,
-                                         u64 flags,
-                                         const Type **params,
-                                         u64 paramsCount)
-{
-    SymbolRef *ref = findSymbolRefByNode(ctx, env, node);
-    return ref ? symbolRefLookupFuncDeclBySignature(
-                     ctx, ref, flags, params, paramsCount, &node->loc, false)
                : NULL;
 }
 

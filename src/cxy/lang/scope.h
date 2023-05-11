@@ -88,6 +88,7 @@ AstNode *findEnclosingFunc(Env *env, Log *L, const FileLoc *loc);
 AstNode *findEnclosingBlock(Env *env, Log *L, const FileLoc *loc);
 void pushScope(Env *env, AstNode *node);
 void popScope(Env *env);
+const Env *getUpperEnv(const Env *);
 
 static inline bool isRootScope(Scope *scope)
 {

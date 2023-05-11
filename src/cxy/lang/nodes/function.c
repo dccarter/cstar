@@ -424,7 +424,7 @@ const Type *checkMethodDeclSignature(AstVisitor *visitor, AstNode *node)
 
     if (node->funcDecl.index != 0) {
         AstNode *decl = symbolRefLookupFuncDeclBySignature(
-            ctx, ref, flgNone, params, paramsCount, NULL, false);
+            ctx, ref, node->flags & flgConst, params, paramsCount, NULL, false);
         if (decl) {
             logError(
                 ctx->L,
@@ -552,6 +552,8 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
 
     SymbolRef *ref =
         defineFunctionDecl(ctx->env, ctx->L, node->funcDecl.name, node);
+    defineDeclarationAliasName(ctx, node);
+
     if (ref == NULL) {
         node->type = ERROR_TYPE(ctx);
         return;
@@ -584,7 +586,6 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
     }
 
     addModuleFunctionExport(ctx, node, node->funcDecl.name);
-    defineDeclarationAliasName(ctx, node);
 
     ret = makeAutoType(ctx->typeTable);
     if (node->funcDecl.ret)

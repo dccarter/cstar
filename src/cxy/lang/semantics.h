@@ -105,7 +105,8 @@ AstNode *findSymbolByNode(SemanticsContext *ctx,
                           const AstNode *node);
 SymbolRef *findSymbolRefByNode(SemanticsContext *ctx,
                                const Env *env,
-                               const AstNode *node);
+                               const AstNode *node,
+                               bool require);
 AstNode *findSymbolOnlyByNode(const Env *env, const AstNode *node);
 
 AstNode *findFunctionWithSignature(SemanticsContext *ctx,
@@ -114,12 +115,6 @@ AstNode *findFunctionWithSignature(SemanticsContext *ctx,
                                    u64 flags,
                                    const Type **params,
                                    u64 paramsCount);
-AstNode *findFunctionWithSignatureByNode(SemanticsContext *ctx,
-                                         const Env *env,
-                                         const AstNode *node,
-                                         u64 flags,
-                                         const Type **params,
-                                         u64 paramsCount);
 
 AstNode *symbolRefLookupFuncDeclBySignature(SemanticsContext *ctx,
                                             SymbolRef *decls,

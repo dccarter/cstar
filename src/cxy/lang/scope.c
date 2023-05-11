@@ -169,6 +169,20 @@ AstNode *findSymbol(const Env *env,
     return findSymbolAndScope(env, L, name, loc, &scope);
 }
 
+static void dumpLookup(const Env *env, const char *name)
+{
+    if (env) {
+        for (Scope *scope = env->scope; scope; scope = scope->prev) {
+            Symbol *symbols = scope->symbols.elems;
+            for (u32 i = 0; i < scope->symbols.capacity; i++) {
+                if (!isBucketOccupied(&scope->symbols, i))
+                    continue;
+                printf("%s %p[%p] -> %s\n", name, env, scope, symbols[i].name);
+            }
+        }
+    }
+}
+
 AstNode *findSymbolAndScope(const Env *env,
                             Log *L,
                             const char *name,
@@ -342,6 +356,14 @@ void releaseScope(Env *env, Env *into)
         env->first = env->scope = NULL;
         into->scope->next = NULL;
     }
+}
+
+const Env *getUpperEnv(const Env *env)
+{
+    while (env && env->up)
+        env = env->up;
+
+    return env;
 }
 
 void popScope(Env *env)

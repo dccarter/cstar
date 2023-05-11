@@ -49,7 +49,8 @@ AstNode *makeAddressOf(SemanticsContext *ctx, AstNode *node)
             &node->loc,
             &(AstNode){
                 .tag = astExprStmt,
-                .type = next->type,
+                .type =
+                    makePointerType(ctx->typeTable, node->type, node->flags),
                 .flags = next->flags,
                 .exprStmt.expr = makeAstNode(
                     ctx->pool,

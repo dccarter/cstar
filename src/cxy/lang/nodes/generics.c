@@ -76,7 +76,7 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     u64 count = countAstNodes(node->pathElement.args);
     if (target->generic.inferrable && count < target->generic.paramsCount) {
         AstNode *call = ctx->currentCall,
-                *args = ctx->currentCall ? call->callExpr.args : NULL;
+                *args = call ? call->callExpr.args : NULL;
         AstNodeList genericArgs = {NULL};
         for (u32 i = count; i < target->generic.paramsCount; i++) {
             AstNode *arg =
@@ -159,16 +159,20 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
 
     substitute->next = NULL;
     Env *saveEnv = ctx->env;
+    const Env *upper = getUpperEnv(generic->genericDecl.env);
     __typeof(ctx->stack) saveStack = ctx->stack;
     ctx->env = generic->genericDecl.env;
-
+    ((Env *)upper)->up = saveEnv;
     bool isMember = nodeIs(target->generic.decl, FuncDecl) &&
                     nodeIs(target->generic.decl->parentScope, StructDecl);
 
-    pushScope(ctx->env, NULL);
+    pushScope(generic->genericDecl.env, NULL);
     param = node->pathElement.args;
     for (u64 i = 0; i < count; i++, param = param->next) {
-        defineSymbol(ctx->env, ctx->L, target->generic.params[i].name, param);
+        defineSymbol(generic->genericDecl.env,
+                     ctx->L,
+                     target->generic.params[i].name,
+                     param);
     }
 
     addTopLevelDecl(ctx, name, substitute);
@@ -183,10 +187,12 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
         node->type = evalType(visitor, substitute);
     }
 
-    popScope(ctx->env);
+    popScope(generic->genericDecl.env);
     environmentFree(&(Env){.first = ctx->env->scope->next});
     ctx->env->scope->next = NULL;
     ctx->env = saveEnv;
+
+    ((Env *)upper)->up = NULL;
 
     ctx->typeTable->currentNamespace = namespace;
 

@@ -16,11 +16,15 @@ struct Integer {
     func add(x: i32) {}
     func add(x: String) {}
     func add(x: string) {}
+
+    func `str`() => ""
 }
 
 func generic[T, U](u: U, x: T) {}
 
 func main(args: [string]) {
-    var map = HashMap[i32, Integer]();
-    map.[1] = Integer(10)
+    var map = HashMap[String, Integer]();
+    map.["Carter"] = Integer(20)
+    for (const (key, value) : map) {
+    }
 }

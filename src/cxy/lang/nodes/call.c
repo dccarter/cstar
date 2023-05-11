@@ -162,9 +162,8 @@ static const Type *evalOverloadFunctionType(AstVisitor *visitor,
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *callee = node->callExpr.callee;
     AstNode *arg = node->callExpr.args;
-    ctx->currentCall = node;
 
-    SymbolRef *symbol = findSymbolRefByNode(ctx, ctx->env, callee);
+    SymbolRef *symbol = findSymbolRefByNode(ctx, ctx->env, callee, false);
 
     evalType(visitor, callee);
 
