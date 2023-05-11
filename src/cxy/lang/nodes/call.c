@@ -7,6 +7,8 @@
 
 #include "lang/ttable.h"
 
+#include "core/alloc.h"
+
 #include <memory.h>
 
 // static bool isBaseFunction(const Type *target, const AstNode *node)
@@ -153,6 +155,167 @@ static void generateClosureCapture(CodegenContext *ctx,
     format(ctx->state, "}; ", NULL);
 }
 
+static const Type *evalOverloadFunctionType(AstVisitor *visitor,
+                                            AstNode *node,
+                                            u64 count)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    AstNode *callee = node->callExpr.callee;
+    AstNode *arg = node->callExpr.args;
+    ctx->currentCall = node;
+
+    SymbolRef *symbol = findSymbolRefByNode(ctx, ctx->env, callee);
+
+    evalType(visitor, callee);
+
+    if (symbol == NULL || !nodeIs(symbol->node, FuncDecl))
+        return callee->type;
+
+    const Type **params = callocOrDie(count, sizeof(Type *));
+    for (u64 i = 0; arg; arg = arg->next, i++)
+        params[i] = arg->type ?: evalType(visitor, arg);
+
+    AstNode *decl = symbolRefLookupFuncDeclBySignature(
+        ctx, symbol, flgNone, params, count, &callee->loc, true);
+
+    free(params);
+
+    if (decl) {
+        getLastAstNode(callee)->type = decl->type;
+        callee->type = decl->type;
+    }
+
+    return callee->type;
+}
+
+static inline void checkCallWithStack(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    AstNode *arg = node->callExpr.args;
+    u64 count = countAstNodes(arg);
+
+    ctx->currentCall = node;
+    node->callExpr.callee->parentScope = node;
+    const Type *callee = evalOverloadFunctionType(visitor, node, count);
+    if (callee == NULL || typeIs(callee, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    bool paramsEvaluated = false;
+    const Type *calleeRaw = stripPointer(callee);
+    if (typeIs(calleeRaw, Struct)) {
+        if (nodeIs(node->callExpr.callee, Path)) {
+            AstNode *decl =
+                findSymbolOnlyByNode(ctx->env, node->callExpr.callee);
+            if (nodeIs(decl, StructDecl)) {
+                evalConstructorCall(visitor,
+                                    callee,
+                                    node,
+                                    node->callExpr.callee,
+                                    node->callExpr.args);
+                return;
+            }
+        }
+
+        callee = structCallToFunctionCall(visitor, callee, node);
+        if (callee == NULL || typeIs(callee, Error)) {
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+        paramsEvaluated = true;
+    }
+
+    if (callee->flags & flgFuncTypeParam) {
+        callee = functionTypeParamToCall(ctx, callee, node);
+    }
+
+    if (callee->tag != typFunc) {
+        logError(ctx->L,
+                 &node->callExpr.callee->loc,
+                 "expression of type '{t}' cannot be invoked, expecting a "
+                 "function",
+                 (FormatArg[]){{.t = callee}});
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    node->type = callee->func.retType;
+    u64 paramsCount = callee->func.paramsCount, i = 0;
+    if (callee->flags & (flgClosure | flgFuncTypeParam)) {
+        paramsCount--;
+        i = 1;
+    }
+
+    u64 withoutDefaulted = paramsCount - callee->func.defaultValuesCount;
+    if (count < withoutDefaulted) {
+        logError(ctx->L,
+                 &node->loc,
+                 "few arguments provided to function of type "
+                 "'{t}', expecting at least '{u64}' but got '{u64}'",
+                 (FormatArg[]){
+                     {.t = callee}, {.u64 = withoutDefaulted}, {.u64 = count}});
+        return;
+    }
+
+    if (count > paramsCount) {
+        logError(
+            ctx->L,
+            &node->loc,
+            "too many arguments provided to function of type "
+            "'{t}', at most '{u64}' but got '{u64}'",
+            (FormatArg[]){{.t = callee}, {.u64 = paramsCount}, {.u64 = count}});
+        return;
+    }
+
+    for (; arg; arg = arg->next, i++) {
+        const Type *type = arg->type ?: evalType(visitor, arg);
+        const Type *expected = callee->func.params[i];
+        if (expected->flags & flgFuncTypeParam) {
+            if (!hasFlags(type, flgClosure | flgFuncTypeParam))
+                type = wrapFuncArgInClosure(visitor, arg);
+
+            if (!hasFlag(type, FuncTypeParam))
+                expected = expected->tuple.members[1];
+        }
+
+        if (stripPointer(expected)->tag == typThis)
+            expected =
+                makePointerType(ctx->typeTable,
+                                callee->func.decl->parentScope->type,
+                                callee->func.decl->parentScope->type->flags);
+
+        if (!evalExplicitConstruction(visitor, expected, arg)) {
+            logError(ctx->L,
+                     &arg->loc,
+                     "incompatible argument types, expecting '{t}' but got "
+                     "'{t}'",
+                     (FormatArg[]){{.t = expected}, {.t = type}});
+        }
+    }
+
+    if (paramsCount > count) {
+        // Add default parameters to function call
+        AstNode *param =
+            getNodeAtIndex(callee->func.decl->funcDecl.params, count);
+        csAssert0(param);
+
+        if (node->callExpr.args == NULL) {
+            node->callExpr.args = copyAstNode(ctx->pool, param->funcParam.def);
+            arg = node->callExpr.args;
+            param = param->next;
+        }
+        else {
+            arg = getLastAstNode(node->callExpr.args);
+        }
+
+        for (; param; param = param->next) {
+            arg->next = copyAstNode(ctx->pool, param->funcParam.def);
+            arg = arg->next;
+        }
+    }
+}
+
 void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -160,6 +323,7 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     const Type *type = resolveType(node->callExpr.callee->type);
     const AstNode *parent =
         type->func.decl ? type->func.decl->parentScope : NULL;
+    u32 index = type->func.decl ? type->func.decl->funcDecl.index : 0;
 
     const char *name =
         (type->flags & (flgClosureStyle | flgClosure))
@@ -181,6 +345,8 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     }
 
     astConstVisit(visitor, node->callExpr.callee);
+    if (index)
+        format(ctx->state, "{u32}", (FormatArg[]){{.u32 = index}});
     bool isMember = parent && parent->tag == astStructDecl;
     if (type->flags & flgClosure) {
         format(ctx->state, "(&{s}0", (FormatArg[]){{.s = name}});
@@ -280,120 +446,8 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
 void checkCall(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
-    const Type *callee = evalType(visitor, node->callExpr.callee);
-    const Type *calleeRaw = stripPointer(callee);
-    AstNode *arg = node->callExpr.args;
-    bool paramsEvaluated = false;
-
-    if (typeIs(calleeRaw, Struct)) {
-        if (nodeIs(node->callExpr.callee, Path)) {
-            AstNode *decl =
-                findSymbolOnlyByNode(ctx->env, node->callExpr.callee);
-            if (nodeIs(decl, StructDecl)) {
-                evalConstructorCall(visitor,
-                                    callee,
-                                    node,
-                                    node->callExpr.callee,
-                                    node->callExpr.args);
-                return;
-            }
-        }
-
-        callee = structCallToFunctionCall(visitor, callee, node);
-        if (callee == NULL || typeIs(callee, Error)) {
-            node->type = ERROR_TYPE(ctx);
-            return;
-        }
-        paramsEvaluated = true;
-    }
-
-    if (callee->flags & flgFuncTypeParam) {
-        callee = functionTypeParamToCall(ctx, callee, node);
-    }
-
-    if (callee->tag != typFunc) {
-        logError(ctx->L,
-                 &node->callExpr.callee->loc,
-                 "expression of type '{t}' cannot be invoked, expecting a "
-                 "function",
-                 (FormatArg[]){{.t = callee}});
-        node->type = ERROR_TYPE(ctx);
-        return;
-    }
-
-    node->type = callee->func.retType;
-    u64 paramsCount = callee->func.paramsCount, i = 0;
-    if (callee->flags & (flgClosure | flgFuncTypeParam)) {
-        paramsCount--;
-        i = 1;
-    }
-
-    u64 count = countAstNodes(arg),
-        withoutDefaulted = paramsCount - callee->func.defaultValuesCount;
-    if (count < withoutDefaulted) {
-        logError(ctx->L,
-                 &node->loc,
-                 "few arguments provided to function of type "
-                 "'{t}', expecting at least '{u64}' but got '{u64}'",
-                 (FormatArg[]){
-                     {.t = callee}, {.u64 = withoutDefaulted}, {.u64 = count}});
-        return;
-    }
-
-    if (count > paramsCount) {
-        logError(
-            ctx->L,
-            &node->loc,
-            "too many arguments provided to function of type "
-            "'{t}', at most '{u64}' but got '{u64}'",
-            (FormatArg[]){{.t = callee}, {.u64 = paramsCount}, {.u64 = count}});
-        return;
-    }
-
-    for (; arg; arg = arg->next, i++) {
-        const Type *type = evalType(visitor, arg);
-        const Type *expected = callee->func.params[i];
-        if (expected->flags & flgFuncTypeParam) {
-            if (!hasFlags(type, flgClosure | flgFuncTypeParam))
-                type = wrapFuncArgInClosure(visitor, arg);
-
-            if (!hasFlag(type, FuncTypeParam))
-                expected = expected->tuple.members[1];
-        }
-
-        if (stripPointer(expected)->tag == typThis)
-            expected =
-                makePointerType(ctx->typeTable,
-                                callee->func.decl->parentScope->type,
-                                callee->func.decl->parentScope->type->flags);
-
-        if (!evalExplicitConstruction(visitor, expected, arg)) {
-            logError(ctx->L,
-                     &arg->loc,
-                     "incompatible argument types, expecting '{t}' but got "
-                     "'{t}'",
-                     (FormatArg[]){{.t = expected}, {.t = type}});
-        }
-    }
-
-    if (paramsCount > count) {
-        // Add default parameters to function call
-        AstNode *param =
-            getNodeAtIndex(callee->func.decl->funcDecl.params, count);
-        csAssert0(param);
-
-        if (node->callExpr.args == NULL) {
-            node->callExpr.args = copyAstNode(ctx->pool, param->funcParam.def);
-            arg = node->callExpr.args;
-            param = param->next;
-        }
-        else {
-            arg = getLastAstNode(node->callExpr.args);
-        }
-
-        for (; param; param = param->next) {
-            arg->next = copyAstNode(ctx->pool, param->funcParam.def);
-            arg = arg->next;
-        }
-    }
+    __typeof(ctx->stack) stack = ctx->stack;
+    ctx->currentCall = node;
+    checkCallWithStack(visitor, node);
+    ctx->stack = stack;
 }

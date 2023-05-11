@@ -2,26 +2,25 @@ import { println } from "stdlib/io.cxy"
 import { HashMap } from "stdlib/map.cxy"
 import { String } from "stdlib/strlib.cxy"
 
+struct Integer {
+    x: String
+
+    func `new`(y: i64) {
+        this.x = String(f"${y}")
+    }
+
+    func `new`(x: String) {
+        this.x = x
+    }
+
+    func add(x: i32) {}
+    func add(x: String) {}
+    func add(x: string) {}
+}
+
+func generic[T, U](u: U, x: T) {}
 
 func main(args: [string]) {
-    var map = HashMap[String, i32]();
-    defer delete &map;
-
-    map.["Carter"] = 10
-    map.["Megan"] = 12
-
-    for (const i : 0..20) {
-        map.[f"${i}"] = <i32>i
-    }
-
-    for (const i : 6..14) {
-        map.remove(f"${i}")
-    }
-
-    for (const (key, value) : map) {
-        println(f"${key} => ${value}")
-    }
-    {
-        var map = 10;
-    }
+    var map = HashMap[i32, Integer]();
+    map.[1] = Integer(10)
 }

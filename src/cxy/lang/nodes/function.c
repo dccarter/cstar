@@ -211,20 +211,31 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         if (ctx->namespace) {
             format(ctx->state, "#define ", NULL);
             writeNamespace(ctx, NULL);
-            format(ctx->state,
-                   "{s} {s}",
-                   (FormatArg[]){{.s = node->funcDecl.name},
-                                 {.s = node->funcDecl.name}});
+            format(
+                ctx->state, "{s}", (FormatArg[]){{.s = node->funcDecl.name}});
+
+            if (node->funcDecl.index != 0)
+                format(ctx->state,
+                       "{u32}",
+                       (FormatArg[]){{.u32 = node->funcDecl.index}});
+
+            format(
+                ctx->state, " {s}", (FormatArg[]){{.s = node->funcDecl.name}});
         }
         const char *name = getNativeDeclarationAliasName(node);
         if (name) {
             format(ctx->state, "\n#define ", NULL);
             writeNamespace(ctx, NULL);
-            format(ctx->state,
-                   "{s} {s}",
-                   (FormatArg[]){{.s = name}, {.s = node->funcDecl.name}});
-        }
+            format(ctx->state, "{s}", (FormatArg[]){{.s = name}});
 
+            if (node->funcDecl.index != 0)
+                format(ctx->state,
+                       "{u32}",
+                       (FormatArg[]){{.u32 = node->funcDecl.index}});
+
+            format(
+                ctx->state, " {s}", (FormatArg[]){{.s = node->funcDecl.name}});
+        }
         return;
     }
 
@@ -283,6 +294,10 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, "{s}", (FormatArg[]){{.s = node->funcDecl.name}});
     }
 
+    if (node->funcDecl.index != 0)
+        format(
+            ctx->state, "{u32}", (FormatArg[]){{.u32 = node->funcDecl.index}});
+
     if (isMember) {
         format(ctx->state, "(", NULL);
         if (node->type->flags & flgConst)
@@ -323,6 +338,7 @@ void generateFuncDeclaration(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
     const AstNode *parent = type->func.decl->parentScope;
+    u32 index = type->func.decl->funcDecl.index;
 
     format(state, ";\n", NULL);
     generateTypeUsage(context, type->func.retType);
@@ -332,6 +348,9 @@ void generateFuncDeclaration(CodegenContext *context, const Type *type)
         format(state, " ", NULL);
     writeTypename(context, parent->type);
     format(state, "__{s}", (FormatArg[]){{.s = type->name}});
+    if (index)
+        format(state, "{u32}", (FormatArg[]){{.u32 = index}});
+
     format(state, "(", NULL);
     if (type->flags & flgConst)
         format(state, "const ", NULL);
@@ -360,6 +379,7 @@ void generateFunctionTypedef(CodegenContext *context, const Type *type)
         format(state, "__", NULL);
     }
     writeTypename(context, type);
+
     format(state, ")(", NULL);
     if (isMember) {
         if (type->flags & flgConst)
@@ -386,7 +406,12 @@ const Type *checkMethodDeclSignature(AstVisitor *visitor, AstNode *node)
     u64 paramsCount = 0;
     bool withDefaultValues = false;
 
-    defineSymbol(ctx->env, ctx->L, node->funcDecl.name, node);
+    SymbolRef *ref =
+        defineFunctionDecl(ctx->env, ctx->L, node->funcDecl.name, node);
+    if (ref == NULL) {
+        return node->type = ERROR_TYPE(ctx);
+    }
+
     if (node->funcDecl.operatorOverload != opInvalid) {
         if (!validateOperatorOverloadFunc(ctx, node)) {
             return node->type = ERROR_TYPE(ctx);
@@ -396,6 +421,21 @@ const Type *checkMethodDeclSignature(AstVisitor *visitor, AstNode *node)
     pushScope(ctx->env, node);
     params =
         checkFunctionParams(visitor, node, &paramsCount, &withDefaultValues);
+
+    if (node->funcDecl.index != 0) {
+        AstNode *decl = symbolRefLookupFuncDeclBySignature(
+            ctx, ref, flgNone, params, paramsCount, NULL, false);
+        if (decl) {
+            logError(
+                ctx->L,
+                &node->loc,
+                "function '{s}' overload with signature {t} already declared",
+                (FormatArg[]){{.s = node->funcDecl.name}, {.t = decl->type}});
+            logNote(
+                ctx->L, &decl->loc, "previous declaration found here", NULL);
+            node->type = ERROR_TYPE(ctx);
+        }
+    }
 
     ret = makeAutoType(ctx->typeTable);
     if (node->funcDecl.ret)
@@ -510,14 +550,11 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
     u64 paramsCount = 0;
     bool withDefaultValues = false;
 
-    defineSymbol(ctx->env, ctx->L, node->funcDecl.name, node);
-    addModuleExport(ctx, node, node->funcDecl.name);
-    defineDeclarationAliasName(ctx, node);
-
-    if (hasFlag(node, Native)) {
-        const AstNode *alias = findAttribute(node, "alias");
-        if (alias) {
-        }
+    SymbolRef *ref =
+        defineFunctionDecl(ctx->env, ctx->L, node->funcDecl.name, node);
+    if (ref == NULL) {
+        node->type = ERROR_TYPE(ctx);
+        return;
     }
 
     if (!ctx->mainOptimized) {
@@ -531,13 +568,32 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
     params =
         checkFunctionParams(visitor, node, &paramsCount, &withDefaultValues);
 
+    if (node->funcDecl.index != 0) {
+        AstNode *decl = symbolRefLookupFuncDeclBySignature(
+            ctx, ref, flgNone, params, paramsCount, NULL, false);
+        if (decl) {
+            logError(
+                ctx->L,
+                &node->loc,
+                "function '{s}' overload with signature {t} already declared",
+                (FormatArg[]){{.s = node->funcDecl.name}, {.t = decl->type}});
+            logNote(
+                ctx->L, &decl->loc, "previous declaration found here", NULL);
+            node->type = ERROR_TYPE(ctx);
+        }
+    }
+
+    addModuleFunctionExport(ctx, node, node->funcDecl.name);
+    defineDeclarationAliasName(ctx, node);
+
     ret = makeAutoType(ctx->typeTable);
     if (node->funcDecl.ret)
         ret = evalType(visitor, node->funcDecl.ret);
 
     type = makeFunctionDeclType(
         ctx, node, ret, params, paramsCount, withDefaultValues);
-    node->type = type;
+
+    node->type = node->type ?: type;
 
     if (node->funcDecl.body) {
         node->funcDecl.body->parentScope = node;

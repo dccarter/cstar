@@ -254,8 +254,15 @@ void writeTypename(CodegenContext *ctx, const Type *type)
         writeDeclNamespace(ctx, type->namespace, NULL);
 
     if (type->name) {
-        if (type->tag == typFunc)
-            format(state, "{s}_t", (FormatArg[]){{.s = type->name}});
+        if (type->tag == typFunc) {
+            u32 index = type->func.decl ? type->func.decl->funcDecl.index : 0;
+            if (index)
+                format(state,
+                       "{s}{u32}_t",
+                       (FormatArg[]){{.s = type->name}, {.u32 = index}});
+            else
+                format(state, "{s}_t", (FormatArg[]){{.s = type->name}});
+        }
         else
             format(state, "{s}", (FormatArg[]){{.s = type->name}});
     }
@@ -303,6 +310,7 @@ void generateTypeUsage(CodegenContext *ctx, const Type *type)
 
     switch (type->tag) {
     case typVoid:
+    case typAuto:
         format(state, "void", NULL);
         break;
     case typString:

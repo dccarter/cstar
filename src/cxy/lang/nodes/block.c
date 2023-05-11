@@ -137,10 +137,10 @@ void checkBlock(AstVisitor *visitor, AstNode *node)
         node->type = makeVoidType(ctx->typeTable);
     }
 
-    VisitSymbols this = {.ctx = ctx, .block = node};
-
-    enumerateHashTable(
-        &ctx->env->scope->symbols, &this, visitSymbols, sizeof(Symbol));
+    //    VisitSymbols this = {.ctx = ctx, .block = node};
+    //
+    //    enumerateHashTable(
+    //        &ctx->env->scope->symbols, &this, visitSymbols, sizeof(Symbol));
 
     popScope(ctx->env);
 }

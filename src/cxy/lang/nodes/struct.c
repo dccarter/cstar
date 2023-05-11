@@ -43,6 +43,32 @@ static inline AstNode *findStructField(const Type *type, cstring name)
     return findSymbolOnly(&env, name);
 }
 
+bool isExplicitExplicitConstructibleFrom(SemanticsContext *ctx,
+                                         const Type *type,
+                                         const Type *from)
+{
+    if (!typeIs(type, Struct))
+        return false;
+
+    AstNode *constructor = findFunctionWithSignature(
+        ctx, type->tStruct.env, "op_new", flgNone, (const Type *[]){from}, 1);
+
+    if (constructor == NULL || findAttribute(constructor, "explicit"))
+        return false;
+
+    if (constructor->type->func.paramsCount != 1)
+        return false;
+
+    const Type *param = constructor->type->func.params[0];
+    if (!typeIs(param, Struct))
+        return isTypeAssignableFrom(param, from);
+
+    if (!isExplicitExplicitConstructibleFrom(ctx, param, from))
+        return false;
+
+    return true;
+}
+
 bool evalExplicitConstruction(AstVisitor *visitor,
                               const Type *type,
                               AstNode *node)
@@ -56,7 +82,13 @@ bool evalExplicitConstruction(AstVisitor *visitor,
     if (!typeIs(type, Struct))
         return false;
 
-    AstNode *constructor = findSymbolOnly(type->tStruct.env, "op_new");
+    AstNode *constructor =
+        findFunctionWithSignature(ctx,
+                                  type->tStruct.env,
+                                  "op_new",
+                                  flgNone,
+                                  (const Type *[]){node->type},
+                                  1);
     if (constructor == NULL || findAttribute(constructor, "explicit"))
         return false;
 
@@ -204,6 +236,7 @@ static void generateStructDelete(CodegenContext *context, const Type *type)
     for (u64 i = 0; i < type->tStruct.fieldsCount; i++) {
         const StructField *field = &type->tStruct.fields[i];
         if (typeIs(field->type, Func) || typeIs(field->type, Generic) ||
+            typeIs(field->type, Enum) ||
             (isBuiltinType(field->type) && !typeIs(field->type, String)))
             continue;
 
@@ -211,7 +244,8 @@ static void generateStructDelete(CodegenContext *context, const Type *type)
         if (y++ != 0)
             format(state, "\n", NULL);
 
-        if ((typeIs(field->type, Pointer) && isBuiltinType(raw)) ||
+        if ((typeIs(field->type, Pointer) &&
+             (isBuiltinType(raw) || typeIs(raw, Enum))) ||
             typeIs(field->type, String)) {
             format(state,
                    "cxy_free((void *)this->{s});",
@@ -418,9 +452,15 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
             goto checkStructDecl_cleanup;
         }
 
-        if (member->tag == astFuncDecl) {
+        if (nodeIs(member, FuncDecl)) {
             members[i] = (StructField){
                 .name = member->funcDecl.name, .type = type, .decl = member};
+        }
+        else if (nodeIs(member, GenericDecl)) {
+            members[i] =
+                (StructField){.name = member->genericDecl.decl->funcDecl.name,
+                              .type = type,
+                              .decl = member};
         }
         else {
             members[i] = (StructField){

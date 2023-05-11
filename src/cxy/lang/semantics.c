@@ -192,6 +192,68 @@ AstNode *findSymbolByPath(SemanticsContext *ctx,
     } while (true);
 }
 
+static SymbolRef *findSymbolRefByPath(SemanticsContext *ctx,
+                                      const Env *env,
+                                      const AstNode *node)
+{
+    AstNode *elem = node->path.elements;
+    do {
+        const Type *type;
+        SymbolRef *ref =
+            findSymbolRef(env, ctx->L, elem->pathElement.name, &elem->loc);
+        if (elem->next == NULL || ref == NULL)
+            return ref;
+
+        type = stripPointer(ref->node->type);
+        elem = elem->next;
+        switch (type->tag) {
+        case typEnum:
+            env = type->tEnum.env;
+            break;
+        case typStruct:
+            env = type->tStruct.env;
+            break;
+        default:
+            logError(ctx->L,
+                     &elem->loc,
+                     "type '{t}' does not support member syntax",
+                     (FormatArg[]){{.t = type}});
+            return NULL;
+        }
+    } while (true);
+}
+
+static SymbolRef *findSymbolRefMemberExpr(SemanticsContext *ctx,
+                                          const Env *env,
+                                          const AstNode *node)
+{
+    if (!nodeIs(node->memberExpr.member, Identifier))
+        return NULL;
+
+    AstNode *target = node->memberExpr.target;
+    SymbolRef *ref = findSymbolRefByNode(ctx, env, target);
+    if (ref == NULL || ref->node->type == NULL)
+        return ref;
+
+    const Type *type = stripPointer(ref->node->type);
+    switch (type->tag) {
+    case typEnum:
+        env = type->tEnum.env;
+        break;
+    case typStruct:
+        env = type->tStruct.env;
+        break;
+    default:
+        logError(ctx->L,
+                 &target->loc,
+                 "type '{t}' does not support member syntax",
+                 (FormatArg[]){{.t = type}});
+        return NULL;
+    }
+
+    return findSymbolRefByNode(ctx, env, node->memberExpr.member);
+}
+
 static AstNode *findSymbolOnlyByPath(const Env *env, const AstNode *node)
 {
     AstNode *elem = node->path.elements;
@@ -234,6 +296,22 @@ AstNode *findSymbolByNode(SemanticsContext *ctx,
     }
 }
 
+SymbolRef *findSymbolRefByNode(SemanticsContext *ctx,
+                               const Env *env,
+                               const AstNode *node)
+{
+    switch (node->tag) {
+    case astPath:
+        return findSymbolRefByPath(ctx, env, node);
+    case astIdentifier:
+        return findSymbolRef(env, ctx->L, node->ident.value, &node->loc);
+    case astMemberExpr:
+        return findSymbolRefMemberExpr(ctx, env, node);
+    default:
+        return NULL;
+    }
+}
+
 AstNode *findSymbolOnlyByNode(const Env *env, const AstNode *node)
 {
     switch (node->tag) {
@@ -246,96 +324,134 @@ AstNode *findSymbolOnlyByNode(const Env *env, const AstNode *node)
     }
 }
 
-void transformToMemberCallExpr(AstVisitor *visitor,
-                               AstNode *node,
-                               AstNode *func,
-                               AstNode *target,
-                               cstring member,
-                               AstNode *args)
+AstNode *findFunctionWithSignature(SemanticsContext *ctx,
+                                   const Env *env,
+                                   cstring name,
+                                   u64 flags,
+                                   const Type **params,
+                                   u64 paramsCount)
 {
-    SemanticsContext *ctx = getAstVisitorContext(visitor);
-    AstNode *funcMember = NULL;
-    if (typeIs(func->type, Generic) && args) {
-        // infer the argument
-        const Type *arg = evalType(visitor, args);
-        funcMember = makeAstNode(
-            ctx->pool,
-            &target->loc,
-            &(AstNode){
-                .tag = astPathElem,
-                .flags = args->flags,
-                .pathElement = {.name = member,
-                                .args = makeTypeReferenceNode(ctx, arg)}});
-    }
-    else {
-        funcMember =
-            makeAstNode(ctx->pool,
-                        &target->loc,
-                        &(AstNode){.tag = astPathElem,
-                                   .flags = args ? args->flags : flgNone,
-                                   .pathElement = {.name = member}});
-    }
-
-    AstNode *path = makeAstNode(ctx->pool,
-                                &target->loc,
-                                &(AstNode){.tag = astPath,
-                                           .flags = target->flags,
-                                           .type = target->type,
-                                           .path = {.elements = funcMember}});
-
-    AstNode *callee = makeAstNode(
-        ctx->pool,
-        &target->loc,
-        &(AstNode){.tag = astMemberExpr,
-                   .flags = target->flags,
-                   .type = target->type,
-                   .memberExpr = {.target = target, .member = path}});
-
-    memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);
-    node->tag = astCallExpr;
-    node->type = NULL;
-    node->callExpr.callee = callee;
-    node->callExpr.args = args;
+    SymbolRef *ref = findSymbolRef(env, NULL, name, NULL);
+    return ref ? symbolRefLookupFuncDeclBySignature(
+                     ctx, ref, flags, params, paramsCount, NULL, true)
+               : NULL;
 }
 
-bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node)
+AstNode *findFunctionWithSignatureByNode(SemanticsContext *ctx,
+                                         const Env *env,
+                                         const AstNode *node,
+                                         u64 flags,
+                                         const Type **params,
+                                         u64 paramsCount)
 {
-    SemanticsContext *ctx = getAstVisitorContext(visitor);
-    const Type *type = node->type ?: evalType(visitor, node);
-    if (!typeIs(type, Struct))
-        return false;
-
-    AstNode *symbol = findSymbolOnly(type->tStruct.env, "op_truthy");
-    if (symbol == NULL)
-        return false;
-
-    transformToMemberCallExpr(visitor,
-                              node,
-                              symbol,
-                              cloneAstNode(ctx->pool, node),
-                              "op_truthy",
-                              NULL);
-
-    type = evalType(visitor, node);
-    return typeIs(type, Primitive);
+    SymbolRef *ref = findSymbolRefByNode(ctx, env, node);
+    return ref ? symbolRefLookupFuncDeclBySignature(
+                     ctx, ref, flags, params, paramsCount, &node->loc, false)
+               : NULL;
 }
 
-bool transformToDerefOperator(AstVisitor *visitor, AstNode *node)
+AstNode *symbolRefLookupFuncDeclBySignature(SemanticsContext *ctx,
+                                            SymbolRef *decls,
+                                            u64 flags,
+                                            const Type **params,
+                                            u64 paramsCount,
+                                            const FileLoc *loc,
+                                            bool constructible)
 {
-    SemanticsContext *ctx = getAstVisitorContext(visitor);
-    const Type *type = node->type ?: evalType(visitor, node->unaryExpr.operand);
-    if (!typeIs(type, Struct))
-        return false;
+    if (decls == NULL)
+        return NULL;
 
-    AstNode *symbol = findSymbolOnly(type->tStruct.env, "op_deref");
-    if (symbol == NULL)
-        return false;
+    if (!nodeIs(decls->node, FuncDecl)) {
+        if (loc) {
+            logError(ctx->L,
+                     loc,
+                     "unexpected variable, expecting a function declaration",
+                     NULL);
+            logNote(ctx->L,
+                    &decls->node->loc,
+                    "is not a function declaration",
+                    NULL);
+        }
+        return NULL;
+    }
 
-    transformToMemberCallExpr(
-        visitor, node, symbol, node->unaryExpr.operand, "op_deref", NULL);
+    SymbolRef *it = decls;
+    AstNode *match = NULL;
+    u64 declarations = 0, maxScore = paramsCount * 2, matchScore = 0;
+    while (it) {
+        declarations++;
+        AstNode *decl = it->node;
+        it = it->next;
 
-    type = evalType(visitor, node);
-    return !typeIs(type, Error);
+        const Type *type = decl->type;
+        if (type == NULL)
+            continue;
+
+        const u64 requiredParamsCount =
+            type->func.paramsCount - type->func.defaultValuesCount;
+
+        if ((decl->flags & flags) != flags)
+            continue;
+        if (type->func.paramsCount < paramsCount ||
+            paramsCount < requiredParamsCount)
+            continue;
+
+        bool compatible = true;
+        u64 score = maxScore;
+        for (u64 i = 0; i < paramsCount; i++) {
+            compatible = isTypeAssignableFrom(type->func.params[i], params[i]);
+            if (!compatible) {
+                if (constructible && nodeIs(decl->parentScope, StructDecl)) {
+                    score--;
+                    compatible = isExplicitExplicitConstructibleFrom(
+                        ctx, type->func.params[i], params[i]);
+                    if (!compatible)
+                        break;
+                }
+                else
+                    break;
+            }
+        }
+
+        if (!compatible)
+            continue;
+
+        if (score == maxScore)
+            return decl;
+
+        if (score >= matchScore) {
+            matchScore = score;
+            match = decl;
+        }
+    }
+
+    if (match)
+        return match;
+
+    if (loc) {
+        Type type = {.tag = typFunc,
+                     .flags = flags,
+                     .func = {.params = params,
+                              .paramsCount = paramsCount,
+                              .retType = makeAutoType(ctx->typeTable)}};
+
+        logError(
+            ctx->L,
+            loc,
+            "incompatible function reference ({u64} functions declared did "
+            "not match function with signature {t})",
+            (FormatArg[]){{.u64 = declarations}, {.t = &type}});
+
+        it = decls;
+        while (it) {
+            logError(ctx->L,
+                     &it->node->loc,
+                     "found declaration with incompatible signature {t}",
+                     (FormatArg[]){{.t = it->node->type}});
+            it = it->next;
+        }
+    }
+    return NULL;
 }
 
 void semanticsCheck(AstNode *program,

@@ -52,6 +52,14 @@ static void setDeclName(AstNode *decl, cstring name)
         unreachable("unsupported generics");
     }
 }
+static AstNode *getGenericDeclFromPath(AstNode *node)
+{
+    while (nodeIs(node->parentScope, PathElem) ||
+           nodeIs(node->parentScope, Path))
+        return getGenericDeclFromPath(node->parentScope);
+
+    return nodeIs(node->parentScope, CallExpr) ? node->parentScope : NULL;
+}
 
 AstNode *checkGenericDeclReference(AstVisitor *visitor,
                                    AstNode *generic,
@@ -59,8 +67,46 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
                                    const Env *env)
 {
     SemanticsContext *ctx = getConstAstVisitorContext(visitor);
-    u64 count = countAstNodes(node->pathElement.args);
     const Type *target = generic->type;
+    if (typeIs(target, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return NULL;
+    }
+
+    u64 count = countAstNodes(node->pathElement.args);
+    if (target->generic.inferrable && count < target->generic.paramsCount) {
+        AstNode *call = ctx->currentCall,
+                *args = ctx->currentCall ? call->callExpr.args : NULL;
+        AstNodeList genericArgs = {NULL};
+        for (u32 i = count; i < target->generic.paramsCount; i++) {
+            AstNode *arg =
+                getNodeAtIndex(args, target->generic.params[i].inferIndex);
+            if (arg == NULL) {
+                logError(ctx->L,
+                         &call->loc,
+                         "cannot infer generic parameter '{s}', insufficient "
+                         "function "
+                         "call arguments to make deduction",
+                         (FormatArg[]){{.s = target->generic.params[i].name}});
+
+                logNote(ctx->L,
+                        &getNodeAtIndex(generic->genericDecl.params, i)->loc,
+                        "generic argument declared here",
+                        NULL);
+
+                node->type = ERROR_TYPE(ctx);
+                return NULL;
+            }
+            insertAstNode(&genericArgs,
+                          makeTypeReferenceNode(ctx, evalType(visitor, arg)));
+        }
+        if (node->pathElement.args == NULL)
+            node->pathElement.args = genericArgs.first;
+        else
+            getLastAstNode(node->pathElement.args)->next = genericArgs.first;
+        count = target->generic.paramsCount;
+    }
+
     if (count != target->generic.paramsCount) {
         logError(ctx->L,
                  &node->loc,
@@ -129,6 +175,7 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     if (isMember) {
         substitute->parentScope = target->generic.decl->parentScope;
         checkMethodDeclSignature(visitor, substitute);
+        ((Type *)(goi.s))->applied.generated = substitute->type;
         checkMethodDeclBody(visitor, substitute);
         node->type = substitute->type;
     }
@@ -174,6 +221,38 @@ void checkGenericParam(AstVisitor *visitor, AstNode *node)
         node->type = ERROR_TYPE(ctx);
 }
 
+static bool buildInferenceIndices(GenericParam *params,
+                                  u64 count,
+                                  AstNode *node)
+{
+    bool hasInference = false;
+    for (u64 i = 0; i < count; i++) {
+        AstNode *param = node->funcDecl.params;
+        bool found = false;
+        for (u32 y = 0; param; param = param->next, y++) {
+            const AstNode *type = param->funcParam.type;
+            if (!nodeIs(type, Path))
+                continue;
+            if (type->path.elements->next ||
+                type->path.elements->pathElement.args)
+                continue;
+
+            if (type->path.elements->pathElement.name == params[i].name) {
+                found = true;
+                params[i].inferIndex = y;
+                break;
+            }
+        }
+        if (found) {
+            hasInference = found;
+        }
+        else if (hasInference)
+            return false;
+    }
+
+    return hasInference;
+}
+
 void checkGenericDecl(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getConstAstVisitorContext(visitor);
@@ -206,14 +285,21 @@ void checkGenericDecl(AstVisitor *visitor, AstNode *node)
         params[i].decl = param;
     }
 
+    bool isInferrable = false;
+    if (nodeIs(node->genericDecl.decl, FuncDecl)) {
+        isInferrable =
+            buildInferenceIndices(params, count, node->genericDecl.decl);
+    }
+
     if (node->type == NULL || !typeIs(node->type, Error)) {
-        node->type = makeGenericType(
-            ctx->typeTable,
-            &(Type){.tag = typGeneric,
-                    .flags = flgNone,
-                    .generic = {.params = params,
-                                .paramsCount = count,
-                                .decl = node->genericDecl.decl}});
+        node->type =
+            makeGenericType(ctx->typeTable,
+                            &(Type){.tag = typGeneric,
+                                    .flags = flgNone,
+                                    .generic = {.params = params,
+                                                .paramsCount = count,
+                                                .decl = node->genericDecl.decl,
+                                                .inferrable = isInferrable}});
     }
 
     ctx->env = saved;

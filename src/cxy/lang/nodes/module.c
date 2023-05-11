@@ -22,6 +22,14 @@ void addModuleExport(SemanticsContext *ctx, AstNode *node, cstring name)
     }
 }
 
+void addModuleFunctionExport(SemanticsContext *ctx, AstNode *node, cstring name)
+{
+    AstNode *exports = ctx->program->program.module;
+    if (exports && (node->flags & flgPublic)) {
+        defineFunctionDecl(ctx->exports, ctx->L, name, node);
+    }
+}
+
 void defineDeclarationAliasName(SemanticsContext *ctx, AstNode *node)
 {
     const AstNode *alias = findAttribute(node, "alias");

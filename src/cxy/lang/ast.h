@@ -389,6 +389,7 @@ struct AstNode {
         struct {
             Operator operatorOverload;
             const char *name;
+            u32 index;
             struct AstNode *params;
             struct AstNode *ret;
             struct AstNode *body;

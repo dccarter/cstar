@@ -13,7 +13,7 @@
 #include "core/strpool.h"
 #include "lang/scope.h"
 
-typedef struct {
+typedef struct SemanticsContext {
     Log *L;
     MemPool *pool;
     StrPool *strPool;
@@ -36,11 +36,13 @@ typedef struct {
         struct {
             Scope *closure;
             AstNode *current;
+            AstNode *currentCall;
             const AstNode *lastReturn;
         };
         struct {
             Scope *closure;
             AstNode *current;
+            AstNode *currentCall;
             const AstNode *lastReturn;
         } stack;
     };
@@ -58,6 +60,9 @@ void semanticsCheck(AstNode *program,
 
 const Type *evalType(AstVisitor *visitor, AstNode *node);
 void addModuleExport(SemanticsContext *ctx, AstNode *node, cstring name);
+void addModuleFunctionExport(SemanticsContext *ctx,
+                             AstNode *node,
+                             cstring name);
 void defineDeclarationAliasName(SemanticsContext *ctx, AstNode *node);
 
 void initializeModule(AstVisitor *visitor, AstNode *node);
@@ -80,6 +85,9 @@ const Type *evalConstructorCall(AstVisitor *visitor,
 bool evalExplicitConstruction(AstVisitor *visitor,
                               const Type *type,
                               AstNode *node);
+bool isExplicitExplicitConstructibleFrom(SemanticsContext *ctx,
+                                         const Type *type,
+                                         const Type *from);
 
 bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node);
 bool transformToDerefOperator(AstVisitor *visitor, AstNode *node);
@@ -95,7 +103,31 @@ AstNode *findSymbolByPath(SemanticsContext *ctx,
 AstNode *findSymbolByNode(SemanticsContext *ctx,
                           const Env *env,
                           const AstNode *node);
+SymbolRef *findSymbolRefByNode(SemanticsContext *ctx,
+                               const Env *env,
+                               const AstNode *node);
 AstNode *findSymbolOnlyByNode(const Env *env, const AstNode *node);
+
+AstNode *findFunctionWithSignature(SemanticsContext *ctx,
+                                   const Env *env,
+                                   cstring name,
+                                   u64 flags,
+                                   const Type **params,
+                                   u64 paramsCount);
+AstNode *findFunctionWithSignatureByNode(SemanticsContext *ctx,
+                                         const Env *env,
+                                         const AstNode *node,
+                                         u64 flags,
+                                         const Type **params,
+                                         u64 paramsCount);
+
+AstNode *symbolRefLookupFuncDeclBySignature(SemanticsContext *ctx,
+                                            SymbolRef *decls,
+                                            u64 flags,
+                                            const Type **params,
+                                            u64 paramsCount,
+                                            const FileLoc *loc,
+                                            bool constructible);
 
 AstNode *checkGenericDeclReference(AstVisitor *visitor,
                                    AstNode *node,

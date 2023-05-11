@@ -245,6 +245,7 @@ void checkPath(AstVisitor *visitor, AstNode *node)
 
     AstNode *elem = node->path.elements;
     u64 flags = node->flags, elemFlags = elem->flags;
+    elem->parentScope = node;
     const Type *type = checkFirstPathElement(visitor, elem);
     if (hasFlag(elem, ImportAlias)) {
         node->flags = flags;

@@ -90,6 +90,7 @@ typedef struct StructField {
 typedef struct GenericParam {
     const char *name;
     const AstNode *decl;
+    u32 inferIndex;
 } GenericParam;
 
 typedef struct EnumOption {
@@ -190,6 +191,7 @@ typedef struct Type {
             GenericParam *params;
             u64 paramsCount;
             AstNode *decl;
+            bool inferrable;
         } generic;
 
         struct {

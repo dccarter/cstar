@@ -5,10 +5,12 @@
 #include "lang/codegen.h"
 #include "lang/semantics.h"
 
+#include "lang/ast.h"
+#include "lang/eval.h"
+#include "lang/node.h"
 #include "lang/ttable.h"
 
 #include "core/alloc.h"
-#include "lang/eval.h"
 
 #include <memory.h>
 
@@ -58,6 +60,12 @@ static bool checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
 
     if (overload == NULL) {
         return false;
+    }
+
+    const Type *right = evalType(visitor, node->binaryExpr.rhs);
+    const Type *operand = overload->funcDecl.params[0].type;
+    if (typeIs(operand, Pointer) && !typeIs(right, Pointer)) {
+        node->binaryExpr.rhs = makeAddressOf(ctx, node->binaryExpr.rhs);
     }
 
     transformToMemberCallExpr(visitor,
@@ -393,7 +401,7 @@ static bool checkComparisonOperation(SemanticsContext *ctx, AstNode *node)
         if (isTypeExpr(lhs) && isTypeExpr(rhs)) {                              \
             memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);                   \
             node->tag = astBoolLit;                                            \
-            node->boolLiteral.value = comptimeCompareTypes(lhs, rhs);          \
+            node->boolLiteral.value = true OP comptimeCompareTypes(lhs, rhs);  \
             return;                                                            \
         }                                                                      \
                                                                                \

@@ -12,6 +12,7 @@ typedef struct SymbolRef {
 } SymbolRef;
 
 typedef struct Symbol {
+    u32 index;
     const char *name;
     SymbolRef ref;
 } Symbol;
@@ -50,12 +51,22 @@ Env *environmentCopy(MemPool *pool, const Env *env);
 void releaseScope(Env *env, Env *into);
 
 bool defineSymbol(Env *env, Log *L, const char *name, AstNode *node);
+SymbolRef *defineFunctionDecl(Env *env,
+                              Log *L,
+                              const char *name,
+                              AstNode *node);
+
+SymbolRef *getLastSymbolRef(SymbolRef *ref);
+
 AstNode *findSymbol(const Env *env,
                     Log *L,
                     const char *name,
                     const FileLoc *loc);
 
-SymbolRef *findSymbolRef(const Env *env, const char *name);
+SymbolRef *findSymbolRef(const Env *env,
+                         Log *L,
+                         const char *name,
+                         const FileLoc *loc);
 
 AstNode *findSymbolAndScope(const Env *env,
                             Log *L,
@@ -72,6 +83,7 @@ AstNode *findEnclosingLoopOrSwitch(Env *env,
                                    Log *L,
                                    const char *keyword,
                                    const FileLoc *loc);
+
 AstNode *findEnclosingFunc(Env *env, Log *L, const FileLoc *loc);
 AstNode *findEnclosingBlock(Env *env, Log *L, const FileLoc *loc);
 void pushScope(Env *env, AstNode *node);

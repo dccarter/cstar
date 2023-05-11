@@ -80,6 +80,7 @@ set(CXY_LANG_SOURCES
         src/cxy/lang/codegen.c
         src/cxy/lang/eval.c
         src/cxy/lang/lexer.c
+        src/cxy/lang/node.c
         src/cxy/lang/parser.c
         src/cxy/lang/scope.c
         src/cxy/lang/ttable.c

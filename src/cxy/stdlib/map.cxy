@@ -68,7 +68,7 @@ pub struct HashMap[K, V] {
 
     @inline
     - func remoteAt(key: K, index: u64) {
-        var removed = Some[V](data.[index].value);
+        var removed = Some(data.[index].value);
 
         var next = incrementWrap(len!(data), index);
         while (isBucketOccupied(next)) {
@@ -97,7 +97,7 @@ pub struct HashMap[K, V] {
         var hash = hashFunc[K](key) | OCCUPIED_MASK;
         var index = cxy_mod_prime(hash, len!(data));
         while (isBucketOccupied(index)) {
-            if (hashes.[index] == hash && key == &data.[index].key){
+            if (hashes.[index] == hash && key == data.[index].key){
                 if (replace)
                     data.[index].value = value
                 return false;
@@ -119,8 +119,8 @@ pub struct HashMap[K, V] {
         const hash = hashFunc[K](key) | OCCUPIED_MASK;
         var index = cxy_mod_prime(hash, len!(data));
         while (isBucketOccupied(index)) {
-            if (hashes.[index] == hash && key == &data.[index].key)
-                return Some[V](data.[index].value);
+            if (hashes.[index] == hash && key == data.[index].key)
+                return Some(data.[index].value);
             index = incrementWrap(len!(data), index)
         }
         return None[V]()
@@ -131,7 +131,7 @@ pub struct HashMap[K, V] {
         var index = cxy_mod_prime(hash, len!(data));
         var found = false;
         while (isBucketOccupied(index)) {
-            if (hashes.[index] == hash && key == &data.[index].key) {
+            if (hashes.[index] == hash && key == data.[index].key) {
                 return remoteAt(key, index)
             }
             index = incrementWrap(len!(data), index)

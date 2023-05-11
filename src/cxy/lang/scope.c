@@ -25,10 +25,26 @@ static Scope *newScope(Scope *prev)
     return next;
 }
 
+static bool freeSymbolRef(attr(unused) void *ctx, const void *it)
+{
+    Symbol *symbol = (Symbol *)it;
+    SymbolRef *next = symbol->ref.next;
+    while (next) {
+        SymbolRef *prev = next;
+        next = next->next;
+        free(prev);
+    }
+    memset(symbol, 0, sizeof(*symbol));
+
+    return true;
+}
+
 static void freeScopes(Scope *scope)
 {
     while (scope) {
         Scope *next = scope->next;
+        enumerateHashTable(
+            &scope->symbols, NULL, freeSymbolRef, sizeof(Symbol));
         freeHashTable(&scope->symbols);
         free(scope);
         scope = next;
@@ -37,9 +53,9 @@ static void freeScopes(Scope *scope)
 
 static u64 levenshteinDistance(const char *lhs, const char *rhs, u64 minDist)
 {
-    if (!lhs)
+    if (!lhs[0])
         return strlen(rhs);
-    if (!rhs)
+    if (!rhs[0])
         return strlen(lhs);
 
     if (lhs[0] == rhs[0])
@@ -54,7 +70,7 @@ static u64 levenshteinDistance(const char *lhs, const char *rhs, u64 minDist)
 
     u64 min = MIN(a, b);
 
-    return MIN(min, c);
+    return 1 + MIN(c, min);
 }
 
 static void suggestSimilarSymbol(const Env *env, Log *L, const char *name)
@@ -110,6 +126,40 @@ bool defineSymbol(Env *env, Log *L, const char *name, AstNode *node)
     return wasInserted;
 }
 
+SymbolRef *defineFunctionDecl(Env *env, Log *L, const char *name, AstNode *node)
+{
+    csAssert0(env->scope);
+
+    Symbol symbol = {.name = name, .ref.node = node};
+    u32 hash = hashStr(hashInit(), name);
+    bool wasInserted = insertInHashTable(
+        &env->scope->symbols, &symbol, hash, sizeof(Symbol), compareSymbols);
+
+    Symbol *sym = findInHashTable(
+        &env->scope->symbols, &symbol, hash, sizeof(Symbol), compareSymbols);
+    csAssert0(sym);
+
+    if (!wasInserted && L && !nodeIs(sym->ref.node, FuncDecl)) {
+        logError(L,
+                 &node->loc,
+                 "symbol {s} already defined",
+                 (FormatArg[]){{.s = name}});
+
+        logNote(L, &sym->ref.node->loc, "previously declared here", NULL);
+        return NULL;
+    }
+    else if (!wasInserted) {
+        sym->index++;
+        if (node->funcDecl.index == 0)
+            node->funcDecl.index = sym->index;
+        SymbolRef *last = getLastSymbolRef(&sym->ref);
+        last->next = callocOrDie(1, sizeof(SymbolRef));
+        last->next->node = node;
+    }
+
+    return &sym->ref;
+}
+
 AstNode *findSymbol(const Env *env,
                     Log *L,
                     const char *name,
@@ -147,7 +197,10 @@ AstNode *findSymbolAndScope(const Env *env,
     return NULL;
 }
 
-SymbolRef *findSymbolRef(const Env *env, const char *name)
+SymbolRef *findSymbolRef(const Env *env,
+                         Log *L,
+                         const char *name,
+                         const FileLoc *loc)
 {
     u32 hash = hashStr(hashInit(), name);
     for (Scope *scope = env->scope; scope; scope = scope->prev) {
@@ -161,15 +214,28 @@ SymbolRef *findSymbolRef(const Env *env, const char *name)
     }
 
     if (env->up) {
-        return findSymbolRef(env->up, name);
+        return findSymbolRef(env->up, L, name, loc);
+    }
+
+    if (L) {
+        logError(L, loc, "undefined symbol '{s}'", (FormatArg[]){{.s = name}});
+        suggestSimilarSymbol(env, L, name);
     }
 
     return NULL;
 }
 
+SymbolRef *getLastSymbolRef(SymbolRef *ref)
+{
+    while (ref && ref->next)
+        ref = ref->next;
+
+    return ref;
+}
+
 AstNode *findSymbolOnly(const Env *env, const char *name)
 {
-    const SymbolRef *ref = findSymbolRef(env, name);
+    const SymbolRef *ref = findSymbolRef(env, NULL, name, NULL);
 
     return ref ? ref->node : NULL;
 }
@@ -253,6 +319,9 @@ void pushScope(Env *env, AstNode *node)
     else
         env->scope = newScope(env->scope);
     env->scope->node = node;
+
+    enumerateHashTable(
+        &env->scope->symbols, NULL, freeSymbolRef, sizeof(Symbol));
     clearHashTable(&env->scope->symbols);
 }
 

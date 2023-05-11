@@ -37,6 +37,21 @@ AstNode *makeTypeReferenceNode(SemanticsContext *ctx, const Type *type)
         return makeAstNode(ctx->pool,
                            builtinLoc(),
                            &(AstNode){.tag = astArrayType, .type = type});
+    case typStruct:
+        return makeAstNode(
+            ctx->pool,
+            builtinLoc(),
+            &(AstNode){
+                .tag = astPath,
+                .path = {.elements = makeAstNode(
+                             ctx->pool,
+                             builtinLoc(),
+                             &(AstNode){.tag = astPathElem,
+                                        .pathElement = {
+                                            .name = type->tStruct.decl
+                                                        ->structDecl.name}})}});
+    case typEnum:
+
     default:
         unreachable("TODO");
     }
