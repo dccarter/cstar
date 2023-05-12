@@ -113,7 +113,7 @@ void checkMember(AstVisitor *visitor, AstNode *node)
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *target = node->memberExpr.target->type
                              ?: evalType(visitor, node->memberExpr.target);
-    const Type *rawTarget = stripPointer(target);
+    const Type *rawTarget = stripAll(target);
 
     AstNode *member = node->memberExpr.member;
     node->flags |= (node->memberExpr.target->flags & flgConst);
@@ -160,7 +160,7 @@ void checkMember(AstVisitor *visitor, AstNode *node)
         else
             node->type = target;
     }
-    else if (typeIs(stripPointer(target), Struct)) {
+    else if (typeIs(rawTarget, Struct)) {
         if (!nodeIs(member, Identifier) && !nodeIs(member, Path)) {
             logError(ctx->L,
                      &member->loc,

@@ -162,6 +162,7 @@ static const Type *evalOverloadFunctionType(AstVisitor *visitor,
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *callee = node->callExpr.callee;
     AstNode *arg = node->callExpr.args;
+    u32 overload = node->callExpr.overload;
 
     SymbolRef *symbol = findSymbolRefByNode(ctx, ctx->env, callee, false);
 
@@ -174,8 +175,10 @@ static const Type *evalOverloadFunctionType(AstVisitor *visitor,
     for (u64 i = 0; arg; arg = arg->next, i++)
         params[i] = arg->type ?: evalType(visitor, arg);
 
-    AstNode *decl = symbolRefLookupFuncDeclBySignature(
-        ctx, symbol, flgNone, params, count, &callee->loc, true);
+    AstNode *decl =
+        overload ? getSymbolRefAt(symbol, overload - 1)->node
+                 : symbolRefLookupFuncDeclBySignature(
+                       ctx, symbol, flgNone, params, count, &callee->loc, true);
 
     free(params);
 
@@ -279,10 +282,10 @@ static inline void checkCallWithStack(AstVisitor *visitor, AstNode *node)
         }
 
         if (stripPointer(expected)->tag == typThis)
-            expected =
-                makePointerType(ctx->typeTable,
-                                callee->func.decl->parentScope->type,
-                                callee->func.decl->parentScope->type->flags);
+            expected = makePointerType(
+                ctx->typeTable,
+                callee->func.decl->parentScope->type,
+                callee->func.decl->parentScope->type->flags | expected->flags);
 
         if (!evalExplicitConstruction(visitor, expected, arg)) {
             logError(ctx->L,

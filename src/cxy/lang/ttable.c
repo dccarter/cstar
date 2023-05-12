@@ -58,6 +58,7 @@ static HashCode hashType(HashCode hash, const Type *type)
         break;
     case typOptional:
     case typInfo:
+    case typWrapped:
         hash = hashType(hash, type->optional.target);
         break;
     case typUnion:
@@ -304,6 +305,22 @@ const Type *stripPointer(const Type *type)
     }
 }
 
+const Type *stripAll(const Type *type)
+{
+    while (true) {
+        switch (resolveType(type)->tag) {
+        case typPointer:
+            type = stripAll(type->pointer.pointed);
+            break;
+        case typWrapped:
+            type = stripAll(type->wrapped.target);
+            break;
+        default:
+            return type;
+        }
+    }
+}
+
 const Type *arrayToPointer(TypeTable *table, const Type *type)
 {
     if (type->tag != typArray)
@@ -470,6 +487,29 @@ const Type *makeGenericType(TypeTable *table, const Type *init)
     return ret.s;
 }
 
+const Type *makeWrappedType(TypeTable *table, const Type *target, u64 flags)
+{
+    if ((target->flags & flags) == flags)
+        return target;
+    Type type = {.tag = typWrapped, .flags = flags, .wrapped.target = target};
+    return getOrInsertType(table, &type).s;
+}
+
+const Type *unwrapType(const Type *type, u64 *flags)
+{
+    u64 tmp = flgNone;
+
+    while (typeIs(type, Wrapped)) {
+        tmp |= type->flags;
+        type = type->wrapped.target;
+    }
+
+    if (flags)
+        *flags = tmp | type->flags;
+
+    return type;
+}
+
 GetOrInset makeAppliedType(TypeTable *table, const Type *init)
 {
     GetOrInset ret = getOrInsertType(table, init);
@@ -531,13 +571,17 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right)
 {
     left = resolveType(left);
     right = resolveType(right);
+    const Type *_left = unwrapType(left, NULL),
+               *_right = unwrapType(right, NULL);
 
-    if (left == right)
-        return left;
-    if ((typeIs(left, String) || typeIs(left, Pointer)) &&
-        typeIs(stripPointer(right), Null))
+    if (_left == _right)
         return left;
 
+    if ((typeIs(_left, String) || typeIs(_left, Pointer)) &&
+        typeIs(stripPointer(_right), Null))
+        return left;
+
+    left = _left, right = _right;
     switch (left->tag) {
     case typPrimitive:
         switch (left->primitive.id) {

@@ -169,13 +169,13 @@ pub struct HashMap[K, V] {
         }
     }
 
-//    const func `..`(body: func (key: K, value: &const V) -> void) {
-//        var i = 0;
-//        while (i < len!(data)) {
-//            if (isOccupiedHash(hashes.[i]))
-//                body(data.[i].key, &data.[i].value)
-//
-//            i++
-//        }
-//    }
+    const func `..`(body: func (key: K, value: &const V) -> void) {
+        var i = 0;
+        while (i < len!(data)) {
+            if (isOccupiedHash(hashes.[i]))
+                body(data.[i].key, &data.[i].value)
+
+            i++
+        }
+    }
 }

@@ -102,8 +102,8 @@ static void suggestSimilarSymbol(const Env *env, Log *L, const char *name)
 bool defineSymbol(Env *env, Log *L, const char *name, AstNode *node)
 {
     csAssert0(env->scope);
-    //    if (name[0] == '_')
-    //        return false;
+    if (isIgnoreVar(name))
+        return false;
 
     Symbol symbol = {.name = name, .ref.node = node};
     u32 hash = hashStr(hashInit(), name);
@@ -242,6 +242,15 @@ SymbolRef *findSymbolRef(const Env *env,
 SymbolRef *getLastSymbolRef(SymbolRef *ref)
 {
     while (ref && ref->next)
+        ref = ref->next;
+
+    return ref;
+}
+
+SymbolRef *getSymbolRefAt(SymbolRef *ref, u32 index)
+{
+    u32 i = 0;
+    while (ref && i++ != index)
         ref = ref->next;
 
     return ref;

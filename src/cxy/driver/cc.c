@@ -23,7 +23,7 @@ void compileCSourceFile(CompilerDriver *driver, const char *sourceFile)
         makeDirectoryForPath(driver, options->output);
 
     format(&state,
-           "cc {s} -o {s} -I{s}/c/imports",
+           "cc {s} -o {s} -I{s}/c/imports -Wno-c2x-extensions",
            (FormatArg[]){{.s = sourceFile},
                          {.s = driver->options.output ?: "app"},
                          {.s = options->buildDir}});

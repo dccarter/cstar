@@ -328,6 +328,11 @@ void generateTypeUsage(CodegenContext *ctx, const Type *type)
         generateTypeUsage(ctx, type->pointer.pointed);
         format(state, "*", NULL);
         break;
+    case typWrapped:
+        if (type->flags & flgConst)
+            format(state, "const ", NULL);
+        generateTypeUsage(ctx, type->wrapped.target);
+        break;
     case typEnum:
     case typOpaque:
     case typArray:

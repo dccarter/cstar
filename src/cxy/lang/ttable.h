@@ -33,6 +33,7 @@ void freeTypeTable(TypeTable *table);
 
 const Type *resolveType(const Type *type);
 const Type *stripPointer(const Type *type);
+const Type *stripAll(const Type *type);
 const Type *arrayToPointer(TypeTable *table, const Type *type);
 const Type *getPrimitiveType(TypeTable *table, PrtId id);
 const Type *getAnySliceType(TypeTable *table);
@@ -77,6 +78,9 @@ const Type *makeModuleType(TypeTable *table, cstring name);
 const Type *makeEnum(TypeTable *table, const Type *init);
 
 const Type *makeGenericType(TypeTable *table, const Type *init);
+
+const Type *makeWrappedType(TypeTable *table, const Type *target, u64 flags);
+const Type *unwrapType(const Type *type, u64 *flags);
 
 GetOrInset makeAppliedType(TypeTable *table, const Type *init);
 

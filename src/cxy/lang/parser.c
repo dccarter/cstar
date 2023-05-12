@@ -131,7 +131,7 @@ static void parserError(Parser *parser,
 {
     advance(parser);
     logError(parser->L, loc, msg, args);
-    E4C_THROW(ParserException, "");
+    E4C_THROW_CTX(ParserException, "", parser);
 }
 
 static void parserWarnThrow(Parser *parser,
@@ -141,7 +141,7 @@ static void parserWarnThrow(Parser *parser,
 {
     advance(parser);
     logWarning(parser->L, loc, msg, args);
-    E4C_THROW(ParserException, "");
+    E4C_THROW_CTX(ParserException, "", parser);
 }
 
 static Token *consume(Parser *parser, TokenTag id, cstring msg, FormatArg *args)
@@ -813,8 +813,10 @@ static AstNode *callExpression(Parser *P, AstNode *callee)
 static AstNode *block(Parser *P)
 {
     AstNodeList stmts = {NULL};
+    Token tok = *current(P);
+    u64 unsafe = match(P, tokUnsafe) != NULL ? flgUnsafe : flgNone;
 
-    Token tok = *consume0(P, tokLBrace);
+    consume0(P, tokLBrace);
     while (!check(P, tokRBrace, tokEoF)) {
         E4C_TRY_BLOCK({
             listAddAstNode(&stmts, statement(P));
@@ -826,10 +828,11 @@ static AstNode *block(Parser *P)
     }
     consume0(P, tokRBrace);
 
-    return newAstNode(
-        P,
-        &tok.fileLoc.begin,
-        &(AstNode){.tag = astBlockStmt, .blockStmt = {.stmts = stmts.first}});
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astBlockStmt,
+                                 .flags = unsafe,
+                                 .blockStmt = {.stmts = stmts.first}});
 }
 
 static AstNode *array(Parser *P)
@@ -1125,6 +1128,26 @@ static AstNode *variable(
                    .varDecl = {.names = names, .type = type, .init = init}});
 }
 
+static AstNode *forVariable(Parser *P)
+{
+    Token tok = *current(P);
+    uint64_t flags = tok.tag == tokConst ? flgConst : flgNone;
+
+    if (!match(P, tokConst, tokVar))
+        reportUnexpectedToken(P, "var/const to start variable declaration");
+
+    AstNode *names = NULL, *type = NULL, *init = NULL;
+    names = parseAtLeastOne(
+        P, "variable names", tokColon, tokComma, parseIdentifier);
+
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astVarDecl,
+                   .flags = flags,
+                   .varDecl = {.names = names, .type = type, .init = init}});
+}
+
 static AstNode *macroDecl(Parser *P, bool isPublic)
 {
     AstNode *params = NULL, *body = NULL, *ret = NULL;
@@ -1327,7 +1350,7 @@ static AstNode *forStatement(Parser *P)
     Token tok = *consume0(P, tokFor);
 
     consume0(P, tokLParen);
-    AstNode *var = variable(P, false, false, true, true);
+    AstNode *var = forVariable(P);
     consume0(P, tokColon);
     AstNode *range = expression(P, true);
     consume0(P, tokRParen);
@@ -1729,7 +1752,7 @@ static AstNode *parseComptimeFor(Parser *P, AstNode *(*parser)(Parser *))
 
 static AstNode *parseComptimeVarDecl(Parser *P, AstNode *(*parser)(Parser *))
 {
-    E4C_THROW(ParserException, "Not Implemented");
+    E4C_THROW_CTX(ParserException, "Not Implemented", P);
     unreachable();
 }
 
@@ -2043,10 +2066,12 @@ static AstNode *parseImportDecl(Parser *P)
 
     exports = compileModule(P->cc, module, entities);
     if (exports == NULL) {
-        parserWarnThrow(P,
-                        &tok.fileLoc,
-                        "importing module {s} failed",
-                        (FormatArg[]){{.s = module->stringLiteral.value}});
+        logWarning(P->L,
+                   &tok.fileLoc,
+                   "importing module {s} failed",
+                   (FormatArg[]){{.s = module->stringLiteral.value}});
+        return makeAstNode(
+            P->memPool, &tok.fileLoc, &(AstNode){.tag = astError});
     }
 
     return makeAstNode(P->memPool,
@@ -2116,13 +2141,13 @@ AstNode *parseProgram(Parser *P)
             match(P, tokAt))) {
         E4C_TRY_BLOCK({
             listAddAstNode(&topLevel, parseTopLevelDecl(P));
-        } E4C_CATCH(ParserException) { synchronize(P); })
+        } E4C_CATCH(ParserException) { synchronize(E4C_EXCEPTION.ctx); })
     }
 
     while (!isEoF(P)) {
         E4C_TRY_BLOCK({
             listAddAstNode(&decls, comptime(P, declaration));
-        } E4C_CATCH(ParserException) { synchronize(P); })
+        } E4C_CATCH(ParserException) { synchronize(E4C_EXCEPTION.ctx); })
     }
 
     return newAstNode(P,

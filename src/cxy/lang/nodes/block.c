@@ -120,7 +120,7 @@ void checkBlock(AstVisitor *visitor, AstNode *node)
     for (; stmt; stmt = stmt->next) {
         stmt->parentScope = node;
         const Type *type = evalType(visitor, stmt);
-        if (stmt->tag == astReturnStmt) {
+        if (nodeIs(stmt, ReturnStmt)) {
             node->type = type;
         }
         if (stmt->tag == astDeferStmt) {

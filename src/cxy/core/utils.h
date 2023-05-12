@@ -251,6 +251,11 @@ int binarySearch(const void *arr,
                  u64 size,
                  int (*compare)(const void *, const void *));
 
+static inline bool isIgnoreVar(cstring s)
+{
+    return s && s[0] == '_' && s[1] == '\0';
+}
+
 #ifdef __cplusplus
 }
 #endif

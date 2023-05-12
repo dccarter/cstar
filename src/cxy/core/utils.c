@@ -73,6 +73,9 @@ size_t convertEscapeSeq(const char *ptr, size_t n, u32 *res)
         if (n <= 1)
             return 0;
         switch (ptr[1]) {
+        case '0':
+            *res = '\0';
+            return 2;
         case 'n':
             *res = '\n';
             return 2;

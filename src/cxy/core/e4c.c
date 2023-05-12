@@ -101,10 +101,19 @@ void e4c_throw(const struct e4c_exception_type *exception_type,
                int line,
                const char *message)
 {
+    e4c_throw_ctx(exception_type, file, line, message, NULL);
+}
 
+extern void e4c_throw_ctx(const struct e4c_exception_type *exception_type,
+                          const char *file,
+                          int line,
+                          const char *message,
+                          void *ctx)
+{
     e4c.err.type = (exception_type ? exception_type : &NullPointerException);
     e4c.err.file = file;
     e4c.err.line = line;
+    e4c.err.ctx = ctx;
 
     (void)sprintf(e4c.err.message,
                   "%.*s",

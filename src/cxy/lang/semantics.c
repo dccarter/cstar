@@ -173,7 +173,7 @@ AstNode *findSymbolByPath(SemanticsContext *ctx,
         if (elem->next == NULL || sym == NULL)
             return sym;
 
-        type = stripPointer(sym->type);
+        type = stripAll(sym->type);
         elem = elem->next;
         switch (type->tag) {
         case typEnum:
@@ -207,7 +207,7 @@ static SymbolRef *findSymbolRefByPath(SemanticsContext *ctx,
         if (elem->next == NULL || ref == NULL)
             return ref;
 
-        type = stripPointer(ref->node->type);
+        type = stripAll(ref->node->type);
         elem = elem->next;
         switch (type->tag) {
         case typEnum:
@@ -239,7 +239,7 @@ static SymbolRef *findSymbolRefMemberExpr(SemanticsContext *ctx,
     if (ref == NULL || ref->node->type == NULL)
         return ref;
 
-    const Type *type = stripPointer(ref->node->type);
+    const Type *type = stripAll(ref->node->type);
     switch (type->tag) {
     case typEnum:
         env = type->tEnum.env;
@@ -392,8 +392,8 @@ AstNode *symbolRefLookupFuncDeclBySignature(SemanticsContext *ctx,
             continue;
 
         bool compatible = true;
-        u64 score = maxScore;
-        for (u64 i = 0; i < paramsCount; i++) {
+        u64 score = maxScore, i = (decl->flags & flgClosureStyle) ? 1 : 0;
+        for (; i < paramsCount; i++) {
             compatible = isTypeAssignableFrom(type->func.params[i], params[i]);
             if (!compatible) {
                 if (constructible && nodeIs(decl->parentScope, StructDecl)) {

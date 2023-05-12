@@ -63,7 +63,44 @@ static bool checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
     }
 
     const Type *right = evalType(visitor, node->binaryExpr.rhs);
-    const Type *operand = overload->funcDecl.params[0].type;
+    const Type *operand = NULL;
+    if (nodeIs(overload, GenericDecl)) {
+        AstNode *lhs = node->binaryExpr.lhs;
+        if (nodeIs(lhs, Path)) {
+            lhs->path.elements->pathElement.args =
+                makeTypeReferenceNode(ctx, right);
+        }
+        else {
+            lhs = makeAstNode(
+                ctx->pool,
+                &lhs->loc,
+                &(AstNode){
+                    .tag = astMemberExpr,
+                    .flags = lhs->flags,
+                    .memberExpr = {
+                        .target = lhs,
+                        .member = makeAstNode(
+                            ctx->pool,
+                            &lhs->loc,
+                            &(AstNode){
+                                .tag = astPath,
+                                .flags = lhs->flags,
+                                .path.elements = makeAstNode(
+                                    ctx->pool,
+                                    &lhs->loc,
+                                    &(AstNode){
+                                        .tag = astPath,
+                                        .flags = lhs->flags,
+                                        .pathElement = {
+                                            .name = name,
+                                            .args = makeTypeReferenceNode(
+                                                ctx, right)}})})}});
+        }
+        operand = evalType(visitor, lhs);
+        if (typeIs(operand, Error))
+            return false;
+    }
+
     if (typeIs(operand, Pointer) && !typeIs(right, Pointer)) {
         node->binaryExpr.rhs = makeAddressOf(ctx, node->binaryExpr.rhs);
     }

@@ -49,6 +49,7 @@ struct e4c_exception {
     char message[E4C_MESSAGE_SIZE];
     const char *file;
     int line;
+    void *ctx;
     const struct e4c_exception_type *type;
 };
 
@@ -78,6 +79,8 @@ struct e4c_exception {
     }
 
 #define E4C_THROW(type, message) e4c_throw(&type, E4C_DEBUG_INFO, message)
+#define E4C_THROW_CTX(type, message, ctx)                                      \
+    e4c_throw_ctx(&type, E4C_DEBUG_INFO, message, ctx)
 
 /* This functions must be called only via E4C_TRY, E4C_CATCH, E4C_FINALLY and
  * E4C_THROW */
@@ -105,6 +108,12 @@ extern void e4c_throw(const struct e4c_exception_type *exception_type,
                       const char *file,
                       int line,
                       const char *message);
+
+extern void e4c_throw_ctx(const struct e4c_exception_type *exception_type,
+                          const char *file,
+                          int line,
+                          const char *message,
+                          void *ctx);
 
 /* OpenMP support */
 #ifdef _OPENMP

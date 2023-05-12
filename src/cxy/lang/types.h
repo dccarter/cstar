@@ -73,7 +73,8 @@ typedef enum {
     typModule,
     typStruct,
     typGeneric,
-    typApplied
+    typApplied,
+    typWrapped
 } TTag;
 
 typedef struct Type Type;
@@ -148,7 +149,7 @@ typedef struct Type {
 
         struct {
             const Type *target;
-        } optional, info;
+        } optional, info, wrapped;
 
         struct {
             u64 count;

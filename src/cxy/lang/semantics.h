@@ -38,12 +38,14 @@ typedef struct SemanticsContext {
             AstNode *current;
             AstNode *currentCall;
             const AstNode *lastReturn;
+            bool isUnsafe;
         };
         struct {
             Scope *closure;
             AstNode *current;
             AstNode *currentCall;
             const AstNode *lastReturn;
+            bool isUnsafe;
         } stack;
     };
 } SemanticsContext;

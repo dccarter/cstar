@@ -89,7 +89,12 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
                      NULL);
             node->type = ERROR_TYPE(ctx);
         }
-        if (node->type->tag == typAuto)
-            node->type = value;
+
+        if (node->type->tag == typAuto) {
+            if (hasFlag(node, Const) && !hasFlag(value, Const))
+                node->type = makeWrappedType(ctx->typeTable, value, flgConst);
+            else
+                node->type = value;
+        }
     }
 }

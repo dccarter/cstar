@@ -21,7 +21,7 @@ static inline bool isParentAssignExpr(const AstNode *node)
 static void checkIndexOperator(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
-    const Type *target = stripPointer(node->indexExpr.target->type);
+    const Type *target = stripAll(node->indexExpr.target->type);
     csAssert0(!isParentAssignExpr(node));
 
     AstNode *func = findSymbolOnly(target->tStruct.env, "op_idx");
@@ -155,8 +155,8 @@ void checkIndex(AstVisitor *visitor, AstNode *node)
     }
 
     node->flags |= node->indexExpr.target->flags;
-
-    if (typeIs(target, Pointer)) {
+    const Type *unwrapped = unwrapType(target, NULL);
+    if (typeIs(unwrapped, Pointer)) {
         target = stripPointer(target);
         node->indexExpr.target = makeAstNode(
             ctx->pool,
@@ -169,18 +169,18 @@ void checkIndex(AstVisitor *visitor, AstNode *node)
                                      .isPrefix = true}});
     }
 
-    if (typeIs(target, Array)) {
+    if (typeIs(unwrapped, Array)) {
         astVisit(visitor, node->indexExpr.index);
-        node->type = target->array.elementType;
+        node->type = unwrapped->array.elementType;
     }
-    else if (typeIs(target, Map)) {
+    else if (typeIs(unwrapped, Map)) {
         astVisit(visitor, node->indexExpr.index);
-        node->type = target->map.value;
+        node->type = unwrapped->map.value;
     }
-    else if (typeIs(target, Struct) || typeIs(target, Union)) {
+    else if (typeIs(unwrapped, Struct) || typeIs(unwrapped, Union)) {
         checkIndexOperator(visitor, node);
     }
-    else if (typeIs(target, String)) {
+    else if (typeIs(unwrapped, String)) {
         const Type *type = evalType(visitor, node->indexExpr.index);
         if (!isIntegerType(type)) {
             logError(ctx->L,

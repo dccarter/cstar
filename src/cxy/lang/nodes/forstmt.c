@@ -11,6 +11,8 @@
 #include "lang/codegen.h"
 #include "lang/semantics.h"
 
+#include "lang/ast.h"
+#include "lang/node.h"
 #include "lang/ttable.h"
 
 #include <memory.h>
@@ -25,35 +27,94 @@ static void checkForStmtGenerator(AstVisitor *visitor, AstNode *node)
                                          : NULL,
             *arg = NULL, *names = orig.forStmt.var->varDecl.names,
             *closureArgs = NULL;
-    u64 varCount = countAstNodes(names), i = 1;
+    u64 varCount = countAstNodes(names), i = 1,
+        argsCount = countAstNodes(range->callExpr.args);
+    const Type *bodyFunc = NULL;
     const FileLoc *loc = args ? &args->loc : &node->loc;
+    //        const Type *callee = evalType(visitor, range->callExpr.callee),
+    //                   *bodyFunc = NULL;
+    //
+    //        if (callee->tag != typFunc || callee->func.paramsCount == 0 ||
+    //            !hasFlag(callee->func.params[callee->func.paramsCount - 1],
+    //                     FuncTypeParam)) {
+    //            logError(ctx->L,
+    //                     &range->callExpr.callee->loc,
+    //                     "for range expression is not a generator function",
+    //                     NULL);
+    //
+    //            node->type = ERROR_TYPE(ctx);
+    //            return;
+    //        }
 
-    const Type *callee = evalType(visitor, range->callExpr.callee),
-               *bodyFunc = NULL;
+    SymbolRef *symbols = findSymbolRefByNode(
+                  ctx, ctx->env, range->callExpr.callee, true),
+              *symbol = symbols;
+    csAssert0(symbols);
 
-    if (callee->tag != typFunc || callee->func.paramsCount == 0 ||
-        !hasFlag(callee->func.params[callee->func.paramsCount - 1],
-                 FuncTypeParam)) {
-        logError(ctx->L,
-                 &range->callExpr.callee->loc,
-                 "for range expression is not a generator function",
-                 NULL);
+    bool reportErrors = false;
+findMatchingRangeFunc:
+    for (; symbol; symbol = symbol->next) {
+        const Type *type = symbol->node->type;
+        if (!typeIs(type, Func) || type->func.paramsCount != 1)
+            continue;
+        if (hasFlag(range->callExpr.callee, Const) &&
+            !hasFlag(symbol->node, Const)) {
+            if (reportErrors) {
+                logNote(ctx->L,
+                        &symbol->node->loc,
+                        "found candidate function here, operating on a const "
+                        "target requires a constant function",
+                        NULL);
+            }
+            continue;
+        }
 
+        const Type *last = type->func.params[type->func.paramsCount - 1];
+        if (!hasFlag(last, FuncTypeParam)) {
+            if (reportErrors) {
+                logNote(ctx->L,
+                        &symbol->node->loc,
+                        "found candidate function here, declaration cannot be "
+                        "used as range operator, last argument must be a "
+                        "function type",
+                        NULL);
+            }
+            continue;
+        }
+
+        bodyFunc = last->tuple.members[1];
+        if (varCount != bodyFunc->func.paramsCount - 1) {
+            if (reportErrors) {
+                logNote(ctx->L,
+                        &node->forStmt.var->loc,
+                        "found candidate function here, for loop variable "
+                        "declaration mismatch, declared {u64}, "
+                        "expecting {u64}",
+                        (FormatArg[]){{.u64 = varCount},
+                                      {.u64 = bodyFunc->func.paramsCount}});
+            }
+
+            bodyFunc = NULL;
+            continue;
+        }
+        // override the overload lookup
+        range->callExpr.overload = symbol->node->funcDecl.index + 1;
+        break;
+    }
+
+    if (reportErrors) {
         node->type = ERROR_TYPE(ctx);
         return;
     }
 
-    bodyFunc =
-        callee->func.params[callee->func.paramsCount - 1]->tuple.members[1];
-    if (varCount != bodyFunc->func.paramsCount - 1) {
+    if (bodyFunc == NULL) {
+        reportErrors = true;
+        symbol = symbols;
         logError(ctx->L,
-                 &node->forStmt.var->loc,
-                 "for loop variable declaration mismatch, declared {u64}, "
-                 "expecting {u64}",
-                 (FormatArg[]){{.u64 = varCount},
-                               {.u64 = bodyFunc->func.paramsCount}});
-        node->type = ERROR_TYPE(ctx);
-        return;
+                 &range->callExpr.callee->loc,
+                 "couldn't find a viable candidate range overload operator",
+                 NULL);
+        goto findMatchingRangeFunc;
     }
 
     for (AstNode *name = names; name; name = name->next, i++) {
@@ -62,7 +123,10 @@ static void checkForStmtGenerator(AstVisitor *visitor, AstNode *node)
             loc,
             &(AstNode){.type = bodyFunc->func.params[i],
                        .tag = astFuncParam,
-                       .funcParam = {.name = name->ident.value, .type = NULL}});
+                       .funcParam = {
+                           .name = isIgnoreVar(name->ident.value)
+                                       ? makeAnonymousVariable(ctx->strPool, "")
+                                       : name->ident.value}});
         if (closureArgs == NULL) {
             closureArgs = newArg;
             arg = newArg;
@@ -94,9 +158,10 @@ static void checkForStmtGenerator(AstVisitor *visitor, AstNode *node)
 static void checkForStmtRangeOperator(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
-    const Type *range = stripPointer(node->forStmt.range->type);
-    AstNode *rangeOp = findSymbolOnly(range->tStruct.env, "op_range");
-    if (rangeOp == NULL) {
+    const Type *range = stripAll(node->forStmt.range->type);
+    SymbolRef *symbol =
+        findSymbolRef(range->tStruct.env, NULL, "op_range", NULL);
+    if (symbol == NULL) {
         logError(ctx->L,
                  &node->forStmt.range->loc,
                  "expression of type '{t}' does not implement the range "
@@ -118,7 +183,7 @@ static void checkForStmtRangeOperator(AstVisitor *visitor, AstNode *node)
                            ctx->pool,
                            &node->forStmt.range->loc,
                            &(AstNode){.tag = astIdentifier,
-                                      .flags = node->forStmt.range->flags,
+                                      .flags = node->forStmt.range->type->flags,
                                       .ident.value = "op_range"})}});
 
     memset(&node->forStmt.range->_body, 0, CXY_AST_NODE_BODY_SIZE);
@@ -138,20 +203,25 @@ void checkForStmt(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    const Type *range = evalType(visitor, node->forStmt.range);
+    const Type *range = evalType(visitor, node->forStmt.range),
+               *stripped = stripAll(range);
 
-    if (typeIs(stripPointer(range), Error)) {
+    if (typeIs(stripped, Error)) {
         node->type = ERROR_TYPE(ctx);
         return;
     }
 
-    if (stripPointer(range)->tag == typStruct) {
+    if (typeIs(stripped, Struct)) {
         checkForStmtRangeOperator(visitor, node);
         return;
     }
 
     pushScope(ctx->env, node);
     const Type *type = evalType(visitor, node->forStmt.var);
+    if (typeIs(type, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
 
     AstNode *symbol = findSymbol(ctx->env,
                                  ctx->L,
@@ -173,8 +243,7 @@ void checkForStmt(AstVisitor *visitor, AstNode *node)
         }
     }
     else {
-        if (range->tag == typPointer)
-            range = stripPointer(range->pointer.pointed);
+        range = stripped;
 
         if (range->tag == typArray) {
             const Type *elementType = range->array.elementType;

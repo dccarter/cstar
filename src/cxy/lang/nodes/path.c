@@ -87,7 +87,8 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
     if (closure == NULL)
         // We are outside a closure
         return node->type;
-    if (isRootScope(scope) && isInSameEnv(closure, scope))
+    if (isRootScope(scope) && isInSameEnv(closure, scope) ||
+        nodeIs(symbol, ImportEntity))
         // Symbol defined in global scope
         return node->type;
     if (!isAncestorScope(scope, closure))

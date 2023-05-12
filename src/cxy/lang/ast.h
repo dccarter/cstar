@@ -203,6 +203,7 @@ enum {
     flgVisited = BIT(28),
     flgImplementsDelete = BIT(28),
     flgImmediatelyReturned = BIT(29),
+    flgUnsafe = BIT(30)
 };
 
 typedef struct AstNode AstNode;
@@ -406,6 +407,7 @@ struct AstNode {
             const char *name;
             struct AstNode *type;
             struct AstNode *def;
+            u32 index;
         } funcParam;
 
         struct {
@@ -484,6 +486,7 @@ struct AstNode {
         struct {
             struct AstNode *callee;
             struct AstNode *args;
+            u32 overload;
         } callExpr, macroCallExpr;
 
         struct {

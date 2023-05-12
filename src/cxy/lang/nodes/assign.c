@@ -58,8 +58,8 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
     AstNode *left = node->assignExpr.lhs, *right = node->assignExpr.rhs;
 
     if (nodeIs(left, IndexExpr)) {
-        const Type *target =
-            stripPointer(evalType(visitor, left->indexExpr.target));
+        const Type *target = evalType(visitor, left->indexExpr.target);
+        target = stripPointer(target);
         if (typeIs(target, Struct)) {
             checkIndexExprAssignment(visitor, node);
             return;

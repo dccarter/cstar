@@ -1,6 +1,6 @@
 module strlib
 
-import { hashInit, hashStringSize } from "stdlib/utils.cxy"
+import { hashInit, hashStringSize, memcpy} from "stdlib/utils.cxy"
 
 pub native type cxy_string_builder_t;
 
@@ -83,6 +83,11 @@ pub struct String {
         this.len = len!(s)
     }
 
+    func `new`(s: string, size: u64) {
+        this.s = s
+        this.len = size
+    }
+
     @inline
     func `delete`() {
         if (s != null)
@@ -102,22 +107,62 @@ pub struct String {
         return <i32>0
     }
 
+    func clear() {
+        if (s != null)
+            __builtin_dealloc(s)
+        s = ""
+    }
+
+    func append(other: &const String) unsafe {
+        var newLen = len + other.len;
+        var str = <&i8>__builtin_alloc(#i8, newLen + 1);
+        memcpy(str, cstr!(s), len)
+        memcpy(ptroff!(str + len), cstr!(other.s), other.len);
+        *(ptroff!(str + newLen)) = <i8>'\0';
+
+        return String(s, newLen);
+    }
+
+    @inline
+    func `+`(other: &const String) {
+        var tmp = String(s, len);
+        tmp.append(other)
+        return tmp
+    }
+
     @inline
     func `==`(other: &const String) => compare(other) == 0
+
     @inline
     func `!=`(other: &const String) => compare(other) != 0
+
     @inline
     func `<`(other: &const String) => compare(other) < 0
+
     @inline
     func `>`(other: &const String) => compare(other) > 0
+
     @inline
     func `<=`(other: &const String) => compare(other) <= 0
+
     @inline
     func `>=`(other: &const String) => compare(other) >= 0
+
     @inline
     func `str`() => s
+
     @inline
     func toString() => s
+
     @inline
     func hash() => hashStringSize(hashInit(), s, len)
+
+    @inline
+    const func `[]`(idx: i32) => s[idx]
+
+    const func `..`(cb: func(c: wchar) -> void) {
+        var i = 0;
+        while (i < 0)
+            cb(s.[i++])
+    }
 }

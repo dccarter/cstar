@@ -1,30 +1,9 @@
 import { println } from "stdlib/io.cxy"
 import { HashMap } from "stdlib/map.cxy"
-import { String } from "stdlib/strlib.cxy"
-
-struct Integer {
-    x: String
-
-    func `new`(y: i64) {
-        this.x = String(f"${y}")
-    }
-
-    func `new`(x: String) {
-        this.x = x
-    }
-
-    func add(x: i32) {}
-    func add(x: String) {}
-    func add(x: string) {}
-
-    func `str`() => ""
-}
-
-func generic[T, U](u: U, x: T) {}
+import { StringBuilder } from "stdlib/strlib.cxy"
 
 func main(args: [string]) {
-    var map = HashMap[String, Integer]();
-    map.["Carter"] = Integer(20)
-    for (const (key, value) : map) {
-    }
+    var str = StringBuilder();
+    str << "Hello World"
+        << "Another Addition";
 }

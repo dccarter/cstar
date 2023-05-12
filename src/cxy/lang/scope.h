@@ -57,6 +57,7 @@ SymbolRef *defineFunctionDecl(Env *env,
                               AstNode *node);
 
 SymbolRef *getLastSymbolRef(SymbolRef *ref);
+SymbolRef *getSymbolRefAt(SymbolRef *ref, u32 index);
 
 AstNode *findSymbol(const Env *env,
                     Log *L,

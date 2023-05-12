@@ -74,14 +74,27 @@ PrtId tokenToPrimitiveTypeId(TokenTag tag)
     }
 }
 
+bool isTypeConst(const Type *type)
+{
+    u64 flags = flgNone;
+    unwrapType(type, &flags);
+    return flags & flgConst;
+}
+
 bool isTypeAssignableFrom(const Type *to, const Type *from)
 {
-    if (to == from) {
-        return true;
-    }
-
     to = resolveType(to);
     from = resolveType(from);
+    if (to == from)
+        return true;
+
+    const Type *_to = unwrapType(to, NULL), *_from = unwrapType(from, NULL);
+    if (isTypeConst(from) && !isTypeConst(to)) {
+        if (!typeIs(_to, Primitive))
+            return false;
+    }
+
+    to = unwrapType(to, NULL), from = unwrapType(from, NULL);
 
     if (to->tag == typPointer && from->tag == typPointer) {
         if (to->pointer.pointed->tag == typVoid)
@@ -192,16 +205,19 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
 {
     to = resolveType(to);
     from = resolveType(from);
+    u64 toFlags = flgNone, fromFlags = flgNone;
+    const Type *unwrappedTo = unwrapType(to, &toFlags);
+    const Type *unwrappedFrom = unwrapType(from, &fromFlags);
 
-    if (to->tag == from->tag) {
+    if (unwrappedTo->tag == unwrappedFrom->tag) {
         if (to->tag != typPrimitive)
-            return true;
+            return (toFlags & flgConst) ? (fromFlags & flgConst) : true;
     }
 
-    if (from->tag == typAuto)
-        return to;
+    if (unwrappedFrom->tag == typAuto)
+        return true;
 
-    switch (to->tag) {
+    switch (unwrappedFrom->tag) {
     case typAuto:
         return false;
     case typPrimitive:
@@ -209,14 +225,14 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
 #define f(I, ...) case prt##I:
             INTEGER_TYPE_LIST(f)
             FLOAT_TYPE_LIST(f)
-            return isNumericType(from);
+            return isNumericType(unwrappedFrom);
 #undef f
         case prtChar:
-            return isUnsignedType(from) && from->size <= 4;
+            return isUnsignedType(unwrappedFrom) && unwrappedFrom->size <= 4;
         case prtBool:
-            return from->primitive.id == prtBool;
+            return unwrappedFrom->primitive.id == prtBool;
         default:
-            return to->primitive.id == from->primitive.id;
+            return unwrappedTo->primitive.id == unwrappedFrom->primitive.id;
         }
 
     default:
@@ -313,6 +329,9 @@ bool isFloatType(const Type *type)
 
 bool isNumericType(const Type *type)
 {
+    if (typeIs(type, Wrapped))
+        return isNumericType(unwrapType(type, NULL));
+
     if (type->tag != typPrimitive || type->primitive.id == prtBool)
         return false;
     return true;
@@ -334,6 +353,10 @@ bool isBuiltinType(const Type *type)
 
 void printType(FormatState *state, const Type *type)
 {
+    if (type->flags & flgConst) {
+        printKeyword(state, "const ");
+    }
+
     switch (type->tag) {
     case typPrimitive:
         switch (type->primitive.id) {
@@ -443,6 +466,9 @@ void printType(FormatState *state, const Type *type)
         format(state, " %s", (FormatArg[]){{.s = type->name}});
         break;
 
+    case typWrapped:
+        printType(state, unwrapType(type, NULL));
+        break;
     default:
         unreachable("TODO");
     }

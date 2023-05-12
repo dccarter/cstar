@@ -194,8 +194,17 @@ static bool validateOperatorOverloadFunc(SemanticsContext *ctx, AstNode *node)
 void generateFuncParam(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    generateTypeUsage(ctx, node->type);
-    format(ctx->state, " {s}", (FormatArg[]){{.s = node->funcParam.name}});
+    if (isIgnoreVar(node->funcParam.name)) {
+        format(ctx->state, "attr(unused) ", NULL);
+        generateTypeUsage(ctx, node->type);
+        format(ctx->state,
+               " _unused{u32}",
+               (FormatArg[]){{.u32 = node->funcParam.index}});
+    }
+    else {
+        generateTypeUsage(ctx, node->type);
+        format(ctx->state, " {s}", (FormatArg[]){{.s = node->funcParam.name}});
+    }
 }
 
 void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
