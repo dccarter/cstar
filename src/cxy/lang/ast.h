@@ -590,7 +590,7 @@ AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *node);
 AstNode *copyAstNode(MemPool *pool, const AstNode *node);
 AstNode *cloneAstNode(MemPool *pool, const AstNode *node);
 
-void printAst(FormatState *state, const AstNode *node);
+void printAst(FormatState *state, const AstNode *node, bool cleanAst);
 
 #define nodeIs(NODE, TAG) ((NODE) && ((NODE)->tag == ast##TAG))
 #define hasFlag(ITEM, FLG) ((ITEM)->flags & (flg##FLG))

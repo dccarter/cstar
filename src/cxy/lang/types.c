@@ -94,7 +94,7 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
             return false;
     }
 
-    to = unwrapType(to, NULL), from = unwrapType(from, NULL);
+    to = _to, from = _from;
 
     if (to->tag == typPointer && from->tag == typPointer) {
         if (to->pointer.pointed->tag == typVoid)
@@ -463,7 +463,7 @@ void printType(FormatState *state, const Type *type)
 
     case typModule:
         printKeyword(state, "module");
-        format(state, " %s", (FormatArg[]){{.s = type->name}});
+        format(state, " {s}", (FormatArg[]){{.s = type->name}});
         break;
 
     case typWrapped:

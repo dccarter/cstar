@@ -162,7 +162,7 @@ pub struct String {
 
     const func `..`(cb: func(c: wchar) -> void) {
         var i = 0;
-        while (i < 0)
+        while (i < len)
             cb(s.[i++])
     }
 }

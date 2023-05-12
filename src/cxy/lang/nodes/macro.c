@@ -49,7 +49,8 @@ static AstNode *makeFilenameNode(AstVisitor *visitor,
         builtinLoc(),
         &(AstNode){.tag = astStringLit,
                    .type = makeStringType(ctx->typeTable),
-                   .stringLiteral.value = visitor->current->loc.fileName});
+                   .stringLiteral.value =
+                       visitor->current->loc.fileName ?: "<builtin>"});
 }
 
 static AstNode *makeLineNumberNode(AstVisitor *visitor,
@@ -401,6 +402,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "column", makeColumnNumberNode},
     {.name = "column", makeColumnNumberNode},
     {.name = "cstr", makeCstrNode},
+    {.name = "file", makeFilenameNode},
     {.name = "len", makeLenNode},
     {.name = "line", makeLineNumberNode},
     {.name = "ptroff", makePointerOfNode},

@@ -281,7 +281,8 @@ static bool cmdParseCommandArguments(CmdParser *P,
                                      char ***pargv)
 {
     int argc = *pargc;
-    char **argv = *pargv, **dst = cmd == P->def ? argv : argv - 1;
+    char **argv = *pargv,
+         **dst = strcmp(cmd->name, *(argv - 1)) != 0 ? argv : argv - 1;
     u32 npos = 0;
     int reWrite = 0;
 

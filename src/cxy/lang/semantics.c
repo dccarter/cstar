@@ -182,6 +182,9 @@ AstNode *findSymbolByPath(SemanticsContext *ctx,
         case typStruct:
             env = type->tStruct.env;
             break;
+        case typModule:
+            env = sym->moduleDecl.env;
+            break;
         default:
             logError(ctx->L,
                      &elem->loc,
@@ -216,6 +219,9 @@ static SymbolRef *findSymbolRefByPath(SemanticsContext *ctx,
         case typStruct:
             env = type->tStruct.env;
             break;
+        case typModule:
+            env = ref->node->moduleDecl.env;
+            break;
         default:
             logError(ctx->L,
                      &elem->loc,
@@ -246,6 +252,9 @@ static SymbolRef *findSymbolRefMemberExpr(SemanticsContext *ctx,
         break;
     case typStruct:
         env = type->tStruct.env;
+        break;
+    case typModule:
+        env = ref->node->moduleDecl.env;
         break;
     default:
         logError(ctx->L,

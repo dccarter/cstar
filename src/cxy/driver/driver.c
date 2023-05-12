@@ -106,11 +106,12 @@ static char *getGeneratedPath(const Options *options,
     FormatState state = newFormatState("    ", true);
     cstring fileName = getFilenameWithoutDirs(filePath);
 
-    format(
-        &state,
-        "{s}/{s}/{s}{s}",
-        (FormatArg[]){
-            {.s = options->buildDir}, {.s = dir}, {.s = fileName}, {.s = ext}});
+    format(&state,
+           "{s}/{s}/{s}{s}",
+           (FormatArg[]){{.s = options->buildDir ?: "./"},
+                         {.s = dir},
+                         {.s = fileName},
+                         {.s = ext}});
 
     char *path = formatStateToString(&state);
     freeFormatState(&state);
@@ -177,7 +178,7 @@ static void dumpGeneratedAst(CompilerDriver *driver, const AstNode *program)
 {
     FormatState state = newFormatState(
         "    ", driver->L->state->ignoreStyle || !isColorSupported(stdout));
-    printAst(&state, program);
+    printAst(&state, program, driver->options.cleanAst);
     writeFormatState(&state, stdout);
     freeFormatState(&state);
     printf("\n");

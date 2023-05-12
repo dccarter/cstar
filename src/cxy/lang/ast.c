@@ -7,6 +7,7 @@ typedef struct {
     FormatState *state;
     u32 isWithinStruct;
     const AstNode *parent;
+    bool clean;
 } AstPrintContext;
 
 static inline void printManyAsts(ConstAstVisitor *visitor,
@@ -303,7 +304,7 @@ static void printCharLiteral(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
     format(context->state,
-           "{$}'{c}'{$}",
+           "{$}'{cE}'{$}",
            (FormatArg[]){{.style = literalStyle},
                          {.u32 = node->charLiteral.value},
                          {.style = resetStyle}});
@@ -343,6 +344,12 @@ static void printPrimitiveType(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
     printKeyword(context->state, getPrimitiveTypeName(node->primitiveType.id));
+}
+
+static void printStringType(ConstAstVisitor *visitor, const AstNode *node)
+{
+    AstPrintContext *context = getConstAstVisitorContext(visitor);
+    printKeyword(context->state, "string");
 }
 
 static void printTupleType(ConstAstVisitor *visitor, const AstNode *node)
@@ -418,13 +425,16 @@ static void printError(ConstAstVisitor *visitor,
 static void printProgram(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
-    format(context->state,
-           "{$}/*\n"
-           "* Generated from {s}\n"
-           "*/{$}\n\n",
-           (FormatArg[]){{.style = commentStyle},
-                         {.s = node->loc.fileName},
-                         {.style = resetStyle}});
+    if (!context->clean) {
+        format(context->state,
+               "{$}/*\n"
+               "* Generated from {s}\n"
+               "*/{$}\n\n",
+               (FormatArg[]){{.style = commentStyle},
+                             {.s = node->loc.fileName},
+                             {.style = resetStyle}});
+    }
+
     printManyAstsWithDelim(visitor, "", "\n\n", "", node->program.decls);
 }
 
@@ -672,7 +682,7 @@ static void printStructDecl(ConstAstVisitor *visitor, const AstNode *node)
 
     printKeyword(context->state, "struct");
     format(context->state, " {s}", (FormatArg[]){{.s = node->structDecl.name}});
-    if (context->parent && nodeIs(context->parent, GenericDecl) &&
+    if (nodeIs(context->parent, GenericDecl) &&
         context->parent->genericDecl.params) {
         printManyAstsWithDelim(
             visitor, "[", ",", "]", context->parent->genericDecl.params);
@@ -879,9 +889,9 @@ void astConstVisit(ConstAstVisitor *visitor, const AstNode *node)
     visitor->current = stack;
 }
 
-void printAst(FormatState *state, const AstNode *node)
+void printAst(FormatState *state, const AstNode *node, bool cleanAst)
 {
-    AstPrintContext context = {.state = state};
+    AstPrintContext context = {.state = state, .clean = cleanAst};
     // clang-format off
     ConstAstVisitor visitor = makeConstAstVisitor(&context, {
         [astError] = printError,
@@ -897,6 +907,7 @@ void printAst(FormatState *state, const AstNode *node)
         [astPointerType] = printPointerType,
         [astFuncType] = printFuncType,
         [astPrimitiveType] = printPrimitiveType,
+        [astStringType] = printStringType,
         [astNullLit] = printNullLiteral,
         [astBoolLit] = printBoolLiteral,
         [astCharLit] = printCharLiteral,

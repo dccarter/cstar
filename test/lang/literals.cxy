@@ -1,0 +1,24 @@
+/*
+ * Tests literals in cxy
+ */
+
+func main(args: [string]) {
+    // null literal
+    null;
+    // bool literal
+    true;
+    false;
+    true;
+    // char literals
+    'a'; 'b'; '\n'; '\0'; '界'; '😊';
+    // integers
+    0; 100; 18446744073709551615;
+    -1; -2; -9223372036854775807;
+    0b100; 0b1010;
+    0o777; 0o189;
+    0xa; 0xff; 0xffffff;
+    // floats
+    1.100; 1.000; 10.0e5; 1.9e-5;
+    // strings
+    ""; "Hello World"; "Hello 世界 Q";
+}

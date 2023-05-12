@@ -1,9 +1,5 @@
 import { println } from "stdlib/io.cxy"
-import { HashMap } from "stdlib/map.cxy"
-import { StringBuilder } from "stdlib/strlib.cxy"
 
 func main(args: [string]) {
-    var str = StringBuilder();
-    str << "Hello World"
-        << "Another Addition";
+    assert!(false)
 }

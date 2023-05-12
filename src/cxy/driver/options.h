@@ -12,6 +12,7 @@ typedef enum { cmdDev, cmdBuild } Command;
 typedef struct Options {
     bool printAst;
     bool noTypeCheck;
+    bool cleanAst;
     Command cmd;
     const char *output;
     const char *libDir;

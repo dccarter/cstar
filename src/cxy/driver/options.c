@@ -14,6 +14,9 @@ Command(dev,
             Help("prints the AST to standard output or given output file after "
                  "compilation"),
             Def("false")),
+        Opt(Name("clean-ast"),
+            Help("Prints the AST exactly as generated without any comments"),
+            Def("false")),
         Str(Name("output"),
             Sf('o'),
             Help("path to file to generate code or print AST to (default is "
@@ -45,7 +48,8 @@ Command(build,
 #define DEV_CMD_LAYOUT(f, ...)                                                 \
     f(noTypeCheck, Local, Option, 0, ##__VA_ARGS__)                            \
     f(printAst, Local, Option, 1, ##__VA_ARGS__)                               \
-    f(output, Local, String, 2, ##__VA_ARGS__)
+    f(cleanAst, Local, Option, 2, ##__VA_ARGS__)                               \
+    f(output, Local, String, 3, ##__VA_ARGS__)
 
 #define BUILD_CMD_LAYOUT(f, ...)                                               \
     f(output, Local, String, 0, ##__VA_ARGS__)                                 \

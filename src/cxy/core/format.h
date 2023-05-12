@@ -87,7 +87,7 @@ void format(FormatState *, const char *format_str, const FormatArg *args);
 void append(FormatState *, const char *s, size_t bytes);
 void printWithStyle(FormatState *, const char *, FormatStyle);
 void printKeyword(FormatState *, const char *);
-void printUtf8(FormatState *state, uint32_t);
+void printUtf8(FormatState *state, uint32_t, bool);
 void writeFormatState(FormatState *, FILE *);
 char *formatStateToString(FormatState *);
 

@@ -138,7 +138,12 @@ static const char *formatArg(FormatState *state,
         }
         break;
     case 'c':
-        printUtf8(state, arg->c);
+        if (*ptr == 'E') {
+            ptr++;
+            printUtf8(state, arg->c, true);
+        }
+        else
+            printUtf8(state, arg->c, false);
         break;
     case 's':
         if (*ptr == 'l') {
@@ -307,8 +312,36 @@ void printKeyword(FormatState *state, const char *keyword)
     printWithStyle(state, keyword, keywordStyle);
 }
 
-void printUtf8(FormatState *state, uint32_t chr)
+void printUtf8(FormatState *state, uint32_t chr, bool escaped)
 {
+    if (escaped) {
+        switch (chr) {
+        case '\0':
+            writeStr(state, "\\0");
+            return;
+        case '\n':
+            writeStr(state, "\\n");
+            return;
+        case '\t':
+            writeStr(state, "\\t");
+            return;
+        case '\v':
+            writeStr(state, "\\v");
+            return;
+        case '\r':
+            writeStr(state, "\\r");
+            return;
+        case '\a':
+            writeStr(state, "\\a");
+            return;
+        case '\b':
+            writeStr(state, "\\b");
+            return;
+        default:
+            break;
+        }
+    }
+
     if (chr < 0x80) {
         writeChar(state, (char)chr);
     }
