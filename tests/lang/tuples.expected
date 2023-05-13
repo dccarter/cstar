@@ -1,0 +1,12 @@
+type Tup1 = (bool, wchar)
+
+type Tup2 = (wchar, (f32, string, Tup1))
+
+func main(args: [string]) {
+    (true, 10)
+    ('a', true, 10, "Hello")
+    ('a', ("World", 32, (true, 5.996000e+00)))
+    const x : (bool, i32) = (true, 10)
+    x = (false, 20)
+    const y : Tup2 = ('a', (6.000000e-01, "Hello", (true, 'A')))
+}

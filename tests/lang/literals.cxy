@@ -8,7 +8,6 @@ func main(args: [string]) {
     // bool literal
     true;
     false;
-    true;
     // char literals
     'a'; 'b'; '\n'; '\0'; '界'; '😊';
     // integers
@@ -20,5 +19,5 @@ func main(args: [string]) {
     // floats
     1.100; 1.000; 10.0e5; 1.9e-5;
     // strings
-    ""; "Hello World"; "Hello 世界 Q";
+    ""; "Hello World"; "Hello 世界";
 }
