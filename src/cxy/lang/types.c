@@ -90,7 +90,7 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
 
     const Type *_to = unwrapType(to, NULL), *_from = unwrapType(from, NULL);
     if (isTypeConst(from) && !isTypeConst(to)) {
-        if (!typeIs(_to, Primitive))
+        if (typeIs(_to, Pointer))
             return false;
     }
 

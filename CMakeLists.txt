@@ -114,8 +114,10 @@ add_custom_target(
         cxy-code ALL
         COMMAND ./escape ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/setup.h generated/setup.inc.h CXY_SETUP
         COMMAND ./escape ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/main.c.h generated/main.inc.h CXY_MAIN
+        COMMAND ./escape ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/tgc.h generated/tgc.inc.h CXY_TGC
         DEPENDS ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/setup.h
                 ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/main.c.h
+                ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/tgc.h
                 escape
 )
 
@@ -124,7 +126,8 @@ set(CXY_STD_LIB_SOURCES
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/map.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/strlib.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/utils.cxy
-        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/vector.cxy)
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/vector.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/tgc.c)
 
 add_custom_target(
         cxy-stdlib ALL

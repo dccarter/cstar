@@ -2,6 +2,8 @@
 type Tup1 = (bool, wchar)
 type Tup2 = (wchar, (f32, string, Tup1))
 
+func swap(tup: (string, i32)) : (i32, string) => (tup.1, tup.0)
+
 func main(args: [string]) {
     // tuple literals
     // NOTE (x) is not a tuple literal
@@ -13,4 +15,18 @@ func main(args: [string]) {
     var x: (bool, i32) = (true, 10);
     x = (false, 20)
     var y : Tup2 = ('a', (0.6, "Hello", (true, 'A')));
+
+    // Tuple members
+    x.0 = false
+    x.1 = 5;
+    y.1.2.1 = 'B'
+    y.1.0 = 0.006
+
+    // calling function that take/return tuples
+    var z : (i32, string) = swap(("Hello", 10));
+    // Tuple references
+    var f :&(i32, string) = &z;
+    var k : (string, i32) = (f.1, f.0);
+    // dereference
+    var g = *f;
 }

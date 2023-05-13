@@ -1,0 +1,14 @@
+const X = 10
+
+var Y = ("Hello", "World")
+
+func main(args: [string]) {
+    const x
+    const y = 10
+    var k = y
+    x = k
+    {
+        const k = 10
+        const y = x
+    }
+}

@@ -57,7 +57,9 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
                          (FormatArg[]){{.t = operand}});
                 operand = ERROR_TYPE(ctx);
             }
-            operand = node->type;
+            else {
+                operand = node->type;
+            }
         }
         else {
             node->flags |=

@@ -118,9 +118,58 @@ lolbash() {
 	echo -e '\e[0m'
 }
 
+[ $(echo $BASH_VERSION | egrep -Eo '[[:digit:]]' | head -n1) -lt 4 ] && {
+  echo -e "${Bred}error${reset}: unsupported bash version, please install at least version 4"
+  if [[ "${OSTYPE}" =~ "darwin" ]]
+  then
+    echo -e "${Bblue}note:${reset} install bash by running 'brew install bash'"
+  fi
+  exit 1
+}
+
+timestamp() {
+  if [[ "${OSTYPE}" =~ "darwin" ]]
+  then
+    if hash gdate 2>/dev/null; then
+        gdate +%s%N
+    else
+        date +%s
+    fi
+  else
+    date +%s%N
+  fi
+}
+
 [ -z "${TESTS_DIR}" ] && TESTS_DIR=../tests
 [ -z "${CXY_COMPILER}" ] && CXY_COMPILER=./cxy
 [ -z "${CXY_STDLIB}" ] && CXY_STDLIB=./stdlib
+
+POSITIONAL_ARGS=()
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -u|--update-snapshot)
+      UPDATE_SNAPSHOT=1
+      shift # past argument
+      ;;
+    -f|--test-filter)
+      TEST_FILTER="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    --default)
+      DEFAULT=YES
+      shift # past argument
+      ;;
+    -*|--*)
+      echo "Unknown option $1"
+      exit 1
+      ;;
+    *)
+      POSITIONAL_ARGS+=("$1") # save positional arg
+      shift # past argument
+      ;;
+  esac
+done
 
 run_test () {
   expected="${1%.cxy}.expected"
@@ -133,6 +182,12 @@ run_test () {
       echo -e "${output}"
       return 1
   }
+  if [ -n "${UPDATE_SNAPSHOT}" ]
+  then
+    # Update snapshots
+    echo "${output}" > ${expected}
+  fi
+
   if [ -f $expected ] ; then
     match=$(diff <(echo "${output}") <(cat "${expected}") -U1 --label "${1}" --label "${expected}")
     [ $? -ne 0 ] && {
@@ -146,20 +201,23 @@ run_test () {
 }
 
 LANG_TESTS=${TESTS_DIR}/lang
-
-
-
-TESTS_START=$(gdate +%s%N)
+TESTS_START=$(timestamp)
 FAILED_TESTS=0
 PASSED_TESTS=0
 declare -A TEST_RESULTS
 declare -A TEST_DURATIONS
 for test in ${LANG_TESTS}/*.cxy ; do
+  if [ -n ${TEST_FILTER} ] && ! echo $test | grep -Eq "${TEST_FILTER}"
+  then
+    continue
+  fi
+
   test_case=$(basename -- "${test}")
   test_case=${test_case%.cxy}
   run_test "${test}" "${test_case}"
-  test_start=$(gdate +%s%N)
-  if [ $? -ne 0 ]
+  status=$?
+  test_start=$(timestamp)
+  if [ $status -ne 0 ]
   then
     FAILED_TESTS=$((FAILED_TESTS + 1))
     TEST_RESULTS+=(["${test_case}"]="FAILED")
@@ -167,10 +225,10 @@ for test in ${LANG_TESTS}/*.cxy ; do
     PASSED_TESTS=$((PASSED_TESTS + 1))
     TEST_RESULTS+=(["${test_case}"]="PASSED")
   fi
-  test_end=$(gdate +%s%N)
+  test_end=$(timestamp)
   TEST_DURATIONS+=(["${test_case}"]=$(((test_end - test_start)/1000000)))
 done
-TESTS_DONE=$(gdate +%s%N)
+TESTS_DONE=$(timestamp)
 
 echo -e "----------------------------------------------------------"
 echo -en "Results: "

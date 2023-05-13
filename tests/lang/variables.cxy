@@ -1,0 +1,15 @@
+// global variables
+var X = 10;
+const Y = ("Hello", "World");
+
+func main(args: [string]) {
+    var x;
+    var y = 10;
+    const k = y;
+    x = k;
+    // variable scope
+    {
+        var k = 10;
+        var y = x;
+    }
+}

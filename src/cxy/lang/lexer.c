@@ -172,6 +172,12 @@ Token advanceLexer(Lexer *lexer)
         return makeToken(lexer, &lexer->filePos, tokLStrFmt);
     }
 
+    if (lexer->flags & lxMaybeNotFloat) {
+        char next = getCurChar(lexer);
+        if (!isdigit(next) && next != '.')
+            lexer->flags &= ~lxMaybeNotFloat;
+    }
+
     while (true) {
         bool parsingStringLiteral = false;
         FilePos begin = lexer->filePos;
@@ -209,7 +215,7 @@ Token advanceLexer(Lexer *lexer)
             if (acceptChar(lexer, '[')) {
                 return makeToken(lexer, &begin, tokIndexExpr);
             }
-
+            lexer->flags |= lxMaybeNotFloat;
             return makeToken(lexer, &begin, tokDot);
         }
         if (acceptChar(lexer, ','))
@@ -463,7 +469,8 @@ Token advanceLexer(Lexer *lexer)
 
             bool hasDot = false;
             if (getCurChar(lexer) == '.' && peekNextChar(lexer) != '.' &&
-                peekNextChar(lexer) != '[') {
+                peekNextChar(lexer) != '[' &&
+                !(lexer->flags & lxMaybeNotFloat)) {
                 skipChar(lexer);
                 hasDot = true;
                 // Parse fractional part

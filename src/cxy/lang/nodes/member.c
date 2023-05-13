@@ -142,7 +142,7 @@ void checkMember(AstVisitor *visitor, AstNode *node)
             return;
         }
 
-        node->type = target->tuple.members[member->intLiteral.value];
+        node->type = rawTarget->tuple.members[member->intLiteral.value];
         node->flags |= ((flags | node->type->flags) & flgConst);
     }
     else if (rawTarget->tag == typEnum) {
