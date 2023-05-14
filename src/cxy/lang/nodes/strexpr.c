@@ -67,14 +67,16 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
         if (node->tag == astStringLit) {
             u64 len = strlen(node->stringLiteral.value);
             if (len)
-                format(
-                    ctx->state,
-                    "cxy_string_builder_append_cstr0(&sb, \"{s}\", {u64});\n",
-                    (FormatArg[]){{.s = node->stringLiteral.value},
-                                  {.u64 = len}});
+                format(ctx->state,
+                       "__cxy_builtins_string_builder_append_cstr0(&sb, "
+                       "\"{s}\", {u64});\n",
+                       (FormatArg[]){{.s = node->stringLiteral.value},
+                                     {.u64 = len}});
         }
         else {
-            format(ctx->state, "cxy_string_builder_append_cstr1(&sb, ", NULL);
+            format(ctx->state,
+                   "__cxy_builtins_string_builder_append_cstr1(&sb, ",
+                   NULL);
             astConstVisit(visitor, node);
             format(ctx->state, ");\n", NULL);
         }
@@ -82,20 +84,27 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
     case typPrimitive:
         switch (type->primitive.id) {
         case prtBool:
-            format(ctx->state, "cxy_string_builder_append_bool(&sb, ", NULL);
+            format(ctx->state,
+                   "__cxy_builtins_string_builder_append_bool(&sb, ",
+                   NULL);
             break;
         case prtChar:
-            format(ctx->state, "cxy_string_builder_append_char(&sb, ", NULL);
+            format(ctx->state,
+                   "__cxy_builtins_string_builder_append_char(&sb, ",
+                   NULL);
             break;
 #define f(I, ...) case prt##I:
             INTEGER_TYPE_LIST(f)
-            format(
-                ctx->state, "cxy_string_builder_append_int(&sb, (i64)", NULL);
+            format(ctx->state,
+                   "__cxy_builtins_string_builder_append_int(&sb, (i64)",
+                   NULL);
             break;
 #undef f
         case prtF32:
         case prtF64:
-            format(ctx->state, "cxy_string_builder_append_float(&sb, ", NULL);
+            format(ctx->state,
+                   "__cxy_builtins_string_builder_append_float(&sb, ",
+                   NULL);
             break;
         default:
             break;
@@ -105,7 +114,9 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
         break;
 
     case typTuple:
-        format(ctx->state, "cxy_string_builder_append_char(&sb, '(');\n", NULL);
+        format(ctx->state,
+               "__cxy_builtins_string_builder_append_char(&sb, '(');\n",
+               NULL);
         for (u64 i = 0; i < type->tuple.count; i++) {
             // Create a temporary member access expression
             AstNode member = {.tag = astIntegerLit,
@@ -118,16 +129,21 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
 
             if (i != 0)
                 format(ctx->state,
-                       "cxy_string_builder_append_cstr0(&sb, \", \", 2);\n",
+                       "__cxy_builtins_string_builder_append_cstr0(&sb, \", "
+                       "\", 2);\n",
                        NULL);
 
             stringBuilderAppend(visitor, &arg);
         }
-        format(ctx->state, "cxy_string_builder_append_char(&sb, ')');\n", NULL);
+        format(ctx->state,
+               "__cxy_builtins_string_builder_append_char(&sb, ')');\n",
+               NULL);
         break;
 
     case typArray:
-        format(ctx->state, "cxy_string_builder_append_char(&sb, '[');\n", NULL);
+        format(ctx->state,
+               "__cxy_builtins_string_builder_append_char(&sb, '[');\n",
+               NULL);
         format(ctx->state, "for (u64 __cxy_i = 0; __cxy_i < ", NULL);
         if (type->array.len == UINT64_MAX) {
             AstNode index = {.tag = astIdentifier,
@@ -146,10 +162,10 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
         }
 
         format(ctx->state, "; __cxy_i++) {{{>}\n", NULL);
-        format(
-            ctx->state,
-            "if (__cxy_i) cxy_string_builder_append_cstr0(&sb, \", \", 2);\n",
-            NULL);
+        format(ctx->state,
+               "if (__cxy_i) __cxy_builtins_string_builder_append_cstr0(&sb, "
+               "\", \", 2);\n",
+               NULL);
         {
             AstNode index = {.tag = astIdentifier,
                              .type = getPrimitiveType(ctx->types, prtI32),
@@ -162,7 +178,9 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
             stringBuilderAppend(visitor, &arg);
         }
         format(ctx->state, "{<}\n}\n", NULL);
-        format(ctx->state, "cxy_string_builder_append_char(&sb, ']');\n", NULL);
+        format(ctx->state,
+               "__cxy_builtins_string_builder_append_char(&sb, ']');\n",
+               NULL);
         break;
 
     case typPointer: {
@@ -175,7 +193,9 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
         break;
     }
     case typEnum:
-        format(ctx->state, "cxy_string_builder_append_cstr1(&sb, ", NULL);
+        format(ctx->state,
+               "__cxy_builtins_string_builder_append_cstr1(&sb, ",
+               NULL);
         writeEnumPrefix(ctx, type);
         format(ctx->state, "__get_name(", NULL);
         astConstVisit(visitor, node);
@@ -183,7 +203,9 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
         break;
 
     case typStruct:
-        format(ctx->state, "cxy_string_builder_append_cstr1(&sb, ", NULL);
+        format(ctx->state,
+               "__cxy_builtins_string_builder_append_cstr1(&sb, ",
+               NULL);
         writeTypename(ctx, type);
         format(ctx->state, "__op_str(&", NULL);
         astConstVisit(visitor, node);
@@ -215,8 +237,8 @@ void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node)
     const AstNode *part = node->stringExpr.parts;
 
     format(ctx->state,
-           "({{{>}\ncxy_string_builder_t sb = {{};\n"
-           "cxy_string_builder_init(&sb);\n",
+           "({{{>}\n__cxy_builtins_string_builder_t sb = {{};\n"
+           "__cxy_builtins_string_builder_init(&sb);\n",
            NULL);
 
     for (; part; part = part->next) {
@@ -226,5 +248,6 @@ void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node)
         stringBuilderAppend(visitor, part);
     }
 
-    format(ctx->state, "cxy_string_builder_release(&sb);{<}\n})", NULL);
+    format(
+        ctx->state, "__cxy_builtins_string_builder_release(&sb);{<}\n})", NULL);
 }

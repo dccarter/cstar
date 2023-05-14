@@ -525,6 +525,21 @@ GetOrInset makeAppliedType(TypeTable *table, const Type *init)
     return ret;
 }
 
+const Type *makeDestructorType(TypeTable *table)
+{
+    return table->destructorType
+               ?: makeFuncType(
+                      table,
+                      &(Type){.flags = flgBuiltin | flgFunctionPtr,
+                              .name = "Destructor",
+                              .tag = typFunc,
+                              .func = {.params =
+                                           (const Type *[]){makeVoidPointerType(
+                                               table, flgNone)},
+                                       .paramsCount = 1,
+                                       .retType = makeVoidType(table)}});
+}
+
 const Type *makeStruct(TypeTable *table, const Type *init)
 {
     GetOrInset ret = getOrInsertType(table, init);

@@ -46,6 +46,8 @@ static void generateTupleDelete(CodegenContext *context, const Type *type)
     }
 
     format(state, "{<}\n}", NULL);
+
+    generateDestructor(context, type);
 }
 
 void generateTupleDefinition(CodegenContext *context, const Type *type)

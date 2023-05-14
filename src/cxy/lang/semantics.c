@@ -407,7 +407,7 @@ AstNode *symbolRefLookupFuncDeclBySignature(SemanticsContext *ctx,
             if (!compatible) {
                 if (constructible && nodeIs(decl->parentScope, StructDecl)) {
                     score--;
-                    compatible = isExplicitExplicitConstructibleFrom(
+                    compatible = isExplicitConstructibleFrom(
                         ctx, type->func.params[i], params[i]);
                     if (!compatible)
                         break;

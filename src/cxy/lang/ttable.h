@@ -24,6 +24,7 @@ typedef struct TypeTable {
     const Type *stringType;
     const Type *anySliceType;
     const Type *primitiveTypes[prtCOUNT];
+    const Type *destructorType;
 } TypeTable;
 
 typedef Pair(bool, const Type *) GetOrInset;
@@ -83,6 +84,8 @@ const Type *makeWrappedType(TypeTable *table, const Type *target, u64 flags);
 const Type *unwrapType(const Type *type, u64 *flags);
 
 GetOrInset makeAppliedType(TypeTable *table, const Type *init);
+
+const Type *makeDestructorType(TypeTable *table);
 
 u64 getTypesCount(TypeTable *table);
 

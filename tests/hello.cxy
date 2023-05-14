@@ -1,5 +1,13 @@
 import { println } from "stdlib/io.cxy"
+import {Vector} from "stdlib/vector.cxy"
 
 func main(args: [string]) {
-    assert!(false)
+    var vec = new Vector[&i64]();
+    for (const i: 0..100000) {
+        vec.push(new i64(i));
+    }
+
+    for (const i : vec) {
+        println(f"${i}")
+    }
 }

@@ -261,16 +261,10 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         writeTypename(ctx, node->type->func.params[0]);
         format(ctx->state, " cxy_main_args_t;\n", NULL);
         if (isIntegerType(node->type->func.retType)) {
-            format(ctx->state,
-                   "#define CXY_MAIN_INVOKE(...) return "
-                   "cxy_main(__VA_ARGS__)\n\n",
-                   NULL);
+            format(ctx->state, "#define CXY_MAIN_INVOKE_RETURN\n\n", NULL);
         }
         else {
-            format(ctx->state,
-                   "#define CXY_MAIN_INVOKE(...) cxy_main(__VA_ARGS__); "
-                   "return EXIT_SUCCESS\n\n",
-                   NULL);
+            format(ctx->state, "#define CXY_MAIN_INVOKE\n\n", NULL);
         }
     }
 
@@ -338,6 +332,10 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         astConstVisit(visitor, node->funcDecl.body);
         format(ctx->state, ";", NULL);
         format(ctx->state, "{<}\n}", NULL);
+    }
+
+    if (node->funcDecl.operatorOverload == opDelete) {
+        generateDestructor(ctx, parent->type);
     }
 
     ctx->namespace = namespace;

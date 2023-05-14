@@ -138,6 +138,15 @@ typedef u8 bool;
 #define ptr(X) ((uintptr_t)(X))
 #endif
 
+#ifdef CXY_GC_ENABLED
+#define cxy_default_alloc(size, dctor)                                         \
+    tgc_alloc_opt(&__cxy_builtins_gc, (size), 0, (dctor))
+#define cxy_default_realloc(ptr, size, dctor)                                  \
+    tgc_realloc(&__cxy_builtins_gc, (ptr), (size))
+#define cxy_default_dealloc(ptr) tgc_free(&__cxy_builtins_gc, (ptr))
+#define cxy_default_calloc(count, size, dctor)                                 \
+    tgc_calloc_opt(&__cxy_builtins_gc, (count), 0, (size), (dctor))
+#else
 enum {
     CXY_ALLOC_STATIC = 0b001,
     CXY_ALLOC_HEAP = 0b010,
@@ -154,6 +163,7 @@ typedef struct cxy_memory_hdr_t {
         };
         u64 hdr;
     };
+    void *dctor;
 } attr(packed) cxy_memory_hdr_t;
 
 #define CXY_MEMORY_HEADER_SIZE sizeof(cxy_memory_hdr_t)
@@ -162,45 +172,69 @@ typedef struct cxy_memory_hdr_t {
 #define CXY_MEMORY_POINTER(HDR)                                                \
     ((void *)(((u8 *)(HDR)) + CXY_MEMORY_HEADER_SIZE))
 
-static void *cxy_default_alloc(u64 size)
+static void *cxy_default_alloc(u64 size, void (*dctor)(void *))
 {
-    cxy_memory_hdr_t *hdr = calloc(1, size + CXY_MEMORY_HEADER_SIZE);
+    cxy_memory_hdr_t *hdr = malloc(size + CXY_MEMORY_HEADER_SIZE);
     hdr->magic = CXY_MEMORY_MAGIC(HEAP);
     hdr->refs = 1;
+    hdr->dctor = dctor;
     return CXY_MEMORY_POINTER(hdr);
 }
 
-static void *cxy_default_realloc(void *ptr, u64 size)
+static void *cxy_default_calloc(u64 n, u64 size, void (*dctor)(void *))
 {
-    if (ptr == NULL)
-        return cxy_default_alloc(size);
-
-    cxy_memory_hdr_t *hdr =
-        realloc(CXY_MEMORY_HEADER(ptr), size + CXY_MEMORY_HEADER_SIZE);
+    cxy_memory_hdr_t *hdr = calloc(n, size + CXY_MEMORY_HEADER_SIZE);
     hdr->magic = CXY_MEMORY_MAGIC(HEAP);
     hdr->refs = 1;
+    hdr->dctor = dctor;
     return CXY_MEMORY_POINTER(hdr);
+}
+
+static void *cxy_default_realloc(void *ptr, u64 size, void (*dctor)(void *))
+{
+    if (ptr == NULL)
+        return cxy_default_alloc(size, dctor);
+
+    cxy_memory_hdr_t *hdr = CXY_MEMORY_HEADER(ptr);
+    if (hdr->magic == CXY_MEMORY_MAGIC(HEAP)) {
+        if (hdr->refs == 1) {
+            hdr = realloc(hdr, size + CXY_MEMORY_HEADER_SIZE);
+            return CXY_MEMORY_POINTER(hdr);
+        }
+        else {
+            --hdr->refs;
+        }
+    }
+
+    return cxy_default_alloc(size, dctor);
 }
 
 void cxy_default_dealloc(void *ctx)
 {
     if (ctx) {
         cxy_memory_hdr_t *hdr = CXY_MEMORY_HEADER(ctx);
-        if ((hdr->magic == CXY_MEMORY_MAGIC(HEAP)) && hdr->refs) {
-            hdr->hdr = 0;
-            free(hdr);
+        if (hdr->magic == CXY_MEMORY_MAGIC(HEAP)) {
+            if (hdr->refs == 1) {
+                memset(hdr, 0, sizeof(*hdr));
+                free(hdr);
+            }
+            else
+                hdr->refs--;
         }
     }
 }
+
+#endif
 
 #ifndef cxy_alloc
 #define cxy_alloc cxy_default_alloc
 #define cxy_free cxy_default_dealloc
 #define cxy_realloc cxy_default_realloc
+#define cxy_calloc cxy_default_calloc
 #endif
 
 #ifndef __builtin_alloc
-#define __builtin_alloc(T, n) cxy_alloc(sizeof(T) * n)
+#define __builtin_alloc(T, n, dctor) cxy_alloc((sizeof(T) * (n)), (dctor))
 #endif
 
 #ifndef __builtin_dealloc
@@ -208,20 +242,47 @@ void cxy_default_dealloc(void *ctx)
 #endif
 
 #ifndef __builtin_realloc
-#define __builtin_realloc(T, P, n) cxy_realloc((P), (sizeof(T) * n))
+#define __builtin_realloc(T, P, n, dctor)                                      \
+    cxy_realloc((P), (sizeof(T) * (n)), (dctor))
 #endif
 
+typedef struct __cxy_builtin_slice_t {
+    void *data;
+    u64 len;
+} __cxy_builtin_slice_t;
+
+void *__builtin_alloc_slice_(u64 count, u64 size, void (*dctor)(void *))
+{
+    __cxy_builtin_slice_t *slice =
+        cxy_alloc(sizeof(__cxy_builtin_slice_t), dctor);
+    slice->len = count;
+    slice->data = cxy_default_alloc((count * size), nullptr);
+    return slice;
+}
+
+void *__builtin_realloc_slice_(void *ptr,
+                               u64 count,
+                               u64 size,
+                               void (*dctor)(void *))
+{
+    __cxy_builtin_slice_t *slice = ptr;
+    if (slice == NULL)
+        slice = cxy_alloc(sizeof(__cxy_builtin_slice_t), dctor);
+
+    slice->len = count;
+    slice->data = cxy_realloc(slice->data, (count * size), nullptr);
+    return slice;
+}
+
 #ifndef __builtin_alloc_slice
-#define __builtin_alloc_slice(T, n)                                            \
-    (T) { .data = __builtin_alloc((*((T *)0)->data), (n)), .len = n }
+#define __builtin_alloc_slice(T, n, dctor)                                     \
+    *((T *)__builtin_alloc_slice_((n), sizeof((*((T *)0)->data)), (dctor)))
 #endif
 
 #ifndef __builtin_realloc_slice
-#define __builtin_realloc_slice(T, P, n)                                       \
-    (T)                                                                        \
-    {                                                                          \
-        .data = __builtin_realloc((*((T *)0)->data), (P).data, (n)), .len = n  \
-    }
+#define __builtin_realloc_slice(T, P, n, dctor)                                \
+    *((T *)__builtin_realloc_slice_(                                           \
+        &(P), (n), sizeof((*((T *)0)->data)), (dctor)))
 #endif
 
 #ifndef __builtin_memset_slice
@@ -333,11 +394,22 @@ static inline u64 wputc(wchar c)
 typedef struct {
     u64 size;
     char *data;
-} cxy_string_t;
+} __cxy_builtins_string_t;
 
-static cxy_string_t *cxy_string_new0(const char *cstr, u64 len)
+attr(always_inline) static void __cxy_builtins_string_delete(void *str)
 {
-    cxy_string_t *str = cxy_alloc(sizeof(cxy_string_t) + len + 1);
+    __cxy_builtins_string_t *this = str;
+    cxy_free(this->data);
+    this->data = nullptr;
+    this->data = 0;
+}
+
+static __cxy_builtins_string_t *__cxy_builtins_string_new0(const char *cstr,
+                                                           u64 len)
+{
+    __cxy_builtins_string_t *str =
+        cxy_alloc(sizeof(__cxy_builtins_string_t) + len + 1,
+                  __cxy_builtins_string_delete);
     str->size = len;
     if (cstr != NULL)
         memcpy(str->data, cstr, len);
@@ -345,140 +417,151 @@ static cxy_string_t *cxy_string_new0(const char *cstr, u64 len)
     return str;
 }
 
-attr(always_inline) static cxy_string_t *cxy_string_new1(const char *cstr)
+attr(always_inline) static __cxy_builtins_string_t *__cxy_builtins_string_new1(
+    const char *cstr)
 {
-    return cxy_string_new0(cstr, strlen(cstr));
+    return __cxy_builtins_string_new0(cstr, strlen(cstr));
 }
 
-static attr(always_inline) cxy_string_t *cxy_string_dup(const cxy_string_t *str)
+static attr(always_inline) __cxy_builtins_string_t *__cxy_builtins_string_dup(
+    const __cxy_builtins_string_t *str)
 {
-    return cxy_string_new0(str->data, str->size);
+    return __cxy_builtins_string_new0(str->data, str->size);
 }
 
-static cxy_string_t *cxy_string_concat(const cxy_string_t *s1,
-                                       const cxy_string_t *s2)
+static __cxy_builtins_string_t *__cxy_builtins_string_concat(
+    const __cxy_builtins_string_t *s1, const __cxy_builtins_string_t *s2)
 {
-    cxy_string_t *str = cxy_string_new0(NULL, s1->size + s2->size);
+    __cxy_builtins_string_t *str =
+        __cxy_builtins_string_new0(NULL, s1->size + s2->size);
     memcpy(str->data, s1->data, s1->size);
     memcpy(&str->data[s1->size], s2->data, s2->size);
     return str;
 }
 
-attr(always_inline) static void cxy_string_delete(cxy_string_t *str)
-{
-    free(str);
-}
-
-#ifndef cxy_STRING_BUILDER_DEFAULT_CAPACITY
-#define cxy_STRING_BUILDER_DEFAULT_CAPACITY 32
+#ifndef __cxy_builtins_string_builder_DEFAULT_CAPACITY
+#define __cxy_builtins_string_builder_DEFAULT_CAPACITY 32
 #endif
 
 typedef struct {
     u64 capacity;
     u64 size;
     char *data;
-} cxy_string_builder_t;
+} __cxy_builtins_string_builder_t;
 
-void cxy_string_builder_grow(cxy_string_builder_t *sb, u64 size)
+void __cxy_builtins_string_builder_grow(__cxy_builtins_string_builder_t *sb,
+                                        u64 size)
 {
     if (sb->data == NULL) {
-        sb->data = malloc(size + 1);
+        sb->data = cxy_alloc(size + 1, nullptr);
         sb->capacity = size;
     }
     else if (size > (sb->capacity - sb->size)) {
         while (sb->capacity < sb->size + size) {
             sb->capacity <<= 1;
         }
-        sb->data = realloc(sb->data, sb->capacity + 1);
+        sb->data = cxy_realloc(sb->data, sb->capacity + 1, nullptr);
     }
 }
 
-attr(always_inline) void cxy_string_builder_init(cxy_string_builder_t *sb)
+attr(always_inline) void __cxy_builtins_string_builder_init(
+    __cxy_builtins_string_builder_t *sb)
 {
-    cxy_string_builder_grow(sb, cxy_STRING_BUILDER_DEFAULT_CAPACITY);
+    __cxy_builtins_string_builder_grow(
+        sb, __cxy_builtins_string_builder_DEFAULT_CAPACITY);
 }
 
-cxy_string_builder_t *cxy_string_builder_new()
+static void __cxy_builtins_string_builder_delete_fwd(void *sb);
+
+__cxy_builtins_string_builder_t *__cxy_builtins_string_builder_new()
 {
-    cxy_string_builder_t *sb = calloc(1, sizeof(cxy_string_builder_t));
-    cxy_string_builder_init(sb);
+    __cxy_builtins_string_builder_t *sb =
+        cxy_calloc(1,
+                   sizeof(__cxy_builtins_string_builder_t),
+                   __cxy_builtins_string_builder_delete_fwd);
+    __cxy_builtins_string_builder_init(sb);
     return sb;
 }
 
-void cxy_string_builder_deinit(cxy_string_builder_t *sb)
+void __cxy_builtins_string_builder_deinit(__cxy_builtins_string_builder_t *sb)
 {
     if (sb->data)
         free(sb->data);
     memset(sb, 0, sizeof(*sb));
 }
 
-attr(always_inline) void cxy_string_builder_delete(cxy_string_builder_t *sb)
+attr(always_inline) void __cxy_builtins_string_builder_delete(
+    __cxy_builtins_string_builder_t *sb)
 {
     if (sb)
-        free(sb);
+        cxy_free(sb);
 }
 
-void cxy_string_builder_append_cstr0(cxy_string_builder_t *sb,
-                                     const char *cstr,
-                                     u64 len)
+static void __cxy_builtins_string_builder_delete_fwd(void *sb)
 {
-    cxy_string_builder_grow(sb, len);
+    __cxy_builtins_string_builder_delete((__cxy_builtins_string_builder_t *)sb);
+}
+
+void __cxy_builtins_string_builder_append_cstr0(
+    __cxy_builtins_string_builder_t *sb, const char *cstr, u64 len)
+{
+    __cxy_builtins_string_builder_grow(sb, len);
     memmove(&sb->data[sb->size], cstr, len);
     sb->size += len;
     sb->data[sb->size] = '\0';
 }
 
-attr(always_inline) void cxy_string_builder_append_cstr1(
-    cxy_string_builder_t *sb, const char *cstr)
+attr(always_inline) void __cxy_builtins_string_builder_append_cstr1(
+    __cxy_builtins_string_builder_t *sb, const char *cstr)
 {
-    cxy_string_builder_append_cstr0(sb, cstr, strlen(cstr));
+    __cxy_builtins_string_builder_append_cstr0(sb, cstr, strlen(cstr));
 }
 
-attr(always_inline) void cxy_string_builder_append_int(cxy_string_builder_t *sb,
-                                                       i64 num)
+attr(always_inline) void __cxy_builtins_string_builder_append_int(
+    __cxy_builtins_string_builder_t *sb, i64 num)
 {
     char data[32];
     i64 len = sprintf(data, "%lld", num);
-    cxy_string_builder_append_cstr0(sb, data, len);
+    __cxy_builtins_string_builder_append_cstr0(sb, data, len);
 }
 
-attr(always_inline) void cxy_string_builder_append_float(
-    cxy_string_builder_t *sb, f64 num)
+attr(always_inline) void __cxy_builtins_string_builder_append_float(
+    __cxy_builtins_string_builder_t *sb, f64 num)
 {
     char data[32];
     i64 len = sprintf(data, "%g", num);
-    cxy_string_builder_append_cstr0(sb, data, len);
+    __cxy_builtins_string_builder_append_cstr0(sb, data, len);
 }
 
-attr(always_inline) void cxy_string_builder_append_char(
-    cxy_string_builder_t *sb, wchar c)
+attr(always_inline) void __cxy_builtins_string_builder_append_char(
+    __cxy_builtins_string_builder_t *sb, wchar c)
 {
     cxy_stack_str_8_t s = cxy_wchar_str(c);
-    cxy_string_builder_append_cstr0(sb, s.str, s.str[5]);
+    __cxy_builtins_string_builder_append_cstr0(sb, s.str, s.str[5]);
 }
 
-attr(always_inline) void cxy_string_builder_append_bool(
-    cxy_string_builder_t *sb, bool v)
+attr(always_inline) void __cxy_builtins_string_builder_append_bool(
+    __cxy_builtins_string_builder_t *sb, bool v)
 {
     if (v)
-        cxy_string_builder_append_cstr0(sb, "true", 4);
+        __cxy_builtins_string_builder_append_cstr0(sb, "true", 4);
     else
-        cxy_string_builder_append_cstr0(sb, "false", 5);
+        __cxy_builtins_string_builder_append_cstr0(sb, "false", 5);
 }
 
-char *cxy_string_builder_release(cxy_string_builder_t *sb)
+char *__cxy_builtins_string_builder_release(__cxy_builtins_string_builder_t *sb)
 {
     char *data = sb->data;
     sb->data = NULL;
-    cxy_string_builder_deinit(sb);
+    __cxy_builtins_string_builder_deinit(sb);
     return data;
 }
 
-int cxy_binary_search(const void *arr,
-                      u64 len,
-                      const void *x,
-                      u64 size,
-                      int (*compare)(const void *, const void *))
+int __cxy_builtins_binary_search(const void *arr,
+                                 u64 len,
+                                 const void *x,
+                                 u64 size,
+                                 int (*compare)(const void *, const void *))
 {
     int lower = 0;
     int upper = (int)len - 1;
@@ -500,80 +583,85 @@ int cxy_binary_search(const void *arr,
 typedef struct {
     i64 value;
     const char *name;
-} cxy_enum_name_t;
+} __cxy_builtins_enum_name_t;
 
-static int cxy_enum_name_compare(const void *lhs, const void *rhs)
+static int __cxy_builtins_enum_name_compare(const void *lhs, const void *rhs)
 {
-    return (int)(((cxy_enum_name_t *)lhs)->value -
-                 ((cxy_enum_name_t *)rhs)->value);
+    return (int)(((__cxy_builtins_enum_name_t *)lhs)->value -
+                 ((__cxy_builtins_enum_name_t *)rhs)->value);
 }
 
-const char *cxy_enum_find_name(const cxy_enum_name_t *names,
-                               u64 count,
-                               u64 value)
+const char *__cxy_builtins_enum_find_name(
+    const __cxy_builtins_enum_name_t *names, u64 count, u64 value)
 {
-    cxy_enum_name_t name = {.value = value};
-    int index = cxy_binary_search(
-        names, count, &name, sizeof(name), cxy_enum_name_compare);
+    __cxy_builtins_enum_name_t name = {.value = value};
+    int index = __cxy_builtins_binary_search(
+        names, count, &name, sizeof(name), __cxy_builtins_enum_name_compare);
     if (index >= 0)
         return names[index].name;
 
     return "(Unknown)";
 }
 
-typedef uint32_t cxy_hash_code_t;
+typedef uint32_t __cxy_builtins_hash_code_t;
 
-attr(always_inline) cxy_hash_code_t cxy_hash_init()
+attr(always_inline) __cxy_builtins_hash_code_t __cxy_builtins_fnv1a_init()
 {
 #define FNV_32_INIT UINT32_C(0x811c9dc5)
     return FNV_32_INIT;
 #undef FNV_32_INIT
 }
 
-attr(always_inline) cxy_hash_code_t cxy_hash_uint8(cxy_hash_code_t h, uint8_t x)
+attr(always_inline) __cxy_builtins_hash_code_t
+    __cxy_builtins_fnv1a_uint8(__cxy_builtins_hash_code_t h, uint8_t x)
 {
 #define FNV_32_PRIME 0x01000193
     return (h ^ x) * FNV_32_PRIME;
 #undef FNV_32_PRIME
 }
 
-attr(always_inline) cxy_hash_code_t
-    cxy_hash_uint16(cxy_hash_code_t h, uint16_t x)
+attr(always_inline) __cxy_builtins_hash_code_t
+    __cxy_builtins_fnv1a_uint16(__cxy_builtins_hash_code_t h, uint16_t x)
 {
-    return cxy_hash_uint8(cxy_hash_uint8(h, x), x >> 8);
+    return __cxy_builtins_fnv1a_uint8(__cxy_builtins_fnv1a_uint8(h, x), x >> 8);
 }
 
-attr(always_inline) cxy_hash_code_t
-    cxy_hash_uint32(cxy_hash_code_t h, cxy_hash_code_t x)
+attr(always_inline) __cxy_builtins_hash_code_t
+    __cxy_builtins_fnv1a_uint32(__cxy_builtins_hash_code_t h,
+                                __cxy_builtins_hash_code_t x)
 {
-    return cxy_hash_uint16(cxy_hash_uint16(h, x), x >> 16);
+    return __cxy_builtins_fnv1a_uint16(__cxy_builtins_fnv1a_uint16(h, x),
+                                       x >> 16);
 }
 
-attr(always_inline) cxy_hash_code_t
-    cxy_hash_uint64(cxy_hash_code_t h, uint64_t x)
+attr(always_inline) __cxy_builtins_hash_code_t
+    __cxy_builtins_fnv1a_uint64(__cxy_builtins_hash_code_t h, uint64_t x)
 {
-    return cxy_hash_uint32(cxy_hash_uint32(h, x), x >> 32);
+    return __cxy_builtins_fnv1a_uint32(__cxy_builtins_fnv1a_uint32(h, x),
+                                       x >> 32);
 }
 
-attr(always_inline) cxy_hash_code_t
-    cxy_hash_ptr(cxy_hash_code_t h, const void *ptr)
+attr(always_inline) __cxy_builtins_hash_code_t
+    __cxy_builtins_fnv1a_ptr(__cxy_builtins_hash_code_t h, const void *ptr)
 {
-    return cxy_hash_uint64(h, (ptrdiff_t)ptr);
+    return __cxy_builtins_fnv1a_uint64(h, (ptrdiff_t)ptr);
 }
 
-attr(always_inline) cxy_hash_code_t
-    cxy_hash_string(cxy_hash_code_t h, const char *str)
+attr(always_inline) __cxy_builtins_hash_code_t
+    __cxy_builtins_fnv1a_string(__cxy_builtins_hash_code_t h, const char *str)
 {
     while (*str)
-        h = cxy_hash_uint8(h, *(str++));
+        h = __cxy_builtins_fnv1a_uint8(h, *(str++));
     return h;
 }
 
-attr(always_inline) cxy_hash_code_t
-    cxy_hash_bytes(cxy_hash_code_t h, const void *ptr, u64 size)
+attr(always_inline) __cxy_builtins_hash_code_t
+    __cxy_builtins_fnv1a_bytes(__cxy_builtins_hash_code_t h,
+                               const void *ptr,
+                               u64 size)
 {
     for (u64 i = 0; i < size; ++i)
-        h = cxy_hash_uint8(h, ((char *)ptr)[i]);
+        h = __cxy_builtins_fnv1a_uint8(h, ((char *)ptr)[i]);
     return h;
 }
 
@@ -591,7 +679,7 @@ static const u64 cxy_primes[] = {
 
 // Returns the prime that is strictly greater than the given value.
 // If there is no such prime in the list, returns MAX_PRIME.
-static u64 cxy_next_prime(u64 i)
+static u64 __cxy_builtins_next_prime(u64 i)
 {
     u64 j = 0, k = sizeof__(cxy_primes);
     while (j < k) {
@@ -606,7 +694,7 @@ static u64 cxy_next_prime(u64 i)
 }
 
 // Returns the modulus of a number i by a prime p.
-static u64 cxy_mod_prime(u64 i, u64 p)
+static u64 __cxy_builtins_mod_prime(u64 i, u64 p)
 {
     switch (p) {
 #define f(x)                                                                   \

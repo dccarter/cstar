@@ -143,6 +143,33 @@ static const Type *checkNewInitializerExpr(AstVisitor *visitor, AstNode *node)
             }
             return checkNewInitializerOverload(visitor, node);
         }
+        else {
+            if (init->callExpr.args == NULL) {
+                node->newExpr.init = NULL;
+                return callee;
+            }
+            if (init->callExpr.args->next) {
+                logError(ctx->L,
+                         &init->callExpr.args->next->loc,
+                         "`new` initializer expression for type '{t}' accepts "
+                         "only 1 parameter",
+                         (FormatArg[]){{.t = callee}});
+                return NULL;
+            }
+            node->newExpr.init = init->callExpr.args;
+            const Type *type = evalType(visitor, node->newExpr.init);
+            if (typeIs(type, Error))
+                return NULL;
+            if (!isExplicitConstructibleFrom(ctx, callee, type)) {
+                logError(
+                    ctx->L,
+                    &init->callExpr.args->loc,
+                    "type '{t}' cannot be constructed with value of type '{t}'",
+                    (FormatArg[]){{.t = callee}, {.t = type}});
+                return NULL;
+            }
+            return callee;
+        }
     }
 
     return NULL;
@@ -158,7 +185,15 @@ void generateNewExpr(ConstAstVisitor *visitor, const AstNode *node)
     generateTypeUsage(ctx, node->type);
     format(ctx->state, " {s} = cxy_alloc(sizeof(", (FormatArg[]){{.s = name}});
     generateTypeUsage(ctx, type);
-    format(ctx->state, "));\n", NULL);
+    format(ctx->state, "),\n", NULL);
+    if (typeIs(type, Struct) || typeIs(type, Array) || typeIs(type, Tuple)) {
+        writeTypename(ctx, type);
+        format(ctx->state, "__op_delete_fwd", NULL);
+    }
+    else
+        format(ctx->state, "nullptr", NULL);
+
+    format(ctx->state, ");\n", NULL);
     if (node->newExpr.init) {
         if (type->tag == typArray) {
             format(ctx->state, " memcpy(*{s}, &(", (FormatArg[]){{.s = name}});

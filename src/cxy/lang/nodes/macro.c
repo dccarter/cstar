@@ -327,6 +327,33 @@ static AstNode *makeCstrNode(AstVisitor *visitor,
     return args;
 }
 
+static AstNode *makeDestructorNode(AstVisitor *visitor,
+                                   const AstNode *node,
+                                   AstNode *args)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
+        return NULL;
+
+    const Type *type = args->type ?: evalType(visitor, args);
+    if (!typeIs(type, Info)) {
+        logError(ctx->L,
+                 &args->loc,
+                 "invalid `destructor!` macro parameter, expecting a "
+                 "`@typeinfo`, got '{t}'",
+                 (FormatArg[]){{.t = type}});
+        return NULL;
+    }
+
+    args->type = makeDestructorType(ctx->typeTable);
+    args->tag = astDestructorRef;
+    args->flags = flgNone;
+    memset(&args->_body, 0, CXY_AST_NODE_BODY_SIZE);
+    args->destructorRef.target = type->info.target;
+
+    return args;
+}
+
 static AstNode *makeTypeofNode(AstVisitor *visitor,
                                const AstNode *node,
                                AstNode *args)
@@ -402,6 +429,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "column", makeColumnNumberNode},
     {.name = "column", makeColumnNumberNode},
     {.name = "cstr", makeCstrNode},
+    {.name = "destructor", makeDestructorNode},
     {.name = "file", makeFilenameNode},
     {.name = "len", makeLenNode},
     {.name = "line", makeLineNumberNode},

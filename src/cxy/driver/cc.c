@@ -23,12 +23,14 @@ void compileCSourceFile(CompilerDriver *driver, const char *sourceFile)
         makeDirectoryForPath(driver, options->output);
 
     format(&state,
-           "cc {s} -o {s} -I{s}/c/imports -Wno-c2x-extensions",
+           "cc {s} -g -o {s} -I{s}/c/imports -Wno-c2x-extensions",
            (FormatArg[]){{.s = sourceFile},
                          {.s = driver->options.output ?: "app"},
                          {.s = options->buildDir}});
 
-    format(&state, " {s}/tgc.c", (FormatArg[]){{.s = options->libDir}});
+    format(&state,
+           " {s}/tgc.c",
+           (FormatArg[]){{.s = options->libDir ?: "stdlib"}});
 
     if (options->rest) {
         format(&state, " {s}", (FormatArg[]){{.s = options->rest}});

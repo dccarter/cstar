@@ -215,6 +215,23 @@ void generateFallback(ConstAstVisitor *visitor, const AstNode *node)
            (FormatArg[]){{.u32 = node->tag}});
 }
 
+void generateDestructor(CodegenContext *context, const Type *type)
+{
+    format(context->state, "\nvoid ", NULL);
+    writeTypename(context, type);
+    format(context->state, "__op_delete_fwd(void *obj) {{ ", NULL);
+    writeTypename(context, type);
+    format(context->state, "__op_delete((", NULL);
+    writeTypename(context, type);
+    format(context->state, "*)obj); }", NULL);
+}
+
+void generateDestructorRef(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    writeTypename(ctx, node->destructorRef.target);
+    format(ctx->state, "__op_delete_fwd", NULL);
+}
 void writeNamespace(CodegenContext *ctx, cstring sep)
 {
     if (ctx->namespace) {
@@ -432,6 +449,7 @@ void generateCode(FormatState *state,
         [astImportDecl] = generateImportDecl,
         [astPathElem] = generatePathElement,
         [astPath] = generatePath,
+        [astDestructorRef] = generateDestructorRef,
         [astPrimitiveType] = generateTypeinfo,
         [astVoidType] = generateTypeinfo,
         [astArrayType] = generateTypeinfo,

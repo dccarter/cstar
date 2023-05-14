@@ -87,9 +87,9 @@ const Type *evalConstructorCall(AstVisitor *visitor,
 bool evalExplicitConstruction(AstVisitor *visitor,
                               const Type *type,
                               AstNode *node);
-bool isExplicitExplicitConstructibleFrom(SemanticsContext *ctx,
-                                         const Type *type,
-                                         const Type *from);
+bool isExplicitConstructibleFrom(SemanticsContext *ctx,
+                                 const Type *type,
+                                 const Type *from);
 
 bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node);
 bool transformToDerefOperator(AstVisitor *visitor, AstNode *node);

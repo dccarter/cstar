@@ -2,52 +2,52 @@ module strlib
 
 import { hashInit, hashStringSize, memcpy} from "stdlib/utils.cxy"
 
-pub native type cxy_string_builder_t;
+pub native type __cxy_builtins_string_builder_t;
 
-pub native func cxy_string_builder_new(): cxy_string_builder_t;
-pub native func cxy_string_builder_delete(this: cxy_string_builder_t) : void;
-pub native func cxy_string_builder_release(this: cxy_string_builder_t) : &char;
+pub native func __cxy_builtins_string_builder_new(): __cxy_builtins_string_builder_t;
+pub native func __cxy_builtins_string_builder_delete(this: __cxy_builtins_string_builder_t) : void;
+pub native func __cxy_builtins_string_builder_release(this: __cxy_builtins_string_builder_t) : &char;
 
-pub native func cxy_string_builder_append_cstr0(
-                    this: cxy_string_builder_t, str:  &const i8, len:  u64) : void;
-pub native func cxy_string_builder_append_int(
-                    this: cxy_string_builder_t, num: i64) : void;
-pub native func cxy_string_builder_append_float(
-                    this: cxy_string_builder_t, num: f64) : void;
-pub native func cxy_string_builder_append_char(
-                    this: cxy_string_builder_t, ch: wchar): void;
-pub native func cxy_string_builder_append_bool(
-                    this: cxy_string_builder_t, val: bool): void;
+pub native func __cxy_builtins_string_builder_append_cstr0(
+                    this: __cxy_builtins_string_builder_t, str:  &const i8, len:  u64) : void;
+pub native func __cxy_builtins_string_builder_append_int(
+                    this: __cxy_builtins_string_builder_t, num: i64) : void;
+pub native func __cxy_builtins_string_builder_append_float(
+                    this: __cxy_builtins_string_builder_t, num: f64) : void;
+pub native func __cxy_builtins_string_builder_append_char(
+                    this: __cxy_builtins_string_builder_t, ch: wchar): void;
+pub native func __cxy_builtins_string_builder_append_bool(
+                    this: __cxy_builtins_string_builder_t, val: bool): void;
 
 pub struct StringBuilder {
-    - sb: cxy_string_builder_t
+    - sb: __cxy_builtins_string_builder_t
 
     @inline
-    func `new`() =>  sb = cxy_string_builder_new()
+    func `new`() =>  sb = __cxy_builtins_string_builder_new()
 
     @inline
-    func `delete`() => cxy_string_builder_delete(sb)
+    func `delete`() => __cxy_builtins_string_builder_delete(sb)
 
     @inline
     func appendString(str: string) =>
-        cxy_string_builder_append_cstr0(sb, unchecked!(str, #&const i8), len!(str))
+        __cxy_builtins_string_builder_append_cstr0(sb, unchecked!(str, #&const i8), len!(str))
 
     @inline
     func appendInt(num: i64) =>
-        cxy_string_builder_append_int(sb, <i64> num)
+        __cxy_builtins_string_builder_append_int(sb, <i64> num)
 
     @inline
     func appendFloat(num: f64) =>
-        cxy_string_builder_append_float(sb, <f64> num)
+        __cxy_builtins_string_builder_append_float(sb, <f64> num)
 
     @inline
     func appendChar(ch: wchar) =>
-        cxy_string_builder_append_char(sb, ch)
+        __cxy_builtins_string_builder_append_char(sb, ch)
 
 
     @inline
     func appendBool(val: bool) =>
-        cxy_string_builder_append_bool(sb, val)
+        __cxy_builtins_string_builder_append_bool(sb, val)
 
     @inline
     func `<<`[U](val: U) {
@@ -67,7 +67,7 @@ pub struct StringBuilder {
 
     @inline
     func toString() {
-        var ret = cxy_string_builder_release(sb);
+        var ret = __cxy_builtins_string_builder_release(sb);
         return unchecked!(ret, #string)
     }
 
@@ -115,7 +115,7 @@ pub struct String {
 
     func append(other: &const String) unsafe {
         var newLen = len + other.len;
-        var str = <&i8>__builtin_alloc(#i8, newLen + 1);
+        var str = <&i8>__builtin_alloc(#i8, newLen + 1, null);
         memcpy(str, cstr!(s), len)
         memcpy(ptroff!(str + len), cstr!(other.s), other.len);
         *(ptroff!(str + newLen)) = <i8>'\0';

@@ -54,6 +54,8 @@ void generateCode(FormatState *state,
                   const AstNode *prog,
                   bool isImport);
 
+void generateDestructor(CodegenContext *ctx, const Type *type);
+
 void generateCCode(ConstAstVisitor *visitor, const AstNode *node);
 void generateTypeinfo(ConstAstVisitor *visitor, const AstNode *node);
 void generateFuncParam(ConstAstVisitor *visitor, const AstNode *node);

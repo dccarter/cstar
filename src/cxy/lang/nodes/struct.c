@@ -43,12 +43,12 @@ static inline AstNode *findStructField(const Type *type, cstring name)
     return findSymbolOnly(&env, name);
 }
 
-bool isExplicitExplicitConstructibleFrom(SemanticsContext *ctx,
-                                         const Type *type,
-                                         const Type *from)
+bool isExplicitConstructibleFrom(SemanticsContext *ctx,
+                                 const Type *type,
+                                 const Type *from)
 {
     if (!typeIs(type, Struct))
-        return false;
+        return isTypeAssignableFrom(type, from);
 
     AstNode *constructor = findFunctionWithSignature(
         ctx, type->tStruct.env, "op_new", flgNone, (const Type *[]){from}, 1);
@@ -63,7 +63,7 @@ bool isExplicitExplicitConstructibleFrom(SemanticsContext *ctx,
     if (!typeIs(param, Struct))
         return isTypeAssignableFrom(param, from);
 
-    if (!isExplicitExplicitConstructibleFrom(ctx, param, from))
+    if (!isExplicitConstructibleFrom(ctx, param, from))
         return false;
 
     return true;
@@ -262,6 +262,7 @@ static void generateStructDelete(CodegenContext *context, const Type *type)
     }
 
     format(state, "{<}\n}", NULL);
+    generateDestructor(context, type);
 }
 
 void generateStructDefinition(CodegenContext *context, const Type *type)

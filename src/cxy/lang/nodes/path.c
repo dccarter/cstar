@@ -135,7 +135,7 @@ void generatePathElement(ConstAstVisitor *visitor, const AstNode *node)
 void generatePath(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    if (node->type->tag == typEnum && node->path.elements->next &&
+    if (typeIs(node->type, Enum) && node->path.elements->next &&
         (node->path.elements->next->flags & flgMember)) {
         writeEnumPrefix(ctx, node->type);
         generateManyAstsWithDelim(

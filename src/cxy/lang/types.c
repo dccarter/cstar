@@ -172,6 +172,9 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
         }
         return true;
     case typFunc: {
+        if (hasFlag(to, FunctionPtr) && typeIs(stripPointer(from), Null))
+            return true;
+
         if (!isTypeAssignableFrom(to->func.retType, to->func.retType))
             return false;
         bool isNameFuncParam =

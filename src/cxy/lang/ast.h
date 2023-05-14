@@ -103,7 +103,7 @@ typedef enum {
     astGenericDecl,
     astIdentifier,
     astImportEntity,
-    astTypeRef,
+    astDestructorRef,
     /* Types */
     astVoidType,
     astStringType,
@@ -203,7 +203,8 @@ enum {
     flgVisited = BIT(28),
     flgImplementsDelete = BIT(28),
     flgImmediatelyReturned = BIT(29),
-    flgUnsafe = BIT(30)
+    flgUnsafe = BIT(30),
+    flgFunctionPtr = BIT(31)
 };
 
 typedef struct AstNode AstNode;
@@ -274,6 +275,10 @@ struct AstNode {
             cstring name;
             Env *env;
         } moduleDecl;
+
+        struct {
+            const Type *target;
+        } destructorRef;
 
         struct {
             cstring value;

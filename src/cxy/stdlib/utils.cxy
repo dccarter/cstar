@@ -7,24 +7,24 @@ pub native func memset(dst: &void, ch: i32, len: u64) : &void;
 type HashCode = u32
 
 @alias(name: "hashInit")
-pub native func cxy_hash_init(): u32;
+pub native func __cxy_builtins_fnv1a_init(): u32;
 @alias(name: "hashPointer")
-pub native func cxy_hash_pointer(init: HashCode, ptr: &const void): u32;
+pub native func __cxy_builtins_fnv1a_pointer(init: HashCode, ptr: &const void): u32;
 @alias(name: "hashUint8")
-pub native func cxy_hash_uint8(init: HashCode, val: u8): u32;
+pub native func __cxy_builtins_fnv1a_uint8(init: HashCode, val: u8): u32;
 @alias(name: "hashUint16")
-pub native func cxy_hash_uint16(init: HashCode, val: u16): u32;
+pub native func __cxy_builtins_fnv1a_uint16(init: HashCode, val: u16): u32;
 @alias(name: "hashUint32")
-pub native func cxy_hash_uint32(init: HashCode, val: u32): u32;
+pub native func __cxy_builtins_fnv1a_uint32(init: HashCode, val: u32): u32;
 @alias(name: "hashUint64")
-pub native func cxy_hash_uint64(init: HashCode, val: u64): u32;
+pub native func __cxy_builtins_fnv1a_uint64(init: HashCode, val: u64): u32;
 @alias(name: "hashBytes")
-pub native func cxy_hash_bytes(init: HashCode, str: &const void, size: u64): u32;
-pub native func cxy_hash_string(init: HashCode, str: &const char): u32;
+pub native func __cxy_builtins_fnv1a_bytes(init: HashCode, str: &const void, size: u64): u32;
+pub native func __cxy_builtins_fnv1a_string(init: HashCode, str: &const char): u32;
 @inline
-pub func hashString(init: HashCode, str: string) => cxy_hash_string(init, unchecked!(str, #&const char))
+pub func hashString(init: HashCode, str: string) => __cxy_builtins_fnv1a_string(init, unchecked!(str, #&const char))
 @inline
-pub func hashStringSize(init: HashCode, str: string, len: u64) => cxy_hash_bytes(init, unchecked!(str, #&const char), len)
+pub func hashStringSize(init: HashCode, str: string, len: u64) => __cxy_builtins_fnv1a_bytes(init, unchecked!(str, #&const char), len)
 
 
 pub func hash[T](val: T) {
@@ -50,10 +50,10 @@ pub func hash[T](val: T) {
 }
 
 @inline
-pub func allocSlice[T](count: u64) => <[T]> __builtin_alloc_slice(#[T], count)
+pub func allocSlice[T](count: u64) => <[T]> __builtin_alloc_slice(#[T], count, destructor!(#[T]))
 
 @inline
-pub func reallocSlice[T](data: [T], count: u64) => <[T]> __builtin_realloc_slice(#[T], data, count)
+pub func reallocSlice[T](data: [T], count: u64) => <[T]> __builtin_realloc_slice(#[T], data, count, destructor!(#[T]))
 
 pub struct PtrRef[T] {
     ptr: &T = null

@@ -55,12 +55,9 @@ static void generateArrayDelete(CodegenContext *context, const Type *type)
         format(state, "{<}\n};\n", NULL);
     }
 
-    if (isSliceType(type))
-        format(state, "__builtin_free_slice(*this);\n", NULL);
-    else
-        format(state, "cxy_free(this);\n", NULL);
-
     format(state, "{<}\n}", NULL);
+
+    generateDestructor(context, type);
 }
 
 void generateForStmtArray(ConstAstVisitor *visitor, const AstNode *node)

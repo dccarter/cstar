@@ -14,8 +14,8 @@
 
 #include <string.h>
 
-#ifndef CXY_STRING_BUILDER_DEFAULT_CAPACITY
-#define CXY_STRING_BUILDER_DEFAULT_CAPACITY 32
+#ifndef __cxy_builtins_string_builder_DEFAULT_CAPACITY
+#define __cxy_builtins_string_builder_DEFAULT_CAPACITY 32
 #endif
 
 typedef struct {
@@ -30,7 +30,7 @@ void stringBuilderGrow(StringBuilder *sb, u64 size);
 
 static attr(always_inline) void stringBuilderInit(StringBuilder *sb)
 {
-    stringBuilderGrow(sb, CXY_STRING_BUILDER_DEFAULT_CAPACITY);
+    stringBuilderGrow(sb, __cxy_builtins_string_builder_DEFAULT_CAPACITY);
 }
 
 StringBuilder *stringBuilderNew();
