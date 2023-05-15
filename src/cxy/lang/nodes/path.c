@@ -167,8 +167,9 @@ void generatePath(ConstAstVisitor *visitor, const AstNode *node)
             if (elem->next) {
                 if (typeIs(elem->type, Module))
                     format(ctx->state, "__", NULL);
-                else if (elem->type && (typeIs(elem->type, Pointer) ||
-                                        typeIs(elem->type, This)))
+                else if (elem->type &&
+                         (typeIs(elem->type, Pointer) ||
+                          typeIs(elem->type, This) || isSliceType(elem->type)))
                     format(ctx->state, "->", NULL);
                 else
                     format(ctx->state, ".", NULL);

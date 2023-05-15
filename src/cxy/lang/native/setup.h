@@ -254,21 +254,18 @@ attr(always_inline) void *cxy_default_get_ref(void *ptr)
 #endif
 
 typedef struct __cxy_builtin_slice_t {
-    void *data;
     u64 len;
+    void *data;
+    u8 p[0];
 } __cxy_builtin_slice_t;
-
-void __builtin_dealloc_slice(void *ptr) { printf("deleting slice: %p\n", ptr); }
 
 void *__builtin_alloc_slice_(u64 count, u64 size, void (*dctor)(void *))
 {
     // destructor should be responsible for deleting the individual elements
     __cxy_builtin_slice_t *slice =
-        cxy_alloc(sizeof(__cxy_builtin_slice_t), dctor);
-
+        cxy_alloc(sizeof(__cxy_builtin_slice_t) + (count * size), dctor);
     slice->len = count;
-    slice->data = cxy_default_alloc((count * size), nullptr);
-
+    slice->data = slice->p;
     return slice;
 }
 
@@ -277,43 +274,26 @@ void *__builtin_realloc_slice_(void *ptr,
                                u64 size,
                                void (*dctor)(void *))
 {
-    __cxy_builtin_slice_t *slice = ptr;
-    if (slice == NULL)
-        slice = cxy_alloc(sizeof(__cxy_builtin_slice_t), dctor);
-
+    __cxy_builtin_slice_t *slice =
+        cxy_realloc(ptr, sizeof(__cxy_builtin_slice_t) + (count * size), dctor);
     slice->len = count;
-    slice->data = cxy_realloc(slice->data, (count * size), nullptr);
+    slice->data = slice->p;
     return slice;
 }
 
 #ifndef __builtin_alloc_slice
 #define __builtin_alloc_slice(T, n, dctor)                                     \
-    *((T *)__builtin_alloc_slice_((n), sizeof((*((T *)0)->data)), (dctor)))
+    (T) __builtin_alloc_slice_((n), sizeof(((T)0)->data[0]), (dctor))
 #endif
 
 #ifndef __builtin_realloc_slice
 #define __builtin_realloc_slice(T, P, n, dctor)                                \
-    *((T *)__builtin_realloc_slice_(                                           \
-        &(P), (n), sizeof((*((T *)0)->data)), (dctor)))
+    (T) __builtin_realloc_slice_((P), (n), sizeof(((T)0)->data[0]), (dctor))
 #endif
 
 #ifndef __builtin_memset_slice
 #define __builtin_memset_slice(T, P, C)                                        \
-    memset((P).data, (C), (sizeof(((T *)0)->data) * (P).len))
-#endif
-
-#ifndef __builtin_free_slice
-#define __builtin_free_slice(P)                                                \
-    if ((P).data)                                                              \
-        cxy_free((P).data);                                                    \
-    (P).data = nullptr;                                                        \
-    (P).len = 0
-#endif
-
-#ifndef __builtin_init_slice
-#define __builtin_init_slice(P)                                                \
-    (P).data = nullptr;                                                        \
-    (P).len = 0;
+    memset((P).data, (C), (sizeof(((T)0)->data[0]) * (P).len))
 #endif
 
 #ifndef __builtin_assert

@@ -12,19 +12,24 @@ static void generateArrayDelete(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
     const Type *element = type->array.elementType;
-    const Type *raw = stripPointer(element);
+    const Type *unwrapped = unwrapType(element, NULL);
+    const Type *stripped = stripAll(element);
 
     format(state, "attr(always_inline)\nstatic void ", NULL);
     writeTypename(context, type);
-    format(state, "__op_delete(", NULL);
-    if (isSliceType(type))
+    format(state, "__builtin_destructor(void *ptr) {{{>}\n", NULL);
+    if (isSliceType(type)) {
         writeTypename(context, type);
-    else
-        writeTypename(context, type->array.elementType);
-    format(state, " *this) {{{>}\n", NULL);
+        format(state, " this = ptr;\n", NULL);
+    }
+    else {
+        writeTypename(context, element);
+        format(state, " *this = ptr;\n", NULL);
+    }
 
-    if (!typeIs(element, Func) && !typeIs(element, Generic) &&
-        !(isBuiltinType(element) || typeIs(element, String))) {
+    if (typeIs(unwrapped, Pointer) || typeIs(unwrapped, String) ||
+        typeIs(stripped, Struct) || typeIs(stripped, Array) ||
+        typeIs(stripped, Tuple)) {
         format(state, "for (u64 i = 0; i < ", NULL);
         if (isSliceType(type))
             format(state, "this->len", NULL);
@@ -32,41 +37,26 @@ static void generateArrayDelete(CodegenContext *context, const Type *type)
             format(state, "{u64}", (FormatArg[]){{.u64 = type->array.len}});
         format(state, "; i++) {{{>}\n", NULL);
 
-        if ((typeIs(element, Pointer) && isBuiltinType(raw)) ||
-            typeIs(element, String)) {
+        if (typeIs(element, Pointer) || typeIs(element, String)) {
             if (isSliceType(type))
-                format(state,
-                       "if (this->data[i]) cxy_free((void *)this->data[i]);",
-                       NULL);
+                format(state, "cxy_free((void *)this->data[i]);", NULL);
             else
-                format(state, "if (this[i]) cxy_free((void *)this[i]);", NULL);
+                format(state, "cxy_free((void *)this[i]);", NULL);
         }
-        else {
+        else if (typeIs(stripped, Struct) || typeIs(stripped, Array) ||
+                 typeIs(stripped, Tuple)) {
             if (isSliceType(type)) {
-                if (typeIs(element, Pointer))
-                    format(state,
-                           "if (this->data[i]) cxy_free(this->data[i]);",
-                           NULL);
-                else {
-                    writeTypename(context, raw);
-                    format(state, "__op_delete(&this->data[i]);", NULL);
-                }
+                writeTypename(context, stripped);
+                format(state, "__builtin_destructor(&this->data[i]);", NULL);
             }
             else {
-                if (typeIs(element, Pointer))
-                    format(state, "if (this[i]) cxy_free(this[i]);", NULL);
-                else {
-                    writeTypename(context, raw);
-                    format(state, "__op_delete(&this[i]);", NULL);
-                }
+                writeTypename(context, stripped);
+                format(state, "__builtin_destructor(&this[i]);", NULL);
             }
         }
         format(state, "{<}\n};\n", NULL);
     }
-
     format(state, "{<}\n}", NULL);
-
-    generateDestructor(context, type);
 }
 
 void generateForStmtArray(ConstAstVisitor *visitor, const AstNode *node)
@@ -91,7 +81,7 @@ void generateForStmtArray(ConstAstVisitor *visitor, const AstNode *node)
     format(ctx->state, " _arr_{s} = ", (FormatArg[]){{.s = name}});
     astConstVisit(visitor, range);
     if (isSliceType(range->type))
-        format(ctx->state, ".data;\n", NULL);
+        format(ctx->state, "->data;\n", NULL);
     else
         format(ctx->state, ";\n", NULL);
 
@@ -108,7 +98,7 @@ void generateForStmtArray(ConstAstVisitor *visitor, const AstNode *node)
 
     if (isSliceType(range->type)) {
         astConstVisit(visitor, range);
-        format(ctx->state, ".len", NULL);
+        format(ctx->state, "->len", NULL);
     }
     else
         format(ctx->state,
@@ -141,9 +131,9 @@ void generateArrayDeclaration(CodegenContext *context, const Type *type)
         format(state, "typedef struct ", NULL);
         writeTypename(context, type);
         format(state, " {{{>}\n", NULL);
+        format(state, "u64 len;\n", NULL);
         generateTypeUsage(context, type->array.elementType);
-        format(state, " *data;\n", NULL);
-        format(state, "u64 len;{<}\n} ", NULL);
+        format(state, " *data;{<}\n} *", NULL);
         writeTypename(context, type);
     }
     else {

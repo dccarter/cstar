@@ -189,7 +189,7 @@ void generateNewExpr(ConstAstVisitor *visitor, const AstNode *node)
     format(ctx->state, "),\n", NULL);
     if (typeIs(type, Struct) || typeIs(type, Array) || typeIs(type, Tuple)) {
         writeTypename(ctx, type);
-        format(ctx->state, "__op_delete_fwd", NULL);
+        format(ctx->state, "__builtin_destructor", NULL);
     }
     else
         format(ctx->state, "nullptr", NULL);

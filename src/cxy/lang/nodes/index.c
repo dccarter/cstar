@@ -131,10 +131,7 @@ void generateIndexExpr(ConstAstVisitor *visitor, const AstNode *node)
     astConstVisit(visitor, node->indexExpr.target);
 
     if (isSliceType(target)) {
-        if (typeIs(target, Pointer))
-            format(ctx->state, "->data", NULL);
-        else
-            format(ctx->state, ".data", NULL);
+        format(ctx->state, "->data", NULL);
     }
 
     if (typeIs(target, Pointer) && typeIs(stripped, Array))

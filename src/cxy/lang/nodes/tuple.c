@@ -15,39 +15,34 @@ static void generateTupleDelete(CodegenContext *context, const Type *type)
     FormatState *state = context->state;
     format(state, "attr(always_inline)\nstatic void ", NULL);
     writeTypename(context, type);
-    format(state, "__op_delete(", NULL);
+    format(state, "__builtin_destructor(void *ptr) {{{>}\n", NULL);
     writeTypename(context, type);
-    format(state, " *this) {{{>}\n", NULL);
+    format(state, " *this = ptr;\n", NULL);
 
     u64 y = 0;
     for (u64 i = 0; i < type->tuple.count; i++) {
         const Type *member = type->tuple.members[i];
-        if (typeIs(member, Func) || typeIs(member, Generic) ||
-            (isBuiltinType(member) && !typeIs(member, String)))
-            continue;
+        const Type *stripped = stripAll(member);
+        const Type *unwrapped = unwrapType(member, NULL);
 
-        const Type *raw = stripPointer(member);
         if (y++ != 0)
             format(state, "\n", NULL);
 
-        if ((typeIs(member, Pointer) && isBuiltinType(raw)) ||
-            typeIs(member, String)) {
+        if (typeIs(unwrapped, Pointer) || typeIs(unwrapped, String)) {
             format(state,
                    "cxy_free((void *)this->_{u64});",
                    (FormatArg[]){{.u64 = i}});
         }
-        else {
-            writeTypename(context, raw);
+        else if (typeIs(stripped, Struct) || typeIs(stripped, Array) ||
+                 typeIs(stripped, Tuple)) {
+            writeTypename(context, stripped);
             format(state,
-                   "__op_delete({s}this->_{u64});",
-                   (FormatArg[]){{.s = !typeIs(member, Pointer) ? "&" : ""},
-                                 {.u64 = i}});
+                   "__builtin_destructor(&this->_{u64});",
+                   (FormatArg[]){{.u64 = i}});
         }
     }
 
     format(state, "{<}\n}", NULL);
-
-    generateDestructor(context, type);
 }
 
 void generateTupleDefinition(CodegenContext *context, const Type *type)

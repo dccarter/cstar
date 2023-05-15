@@ -220,7 +220,7 @@ bool isBuiltinType(const Type *type);
 void printType(FormatState *state, const Type *type);
 static inline bool isSliceType(const Type *type)
 {
-    return type && typeIs(type, Array) && type->array.len == UINT64_MAX;
+    return typeIs(type, Array) && type->array.len == UINT64_MAX;
 }
 
 static inline bool isTruthyType(TypeTable *table, const Type *type)

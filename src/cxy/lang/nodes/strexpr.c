@@ -146,14 +146,8 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
                NULL);
         format(ctx->state, "for (u64 __cxy_i = 0; __cxy_i < ", NULL);
         if (type->array.len == UINT64_MAX) {
-            AstNode index = {.tag = astIdentifier,
-                             .type = getPrimitiveType(ctx->types, prtI32),
-                             .ident.value = "len"};
-            AstNode arg = {
-                .tag = astMemberExpr,
-                .type = type->array.elementType,
-                .memberExpr = {.target = (AstNode *)node, .member = &index}};
-            astConstVisit(visitor, &arg);
+            astConstVisit(visitor, node);
+            format(ctx->state, "->len", NULL);
         }
         else {
             format(ctx->state, "sizeof__(", NULL);

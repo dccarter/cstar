@@ -18,8 +18,7 @@ struct Number {
     func `str`() => ""
 
     func `delete`() {
-        println(f"deleting number ${id}")
-        inner = null
+        println("deleting number");
     }
 }
 
@@ -27,9 +26,5 @@ func main(args: [string]) {
     var vec = new Vector[&Number]();
     for (const i: 0..5) {
         vec.push(new Number(<i32>i));
-    }
-
-    for (const i : vec) {
-        println(f"${i}")
     }
 }

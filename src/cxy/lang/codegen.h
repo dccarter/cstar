@@ -53,8 +53,7 @@ void generateCode(FormatState *state,
                   StrPool *strPool,
                   const AstNode *prog,
                   bool isImport);
-
-void generateDestructor(CodegenContext *ctx, const Type *type);
+void generateStructDelete(CodegenContext *context, const Type *type);
 
 void generateCCode(ConstAstVisitor *visitor, const AstNode *node);
 void generateTypeinfo(ConstAstVisitor *visitor, const AstNode *node);

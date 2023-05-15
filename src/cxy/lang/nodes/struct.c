@@ -223,46 +223,50 @@ void generateStructExpr(ConstAstVisitor *visitor, const AstNode *node)
     format(ctx->state, "}", NULL);
 }
 
-static void generateStructDelete(CodegenContext *context, const Type *type)
+void generateStructDelete(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
     format(state, "attr(always_inline)\nstatic void ", NULL);
     writeTypename(context, type);
-    format(state, "__op_delete(", NULL);
+    format(state, "__builtin_destructor(void *ptr) {{{>}\n", NULL);
     writeTypename(context, type);
-    format(state, " *this) {{{>}\n", NULL);
+    format(state, " *this = ptr;\n", NULL);
+
+    if (hasFlag(type, ImplementsDelete)) {
+        writeTypename(context, type);
+        format(state, "__op_delete(this);\n", NULL);
+    }
 
     u64 y = 0;
     for (u64 i = 0; i < type->tStruct.fieldsCount; i++) {
         const StructField *field = &type->tStruct.fields[i];
-        if (typeIs(field->type, Func) || typeIs(field->type, Generic) ||
-            typeIs(field->type, Enum) ||
-            (isBuiltinType(field->type) && !typeIs(field->type, String)))
+        if (typeIs(field->type, Func) || typeIs(field->type, Generic))
             continue;
 
-        const Type *raw = stripPointer(field->type);
-        if (y++ != 0)
-            format(state, "\n", NULL);
+        const Type *unwrapped = unwrapType(field->type, NULL);
+        const Type *stripped = stripAll(field->type);
 
-        if ((typeIs(field->type, Pointer) &&
-             (isBuiltinType(raw) || typeIs(raw, Enum))) ||
-            typeIs(field->type, String)) {
+        if (typeIs(unwrapped, Pointer) || typeIs(unwrapped, String)) {
+            if (y++ != 0)
+                format(state, "\n", NULL);
+
             format(state,
                    "cxy_free((void *)this->{s});",
                    (FormatArg[]){{.s = field->name}});
         }
-        else {
-            writeTypename(context, raw);
-            format(
-                state,
-                "__op_delete({s}this->{s});",
-                (FormatArg[]){{.s = !typeIs(field->type, Pointer) ? "&" : ""},
-                              {.s = field->name}});
+        else if (typeIs(stripped, Struct) || typeIs(stripped, Array) ||
+                 typeIs(stripped, Tuple)) {
+            if (y++ != 0)
+                format(state, "\n", NULL);
+
+            writeTypename(context, stripped);
+            format(state,
+                   "__builtin_destructor(&this->{s});",
+                   (FormatArg[]){{.s = field->name}});
         }
     }
 
     format(state, "{<}\n}", NULL);
-    generateDestructor(context, type);
 }
 
 void generateStructDefinition(CodegenContext *context, const Type *type)

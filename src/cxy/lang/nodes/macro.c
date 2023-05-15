@@ -240,6 +240,50 @@ static AstNode *makeLenNode(AstVisitor *visitor,
     return NULL;
 }
 
+static AstNode *makeDataNode(AstVisitor *visitor,
+                             const AstNode *node,
+                             AstNode *args)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
+        return NULL;
+
+    const Type *type = args->type ?: evalType(visitor, args);
+    const Type *raw = stripAll(type);
+
+    switch (raw->tag) {
+    case typArray:
+        if (raw->array.len == UINT64_MAX) {
+            const Type *retType = makePointerType(
+                ctx->typeTable, raw->array.elementType, type->flags & flgConst);
+            return makeAstNode(
+                ctx->pool,
+                &node->loc,
+                &(AstNode){
+                    .tag = astMemberExpr,
+                    .type = retType,
+                    .memberExpr = {.target = args,
+                                   .member = makeAstNode(
+                                       ctx->pool,
+                                       &node->loc,
+                                       &(AstNode){.tag = astIdentifier,
+                                                  .flags = flgConst,
+                                                  .type = retType,
+                                                  .ident.value = "data"})}});
+        }
+
+    default:
+        break;
+    }
+
+    logError(ctx->L,
+             &args->loc,
+             "macro builtin 'data!' cannot be used with expression of type "
+             "'{t}'",
+             (FormatArg[]){{.t = type}});
+    return NULL;
+}
+
 static AstNode *makeAssertNode(AstVisitor *visitor,
                                const AstNode *node,
                                AstNode *args)
@@ -429,6 +473,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "column", makeColumnNumberNode},
     {.name = "column", makeColumnNumberNode},
     {.name = "cstr", makeCstrNode},
+    {.name = "data", makeDataNode},
     {.name = "destructor", makeDestructorNode},
     {.name = "file", makeFilenameNode},
     {.name = "len", makeLenNode},

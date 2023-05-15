@@ -92,7 +92,7 @@ void generateMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
     }
     else {
         astConstVisit(visitor, target);
-        if (target->type->tag == typPointer)
+        if (typeIs(target->type, Pointer) || isSliceType(target->type))
             format(ctx->state, "->", NULL);
         else
             format(ctx->state, ".", NULL);

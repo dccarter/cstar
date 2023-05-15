@@ -335,7 +335,7 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
     }
 
     if (node->funcDecl.operatorOverload == opDelete) {
-        generateDestructor(ctx, parent->type);
+        generateStructDelete(ctx, parent->type);
     }
 
     ctx->namespace = namespace;

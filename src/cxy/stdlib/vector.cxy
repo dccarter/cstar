@@ -36,8 +36,8 @@ pub struct Vector[T] {
         const item = data.[0];
         var tmp = data;
         len -= 1
-        utils.memmove(unchecked!(tmp.data, #&void),
-                      ptroff!(unchecked!(tmp.data, #&T) + 1),
+        utils.memmove(data!(tmp),
+                      ptroff!(data!(tmp) + 1),
                       sizeof!(item) * len)
         return item
     }
