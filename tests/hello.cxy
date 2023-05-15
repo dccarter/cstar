@@ -1,10 +1,32 @@
 import { println } from "stdlib/io.cxy"
 import {Vector} from "stdlib/vector.cxy"
 
+struct Inner {
+    func `delete`() {
+        println("deleting inner");
+    }
+}
+
+struct Number {
+    - id: i32
+    - inner: &Inner
+    func `new`(x: i32) {
+        id = x
+        inner = new auto Inner{};
+    }
+
+    func `str`() => ""
+
+    func `delete`() {
+        println(f"deleting number ${id}")
+        inner = null
+    }
+}
+
 func main(args: [string]) {
-    var vec = new Vector[&i64]();
-    for (const i: 0..100000) {
-        vec.push(new i64(i));
+    var vec = new Vector[&Number]();
+    for (const i: 0..5) {
+        vec.push(new Number(<i32>i));
     }
 
     for (const i : vec) {

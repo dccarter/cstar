@@ -10,6 +10,8 @@
 void generateVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    if (!hasFlag(node, ImmediatelyReturned) && typeIs(node->type, Pointer))
+        format(ctx->state, "__builtin_cxy_stack_cleanup ", NULL);
 
     if (node->flags & flgNative)
         format(ctx->state, "extern ", NULL);
@@ -26,7 +28,15 @@ void generateVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
 
     if (node->varDecl.init) {
         format(ctx->state, " = ", NULL);
-        astConstVisit(visitor, node->varDecl.init);
+        if (typeIs(node->varDecl.init->type, Pointer) &&
+            !nodeIs(node->varDecl.init, NewExpr) &&
+            !(nodeIs(node->varDecl.init, StmtExpr))) {
+            format(ctx->state, "__builtin_cxy_get_ref(", NULL);
+            astConstVisit(visitor, node->varDecl.init);
+            format(ctx->state, ")", NULL);
+        }
+        else
+            astConstVisit(visitor, node->varDecl.init);
     }
     format(ctx->state, ";", NULL);
 }

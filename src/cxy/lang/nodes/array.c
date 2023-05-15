@@ -35,22 +35,31 @@ static void generateArrayDelete(CodegenContext *context, const Type *type)
         if ((typeIs(element, Pointer) && isBuiltinType(raw)) ||
             typeIs(element, String)) {
             if (isSliceType(type))
-                format(state, "cxy_free((void *)this->data[i]);", NULL);
+                format(state,
+                       "if (this->data[i]) cxy_free((void *)this->data[i]);",
+                       NULL);
             else
-                format(state, "cxy_free((void *)this[i]);", NULL);
+                format(state, "if (this[i]) cxy_free((void *)this[i]);", NULL);
         }
         else {
-            writeTypename(context, raw);
-            if (isSliceType(type))
-                format(
-                    state,
-                    "__op_delete({s}this->data[i]);",
-                    (FormatArg[]){{.s = !typeIs(element, Pointer) ? "&" : ""}});
-            else
-                format(
-                    state,
-                    "__op_delete({s}this[i]);",
-                    (FormatArg[]){{.s = !typeIs(element, Pointer) ? "&" : ""}});
+            if (isSliceType(type)) {
+                if (typeIs(element, Pointer))
+                    format(state,
+                           "if (this->data[i]) cxy_free(this->data[i]);",
+                           NULL);
+                else {
+                    writeTypename(context, raw);
+                    format(state, "__op_delete(&this->data[i]);", NULL);
+                }
+            }
+            else {
+                if (typeIs(element, Pointer))
+                    format(state, "if (this[i]) cxy_free(this[i]);", NULL);
+                else {
+                    writeTypename(context, raw);
+                    format(state, "__op_delete(&this[i]);", NULL);
+                }
+            }
         }
         format(state, "{<}\n};\n", NULL);
     }

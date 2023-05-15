@@ -28,10 +28,6 @@ void compileCSourceFile(CompilerDriver *driver, const char *sourceFile)
                          {.s = driver->options.output ?: "app"},
                          {.s = options->buildDir}});
 
-    format(&state,
-           " {s}/tgc.c",
-           (FormatArg[]){{.s = options->libDir ?: "stdlib"}});
-
     if (options->rest) {
         format(&state, " {s}", (FormatArg[]){{.s = options->rest}});
     }

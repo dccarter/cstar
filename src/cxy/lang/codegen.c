@@ -15,7 +15,6 @@
 #include "core/alloc.h"
 #include "main.inc.h"
 #include "setup.inc.h"
-#include "tgc.inc.h"
 
 #define CXY_ANONYMOUS_FUNC "cxy_anonymous_func"
 #define CXY_ANONYMOUS_TUPLE "cxy_anonymous_tuple"
@@ -191,8 +190,6 @@ static void prologue(ConstAstVisitor *visitor, const AstNode *node)
                " */\n"
                "\n",
                NULL);
-        format(ctx->state, "#define CXY_GC_ENABLED\n", NULL);
-        append(ctx->state, CXY_TGC_CODE, CXY_TGC_CODE_SIZE);
         format(ctx->state, "\n\n", NULL);
         append(ctx->state, CXY_SETUP_CODE, CXY_SETUP_CODE_SIZE);
         format(ctx->state, "\n\n", NULL);

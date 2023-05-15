@@ -138,15 +138,6 @@ typedef u8 bool;
 #define ptr(X) ((uintptr_t)(X))
 #endif
 
-#ifdef CXY_GC_ENABLED
-#define cxy_default_alloc(size, dctor)                                         \
-    tgc_alloc_opt(&__cxy_builtins_gc, (size), 0, (dctor))
-#define cxy_default_realloc(ptr, size, dctor)                                  \
-    tgc_realloc(&__cxy_builtins_gc, (ptr), (size))
-#define cxy_default_dealloc(ptr) tgc_free(&__cxy_builtins_gc, (ptr))
-#define cxy_default_calloc(count, size, dctor)                                 \
-    tgc_calloc_opt(&__cxy_builtins_gc, (count), 0, (size), (dctor))
-#else
 enum {
     CXY_ALLOC_STATIC = 0b001,
     CXY_ALLOC_HEAP = 0b010,
@@ -163,7 +154,7 @@ typedef struct cxy_memory_hdr_t {
         };
         u64 hdr;
     };
-    void *dctor;
+    void (*dctor)(void *);
 } attr(packed) cxy_memory_hdr_t;
 
 #define CXY_MEMORY_HEADER_SIZE sizeof(cxy_memory_hdr_t)
@@ -198,6 +189,8 @@ static void *cxy_default_realloc(void *ptr, u64 size, void (*dctor)(void *))
     cxy_memory_hdr_t *hdr = CXY_MEMORY_HEADER(ptr);
     if (hdr->magic == CXY_MEMORY_MAGIC(HEAP)) {
         if (hdr->refs == 1) {
+            if (hdr->dctor)
+                hdr->dctor(ptr);
             hdr = realloc(hdr, size + CXY_MEMORY_HEADER_SIZE);
             return CXY_MEMORY_POINTER(hdr);
         }
@@ -209,12 +202,14 @@ static void *cxy_default_realloc(void *ptr, u64 size, void (*dctor)(void *))
     return cxy_default_alloc(size, dctor);
 }
 
-void cxy_default_dealloc(void *ctx)
+void cxy_default_dealloc(void *ptr)
 {
-    if (ctx) {
-        cxy_memory_hdr_t *hdr = CXY_MEMORY_HEADER(ctx);
-        if (hdr->magic == CXY_MEMORY_MAGIC(HEAP)) {
+    if (ptr) {
+        cxy_memory_hdr_t *hdr = CXY_MEMORY_HEADER(ptr);
+        if (hdr->magic == CXY_MEMORY_MAGIC(HEAP) && hdr->refs) {
             if (hdr->refs == 1) {
+                if (hdr->dctor)
+                    hdr->dctor(ptr);
                 memset(hdr, 0, sizeof(*hdr));
                 free(hdr);
             }
@@ -224,7 +219,15 @@ void cxy_default_dealloc(void *ctx)
     }
 }
 
-#endif
+attr(always_inline) void *cxy_default_get_ref(void *ptr)
+{
+    if (ptr) {
+        cxy_memory_hdr_t *hdr = CXY_MEMORY_HEADER(ptr);
+        if (hdr->magic == CXY_MEMORY_MAGIC(HEAP))
+            hdr->refs++;
+    }
+    return ptr;
+}
 
 #ifndef cxy_alloc
 #define cxy_alloc cxy_default_alloc
@@ -238,7 +241,7 @@ void cxy_default_dealloc(void *ctx)
 #endif
 
 #ifndef __builtin_dealloc
-#define __builtin_dealloc(P) cxy_default_dealloc((void *)(P))
+#define __builtin_dealloc(P) cxy_free((void *)(P))
 #endif
 
 #ifndef __builtin_realloc
@@ -246,17 +249,26 @@ void cxy_default_dealloc(void *ctx)
     cxy_realloc((P), (sizeof(T) * (n)), (dctor))
 #endif
 
+#ifndef __builtin_cxy_get_ref
+#define __builtin_cxy_get_ref cxy_default_get_ref
+#endif
+
 typedef struct __cxy_builtin_slice_t {
     void *data;
     u64 len;
 } __cxy_builtin_slice_t;
 
+void __builtin_dealloc_slice(void *ptr) { printf("deleting slice: %p\n", ptr); }
+
 void *__builtin_alloc_slice_(u64 count, u64 size, void (*dctor)(void *))
 {
+    // destructor should be responsible for deleting the individual elements
     __cxy_builtin_slice_t *slice =
         cxy_alloc(sizeof(__cxy_builtin_slice_t), dctor);
+
     slice->len = count;
     slice->data = cxy_default_alloc((count * size), nullptr);
+
     return slice;
 }
 
@@ -313,6 +325,19 @@ void *__builtin_realloc_slice_(void *ptr,
 #ifndef __builtin_sizeof
 #define __builtin_sizeof(X) sizeof(X)
 #endif
+
+attr(always_inline) void __builtin_cxy_stack_free(void *ptr)
+{
+    union {
+        void **stack;
+        void *ptr;
+    } either = {.ptr = ptr};
+    cxy_free(*either.stack);
+    *either.stack = NULL;
+}
+
+#define __builtin_cxy_stack_cleanup                                            \
+    __attribute__((cleanup(__builtin_cxy_stack_free)))
 
 static attr(noreturn)
     attr(format, printf, 1, 2) void cxyAbort(const char *fmt, ...)
