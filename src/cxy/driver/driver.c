@@ -351,7 +351,6 @@ AstNode *compileModule(CompilerDriver *driver,
 
 bool compileSource(const char *fileName, CompilerDriver *driver)
 {
-    const Options *options = &driver->options;
     AstNode *program = parseFile(driver, fileName);
 
     return compileProgram(driver, program, fileName);

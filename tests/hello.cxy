@@ -33,6 +33,9 @@ func main(args: [string]) {
     var map = new HashMap[string, i32]();
     var sb = StringBuilder();
     sb << Number(10) << "\n"
-       << "We got magic going"
+       << "We got magic going\n"
+       << *map
+       << "\n"
+       << *vec
     println(sb.toString())
 }

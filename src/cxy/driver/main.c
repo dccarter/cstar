@@ -9,7 +9,7 @@
 int main(int argc, char **argv)
 {
     FormatState state = newFormatState("    ", !isColorSupported(stderr));
-    CompilerDriver driver;
+    CompilerDriver driver = {0};
     Log log = newLog(&state);
     bool status = true;
 
@@ -18,7 +18,7 @@ int main(int argc, char **argv)
         goto exit;
     }
     initCompilerDriver(&driver, &log);
-    
+
     for (int i = 1; i < argc && status; ++i)
         status &= compileSource(argv[i], &driver);
 

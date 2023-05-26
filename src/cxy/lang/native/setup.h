@@ -444,8 +444,8 @@ static __cxy_builtins_string_t *__cxy_builtins_string_concat(
     return str;
 }
 
-#ifndef __cxy_builtins_string_builder_DEFAULT_CAPACITY
-#define __cxy_builtins_string_builder_DEFAULT_CAPACITY 32
+#ifndef __CXY_STRING_BUILDER_DEFAULT_CAPACITY
+#define __CXY_STRING_BUILDER_DEFAULT_CAPACITY 32
 #endif
 
 typedef struct {
@@ -472,8 +472,8 @@ void __cxy_builtins_string_builder_grow(__cxy_builtins_string_builder_t *sb,
 attr(always_inline) void __cxy_builtins_string_builder_init(
     __cxy_builtins_string_builder_t *sb)
 {
-    __cxy_builtins_string_builder_grow(
-        sb, __cxy_builtins_string_builder_DEFAULT_CAPACITY);
+    __cxy_builtins_string_builder_grow(sb,
+                                       __CXY_STRING_BUILDER_DEFAULT_CAPACITY);
 }
 
 static void __cxy_builtins_string_builder_delete_fwd(void *sb);
@@ -510,16 +510,21 @@ static void __cxy_builtins_string_builder_delete_fwd(void *sb)
 void __cxy_builtins_string_builder_append_cstr0(
     __cxy_builtins_string_builder_t *sb, const char *cstr, u64 len)
 {
-    __cxy_builtins_string_builder_grow(sb, len);
-    memmove(&sb->data[sb->size], cstr, len);
-    sb->size += len;
-    sb->data[sb->size] = '\0';
+    if (cstr) {
+        __cxy_builtins_string_builder_grow(sb, len);
+        memmove(&sb->data[sb->size], cstr, len);
+        sb->size += len;
+        sb->data[sb->size] = '\0';
+    }
+    else
+        __cxy_builtins_string_builder_append_cstr0(sb, "null", 4);
 }
 
 attr(always_inline) void __cxy_builtins_string_builder_append_cstr1(
     __cxy_builtins_string_builder_t *sb, const char *cstr)
 {
-    __cxy_builtins_string_builder_append_cstr0(sb, cstr, strlen(cstr));
+    __cxy_builtins_string_builder_append_cstr0(
+        sb, cstr, cstr ? strlen(cstr) : 0);
 }
 
 attr(always_inline) void __cxy_builtins_string_builder_append_int(

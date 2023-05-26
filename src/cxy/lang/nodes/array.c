@@ -68,7 +68,21 @@ static void buildStringFormatForIndex(CodegenContext *context,
     const Type *unwrapped = unwrapType(type, NULL);
     const Type *stripped = stripAll(type);
 
-    switch (unwrapped->tag) {
+    if (typeIs(unwrapped, Pointer)) {
+        format(state,
+               "if (this{s}[i] != NULL) {{{>}\n"
+               "__cxy_builtins_string_builder_append_cstr0(sb->sb, \"null\", "
+               "4);\nreturn;{<}\n}\n",
+               (FormatArg[]){{.s = target}});
+
+        format(state,
+               "__cxy_builtins_string_builder_append_char(sb->sb, "
+               "'&');\n",
+               NULL);
+        deref = pointerLevels(unwrapped);
+    }
+
+    switch (stripped->tag) {
     case typNull:
         format(state,
                "__cxy_builtins_string_builder_append_cstr0(sb->sb, "
@@ -131,14 +145,6 @@ static void buildStringFormatForIndex(CodegenContext *context,
         format(state,
                "__toString({cl}(&this{s}[i]), sb);\n",
                (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = target}});
-        break;
-    case typPointer:
-        format(state,
-               "__cxy_builtins_string_builder_append_char(sb->sb, "
-               "'&');\n",
-               NULL);
-        buildStringFormatForIndex(
-            context, stripped, target, pointerLevels(unwrapped));
         break;
     case typOpaque:
         format(state,

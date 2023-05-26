@@ -43,13 +43,15 @@ AstNode *makeTypeReferenceNode(SemanticsContext *ctx, const Type *type)
             builtinLoc(),
             &(AstNode){
                 .tag = astPath,
-                .path = {.elements = makeAstNode(
-                             ctx->pool,
-                             builtinLoc(),
-                             &(AstNode){.tag = astPathElem,
-                                        .pathElement = {
-                                            .name = type->tStruct.decl
-                                                        ->structDecl.name}})}});
+                .path = {
+                    .elements = makeAstNode(
+                        ctx->pool,
+                        builtinLoc(),
+                        &(AstNode){
+                            .tag = astPathElem,
+                            .pathElement = {
+                                .name = type->tStruct.decl->structDecl.name,
+                                .resolvesTo = type->tStruct.decl}})}});
     case typEnum:
 
     default:

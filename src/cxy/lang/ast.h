@@ -208,6 +208,8 @@ enum {
     flgBuiltinMember = BIT(32)
 };
 
+struct Scope;
+
 typedef struct AstNode AstNode;
 
 typedef struct AstNodeList {
@@ -383,8 +385,11 @@ struct AstNode {
         struct {
             const char *name;
             const char *alt;
-            const char *alt2;
-            struct AstNode *args;
+            union {
+                const char *alt2;
+                struct Scope *scope;
+            };
+            struct AstNode *args, *resolvesTo;
             u64 index;
         } pathElement;
 
@@ -395,8 +400,8 @@ struct AstNode {
 
         struct {
             Operator operatorOverload;
-            const char *name;
             u32 index;
+            const char *name;
             struct AstNode *params;
             struct AstNode *ret;
             struct AstNode *body;

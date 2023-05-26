@@ -287,6 +287,12 @@ void buildStringOperatorForMember(CodegenContext *context,
            (FormatArg[]){{.s = name}, {.u64 = strlen(name) + 2}});
     if (typeIs(unwrapped, Pointer)) {
         format(state,
+               "if (this->{s} != NULL) {{{>}\n"
+               "__cxy_builtins_string_builder_append_cstr0(sb->sb, \"null\", "
+               "4);\nreturn;{<}\n}\n",
+               (FormatArg[]){{.s = name}});
+
+        format(state,
                "__cxy_builtins_string_builder_append_char(sb->sb, "
                "'&');\n",
                NULL);

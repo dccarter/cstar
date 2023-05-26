@@ -41,12 +41,13 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     Scope *scope = NULL, *closure = ctx->closure;
 
-    AstNode *symbol =
-        findSymbolAndScope(ctx->env,
-                           ctx->L,
-                           node->pathElement.alt ?: node->pathElement.name,
-                           &node->loc,
-                           &scope);
+    AstNode *symbol = node->pathElement.resolvesTo
+                          ?: findSymbolAndScope(ctx->env,
+                                                ctx->L,
+                                                node->pathElement.alt
+                                                    ?: node->pathElement.name,
+                                                &node->loc,
+                                                &scope);
 
     u64 flags = flgNone;
     if (symbol == NULL) {
@@ -68,7 +69,7 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
         return ERROR_TYPE(ctx);
     }
 
-    if (scope->node && scope->node->tag == astStructDecl) {
+    if (scope && scope->node && scope->node->tag == astStructDecl) {
         if (nodeIs(symbol, StructField))
             node->flags = flgAddThis;
 
@@ -80,8 +81,9 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
     node->type = symbol->type;
     flags = (symbol->flags & (flgConst | flgTypeAst | flgImportAlias));
     if (hasFlag(symbol, TopLevelDecl)) {
+        const AstNode *module = symbol->parentScope->program.module;
         node->parentScope = symbol->parentScope;
-        if (symbol->parentScope->program.module->moduleDecl.name)
+        if (module && module->moduleDecl.name)
             flags |= flgAppendNS;
     }
 
