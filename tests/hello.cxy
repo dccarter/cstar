@@ -1,7 +1,11 @@
 import { println } from "stdlib/io.cxy"
-import {Vector} from "stdlib/vector.cxy"
+import { Vector } from "stdlib/vector.cxy"
+import { HashMap } from "stdlib/map.cxy"
+import { String } from "stdlib/str.cxy"
 
 struct Inner {
+    x: &i32
+
     func `delete`() {
         println("deleting inner");
     }
@@ -10,12 +14,11 @@ struct Inner {
 struct Number {
     - id: i32
     - inner: &Inner
+
     func `new`(x: i32) {
         id = x
-        inner = new auto Inner{};
+        inner = new auto Inner{x: &id};
     }
-
-    func `str`() => ""
 
     func `delete`() {
         println("deleting number");
@@ -27,4 +30,9 @@ func main(args: [string]) {
     for (const i: 0..5) {
         vec.push(new Number(<i32>i));
     }
+    var map = new HashMap[string, i32]();
+    var sb = StringBuilder();
+    sb << Number(10) << "\n"
+       << "We got magic going"
+    println(sb.toString())
 }

@@ -89,7 +89,7 @@ static bool checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
                                     ctx->pool,
                                     &lhs->loc,
                                     &(AstNode){
-                                        .tag = astPath,
+                                        .tag = astPathElem,
                                         .flags = lhs->flags,
                                         .pathElement = {
                                             .name = name,
@@ -101,9 +101,9 @@ static bool checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
             return false;
     }
 
-    if (typeIs(operand, Pointer) && !typeIs(right, Pointer)) {
-        node->binaryExpr.rhs = makeAddressOf(ctx, node->binaryExpr.rhs);
-    }
+    //    if (typeIs(operand, Pointer) && !typeIs(right, Pointer)) {
+    //        node->binaryExpr.rhs = makeAddressOf(ctx, node->binaryExpr.rhs);
+    //    }
 
     transformToMemberCallExpr(visitor,
                               node,

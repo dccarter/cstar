@@ -7,6 +7,8 @@
 
 #include <string.h>
 
+static Env *__builtins = NULL;
+
 static inline bool compareSymbols(const void *lhs, const void *rhs)
 {
     return !strcmp(((const Symbol *)lhs)->name, ((const Symbol *)rhs)->name);
@@ -206,6 +208,12 @@ AstNode *findSymbolAndScope(const Env *env,
         return findSymbolAndScope(env->up, L, name, loc, outScope);
     }
 
+    if (__builtins && __builtins != env) {
+        AstNode *node = findSymbolAndScope(__builtins, L, name, loc, outScope);
+        if (node)
+            return node;
+    }
+
     logError(L, loc, "undefined symbol '{s}'", (FormatArg[]){{.s = name}});
     suggestSimilarSymbol(env, L, name);
     return NULL;
@@ -229,6 +237,12 @@ SymbolRef *findSymbolRef(const Env *env,
 
     if (env->up) {
         return findSymbolRef(env->up, L, name, loc);
+    }
+
+    if (__builtins && env != __builtins) {
+        SymbolRef *ref = findSymbolRef(__builtins, L, name, loc);
+        if (ref)
+            return ref;
     }
 
     if (L) {
@@ -342,6 +356,7 @@ void pushScope(Env *env, AstNode *node)
     else
         env->scope = newScope(env->scope);
     env->scope->node = node;
+    env->scope->env = env;
 
     enumerateHashTable(
         &env->scope->symbols, NULL, freeSymbolRef, sizeof(Symbol));
@@ -369,10 +384,16 @@ void releaseScope(Env *env, Env *into)
 
 const Env *getUpperEnv(const Env *env)
 {
-    while (env && env->up)
-        env = env->up;
+    if (env->up == NULL)
+        return env;
 
-    return env;
+    const Env *it = env->up;
+    while (env && env->up && env != it) {
+        env = env->up;
+        if (it && it->up)
+            it = it->up->up;
+    }
+    return it != env ? env : NULL;
 }
 
 void popScope(Env *env)
@@ -385,6 +406,12 @@ void environmentInit(Env *env)
 {
     env->first = newScope(NULL);
     env->scope = NULL;
+}
+
+void setBuiltinEnvironment(Env *env)
+{
+    csAssert0(__builtins == NULL);
+    __builtins = env;
 }
 
 Env *makeEnvironment(MemPool *pool, Env *up)
@@ -407,3 +434,7 @@ void environmentFree(Env *env)
     if (env)
         freeScopes(env->first);
 }
+
+bool isBuiltinEnv(const Env *env) { return env == __builtins; }
+
+const Env *getBuiltinEnv(void) { return __builtins; }

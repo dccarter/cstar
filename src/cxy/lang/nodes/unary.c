@@ -90,14 +90,7 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
 void generateDeleteExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    const Type *type = node->unaryExpr.operand->type, *raw = stripPointer(type);
-    if (isBuiltinType(raw)) {
-        format(ctx->state, "cxy_free((void *)", NULL);
-    }
-    else {
-        writeTypename(ctx, raw);
-        format(ctx->state, "__op_delete(", NULL);
-    }
+    format(ctx->state, "cxy_free((void *)", NULL);
     astConstVisit(visitor, node->unaryExpr.operand);
     format(ctx->state, ")", NULL);
 }

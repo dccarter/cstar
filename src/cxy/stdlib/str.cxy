@@ -1,0 +1,94 @@
+module str
+
+pub struct String {
+    - s: string
+    - len: u64 = 0
+
+    func `new`(s: string = "") {
+        this.s = s
+        this.len = len!(s)
+    }
+
+    func `new`(s: string, size: u64) {
+        this.s = s
+        this.len = size
+    }
+
+    @inline
+    func `delete`() {
+        if (s != null)
+            __builtin_dealloc(s)
+        s = null
+    }
+
+    func compare(other: &const String) {
+        if (len != other.len)
+            return <i32>(len - other.len)
+
+        for (const i : 0..len) {
+            if (s.[i] != other.s.[i])
+                return <i32>s.[i] - <i32>other.s.[i]
+        }
+
+        return <i32>0
+    }
+
+    func clear() {
+        if (s != null)
+            __builtin_dealloc(s)
+        s = ""
+    }
+
+    func append(other: &const String) unsafe {
+        var newLen = len + other.len;
+        var str = <&i8>__builtin_alloc(#i8, newLen + 1, null);
+        memcpy(str, cstr!(s), len)
+        memcpy(ptroff!(str + len), cstr!(other.s), other.len);
+        *(ptroff!(str + newLen)) = <i8>'\0';
+
+        return String(s, newLen);
+    }
+
+    @inline
+    func `+`(other: &const String) {
+        var tmp = String(s, len);
+        tmp.append(other)
+        return tmp
+    }
+
+    @inline
+    func `==`(other: &const String) => compare(other) == 0
+
+    @inline
+    func `!=`(other: &const String) => compare(other) != 0
+
+    @inline
+    func `<`(other: &const String) => compare(other) < 0
+
+    @inline
+    func `>`(other: &const String) => compare(other) > 0
+
+    @inline
+    func `<=`(other: &const String) => compare(other) <= 0
+
+    @inline
+    func `>=`(other: &const String) => compare(other) >= 0
+
+    @inline
+    func `str`() => s
+
+    @inline
+    func toString(dst: StringBuilder) => dst.appendString(s)
+
+    @inline
+    func hash() => hashStringSize(hashInit(), s, len)
+
+    @inline
+    const func `[]`(idx: i32) => s[idx]
+
+    const func `..`(cb: func(c: wchar) -> void) {
+        var i = 0;
+        while (i < len)
+            cb(s.[i++])
+    }
+}

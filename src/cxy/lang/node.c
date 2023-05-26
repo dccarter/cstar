@@ -96,17 +96,17 @@ void transformToMemberCallExpr(AstVisitor *visitor,
             &target->loc,
             &(AstNode){
                 .tag = astPathElem,
-                .flags = args->flags,
+                .flags = (args->flags & ~flgAddThis),
                 .pathElement = {.name = member,
                                 .args = makeTypeReferenceNode(ctx, arg)}});
     }
     else {
-        funcMember =
-            makeAstNode(ctx->pool,
-                        &target->loc,
-                        &(AstNode){.tag = astPathElem,
-                                   .flags = args ? args->flags : flgNone,
-                                   .pathElement = {.name = member}});
+        funcMember = makeAstNode(
+            ctx->pool,
+            &target->loc,
+            &(AstNode){.tag = astPathElem,
+                       .flags = args ? (args->flags & ~flgAddThis) : flgNone,
+                       .pathElement = {.name = member}});
     }
 
     AstNode *path = makeAstNode(ctx->pool,

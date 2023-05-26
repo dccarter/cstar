@@ -147,14 +147,14 @@ enum {
 #define CXY_MEMORY_MAGIC(ALLOC) (0xbebebe00 | CXY_ALLOC_##ALLOC)
 
 typedef struct cxy_memory_hdr_t {
+    void (*dctor)(void *);
     union {
         struct {
-            u32 magic;
             u32 refs;
+            u32 magic;
         };
         u64 hdr;
     };
-    void (*dctor)(void *);
 } attr(packed) cxy_memory_hdr_t;
 
 #define CXY_MEMORY_HEADER_SIZE sizeof(cxy_memory_hdr_t)
@@ -293,7 +293,7 @@ void *__builtin_realloc_slice_(void *ptr,
 
 #ifndef __builtin_memset_slice
 #define __builtin_memset_slice(T, P, C)                                        \
-    memset((P).data, (C), (sizeof(((T)0)->data[0]) * (P).len))
+    memset((P)->data, (C), (sizeof(((T)0)->data[0]) * (P)->len))
 #endif
 
 #ifndef __builtin_assert

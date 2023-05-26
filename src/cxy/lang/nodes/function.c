@@ -257,7 +257,7 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         ctx->namespace = node->type->namespace;
 
     if (!isMember && hasFlag(node, Main)) {
-        format(ctx->state, "typedef ", NULL);
+        format(ctx->state, "typedef __", NULL);
         writeTypename(ctx, node->type->func.params[0]);
         format(ctx->state, " cxy_main_args_t;\n", NULL);
         if (isIntegerType(node->type->func.retType)) {
@@ -346,6 +346,8 @@ void generateFuncDeclaration(CodegenContext *context, const Type *type)
     FormatState *state = context->state;
     const AstNode *parent = type->func.decl->parentScope;
     u32 index = type->func.decl->funcDecl.index;
+    if (hasFlag(type->func.decl, BuiltinMember))
+        return;
 
     format(state, ";\n", NULL);
     generateTypeUsage(context, type->func.retType);

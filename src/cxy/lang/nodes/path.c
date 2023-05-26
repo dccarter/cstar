@@ -69,18 +69,20 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
     }
 
     if (scope->node && scope->node->tag == astStructDecl) {
-        node->flags = flgAddThis;
+        if (nodeIs(symbol, StructField))
+            node->flags = flgAddThis;
+
         if (scope != ctx->env->first &&
             nodeIs(ctx->env->first->node, StructDecl))
             node->flags |= flgAddSuper;
     }
 
     node->type = symbol->type;
-    flags =
-        (symbol->flags & (flgConst | flgAddThis | flgTypeAst | flgImportAlias));
-    if (hasFlag(symbol, TopLevelDecl) && isInSameEnv(scope, ctx->env->first)) {
+    flags = (symbol->flags & (flgConst | flgTypeAst | flgImportAlias));
+    if (hasFlag(symbol, TopLevelDecl)) {
         node->parentScope = symbol->parentScope;
-        flags |= flgAppendNS;
+        if (symbol->parentScope->program.module->moduleDecl.name)
+            flags |= flgAppendNS;
     }
 
     node->flags |= flags;
@@ -141,8 +143,10 @@ void generatePath(ConstAstVisitor *visitor, const AstNode *node)
         generateManyAstsWithDelim(
             visitor, "_", "_", "", node->path.elements->next);
     }
-    else if (node->type->tag == typFunc && node->type->func.decl->parentScope &&
-             node->type->func.decl->parentScope->tag == astStructDecl) {
+    else if (hasFlag(node, BuiltinMember) ||
+             (node->type->tag == typFunc &&
+              node->type->func.decl->parentScope &&
+              node->type->func.decl->parentScope->tag == astStructDecl)) {
         const Type *scope = node->type->func.decl->parentScope->type;
         const AstNode *func = node->type->func.decl;
         writeTypename(ctx, scope);

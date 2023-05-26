@@ -1,7 +1,5 @@
 module vector
 
-import "stdlib/utils.cxy"
-
 const DEFAULT_VECTOR_CAPACITY : u64 = 16;
 
 pub struct Vector[T] {
@@ -12,12 +10,12 @@ pub struct Vector[T] {
         var capacity = len!(data);
         if (len >= capacity) {
             capacity += (capacity / 2)
-            data = utils.reallocSlice[T](data, capacity)
+            data = reallocSlice[T](data, capacity)
         }
     }
 
     func `new`(initialSize: u64 = DEFAULT_VECTOR_CAPACITY) {
-        data = utils.allocSlice[T](initialSize)
+        data = allocSlice[T](initialSize)
     }
 
     func push(item: T) {
@@ -36,14 +34,14 @@ pub struct Vector[T] {
         const item = data.[0];
         var tmp = data;
         len -= 1
-        utils.memmove(data!(tmp),
+        memmove(data!(tmp),
                       ptroff!(data!(tmp) + 1),
                       sizeof!(item) * len)
         return item
     }
 
     func resize(newSize: u64) {
-        data = utils.reallocSlice[T](data, newSize)
+        data = reallocSlice[T](data, newSize)
         if (newSize < len)
             len = newSize
     }

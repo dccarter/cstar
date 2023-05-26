@@ -192,6 +192,7 @@ static void prologue(ConstAstVisitor *visitor, const AstNode *node)
                NULL);
         format(ctx->state, "\n\n", NULL);
         append(ctx->state, CXY_SETUP_CODE, CXY_SETUP_CODE_SIZE);
+        format(ctx->state, "#include <__builtins.cxy.c>\n", NULL);
         format(ctx->state, "\n\n", NULL);
     }
     else
@@ -415,7 +416,7 @@ cstring getNativeDeclarationAliasName(const AstNode *node)
 
     const AstNode *name = findAttributeArgument(alias, "name");
 
-    return (name && nodeIs(name, StringLit)) ? name->stringLiteral.value : NULL;
+    return (nodeIs(name, StringLit)) ? name->stringLiteral.value : NULL;
 }
 
 void generateCode(FormatState *state,

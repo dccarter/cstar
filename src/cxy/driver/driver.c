@@ -16,6 +16,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "builtins.cxy.h"
+
 #define BYTES_TO_GB(B) (((double)(B)) / 1000000000)
 #define BYTES_TO_MB(B) (((double)(B)) / 1000000)
 #define BYTES_TO_KB(B) (((double)(B)) / 1000)
@@ -77,6 +79,20 @@ static AstNode *parseFile(CompilerDriver *driver, const char *fileName)
 
     freeLexer(&lexer);
     free(fileData);
+
+    return program;
+}
+
+static AstNode *parseString(CompilerDriver *driver,
+                            cstring code,
+                            u64 codeSize,
+                            const char *fileName)
+{
+    Lexer lexer = newLexer(fileName ?: "builtins", code, codeSize, driver->L);
+    Parser parser = makeParser(&lexer, driver);
+    AstNode *program = parseProgram(&parser);
+
+    freeLexer(&lexer);
 
     return program;
 }
@@ -184,14 +200,81 @@ static void dumpGeneratedAst(CompilerDriver *driver, const AstNode *program)
     printf("\n");
 }
 
-void initCompilerDriver(CompilerDriver *compiler, Log *log)
+static bool compileProgram(CompilerDriver *driver,
+                           AstNode *program,
+                           const char *fileName)
 {
-    compiler->options = default_options;
+    const Options *options = &driver->options;
+
+    if (program == NULL)
+        return false;
+
+    if (options->cmd == cmdBuild ||
+        (!options->noTypeCheck && !hasErrors(driver))) {
+        semanticsCheck(program,
+                       driver->L,
+                       &driver->memPool,
+                       &driver->strPool,
+                       driver->typeTable,
+                       driver->builtins);
+    }
+
+    if (options->printAst && !hasErrors(driver)) {
+        dumpGeneratedAst(driver, program);
+        return true;
+    }
+
+    if (!hasErrors(driver)) {
+        generateSourceFiles(driver, program, fileName, false);
+    }
+
+    MemPoolStats stats;
+    getMemPoolStats(&driver->memPool, &stats);
+    printf("\tMemory usage: blocks: %zu, allocated: %f kb, used: %f kb\n",
+           stats.numberOfBlocks,
+           BYTES_TO_KB(stats.totalAllocated),
+           BYTES_TO_KB(stats.totalUsed));
+
+    return true;
+}
+
+static bool compileBuiltin(CompilerDriver *driver,
+                           cstring code,
+                           u64 size,
+                           const char *fileName)
+{
+    const Options *options = &driver->options;
+    AstNode *program = parseString(driver, code, size, fileName);
+    if (program == NULL)
+        return false;
+
+    if (!hasErrors(driver)) {
+        semanticsCheck(program,
+                       driver->L,
+                       &driver->memPool,
+                       &driver->strPool,
+                       driver->typeTable,
+                       NULL);
+    }
+
+    if (!hasErrors(driver)) {
+        setBuiltinEnvironment(program->program.module->moduleDecl.env);
+        generateSourceFiles(driver, program, fileName, true);
+    }
+
+    return true;
+}
+
+bool initCompilerDriver(CompilerDriver *compiler, Log *log)
+{
     compiler->memPool = newMemPool();
     compiler->strPool = newStrPool(&compiler->memPool);
     compiler->typeTable = newTypeTable(&compiler->memPool, &compiler->strPool);
     compiler->moduleCache = newHashTable(sizeof(CachedModule));
     compiler->L = log;
+
+    return compileBuiltin(
+        compiler, CXY_BUILTINS_CODE, CXY_BUILTINS_CODE_SIZE, "__builtins.cxy");
 }
 
 AstNode *compileModule(CompilerDriver *driver,
@@ -233,7 +316,8 @@ AstNode *compileModule(CompilerDriver *driver,
                            driver->L,
                            &driver->memPool,
                            &driver->strPool,
-                           driver->typeTable);
+                           driver->typeTable,
+                           driver->builtins);
         }
 
         if (hasErrors(driver))
@@ -270,33 +354,14 @@ bool compileSource(const char *fileName, CompilerDriver *driver)
     const Options *options = &driver->options;
     AstNode *program = parseFile(driver, fileName);
 
-    if (program == NULL)
-        return false;
+    return compileProgram(driver, program, fileName);
+}
 
-    if (options->cmd == cmdBuild ||
-        (!options->noTypeCheck && !hasErrors(driver))) {
-        semanticsCheck(program,
-                       driver->L,
-                       &driver->memPool,
-                       &driver->strPool,
-                       driver->typeTable);
-    }
-
-    if (options->printAst && !hasErrors(driver)) {
-        dumpGeneratedAst(driver, program);
-        return true;
-    }
-
-    if (!hasErrors(driver)) {
-        generateSourceFiles(driver, program, fileName, false);
-    }
-
-    MemPoolStats stats;
-    getMemPoolStats(&driver->memPool, &stats);
-    printf("\tMemory usage: blocks: %zu, allocated: %f kb, used: %f kb\n",
-           stats.numberOfBlocks,
-           BYTES_TO_KB(stats.totalAllocated),
-           BYTES_TO_KB(stats.totalUsed));
-
-    return true;
+bool compileSourceString(CompilerDriver *driver,
+                         cstring source,
+                         u64 size,
+                         cstring filename)
+{
+    AstNode *program = parseString(driver, source, size, filename);
+    return compileProgram(driver, program, filename);
 }

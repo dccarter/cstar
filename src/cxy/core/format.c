@@ -59,6 +59,15 @@ static void writeStr(FormatState *state, const char *s)
     write(state, s, strlen(s));
 }
 
+static void printUtf8ManyTimes(FormatState *state,
+                               uint32_t chr,
+                               bool escaped,
+                               u64 times)
+{
+    for (u64 i = 0; i < times; i++)
+        printUtf8(state, chr, escaped);
+}
+
 static const char *formatArg(FormatState *state,
                              const char *ptr,
                              size_t *index,
@@ -140,10 +149,21 @@ static const char *formatArg(FormatState *state,
     case 'c':
         if (*ptr == 'E') {
             ptr++;
-            printUtf8(state, arg->c, true);
+            if (*ptr == 'l') {
+                ptr++;
+                printUtf8ManyTimes(state, arg->c, true, args[(*index)++].len);
+            }
+            else
+                printUtf8(state, arg->c, true);
         }
-        else
-            printUtf8(state, arg->c, false);
+        else {
+            if (*ptr == 'l') {
+                ptr++;
+                printUtf8ManyTimes(state, arg->c, false, args[(*index)++].len);
+            }
+            else
+                printUtf8(state, arg->c, false);
+        }
         break;
     case 's':
         if (*ptr == 'l') {

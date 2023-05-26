@@ -59,6 +59,150 @@ static void generateArrayDelete(CodegenContext *context, const Type *type)
     format(state, "{<}\n}", NULL);
 }
 
+static void buildStringFormatForIndex(CodegenContext *context,
+                                      const Type *type,
+                                      cstring target,
+                                      u64 deref)
+{
+    FormatState *state = context->state;
+    const Type *unwrapped = unwrapType(type, NULL);
+    const Type *stripped = stripAll(type);
+
+    switch (unwrapped->tag) {
+    case typNull:
+        format(state,
+               "__cxy_builtins_string_builder_append_cstr0(sb->sb, "
+               "\"null\", 4);\n",
+               NULL);
+        break;
+    case typPrimitive:
+        switch (stripped->primitive.id) {
+        case prtBool:
+            format(state,
+                   "__cxy_builtins_string_builder_append_bool(sb->sb, "
+                   "{cl}this{s}[i]);\n",
+                   (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = target}});
+            break;
+        case prtChar:
+            format(state,
+                   "__cxy_builtins_string_builder_append_char(sb->sb, "
+                   "{cl}this{s}[i]);\n",
+                   (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = target}});
+            break;
+#define f(I, ...) case prt##I:
+            INTEGER_TYPE_LIST(f)
+            format(state,
+                   "__cxy_builtins_string_builder_append_int(sb->sb, "
+                   "(i64)({cl}this{s}[i]));\n",
+                   (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = target}});
+            break;
+#undef f
+#define f(I, ...) case prt##I:
+            FLOAT_TYPE_LIST(f)
+            format(state,
+                   "__cxy_builtins_string_builder_append_float(sb->sb, "
+                   "(f64)({cl}this{s}[i]));\n",
+                   (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = target}});
+            break;
+#undef f
+        default:
+            unreachable("UNREACHABLE");
+        }
+        break;
+
+    case typString:
+        format(state,
+               "__cxy_builtins_string_builder_append_cstr1(sb->sb, "
+               "{cl}this{s}[i]);\n",
+               (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = target}});
+        break;
+    case typEnum:
+        format(
+            state, "__cxy_builtins_string_builder_append_cstr1(sb->sb, ", NULL);
+        writeEnumPrefix(context, type);
+        format(state,
+               "__get_name({cl}this{s}[i]));\n",
+               (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = target}});
+        break;
+    case typArray:
+    case typStruct:
+    case typTuple:
+        writeTypename(context, stripped);
+        format(state,
+               "__toString({cl}(&this{s}[i]), sb);\n",
+               (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = target}});
+        break;
+    case typPointer:
+        format(state,
+               "__cxy_builtins_string_builder_append_char(sb->sb, "
+               "'&');\n",
+               NULL);
+        buildStringFormatForIndex(
+            context, stripped, target, pointerLevels(unwrapped));
+        break;
+    case typOpaque:
+        format(state,
+               "__cxy_builtins_string_builder_append_cstr1(sb->sb, "
+               "\"<opaque:",
+               NULL);
+        writeTypename(context, type);
+        format(state, ">\");\n", NULL);
+        break;
+    case typVoid:
+        format(state,
+               "__cxy_builtins_string_builder_append_cstr0(sb->sb, "
+               "\"void\", 4);\n",
+               NULL);
+        break;
+    case typFunc:
+        format(state,
+               "__cxy_builtins_string_builder_append_cstr0(sb->sb, "
+               "\"<func>\", 4);\n",
+               NULL);
+        break;
+    default:
+        unreachable("UNREACHABLE");
+    }
+}
+
+static void generateArrayToString(CodegenContext *context, const Type *type)
+{
+    FormatState *state = context->state;
+    format(state, "static void ", NULL);
+    writeTypename(context, type);
+    format(state, "__toString(", NULL);
+    writeTypename(context, type);
+    if (isSliceType(type))
+        format(state, " this, StringBuilder* sb) {{{>}\n", NULL);
+    else
+        format(state, " *this, StringBuilder* sb) {{{>}\n", NULL);
+
+    format(
+        state, "__cxy_builtins_string_builder_append_char(sb->sb, '[');", NULL);
+
+    format(state, "for (u64 i = 0; i < ", NULL);
+    if (isSliceType(type))
+        format(state, "this->len", NULL);
+    else
+        format(state, "{u64}", (FormatArg[]){{.u64 = type->array.len}});
+    format(state, "; i++) {{{>}\n", NULL);
+
+    format(state,
+           "if (i) __cxy_builtins_string_builder_append_cstr0(sb->sb, \", \", "
+           "2);\n",
+           NULL);
+    if (isSliceType(type))
+        buildStringFormatForIndex(
+            context, type->array.elementType, "->data", 0);
+    else
+        buildStringFormatForIndex(context, type->array.elementType, "", 0);
+
+    format(
+        state, "__cxy_builtins_string_builder_append_char(sb->sb, ']');", NULL);
+
+    format(state, "{<}\n}{<}\n}", NULL);
+}
+
 void generateForStmtArray(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -133,7 +277,11 @@ void generateArrayDeclaration(CodegenContext *context, const Type *type)
         format(state, " {{{>}\n", NULL);
         format(state, "u64 len;\n", NULL);
         generateTypeUsage(context, type->array.elementType);
-        format(state, " *data;{<}\n} *", NULL);
+        format(state, " *data;{<}\n} __", NULL);
+        writeTypename(context, type);
+        format(state, ";\ntypedef __", NULL);
+        writeTypename(context, type);
+        format(state, " *", NULL);
         writeTypename(context, type);
     }
     else {
@@ -146,6 +294,8 @@ void generateArrayDeclaration(CodegenContext *context, const Type *type)
 
     format(state, ";\n", NULL);
     generateArrayDelete(context, type);
+    format(state, "\n", NULL);
+    generateArrayToString(context, type);
 }
 
 void checkArrayType(AstVisitor *visitor, AstNode *node)

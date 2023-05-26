@@ -978,6 +978,8 @@ bool isAssignableExpr(attr(unused) const AstNode *node)
 
 bool isLiteralExpr(const AstNode *node)
 {
+    if (node == NULL)
+        return false;
     switch (node->tag) {
     case astStringLit:
     case astIntegerLit:

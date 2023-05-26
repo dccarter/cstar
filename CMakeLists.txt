@@ -112,18 +112,20 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR}/generated)
 
 add_custom_target(
         cxy-code ALL
-        COMMAND ./escape ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/setup.h generated/setup.inc.h CXY_SETUP
-        COMMAND ./escape ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/main.c.h generated/main.inc.h CXY_MAIN
-        DEPENDS ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/setup.h
-                ${CMAKE_SOURCE_DIR}/src/cxy/lang/native/main.c.h
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMAND escape src/cxy/lang/native/setup.h ${CMAKE_CURRENT_BINARY_DIR}/generated/setup.inc.h CXY_SETUP
+        COMMAND escape src/cxy/lang/native/main.c.h ${CMAKE_CURRENT_BINARY_DIR}/generated/main.inc.h CXY_MAIN
+        COMMAND escape src/cxy/lang/builtins.cxy ${CMAKE_CURRENT_BINARY_DIR}/generated/builtins.cxy.h CXY_BUILTINS
+        DEPENDS src/cxy/lang/native/setup.h
+                src/cxy/lang/native/main.c.h
+                src/cxy/lang/builtins.cxy
                 escape
 )
 
 set(CXY_STD_LIB_SOURCES
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/io.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/map.cxy
-        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/strlib.cxy
-        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/utils.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/str.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/vector.cxy)
 
 add_custom_target(

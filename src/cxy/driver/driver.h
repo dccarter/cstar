@@ -13,11 +13,16 @@ typedef struct CompilerDriver {
     HashTable moduleCache;
     Log *L;
     TypeTable *typeTable;
+    Env *builtins;
 } CompilerDriver;
 
 void makeDirectoryForPath(CompilerDriver *driver, cstring path);
-void initCompilerDriver(CompilerDriver *compiler, Log *log);
+bool initCompilerDriver(CompilerDriver *compiler, Log *log);
 bool compileSource(const char *fileName, CompilerDriver *driver);
+bool compileSourceString(CompilerDriver *driver,
+                         cstring source,
+                         u64 size,
+                         cstring filename);
 AstNode *compileModule(CompilerDriver *driver,
                        const AstNode *source,
                        const AstNode *entities);

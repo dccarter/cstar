@@ -265,7 +265,7 @@ const Type *checkBuiltinTypeProperty(SemanticsContext *ctx,
             logError(
                 ctx->L,
                 &target->loc,
-                "target type '{t}' does not support builtin `#len` property",
+                "target type '{t}' does not support native `#len` property",
                 (FormatArg[]){{.t = target->type}});
         }
         return getPrimitiveType(ctx->typeTable, prtU64);
@@ -273,7 +273,7 @@ const Type *checkBuiltinTypeProperty(SemanticsContext *ctx,
     else {
         logError(ctx->L,
                  &target->loc,
-                 "unknown type builtin property `{s}`",
+                 "unknown type native property `{s}`",
                  (FormatArg[]){{.s = name}});
         return ERROR_TYPE(ctx);
     }

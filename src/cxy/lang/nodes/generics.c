@@ -162,7 +162,8 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     const Env *upper = getUpperEnv(generic->genericDecl.env);
     __typeof(ctx->stack) saveStack = ctx->stack;
     ctx->env = generic->genericDecl.env;
-    ((Env *)upper)->up = saveEnv;
+    if (upper)
+        ((Env *)upper)->up = saveEnv;
     bool isMember = nodeIs(target->generic.decl, FuncDecl) &&
                     nodeIs(target->generic.decl->parentScope, StructDecl);
 
@@ -192,7 +193,8 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     ctx->env->scope->next = NULL;
     ctx->env = saveEnv;
 
-    ((Env *)upper)->up = NULL;
+    if (upper)
+        ((Env *)upper)->up = NULL;
 
     ctx->typeTable->currentNamespace = namespace;
 

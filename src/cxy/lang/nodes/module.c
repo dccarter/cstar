@@ -101,10 +101,10 @@ void finalizeModule(AstVisitor *visitor, AstNode *node, cstring namespace)
         AstNode *module = node->program.module;
         module->type = makeModuleType(ctx->typeTable,
                                       node->program.module->moduleDecl.name);
-        module->moduleDecl.env = mallocOrDie(sizeof(Env));
         module->moduleDecl.env = ctx->exports;
         ctx->exports = NULL;
     }
+
     ctx->typeTable->currentNamespace = namespace;
 }
 
@@ -113,7 +113,14 @@ void initializeModule(AstVisitor *visitor, AstNode *node)
     SemanticsContext *ctx = getAstVisitorContext(visitor);
 
     ctx->typeTable->currentNamespace = NULL;
-    if (node->program.module)
+    if (node->program.module) {
         ctx->typeTable->currentNamespace =
             node->program.module->moduleDecl.name;
+    }
+    else if (ctx->isBuiltins) {
+        node->program.module = makeAstNode(
+            ctx->pool,
+            builtinLoc(),
+            &(AstNode){.tag = astModuleDecl, .moduleDecl = {.name = NULL}});
+    }
 }

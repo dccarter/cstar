@@ -24,7 +24,8 @@ typedef struct SemanticsContext {
     HashTable builtinMacros;
     Env *env;
     Env *exports;
-
+    bool isBuiltins;
+    
     struct {
         Env env;
         AstVisitor *visitor;
@@ -58,7 +59,8 @@ void semanticsCheck(AstNode *program,
                     Log *L,
                     MemPool *pool,
                     StrPool *strPool,
-                    TypeTable *typeTable);
+                    TypeTable *typeTable,
+                    Env *builtins);
 
 const Type *evalType(AstVisitor *visitor, AstNode *node);
 void addModuleExport(SemanticsContext *ctx, AstNode *node, cstring name);

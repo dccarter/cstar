@@ -321,6 +321,17 @@ const Type *stripAll(const Type *type)
     }
 }
 
+u64 pointerLevels(const Type *type)
+{
+    u64 levels = 0;
+    while (typeIs(type, Pointer)) {
+        type = type->pointer.pointed;
+        levels++;
+    }
+
+    return levels;
+}
+
 const Type *arrayToPointer(TypeTable *table, const Type *type)
 {
     if (type->tag != typArray)

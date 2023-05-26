@@ -11,7 +11,9 @@
 #include "core/args.h"
 #include "core/format.h"
 
+#include <errno.h>
 #include <stdlib.h>
+#include <string.h>
 
 int main(int argc, char *argv[])
 {
@@ -21,13 +23,19 @@ int main(int argc, char *argv[])
 
     char *data = readFile(argv[1], &bytes);
     if (data == NULL) {
-        perror("reading file failed");
+        fprintf(stderr,
+                "reading file '%s' failed - %s\n",
+                argv[1],
+                strerror(errno));
         return EXIT_FAILURE;
     }
 
     FILE *output = fopen(argv[2], "w");
     if (output == NULL) {
-        perror("opening output file failed");
+        fprintf(stdout,
+                "opening output file '%s' failed - %s\n",
+                argv[2],
+                strerror(errno));
         free(data);
         return EXIT_FAILURE;
     }

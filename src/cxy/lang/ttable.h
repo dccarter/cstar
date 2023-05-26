@@ -35,6 +35,7 @@ void freeTypeTable(TypeTable *table);
 const Type *resolveType(const Type *type);
 const Type *stripPointer(const Type *type);
 const Type *stripAll(const Type *type);
+u64 pointerLevels(const Type *type);
 const Type *arrayToPointer(TypeTable *table, const Type *type);
 const Type *getPrimitiveType(TypeTable *table, PrtId id);
 const Type *getAnySliceType(TypeTable *table);

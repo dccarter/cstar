@@ -50,7 +50,7 @@ static AstNode *makeFilenameNode(AstVisitor *visitor,
         &(AstNode){.tag = astStringLit,
                    .type = makeStringType(ctx->typeTable),
                    .stringLiteral.value =
-                       visitor->current->loc.fileName ?: "<builtin>"});
+                       visitor->current->loc.fileName ?: "<native>"});
 }
 
 static AstNode *makeLineNumberNode(AstVisitor *visitor,
@@ -232,11 +232,10 @@ static AstNode *makeLenNode(AstVisitor *visitor,
         break;
     }
 
-    logError(
-        ctx->L,
-        &args->loc,
-        "macro builtin 'len!' cannot be used with expression of type '{t}'",
-        (FormatArg[]){{.t = type}});
+    logError(ctx->L,
+             &args->loc,
+             "macro native 'len!' cannot be used with expression of type '{t}'",
+             (FormatArg[]){{.t = type}});
     return NULL;
 }
 
@@ -278,7 +277,7 @@ static AstNode *makeDataNode(AstVisitor *visitor,
 
     logError(ctx->L,
              &args->loc,
-             "macro builtin 'data!' cannot be used with expression of type "
+             "macro native 'data!' cannot be used with expression of type "
              "'{t}'",
              (FormatArg[]){{.t = type}});
     return NULL;
@@ -514,7 +513,7 @@ void checkMacroExpr(AstVisitor *visitor, AstNode *node)
     if (macro == NULL) {
         logError(ctx->L,
                  &node->macroCallExpr.callee->loc,
-                 "currently only builtin macros are supported",
+                 "currently only native macros are supported",
                  NULL);
         node->type = ERROR_TYPE(ctx);
         return;

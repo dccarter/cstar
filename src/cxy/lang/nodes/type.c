@@ -69,7 +69,7 @@ void checkBuiltinType(AstVisitor *visitor, AstNode *node)
         node->type = makeStringType(ctx->typeTable);
         break;
     default:
-        logError(ctx->L, &node->loc, "unsupported builtin type", NULL);
+        logError(ctx->L, &node->loc, "unsupported native type", NULL);
         node->type = ERROR_TYPE(ctx);
         break;
     }

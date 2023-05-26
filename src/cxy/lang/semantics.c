@@ -179,6 +179,8 @@ AstNode *findSymbolByPath(SemanticsContext *ctx,
         case typEnum:
             env = type->tEnum.env;
             break;
+        case typThis:
+            type = type->this.that;
         case typStruct:
             env = type->tStruct.env;
             break;
@@ -216,6 +218,8 @@ static SymbolRef *findSymbolRefByPath(SemanticsContext *ctx,
         case typEnum:
             env = type->tEnum.env;
             break;
+        case typThis:
+            type = type->this.that;
         case typStruct:
             env = type->tStruct.env;
             break;
@@ -250,6 +254,8 @@ static SymbolRef *findSymbolRefMemberExpr(SemanticsContext *ctx,
     case typEnum:
         env = type->tEnum.env;
         break;
+    case typThis:
+        type = type->this.that;
     case typStruct:
         env = type->tStruct.env;
         break;
@@ -462,7 +468,8 @@ void semanticsCheck(AstNode *program,
                     Log *L,
                     MemPool *pool,
                     StrPool *strPool,
-                    TypeTable *typeTable)
+                    TypeTable *typeTable,
+                    Env *builtins)
 {
     SemanticsContext context = {.L = L,
                                 .typeTable = typeTable,
@@ -470,11 +477,12 @@ void semanticsCheck(AstNode *program,
                                 .strPool = strPool,
                                 .program = program,
                                 .env = NULL,
-                                .exports = NULL};
+                                .exports = NULL,
+                                .isBuiltins = builtins == NULL};
 
     context.env = makeEnvironment(pool, NULL);
-
-    if (program->program.module) {
+    
+    if (context.isBuiltins || program->program.module) {
         context.exports = makeEnvironment(pool, NULL);
         pushScope(context.exports, program->program.module);
     }

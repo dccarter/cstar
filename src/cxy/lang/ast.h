@@ -204,7 +204,8 @@ enum {
     flgImplementsDelete = BIT(28),
     flgImmediatelyReturned = BIT(29),
     flgUnsafe = BIT(30),
-    flgFunctionPtr = BIT(31)
+    flgFunctionPtr = BIT(31),
+    flgBuiltinMember = BIT(32)
 };
 
 typedef struct AstNode AstNode;

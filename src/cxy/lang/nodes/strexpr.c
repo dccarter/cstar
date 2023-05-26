@@ -113,79 +113,6 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, ");\n", NULL);
         break;
 
-    case typTuple:
-        format(ctx->state,
-               "__cxy_builtins_string_builder_append_char(&sb, '(');\n",
-               NULL);
-        for (u64 i = 0; i < type->tuple.count; i++) {
-            // Create a temporary member access expression
-            AstNode member = {.tag = astIntegerLit,
-                              .type = getPrimitiveType(ctx->types, prtI32),
-                              .intLiteral.value = i};
-            AstNode arg = {
-                .tag = astMemberExpr,
-                .type = type->tuple.members[i],
-                .memberExpr = {.target = (AstNode *)node, .member = &member}};
-
-            if (i != 0)
-                format(ctx->state,
-                       "__cxy_builtins_string_builder_append_cstr0(&sb, \", "
-                       "\", 2);\n",
-                       NULL);
-
-            stringBuilderAppend(visitor, &arg);
-        }
-        format(ctx->state,
-               "__cxy_builtins_string_builder_append_char(&sb, ')');\n",
-               NULL);
-        break;
-
-    case typArray:
-        format(ctx->state,
-               "__cxy_builtins_string_builder_append_char(&sb, '[');\n",
-               NULL);
-        format(ctx->state, "for (u64 __cxy_i = 0; __cxy_i < ", NULL);
-        if (type->array.len == UINT64_MAX) {
-            astConstVisit(visitor, node);
-            format(ctx->state, "->len", NULL);
-        }
-        else {
-            format(ctx->state, "sizeof__(", NULL);
-            writeTypename(ctx, type);
-            format(ctx->state, ")", NULL);
-        }
-
-        format(ctx->state, "; __cxy_i++) {{{>}\n", NULL);
-        format(ctx->state,
-               "if (__cxy_i) __cxy_builtins_string_builder_append_cstr0(&sb, "
-               "\", \", 2);\n",
-               NULL);
-        {
-            AstNode index = {.tag = astIdentifier,
-                             .type = getPrimitiveType(ctx->types, prtI32),
-                             .ident.value = "__cxy_i"};
-            AstNode arg = {
-                .tag = astIndexExpr,
-                .type = type->array.elementType,
-                .indexExpr = {.target = (AstNode *)node, .index = &index}};
-
-            stringBuilderAppend(visitor, &arg);
-        }
-        format(ctx->state, "{<}\n}\n", NULL);
-        format(ctx->state,
-               "__cxy_builtins_string_builder_append_char(&sb, ']');\n",
-               NULL);
-        break;
-
-    case typPointer: {
-        AstNode arg = {.tag = astUnaryExpr,
-                       .type = type->pointer.pointed,
-                       .unaryExpr = {.operand = (AstNode *)node,
-                                     .op = opDeref,
-                                     .isPrefix = true}};
-        stringBuilderAppend(visitor, &arg);
-        break;
-    }
     case typEnum:
         format(ctx->state,
                "__cxy_builtins_string_builder_append_cstr1(&sb, ",
@@ -196,14 +123,18 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, "));\n", NULL);
         break;
 
+    case typTuple:
+    case typArray:
     case typStruct:
-        format(ctx->state,
-               "__cxy_builtins_string_builder_append_cstr1(&sb, ",
-               NULL);
         writeTypename(ctx, type);
-        format(ctx->state, "__op_str(&", NULL);
+        format(ctx->state,
+               "__toString({s}",
+               (FormatArg[]){{.s = (typeIs(type, Pointer) || isSliceType(type))
+                                       ? ""
+                                       : "&"}});
         astConstVisit(visitor, node);
-        format(ctx->state, "));\n", NULL);
+        format(ctx->state, ", &(StringBuilder){{.sb = &sb}", NULL);
+        format(ctx->state, ");\n", NULL);
         break;
     default:
         break;
@@ -214,6 +145,7 @@ void checkStringExpr(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *part = node->stringExpr.parts;
+
     for (; part; part = part->next) {
         part->type = evalType(visitor, part);
         if (part->type == makeErrorType(ctx->typeTable)) {
@@ -222,7 +154,15 @@ void checkStringExpr(AstVisitor *visitor, AstNode *node)
         }
     }
 
-    node->type = makeStringType(ctx->typeTable);
+    part = node->stringExpr.parts;
+    if (nodeIs(part, StringLit) && part->next == NULL) {
+        node->tag = astStringLit;
+        node->type = part->type;
+        memcpy(&node->_body, &part->_body, CXY_AST_NODE_BODY_SIZE);
+    }
+    else {
+        node->type = makeStringType(ctx->typeTable);
+    }
 }
 
 void generateStringExpr(ConstAstVisitor *visitor, const AstNode *node)

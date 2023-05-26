@@ -35,6 +35,8 @@ struct Env {
 
 void environmentInit(Env *env);
 
+void setBuiltinEnvironment(Env *env);
+
 Env *makeEnvironment(MemPool *pool, Env *up);
 
 static inline void environmentAttachUp(Env *env, const Env *up)
@@ -90,6 +92,8 @@ AstNode *findEnclosingBlock(Env *env, Log *L, const FileLoc *loc);
 void pushScope(Env *env, AstNode *node);
 void popScope(Env *env);
 const Env *getUpperEnv(const Env *);
+const Env *getBuiltinEnv(void);
+bool isBuiltinEnv(const Env *);
 
 static inline bool isRootScope(Scope *scope)
 {

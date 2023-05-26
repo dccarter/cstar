@@ -218,12 +218,17 @@ void checkNewExpr(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *type = NULL, *init = NULL;
-    node->flags |= flgNewAllocated;
+    u64 flags = flgNewAllocated;
 
-    if (node->newExpr.type)
+    if (node->newExpr.type) {
+        flags = node->newExpr.type->flags;
         type = evalType(visitor, node->newExpr.type);
+    }
 
     if (node->newExpr.init) {
+        if (flags == flgNone)
+            flags = node->newExpr.init->flags;
+        
         init = checkNewInitializerExpr(visitor, node);
         if (init == NULL) {
             logError(ctx->L,
@@ -247,9 +252,11 @@ void checkNewExpr(AstVisitor *visitor, AstNode *node)
             &node->loc,
             "new initializer value type '{t}' is not assignable to type '{t}'",
             (FormatArg[]){{.t = type}, {.t = init}});
+        node->type = ERROR_TYPE(ctx);
+        return;
     }
-    node->flags = (node->newExpr.type ? node->newExpr.type->flags
-                                      : node->newExpr.init->flags);
+
+    node->flags = flags;
     node->type =
         makePointerType(ctx->typeTable, type, type->flags | flgNewAllocated);
 }

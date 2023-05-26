@@ -246,7 +246,8 @@ void generateStructDelete(CodegenContext *context, const Type *type)
         const Type *unwrapped = unwrapType(field->type, NULL);
         const Type *stripped = stripAll(field->type);
 
-        if (typeIs(unwrapped, Pointer) || typeIs(unwrapped, String)) {
+        if (typeIs(unwrapped, Pointer) || typeIs(unwrapped, String) ||
+            isSliceType(unwrapped)) {
             if (y++ != 0)
                 format(state, "\n", NULL);
 
@@ -261,10 +262,182 @@ void generateStructDelete(CodegenContext *context, const Type *type)
 
             writeTypename(context, stripped);
             format(state,
-                   "__builtin_destructor(&this->{s});",
+                   "__builtin_destructor(this->{s});",
                    (FormatArg[]){{.s = field->name}});
         }
     }
+
+    format(state, "{<}\n}", NULL);
+}
+
+void buildStringOperatorForMember(CodegenContext *context,
+                                  const Type *type,
+                                  cstring name,
+                                  u64 deref)
+{
+    FormatState *state = context->state;
+    const Type *unwrapped = unwrapType(type, NULL);
+    const Type *stripped = stripAll(type);
+
+    deref += isSliceType(type);
+
+    format(state,
+           "__cxy_builtins_string_builder_append_cstr0(sb->sb, "
+           "\"{s}: \", {u64});\n",
+           (FormatArg[]){{.s = name}, {.u64 = strlen(name) + 2}});
+    if (typeIs(unwrapped, Pointer)) {
+        format(state,
+               "__cxy_builtins_string_builder_append_char(sb->sb, "
+               "'&');\n",
+               NULL);
+        deref = pointerLevels(unwrapped);
+    }
+
+    switch (stripped->tag) {
+    case typNull:
+        format(state,
+               "__cxy_builtins_string_builder_append_cstr0(sb->sb, "
+               "\"null\", 4);\n",
+               NULL);
+        break;
+    case typPrimitive:
+        switch (stripped->primitive.id) {
+        case prtBool:
+            format(state,
+                   "__cxy_builtins_string_builder_append_bool(sb->sb, "
+                   "{cl}this->{s});\n",
+                   (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = name}});
+            break;
+        case prtChar:
+            format(state,
+                   "__cxy_builtins_string_builder_append_char(sb->sb, "
+                   "{cl}this->{s});\n",
+                   (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = name}});
+            break;
+#define f(I, ...) case prt##I:
+            INTEGER_TYPE_LIST(f)
+            format(state,
+                   "__cxy_builtins_string_builder_append_int(sb->sb, "
+                   "(i64)({cl}this->{s}));\n",
+                   (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = name}});
+            break;
+#undef f
+#define f(I, ...) case prt##I:
+            FLOAT_TYPE_LIST(f)
+            format(state,
+                   "__cxy_builtins_string_builder_append_float(sb->sb, "
+                   "(f64)({cl}this->{s}));\n",
+                   (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = name}});
+            break;
+#undef f
+        default:
+            unreachable("UNREACHABLE");
+        }
+        break;
+
+    case typString:
+        format(state,
+               "__cxy_builtins_string_builder_append_cstr1(sb->sb, "
+               "{cl}this->{s});\n",
+               (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = name}});
+        break;
+    case typArray:
+    case typStruct:
+    case typTuple:
+        writeTypename(context, stripped);
+        format(state,
+               "__toString({cl}this->{s}, sb);\n",
+               (FormatArg[]){{.c = deref ? '*' : '&'},
+                             {.len = deref ? deref - 1 : 1},
+                             {.s = name}});
+        break;
+    case typOpaque:
+        format(state,
+               "__cxy_builtins_string_builder_append_cstr1(sb->sb, "
+               "\"<opaque:",
+               NULL);
+        writeTypename(context, type);
+        format(state, ">\");\n", NULL);
+        break;
+    case typEnum:
+        format(
+            state, "__cxy_builtins_string_builder_append_cstr1(sb->sb, ", NULL);
+        writeEnumPrefix(context, type);
+        format(state,
+               "__get_name({cl}this->{s}));\n",
+               (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = name}});
+        break;
+    default:
+        unreachable("UNREACHABLE");
+    }
+}
+
+static const Type *getBuiltinStringBuilderType()
+{
+    static const Type *sb = NULL;
+    if (sb == NULL && getBuiltinEnv() != NULL) {
+        AstNode *node = findSymbolOnly(getBuiltinEnv(), "StringBuilder");
+        if (node != NULL) {
+            sb = node->type;
+        }
+    }
+    return sb;
+}
+
+static bool structHasToString(const Type *type)
+{
+    SymbolRef *symbol =
+        findSymbolRef(type->tStruct.env, NULL, "toString", NULL);
+
+    const Type *sb = getBuiltinStringBuilderType();
+    if (sb == NULL || stripAll(type) == sb)
+        return true;
+
+    while (symbol) {
+        const Type *nodeType = symbol->node->type;
+        if (!hasFlags(symbol->node, flgBuiltinMember) &&
+            nodeType->func.paramsCount == 1 &&
+            stripAll(nodeType->func.params[0]) == sb)
+            return true;
+        symbol = symbol->next;
+    }
+
+    return false;
+}
+
+static void generateStructToString(CodegenContext *context, const Type *type)
+{
+    FormatState *state = context->state;
+    if (structHasToString(type))
+        return;
+
+    format(state, "\nstatic void ", NULL);
+    writeTypename(context, type);
+    format(state, "__toString(", NULL);
+    writeTypename(context, type);
+    format(state, " *this, StringBuilder *sb) {{{>}\n", NULL);
+    format(
+        state, "__cxy_builtins_string_builder_append_cstr1(sb->sb, \"", NULL);
+    writeTypename(context, type);
+    format(state, "{{\");\n", NULL);
+
+    u64 y = 0;
+    for (u64 i = 0; i < type->tStruct.fieldsCount; i++) {
+        const StructField *field = &type->tStruct.fields[i];
+        if (typeIs(field->type, Func) || typeIs(field->type, Generic))
+            continue;
+
+        if (y++ != 0)
+            format(state,
+                   "__cxy_builtins_string_builder_append_cstr0(sb->sb, "
+                   "\", \", 2);\n",
+                   NULL);
+
+        buildStringOperatorForMember(context, field->type, field->name, 0);
+    }
+
+    format(
+        state, "__cxy_builtins_string_builder_append_char(sb->sb, '}');", NULL);
 
     format(state, "{<}\n}", NULL);
 }
@@ -279,6 +452,7 @@ void generateStructDefinition(CodegenContext *context, const Type *type)
         writeTypename(context, type->tStruct.base);
         format(state, " super;\n", NULL);
     }
+    format(state, "void *__mgmt;\n", NULL);
 
     u64 y = 0;
     for (u64 i = 0; i < type->tStruct.fieldsCount; i++) {
@@ -298,6 +472,9 @@ void generateStructDefinition(CodegenContext *context, const Type *type)
         format(state, ";\n", NULL);
         generateStructDelete(context, type);
     }
+
+    format(state, ";\n", NULL);
+    generateStructToString(context, type);
 }
 
 void generateStructTypedef(CodegenContext *ctx, const Type *type)
@@ -406,6 +583,32 @@ void checkStructField(AstVisitor *visitor, AstNode *node)
     defineSymbol(ctx->env, ctx->L, node->structField.name, node);
 }
 
+void makeOpaqueToString(SemanticsContext *ctx, AstNode *node)
+{
+    if (structHasToString(node->type))
+        return;
+
+    const Type *sb = getBuiltinStringBuilderType();
+    AstNode *it = makeAstNode(ctx->pool,
+                              &node->loc,
+                              &(AstNode){.tag = astFuncDecl,
+                                         .flags = flgBuiltinMember,
+                                         .parentScope = node,
+                                         .funcDecl.name = "toString"});
+
+    it->type = makeFuncType(
+        ctx->typeTable,
+        &(Type){
+            .tag = typFunc,
+            .name = "toString",
+            .func = {.paramsCount = 1,
+                     .params = (const Type **)(const Type *[]){makePointerType(
+                         ctx->typeTable, sb, sb->flags)},
+                     .retType = makeVoidType(ctx->typeTable),
+                     .decl = it}});
+    defineSymbol(node->type->tStruct.env, NULL, "toString", it);
+}
+
 void checkStructDecl(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
@@ -483,6 +686,8 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
                                                 .fields = members,
                                                 .fieldsCount = i,
                                                 .decl = node}});
+    makeOpaqueToString(ctx, node);
+
     ((Type *)this)->this.that = node->type;
 
     member = node->structDecl.members;
