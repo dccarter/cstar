@@ -168,4 +168,23 @@ pub struct HashMap[K, V] {
             i++
         }
     }
+
+    func toString(sb: &StringBuilder) {
+        sb << "{"
+        var i = 0;
+        var first = true;
+
+        while (i < len!(data)) {
+            if (!first)
+                sb << ", "
+
+            if (isOccupiedHash(hashes.[i])) {
+                sb << data.[i].key << ": " << data.[i].value
+            }
+
+            i++
+        }
+
+        sb <<  "}"
+    }
 }

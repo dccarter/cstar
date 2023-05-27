@@ -593,7 +593,6 @@ typedef struct ConstAstVisitor {
 // clang-format on
 
 void astVisit(AstVisitor *visitor, AstNode *node);
-
 void astConstVisit(ConstAstVisitor *visitor, const AstNode *node);
 
 void clearAstBody(AstNode *node);

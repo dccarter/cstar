@@ -972,7 +972,7 @@ bool isTuple(const AstNode *node)
 
 bool isAssignableExpr(attr(unused) const AstNode *node)
 {
-    csAssert(node->type, "expression must have been key-checked first");
+    csAssert(node->type, "expression must have been type-checked first");
     return false;
 }
 

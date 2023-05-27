@@ -63,6 +63,9 @@ static bool checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
     }
 
     const Type *right = evalType(visitor, node->binaryExpr.rhs);
+    if (typeIs(right, Error))
+        return false;
+    
     const Type *operand = NULL;
     if (nodeIs(overload, GenericDecl)) {
         AstNode *lhs = node->binaryExpr.lhs;

@@ -65,5 +65,14 @@ pub struct Vector[T] {
             cb(data.[i++])
     }
 
-    func `str`() => f"${data}"
+    const func toString(sb: &StringBuilder) {
+        var i = 0;
+        sb << '['
+        while (i < len) {
+            if (i != 0)
+                sb << ", "
+            sb << data.[i++]
+        }
+        sb << ']'
+    }
 }
