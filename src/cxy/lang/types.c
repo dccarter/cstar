@@ -153,9 +153,9 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
             !isTypeAssignableFrom(to->array.elementType,
                                   from->array.elementType))
             return false;
-        if (to->size == UINT64_MAX)
+        if (to->array.len == UINT64_MAX)
             return true;
-        return to->size == from->size;
+        return to->array.len == from->array.len;
 
     case typOptional:
         return from->tag == typNull ||

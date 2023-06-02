@@ -231,9 +231,7 @@ AstNode *findSymbolAndScope(const Env *env,
     }
 
     if (__builtins && __builtins != env) {
-        AstNode *node = findSymbolAndScope(__builtins, L, name, loc, outScope);
-        if (node)
-            return node;
+        return findSymbolAndScope(__builtins, L, name, loc, outScope);
     }
 
     logError(L, loc, "undefined symbol '{s}'", (FormatArg[]){{.s = name}});
@@ -262,9 +260,7 @@ SymbolRef *findSymbolRef(const Env *env,
     }
 
     if (__builtins && env != __builtins) {
-        SymbolRef *ref = findSymbolRef(__builtins, L, name, loc);
-        if (ref)
-            return ref;
+        return findSymbolRef(__builtins, L, name, loc);
     }
 
     if (L) {
@@ -314,16 +310,17 @@ static inline AstNode *findEnclosingScope(Env *env,
             scope->node->tag == thirdTag)
             return scope->node;
     }
-
-    logError(L,
-             loc,
-             "use of '{$}{s}{$}' outside of a {s}",
-             (FormatArg[]){
-                 {.style = keywordStyle},
-                 {.s = keyword},
-                 {.style = resetStyle},
-                 {.s = context},
-             });
+    if (L) {
+        logError(L,
+                 loc,
+                 "use of '{$}{s}{$}' outside of a {s}",
+                 (FormatArg[]){
+                     {.style = keywordStyle},
+                     {.s = keyword},
+                     {.style = resetStyle},
+                     {.s = context},
+                 });
+    }
     return NULL;
 }
 

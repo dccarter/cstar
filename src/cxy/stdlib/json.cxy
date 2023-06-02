@@ -1,0 +1,52 @@
+module json
+
+pub func toJson[T](sb: &StringBuilder, it: &const T)
+{
+    #const Tinfo = #T;
+
+    #if (T.isNumber || T.isBoolean || T.isChar) {
+        sb << *it;
+    }
+    else #if (T.isString) {
+        sb << '"' << *it << '"'
+    }
+    else #if (T.isOptional) {
+        if (it)
+            toJson(sb, *it);
+        else
+            sb << "null";
+    }
+    else #if (T.isStruct) {
+        sb << "{";
+        #const first = true;
+        #for (const member: Tinfo.members) {
+            #if (first == false) {
+                sb << ", ";
+            }
+
+            #if (member.isField) {
+                sb << '"' << #{member.name} << "\": ";
+                #if (member.isPointer)
+                    toJson[#{member.Tinfo.pointedType}](sb, it.#{mkIdent!(member.name)})
+                else
+                    toJson[#{member.Tinfo}](sb, &it.#{mkIdent!(member.name)})
+                #{first = false}
+            }
+        }
+        sb << "}";
+    }
+    else #if (T.isArray) {
+        sb << '[';
+        var first = true;
+        for (const member: *it) {
+            if (!first) sb << ", "
+            #if (T.elementType.isPointer)
+                toJson[#{T.elementType.pointedType}](sb, member)
+            else
+                toJson[#{T.elementType}](sb, &member)
+
+            first = false
+        }
+        sb << ']'
+    }
+}

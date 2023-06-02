@@ -203,10 +203,35 @@ static void generateArrayToString(CodegenContext *context, const Type *type)
     else
         buildStringFormatForIndex(context, type->array.elementType, "", 0);
 
+    format(state, "{<}\n}\n", NULL);
+
     format(
         state, "__cxy_builtins_string_builder_append_char(sb->sb, ']');", NULL);
 
-    format(state, "{<}\n}{<}\n}", NULL);
+    format(state, "{<}\n}", NULL);
+}
+
+void generateArrayToSlice(ConstAstVisitor *visitor,
+                          const Type *slice,
+                          const AstNode *value)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+
+    format(ctx->state, "&(__", NULL);
+    writeTypename(ctx, slice);
+    format(ctx->state, "){{.data = ", NULL);
+    format(ctx->state, "(", NULL);
+    writeTypename(ctx, slice->array.elementType);
+    format(ctx->state, "*)", NULL);
+    if (nodeIs(value, ArrayExpr)) {
+        format(ctx->state, "(", NULL);
+        writeTypename(ctx, value->type);
+        format(ctx->state, ")", NULL);
+    }
+    astConstVisit(visitor, value);
+    format(ctx->state,
+           ", .len = {u64}}",
+           (FormatArg[]){{.u64 = value->type->array.len}});
 }
 
 void generateForStmtArray(ConstAstVisitor *visitor, const AstNode *node)
@@ -309,7 +334,7 @@ void checkArrayType(AstVisitor *visitor, AstNode *node)
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     if (node->type)
         return;
-    
+
     const Type *element = evalType(visitor, node->arrayType.elementType);
 
     u64 size = UINT64_MAX;

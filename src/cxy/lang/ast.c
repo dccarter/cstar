@@ -401,6 +401,7 @@ static void printFuncType(ConstAstVisitor *visitor, const AstNode *node)
 static void printFuncParam(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstPrintContext *context = getConstAstVisitorContext(visitor);
+
     if (node->attrs) {
         printAttributes(visitor, node->attrs);
         format(context->state, " ", NULL);
@@ -410,7 +411,10 @@ static void printFuncParam(ConstAstVisitor *visitor, const AstNode *node)
         format(context->state, "...", NULL);
 
     format(context->state, "{s}: ", (FormatArg[]){{.s = node->funcParam.name}});
-    astConstVisit(visitor, node->funcParam.type);
+    if (hasFlag(node, Capture))
+        format(context->state, "&Capture", NULL);
+    else
+        astConstVisit(visitor, node->funcParam.type);
 }
 
 static void printError(ConstAstVisitor *visitor,
@@ -496,7 +500,7 @@ static void printFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
 
     printKeyword(context->state, "func");
     format(context->state, " {s}", (FormatArg[]){{.s = node->funcDecl.name}});
-    if (context->parent && nodeIs(context->parent, GenericDecl) &&
+    if (nodeIs(context->parent, GenericDecl) &&
         context->parent->genericDecl.params) {
         printManyAstsWithDelim(
             visitor, "[", ",", "]", context->parent->genericDecl.params);

@@ -41,7 +41,7 @@ void logError(Log *, const FileLoc *, const char *, const FormatArg *);
 void logWarning(Log *, const FileLoc *, const char *, const FormatArg *);
 void logNote(Log *, const FileLoc *, const char *, const FormatArg *);
 const FileLoc *builtinLoc(void);
-static inline FileLoc fileposSubrange(const FileLoc *start, const FileLoc *end)
+static inline FileLoc locSubrange(const FileLoc *start, const FileLoc *end)
 {
     csAssert0(start->fileName == end->fileName);
     return (FileLoc){

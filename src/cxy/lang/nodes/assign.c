@@ -73,6 +73,11 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
     }
 
     const Type *lhs = evalType(visitor, left);
+    if (hasFlag(left, AddThis)) {
+        AstNode *func = findEnclosingFunc(ctx->env, NULL, NULL);
+        left->flags |= (func->flags & flgConst);
+    }
+
     const Type *rhs = evalType(visitor, right);
     bool isLeftAuto = typeIs(lhs, Auto);
 

@@ -513,6 +513,7 @@ struct AstNode {
             const char *name;
             u64 index;
             struct AstNode *value;
+            const Type *sliceType;
         } fieldExpr;
 
         struct {

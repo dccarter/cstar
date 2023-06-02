@@ -1,8 +1,9 @@
 import { println } from "stdlib/io.cxy"
+import { toJson } from "stdlib/json.cxy"
 
 struct Greet {
     name: bool
-    points: [i32, 3]
+    points: [i32]
 }
 
 struct Hello {
@@ -10,58 +11,21 @@ struct Hello {
     b: u64
     c: &i32
     greet: Greet
+
+    const func with(cb: func(a: i32) -> void) => cb(<i32>a)
+    func slice(data: [i32]) => greet.points = data
 }
-
-func toJson[T](sb: &StringBuilder, it: &const T) {
-    #const Tinfo = #T;
-
-    #if (T.isNumber || T.isBoolean || T.isChar) {
-        sb << *it;
-    }
-    else #if (T.isString) {
-        sb << '"' << *it << '"'
-    }
-    else #if (T.isOptional) {
-        if (it)
-            toJson(sb, *it);
-        else
-            sb << "null";
-    }
-    else #if (T.isStruct) {
-        sb << "{";
-        #const first = true;
-        #for (const member: Tinfo.members) {
-            #if (first == false) {
-                sb << ", ";
-            }
-
-            #if (member.isField) {
-                sb << '"' << #{member.name} << "\": ";
-                #if (member.isPointer)
-                    toJson[#{member.Tinfo.pointedType}](sb, it.#{mkIdent!(member.name)})
-                else
-                    toJson[#{member.Tinfo}](sb, &it.#{mkIdent!(member.name)})
-                #{first = false}
-            }
-        }
-        sb << "}";
-    }
-    else #if (T.isArray) {
-        sb << '[';
-        for (const member: *it) {
-            #if (T.elementType.isPointer)
-                toJson[#{T.elementType.pointedType}](sb, member)
-            else
-                toJson[#{T.elementType}](sb, &member)
-        }
-        sb << ']'
-    }
-}
-
 
 func main(args: [string]) {
-    var y = 199;
-    const x = Hello{a: 100, b: 200, c: &y, greet: Greet{name: false, points: [10, 20, 30]}};
+    var y = 0;
+    var arr = [10, 20, 30];
+    var x = Hello{a: 100, b: 200, c: &y, greet: Greet{name: false, points: [10, 20, 30, 40]}};
+    x.with((a: i32) => println(f"${a} - ${y}"))
+    var z : [i32, 3]  = [10, 20, 30];
+    x.slice([10, 20, 30])
+
+//    println(f"${x}")
+
     var sb = StringBuilder();
     toJson[Hello](&sb, &x);
     println(sb.toString())

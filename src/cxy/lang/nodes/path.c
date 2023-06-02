@@ -192,7 +192,7 @@ void checkPathElement(AstVisitor *visitor, AstNode *node)
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     csAssert0(node->parentScope);
     AstNode *parent = node->parentScope;
-    const Type *scope = stripPointer(parent->type);
+    const Type *scope = stripAll(parent->type);
 
     const Env *env = NULL;
     Env thisEnv = {};

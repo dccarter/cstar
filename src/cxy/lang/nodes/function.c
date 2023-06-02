@@ -125,7 +125,7 @@ static bool validateOperatorOverloadFunc(SemanticsContext *ctx, AstNode *node)
 {
     u64 count = countAstNodes(node->funcDecl.params);
     Operator op = node->funcDecl.operatorOverload;
-    FileLoc loc = fileposSubrange(&node->loc, &node->funcDecl.body->loc);
+    FileLoc loc = locSubrange(&node->loc, &node->funcDecl.body->loc);
     switch (op) {
 #define f(OP, ...) case op##OP:
         AST_BINARY_EXPR_LIST(f)
@@ -386,6 +386,10 @@ void generateFuncGeneratedDeclaration(CodegenContext *context, const Type *type)
         format(context->state, " *", NULL);
     else
         format(state, " ", NULL);
+    if (hasFlag(type->func.decl, Generated))
+        writeDeclNamespace(context, type->namespace, NULL);
+    else
+        writeNamespace(context, NULL);
     format(state, "{s}", (FormatArg[]){{.s = type->name}});
     if (index)
         format(state, "{u32}", (FormatArg[]){{.u32 = index}});
@@ -402,8 +406,8 @@ void generateFuncGeneratedDeclaration(CodegenContext *context, const Type *type)
 void generateFunctionTypedef(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
-    const AstNode *parent =
-        type->func.decl ? type->func.decl->parentScope : NULL;
+    const AstNode *decl = type->func.decl,
+                  *parent = decl ? type->func.decl->parentScope : NULL;
     bool isMember = parent && parent->tag == astStructDecl;
 
     format(state, "typedef ", NULL);
@@ -431,7 +435,7 @@ void generateFunctionTypedef(CodegenContext *context, const Type *type)
     format(state, ")", NULL);
     if (isMember)
         generateFuncDeclaration(context, type);
-    else if (type->func.decl->flags & flgGenerated)
+    else if (decl && decl->flags & flgGenerated)
         generateFuncGeneratedDeclaration(context, type);
 }
 

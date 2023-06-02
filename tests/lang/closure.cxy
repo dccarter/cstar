@@ -1,0 +1,16 @@
+
+func main(args: [string]) {
+    // simple closure
+    const one = () => 1;
+    one();
+
+    // iic
+    ((name: string)  => {
+        return f"Hello ${name}"
+    })("User");
+
+    // capture
+    var x = 100;
+    var b = "Hello";
+    (() => f"${b} -> ${x}")()
+}

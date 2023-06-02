@@ -218,7 +218,12 @@ void generateStructExpr(ConstAstVisitor *visitor, const AstNode *node)
             ".{s}{s} = ",
             (FormatArg[]){{.s = (field->flags & flgAddSuper) ? "super." : ""},
                           {.s = field->fieldExpr.name}});
-        astConstVisit(visitor, field->fieldExpr.value);
+
+        if (isSliceType(field->type) &&
+            !isSliceType(field->fieldExpr.value->type))
+            generateArrayToSlice(visitor, field->type, field->fieldExpr.value);
+        else
+            astConstVisit(visitor, field->fieldExpr.value);
     }
 
     format(ctx->state, "}", NULL);
@@ -549,6 +554,8 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
             node->type = ERROR_TYPE(ctx);
             continue;
         }
+
+        field->type = decl->type;
 
         initialized[decl->structField.index] = true;
     }

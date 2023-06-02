@@ -175,10 +175,15 @@ static const Type *evalOverloadFunctionType(AstVisitor *visitor,
     for (u64 i = 0; arg; arg = arg->next, i++)
         params[i] = arg->type ?: evalType(visitor, arg);
 
+    u64 flags = nodeIs(callee, Path) &&
+                        typeIs(stripAll(callee->path.elements->type), Struct)
+                    ? (callee->path.elements->flags & flgConst)
+                    : flgNone;
+
     AstNode *decl =
         overload ? getSymbolRefAt(symbol, overload - 1)->node
                  : symbolRefLookupFuncDeclBySignature(
-                       ctx, symbol, flgNone, params, count, &callee->loc, true);
+                       ctx, symbol, flags, params, count, &callee->loc, true);
 
     free(params);
 
@@ -232,6 +237,7 @@ static inline void checkCallWithStack(AstVisitor *visitor, AstNode *node)
         callee = functionTypeParamToCall(ctx, callee, node);
     }
 
+    callee = unwrapType(callee, NULL);
     if (callee->tag != typFunc) {
         logError(ctx->L,
                  &node->callExpr.callee->loc,
@@ -420,18 +426,7 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
                 format(ctx->state, "_fwd}", NULL);
             }
             else if (isSliceType(param) && !isSliceType(arg->type)) {
-                format(ctx->state, "(", NULL);
-                writeTypename(ctx, param);
-                format(ctx->state, "){{.data = ", NULL);
-                if (nodeIs(arg, ArrayExpr)) {
-                    format(ctx->state, "(", NULL);
-                    writeTypename(ctx, arg->type);
-                    format(ctx->state, ")", NULL);
-                }
-                astConstVisit(visitor, arg);
-                format(ctx->state,
-                       ", .len = {u64}}",
-                       (FormatArg[]){{.u64 = arg->type->array.len}});
+                generateArrayToSlice(visitor, param, arg);
             }
             else {
                 astConstVisit(visitor, arg);

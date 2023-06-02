@@ -150,6 +150,7 @@ void addTopLevelDecl(SemanticsContext *ctx, cstring name, AstNode *node)
             return;
     }
 
+    node->flags |= flgTopLevelDecl;
     if (ctx->previousTopLevelDecl == ctx->currentTopLevelDecl) {
         ctx->program->program.decls = node;
         node->next = ctx->currentTopLevelDecl;
