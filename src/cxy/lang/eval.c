@@ -162,7 +162,7 @@ bool evaluate(AstVisitor *visitor, AstNode *node)
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     if (isLiteralExpr(node) || isBuiltinTypeExpr(node))
         return true;
-    
+
     astVisit(visitor, node);
     return node->tag != astError;
 }
@@ -173,12 +173,16 @@ void initEvalVisitor(AstVisitor *visitor, SemanticsContext *ctx)
     *visitor = makeAstVisitor(ctx, {
         [astPath] = evalPath,
         [astIfStmt] = evalIfStmt,
+        [astForStmt] = evalForStmt,
         [astTupleExpr] = evalTupleExpr,
         [astBinaryExpr] = evalBinaryExpr,
+        [astAssignExpr] = evalAssignExpr,
         [astIndexExpr] = evalIndexExpr,
         [astMemberExpr] = evalMemberExpr,
         [astArrayExpr]= evalArrayExpr,
-        [astEnumDecl] = evalEnumDecl
+        [astEnumDecl] = evalEnumDecl,
+        [astMacroCallExpr] = evalMacroCall,
+        [astVarDecl] = evalVarDecl
     }, .fallback = evalFallback);
 
     // clang-format on
@@ -186,4 +190,7 @@ void initEvalVisitor(AstVisitor *visitor, SemanticsContext *ctx)
     ctx->eval.visitor = visitor;
     environmentInit(&ctx->eval.env);
     environmentAttachUp(&ctx->eval.env, ctx->env);
+    pushScope(&ctx->eval.env, NULL);
+
+    initComptime(ctx);
 }

@@ -128,6 +128,24 @@ bool defineSymbol(Env *env, Log *L, const char *name, AstNode *node)
     return wasInserted;
 }
 
+SymbolRef *updateSymbol(Env *env, const char *name, AstNode *node)
+{
+    csAssert0(env->scope);
+    if (isIgnoreVar(name))
+        return NULL;
+
+    Symbol symbol = {.name = name, .ref.node = node};
+    u32 hash = hashStr(hashInit(), name);
+    bool wasInserted = insertInHashTable(
+        &env->scope->symbols, &symbol, hash, sizeof(Symbol), compareSymbols);
+    Symbol *prev = findInHashTable(
+        &env->scope->symbols, &symbol, hash, sizeof(Symbol), compareSymbols);
+    if (!wasInserted)
+        prev->ref.node = node;
+
+    return &prev->ref;
+}
+
 SymbolRef *defineFunctionDecl(Env *env, Log *L, const char *name, AstNode *node)
 {
     csAssert0(env->scope);
@@ -171,7 +189,7 @@ AstNode *findSymbol(const Env *env,
     return findSymbolAndScope(env, L, name, loc, &scope);
 }
 
-static void dumpLookup(const Env *env, const char *name)
+void environmentDump(const Env *env, const char *name)
 {
     if (env) {
         for (Scope *scope = env->scope; scope; scope = scope->prev) {
@@ -179,7 +197,11 @@ static void dumpLookup(const Env *env, const char *name)
             for (u32 i = 0; i < scope->symbols.capacity; i++) {
                 if (!isBucketOccupied(&scope->symbols, i))
                     continue;
-                printf("%s %p[%p] -> %s\n", name, env, scope, symbols[i].name);
+                printf("%s %p[%p] -> %s\n",
+                       name ?: "null",
+                       env,
+                       scope,
+                       symbols[i].name);
             }
         }
     }

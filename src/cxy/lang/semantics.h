@@ -25,10 +25,11 @@ typedef struct SemanticsContext {
     Env *env;
     Env *exports;
     bool isBuiltins;
-    
+
     struct {
         Env env;
         AstVisitor *visitor;
+        AstVisitor *semanticsVisitor;
     } eval;
 
     u64 anonymousDeclsIndex;

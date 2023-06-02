@@ -52,6 +52,13 @@ AstNode *makeTypeReferenceNode(SemanticsContext *ctx, const Type *type)
                             .pathElement = {
                                 .name = type->tStruct.decl->structDecl.name,
                                 .resolvesTo = type->tStruct.decl}})}});
+    case typPointer:
+        return makeAstNode(
+            ctx->pool,
+            builtinLoc(),
+            &(AstNode){.tag = astPointerType,
+                       .pointerType = {.pointed = makeTypeReferenceNode(
+                                           ctx, stripAll(type))}});
     case typEnum:
 
     default:

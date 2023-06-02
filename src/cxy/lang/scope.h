@@ -50,9 +50,13 @@ static inline void environmentDetachUp(Env *env)
 }
 void environmentFree(Env *env);
 Env *environmentCopy(MemPool *pool, const Env *env);
+void environmentDump(const Env *env, const char *name);
+
 void releaseScope(Env *env, Env *into);
 
 bool defineSymbol(Env *env, Log *L, const char *name, AstNode *node);
+SymbolRef *updateSymbol(Env *env, const char *name, AstNode *node);
+
 SymbolRef *defineFunctionDecl(Env *env,
                               Log *L,
                               const char *name,

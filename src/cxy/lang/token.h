@@ -64,6 +64,7 @@
     f(CallOverride,    "()")        \
     f(IndexOverride,   "[]")        \
     f(IndexAssignOvd,  "[]=")       \
+    f(AstMacroAccess,  "#.")        \
 
 #define KEYWORD_LIST(f)             \
     f(Auto, "auto")                 \

@@ -227,6 +227,8 @@ Token advanceLexer(Lexer *lexer)
         if (acceptChar(lexer, '#')) {
             if (acceptChar(lexer, '{'))
                 return makeToken(lexer, &begin, tokSubstitutue);
+            if (acceptChar(lexer, '.'))
+                return makeToken(lexer, &begin, tokAstMacroAccess);
             return makeToken(lexer, &begin, tokHash);
         }
         if (acceptChar(lexer, '`'))

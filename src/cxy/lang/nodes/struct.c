@@ -3,6 +3,7 @@
 //
 
 #include "lang/codegen.h"
+#include "lang/eval.h"
 #include "lang/semantics.h"
 
 #include "lang/ttable.h"
@@ -261,9 +262,14 @@ void generateStructDelete(CodegenContext *context, const Type *type)
                 format(state, "\n", NULL);
 
             writeTypename(context, stripped);
-            format(state,
-                   "__builtin_destructor(this->{s});",
-                   (FormatArg[]){{.s = field->name}});
+            if (typeIs(unwrapped, Pointer))
+                format(state,
+                       "__builtin_destructor(this->{s});",
+                       (FormatArg[]){{.s = field->name}});
+            else
+                format(state,
+                       "__builtin_destructor(&this->{s});",
+                       (FormatArg[]){{.s = field->name}});
         }
     }
 
@@ -287,14 +293,14 @@ void buildStringOperatorForMember(CodegenContext *context,
            (FormatArg[]){{.s = name}, {.u64 = strlen(name) + 2}});
     if (typeIs(unwrapped, Pointer)) {
         format(state,
-               "if (this->{s} != NULL) {{{>}\n"
+               "if (this->{s} == NULL) {{{>}\n"
                "__cxy_builtins_string_builder_append_cstr0(sb->sb, \"null\", "
-               "4);\nreturn;{<}\n}\n",
+               "4);\n",
                (FormatArg[]){{.s = name}});
 
         format(state,
                "__cxy_builtins_string_builder_append_char(sb->sb, "
-               "'&');\n",
+               "'&');{<}\n}\nelse{>}\n",
                NULL);
         deref = pointerLevels(unwrapped);
     }
@@ -303,7 +309,7 @@ void buildStringOperatorForMember(CodegenContext *context,
     case typNull:
         format(state,
                "__cxy_builtins_string_builder_append_cstr0(sb->sb, "
-               "\"null\", 4);\n",
+               "\"null\", 4);",
                NULL);
         break;
     case typPrimitive:
@@ -311,20 +317,20 @@ void buildStringOperatorForMember(CodegenContext *context,
         case prtBool:
             format(state,
                    "__cxy_builtins_string_builder_append_bool(sb->sb, "
-                   "{cl}this->{s});\n",
+                   "{cl}this->{s});",
                    (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = name}});
             break;
         case prtChar:
             format(state,
                    "__cxy_builtins_string_builder_append_char(sb->sb, "
-                   "{cl}this->{s});\n",
+                   "{cl}this->{s});",
                    (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = name}});
             break;
 #define f(I, ...) case prt##I:
             INTEGER_TYPE_LIST(f)
             format(state,
                    "__cxy_builtins_string_builder_append_int(sb->sb, "
-                   "(i64)({cl}this->{s}));\n",
+                   "(i64)({cl}this->{s}));",
                    (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = name}});
             break;
 #undef f
@@ -332,7 +338,7 @@ void buildStringOperatorForMember(CodegenContext *context,
             FLOAT_TYPE_LIST(f)
             format(state,
                    "__cxy_builtins_string_builder_append_float(sb->sb, "
-                   "(f64)({cl}this->{s}));\n",
+                   "(f64)({cl}this->{s}));",
                    (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = name}});
             break;
 #undef f
@@ -344,7 +350,7 @@ void buildStringOperatorForMember(CodegenContext *context,
     case typString:
         format(state,
                "__cxy_builtins_string_builder_append_cstr1(sb->sb, "
-               "{cl}this->{s});\n",
+               "{cl}this->{s});",
                (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = name}});
         break;
     case typArray:
@@ -352,7 +358,7 @@ void buildStringOperatorForMember(CodegenContext *context,
     case typTuple:
         writeTypename(context, stripped);
         format(state,
-               "__toString({cl}this->{s}, sb);\n",
+               "__toString({cl}this->{s}, sb);",
                (FormatArg[]){{.c = deref ? '*' : '&'},
                              {.len = deref ? deref - 1 : 1},
                              {.s = name}});
@@ -363,19 +369,23 @@ void buildStringOperatorForMember(CodegenContext *context,
                "\"<opaque:",
                NULL);
         writeTypename(context, type);
-        format(state, ">\");\n", NULL);
+        format(state, ">\");", NULL);
         break;
     case typEnum:
         format(
             state, "__cxy_builtins_string_builder_append_cstr1(sb->sb, ", NULL);
         writeEnumPrefix(context, type);
         format(state,
-               "__get_name({cl}this->{s}));\n",
+               "__get_name({cl}this->{s}));",
                (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = name}});
         break;
     default:
         unreachable("UNREACHABLE");
     }
+
+    if (typeIs(unwrapped, Pointer))
+        format(state, "{<}", NULL);
+    format(state, "\n", NULL);
 }
 
 static const Type *getBuiltinStringBuilderType()

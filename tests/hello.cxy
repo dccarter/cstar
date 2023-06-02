@@ -1,41 +1,68 @@
 import { println } from "stdlib/io.cxy"
-import { Vector } from "stdlib/vector.cxy"
-import { HashMap } from "stdlib/map.cxy"
-import { String } from "stdlib/str.cxy"
 
-struct Inner {
-    x: &i32
+struct Greet {
+    name: bool
+    points: [i32, 3]
+}
 
-    func `delete`() {
-        println("deleting inner");
+struct Hello {
+    a: u32
+    b: u64
+    c: &i32
+    greet: Greet
+}
+
+func toJson[T](sb: &StringBuilder, it: &const T) {
+    #const Tinfo = #T;
+
+    #if (T.isNumber || T.isBoolean || T.isChar) {
+        sb << *it;
+    }
+    else #if (T.isString) {
+        sb << '"' << *it << '"'
+    }
+    else #if (T.isOptional) {
+        if (it)
+            toJson(sb, *it);
+        else
+            sb << "null";
+    }
+    else #if (T.isStruct) {
+        sb << "{";
+        #const first = true;
+        #for (const member: Tinfo.members) {
+            #if (first == false) {
+                sb << ", ";
+            }
+
+            #if (member.isField) {
+                sb << '"' << #{member.name} << "\": ";
+                #if (member.isPointer)
+                    toJson[#{member.Tinfo.pointedType}](sb, it.#{mkIdent!(member.name)})
+                else
+                    toJson[#{member.Tinfo}](sb, &it.#{mkIdent!(member.name)})
+                #{first = false}
+            }
+        }
+        sb << "}";
+    }
+    else #if (T.isArray) {
+        sb << '[';
+        for (const member: *it) {
+            #if (T.elementType.isPointer)
+                toJson[#{T.elementType.pointedType}](sb, member)
+            else
+                toJson[#{T.elementType}](sb, &member)
+        }
+        sb << ']'
     }
 }
 
-struct Number {
-    - id: i32
-    - inner: &Inner
-
-    func `new`(x: i32) {
-        id = x
-        inner = new auto Inner{x: &id};
-    }
-
-    func `delete`() {
-        println("deleting number");
-    }
-}
 
 func main(args: [string]) {
-    var vec = new Vector[&Number]();
-    for (const i: 0..5) {
-        vec.push(new Number(<i32>i));
-    }
-    var map = new HashMap[string, i32]();
+    var y = 199;
+    const x = Hello{a: 100, b: 200, c: &y, greet: Greet{name: false, points: [10, 20, 30]}};
     var sb = StringBuilder();
-    sb << Number(10) << "\n"
-       << "We got magic going\n"
-       << *map
-       << "\n"
-       << *vec
+    toJson[Hello](&sb, &x);
     println(sb.toString())
 }

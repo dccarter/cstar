@@ -11,6 +11,7 @@
 #include "lang/codegen.h"
 #include "lang/semantics.h"
 
+#include "lang/eval.h"
 #include "lang/ttable.h"
 
 #include <memory.h>
@@ -118,4 +119,27 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
     else {
         node->type = lhs;
     }
+}
+
+void evalAssignExpr(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    AstNode *left = node->assignExpr.lhs, *right = node->assignExpr.rhs;
+    const Env *up = ctx->eval.env.up;
+    ctx->eval.env.up = NULL;
+    SymbolRef *symbol = findSymbolRefByNode(ctx, &ctx->eval.env, left, true);
+    ctx->eval.env.up = up;
+
+    if (symbol == NULL) {
+        node->tag = astError;
+        return;
+    }
+
+    if (!evaluate(visitor, right)) {
+        node->tag = astError;
+        return;
+    }
+    symbol->node = right;
+
+    node->tag = astNop;
 }

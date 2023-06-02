@@ -16,6 +16,39 @@
 
 #include <string.h>
 
+bool evalStringBuilderAppend(SemanticsContext *ctx,
+                             StringBuilder *sb,
+                             AstNode *node)
+{
+    switch (node->tag) {
+    case astStringLit:
+        stringBuilderAppendCstr1(sb, node->stringLiteral.value);
+        break;
+    case astIntegerLit:
+        if (node->intLiteral.hasMinus)
+            stringBuilderAppendChar(sb, '-');
+        stringBuilderAppendInt(sb, node->intLiteral.value);
+        break;
+    case astFloatLit:
+        stringBuilderAppendFloat(sb, node->floatLiteral.value);
+        break;
+    case astCharLit:
+        stringBuilderAppendChar(sb, node->charLiteral.value);
+        break;
+    case astBoolLit:
+        stringBuilderAppendBool(sb, node->boolLiteral.value);
+        break;
+    default:
+        logError(ctx->L,
+                 &node->loc,
+                 "expression cannot be transformed to a string",
+                 NULL);
+        return false;
+    }
+
+    return true;
+}
+
 void evalStringConcatenation(SemanticsContext *ctx,
                              AstNode *node,
                              AstNode *lhs,
@@ -23,29 +56,9 @@ void evalStringConcatenation(SemanticsContext *ctx,
 {
     StringBuilder sb;
     stringBuilderInit(&sb);
-    stringBuilderAppendCstr1(&sb, lhs->stringLiteral.value);
-    switch (rhs->tag) {
-    case astStringLit:
-        stringBuilderAppendCstr1(&sb, rhs->stringLiteral.value);
-        break;
-    case astIntegerLit:
-        if (rhs->intLiteral.hasMinus)
-            stringBuilderAppendChar(&sb, '-');
-        stringBuilderAppendInt(&sb, rhs->intLiteral.value);
-        break;
-    case astFloatLit:
-        stringBuilderAppendFloat(&sb, rhs->floatLiteral.value);
-        break;
-    case astCharLit:
-        stringBuilderAppendChar(&sb, rhs->charLiteral.value);
-        break;
-    case astBoolLit:
-        stringBuilderAppendBool(&sb, rhs->boolLiteral.value);
-        break;
-    default:
-        unreachable("INVALID operand");
-    }
-
+    evalStringBuilderAppend(ctx, &sb, lhs);
+    csAssert0(evalStringBuilderAppend(ctx, &sb, rhs));
+    
     char *str = stringBuilderRelease(&sb);
     node->tag = astStringLit;
     node->stringLiteral.value = makeString(ctx->strPool, str);

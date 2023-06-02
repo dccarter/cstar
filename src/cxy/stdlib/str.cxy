@@ -78,7 +78,7 @@ pub struct String {
     func `str`() => s
 
     @inline
-    func toString(dst: StringBuilder) => dst.appendString(s)
+    func toString(dst: &StringBuilder) => dst.appendString(s)
 
     @inline
     func hash() => hashStringSize(hashInit(), s, len)

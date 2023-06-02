@@ -3,6 +3,7 @@
 //
 
 #include "lang/codegen.h"
+#include "lang/eval.h"
 #include "lang/semantics.h"
 
 #include "lang/ttable.h"
@@ -57,6 +58,23 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
         return;
     }
 
+    if (hasFlag(node->varDecl.names, Comptime)) {
+        if (!evaluate(visitor, node->varDecl.names)) {
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+
+        if (!nodeIs(node->varDecl.names, Identifier)) {
+            logError(ctx->L,
+                     &node->varDecl.names->loc,
+                     "comptime computed variable must resolve to an identifier",
+                     NULL);
+
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+    }
+
     defineSymbol(ctx->env, ctx->L, names->ident.value, node);
     addModuleExport(ctx, node, names->ident.value);
 
@@ -107,4 +125,30 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
                 node->type = value;
         }
     }
+}
+
+void evalVarDecl(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    AstNode *names = node->varDecl.names;
+
+    if (names->next) {
+        logError(ctx->L,
+                 &node->loc,
+                 "unsupported: compile time multi-variable declaration not "
+                 "supported",
+                 NULL);
+
+        node->tag = astError;
+        return;
+    }
+
+    if (!evaluate(visitor, node->varDecl.init)) {
+        node->tag = astError;
+        return;
+    }
+
+    updateSymbol(&ctx->eval.env, names->ident.value, node->varDecl.init);
+    node->flags = flgVisited;
+    node->tag = astNop;
 }

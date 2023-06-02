@@ -3,6 +3,7 @@
 //
 
 #include "lang/codegen.h"
+#include "lang/eval.h"
 #include "lang/semantics.h"
 
 #include "lang/capture.h"
@@ -62,6 +63,7 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
 
     if (nodeIs(symbol, GenericDecl)) {
         symbol = checkGenericDeclReference(visitor, symbol, node, ctx->env);
+        node->pathElement.resolvesTo = symbol;
     }
 
     if (symbol == NULL) {
@@ -81,8 +83,9 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
     node->type = symbol->type;
     flags = (symbol->flags & (flgConst | flgTypeAst | flgImportAlias));
     if (hasFlag(symbol, TopLevelDecl)) {
-        const AstNode *module = symbol->parentScope->program.module;
         node->parentScope = symbol->parentScope;
+        const AstNode *module =
+            symbol->parentScope ? symbol->parentScope->program.module : NULL;
         if (module && module->moduleDecl.name)
             flags |= flgAppendNS;
     }
@@ -220,6 +223,7 @@ void checkPathElement(AstVisitor *visitor, AstNode *node)
         findSymbol(env, ctx->L, node->pathElement.name, &node->loc);
     if (symbol != NULL && nodeIs(symbol, GenericDecl)) {
         symbol = checkGenericDeclReference(visitor, symbol, node, env);
+        node->pathElement.resolvesTo = symbol;
     }
 
     if (symbol == NULL) {
@@ -302,8 +306,8 @@ void evalPath(AstVisitor *visitor, AstNode *node)
 
     if (elem->next) {
         elem = elem->next;
-        cstring name = elem->pathElement.alt ?: elem->pathElement.name;
         if (nodeIs(symbol, EnumDecl)) {
+            cstring name = elem->pathElement.alt ?: elem->pathElement.name;
             AstNode *option = findEnumOptionByName(symbol, name);
             if (option == NULL) {
                 logError(
@@ -318,14 +322,19 @@ void evalPath(AstVisitor *visitor, AstNode *node)
             symbol = option->enumOption.value;
         }
         else {
-            logError(
-                ctx->L,
-                &node->loc,
-                "comptime member access only supported on enum declarations",
-                NULL);
-
-            node->tag = astError;
-            return;
+            while (elem) {
+                cstring name = elem->pathElement.alt ?: elem->pathElement.name;
+                symbol = evalAstNodeMemberAccess(ctx, &elem->loc, symbol, name);
+                if (symbol == NULL) {
+                    logError(ctx->L,
+                             &elem->loc,
+                             "undefined compile time member named '{s}'",
+                             (FormatArg[]){{.s = name}});
+                    node->tag = astError;
+                    return;
+                }
+                elem = elem->next;
+            }
         }
     }
 
@@ -362,12 +371,17 @@ void evalPath(AstVisitor *visitor, AstNode *node)
             *node = *decl;
             break;
         }
+        case typPointer:
+        case typArray:
+            *node = *symbol;
+            break;
         default:
             csAssert0(false);
         }
     }
     else {
         u64 flags = node->flags;
+        flags &= ~flgComptime;
         *node = *symbol;
         node->flags |= flags;
     }

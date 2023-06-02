@@ -247,6 +247,12 @@ bool isIntegerType(const Type *type)
 {
     type = resolveType(type);
 
+    if (typeIs(type, Info))
+        return isIntegerType(type->info.target);
+
+    if (typeIs(type, Wrapped))
+        return isIntegerType(unwrapType(type, NULL));
+
     if (!type || type->tag != typPrimitive)
         return false;
     switch (type->primitive.id) {
@@ -262,6 +268,12 @@ bool isIntegerType(const Type *type)
 bool isIntegralType(const Type *type)
 {
     type = resolveType(type);
+
+    if (typeIs(type, Info))
+        return isIntegralType(type->info.target);
+
+    if (typeIs(type, Wrapped))
+        return isIntegralType(unwrapType(type, NULL));
 
     if (typeIs(type, Enum))
         return true;
@@ -284,6 +296,11 @@ bool isIntegralType(const Type *type)
 bool isSignedType(const Type *type)
 {
     type = resolveType(type);
+    if (typeIs(type, Info))
+        return isSignedType(type->info.target);
+
+    if (typeIs(type, Wrapped))
+        return isSignedType(unwrapType(type, NULL));
 
     if (!type || type->tag != typPrimitive)
         return false;
@@ -301,6 +318,11 @@ bool isSignedType(const Type *type)
 bool isUnsignedType(const Type *type)
 {
     type = resolveType(type);
+    if (typeIs(type, Info))
+        return isUnsignedType(type->info.target);
+
+    if (typeIs(type, Wrapped))
+        return isUnsignedType(unwrapType(type, NULL));
 
     if (!type || type->tag != typPrimitive)
         return false;
@@ -318,6 +340,12 @@ bool isFloatType(const Type *type)
 {
     type = resolveType(type);
 
+    if (typeIs(type, Info))
+        return isFloatType(type->info.target);
+
+    if (typeIs(type, Wrapped))
+        return isFloatType(unwrapType(type, NULL));
+
     if (!type || type->tag != typPrimitive)
         return false;
     switch (type->primitive.id) {
@@ -332,16 +360,77 @@ bool isFloatType(const Type *type)
 
 bool isNumericType(const Type *type)
 {
+    type = resolveType(type);
+
     if (typeIs(type, Wrapped))
         return isNumericType(unwrapType(type, NULL));
 
-    if (type->tag != typPrimitive || type->primitive.id == prtBool)
+    if (typeIs(type, Info))
+        return isNumericType(type->info.target);
+
+    if (type == NULL || type->tag != typPrimitive ||
+        type->primitive.id == prtBool)
         return false;
     return true;
 }
 
+bool isBooleanType(const Type *type)
+{
+    type = resolveType(type);
+
+    if (typeIs(type, Wrapped))
+        return isBooleanType(unwrapType(type, NULL));
+
+    if (typeIs(type, Info))
+        return isBooleanType(type->info.target);
+
+    return (type && type->tag == typPrimitive && type->primitive.id == prtBool);
+}
+
+bool isCharacterType(const Type *type)
+{
+    type = resolveType(type);
+
+    if (typeIs(type, Wrapped))
+        return isCharacterType(unwrapType(type, NULL));
+
+    if (typeIs(type, Info))
+        return isCharacterType(type->info.target);
+
+    return (type && type->tag == typPrimitive && type->primitive.id == prtChar);
+}
+
+bool isArrayType(const Type *type)
+{
+    type = resolveType(type);
+
+    if (typeIs(type, Wrapped))
+        return isArrayType(unwrapType(type, NULL));
+
+    if (typeIs(type, Info))
+        return isArrayType(type->info.target);
+
+    return typeIs(type, Array);
+}
+
+bool isPointerType(const Type *type)
+{
+    type = resolveType(type);
+
+    if (typeIs(type, Wrapped))
+        return isArrayType(unwrapType(type, NULL));
+
+    if (typeIs(type, Info))
+        return isArrayType(type->info.target);
+
+    return typeIs(type, Pointer);
+}
+
 bool isBuiltinType(const Type *type)
 {
+    if (type == NULL)
+        return false;
+
     switch (type->tag) {
     case typPrimitive:
     case typVoid:
@@ -349,6 +438,10 @@ bool isBuiltinType(const Type *type)
     case typAuto:
     case typNull:
         return true;
+    case typInfo:
+        return isBuiltinType(type->info.target);
+    case typWrapped:
+        return isBuiltinType(unwrapType(type, NULL));
     default:
         return false;
     }

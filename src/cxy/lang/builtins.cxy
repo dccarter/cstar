@@ -101,13 +101,13 @@ pub struct StringBuilder {
 
     @inline
     func `<<`[U](val: U) {
-        #if (#U == #string)
+        #if (U.isString)
             appendString(val)
-        else #if (#U == #i8 || #U == #u8 || #U == #i16 || #U == #u16 || #U == #i32 || #U == #u32 || #U == #i64 || #U == #u64)
-            appendInt(val)
-        else #if (#U == #f32 || #U == #f64)
+        else #if (U.isInteger)
+            appendInt(<i64>val)
+        else #if (U.isFloat)
             appendFloat(val)
-        else #if (#U == #bool)
+        else #if (U.isBoolean)
             appendBool(val)
         else #if (#U == #wchar)
              appendChar(val)
@@ -141,6 +141,17 @@ pub struct PtrRef[T] {
 pub struct Optional[T] {
     valid: bool = false
     val: T
+
+    @inline
+    func `new`(val: T) {
+        this.val = val
+        valid = true
+    }
+
+    @inline
+    func `new`() {
+        valid = false
+    }
 
     @inline
     func `!!`() => valid

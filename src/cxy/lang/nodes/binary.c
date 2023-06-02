@@ -65,7 +65,7 @@ static bool checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
     const Type *right = evalType(visitor, node->binaryExpr.rhs);
     if (typeIs(right, Error))
         return false;
-    
+
     const Type *operand = NULL;
     if (nodeIs(overload, GenericDecl)) {
         AstNode *lhs = node->binaryExpr.lhs;
@@ -104,9 +104,13 @@ static bool checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
             return false;
     }
 
-    //    if (typeIs(operand, Pointer) && !typeIs(right, Pointer)) {
-    //        node->binaryExpr.rhs = makeAddressOf(ctx, node->binaryExpr.rhs);
-    //    }
+    const AstNode *arg =
+        (nodeIs(overload, GenericDecl) ? overload->genericDecl.decl : overload)
+            ->funcDecl.params->funcParam.type;
+
+    if (nodeIs(arg, PointerType) && !typeIs(right, Pointer)) {
+        node->binaryExpr.rhs = makeAddressOf(ctx, node->binaryExpr.rhs);
+    }
 
     transformToMemberCallExpr(visitor,
                               node,
@@ -656,6 +660,7 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
 void evalBinaryExpr(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
+    AstNode *next = node->next, *parentScope = node->parentScope;
     if (!evaluate(visitor, node->binaryExpr.lhs)) {
         node->tag = astError;
         return;
@@ -679,4 +684,7 @@ void evalBinaryExpr(AstVisitor *visitor, AstNode *node)
     default:
         unreachable("NOT supported binary operator")
     }
+
+    node->next = next;
+    node->parentScope = parentScope;
 }

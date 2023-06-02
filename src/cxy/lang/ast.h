@@ -94,6 +94,7 @@ typedef enum {
 typedef enum {
     astError,
     astNop,
+    astComptimeOnly,
     astProgram,
     astCCode,
     astAttr,
@@ -205,7 +206,8 @@ enum {
     flgImmediatelyReturned = BIT(29),
     flgUnsafe = BIT(30),
     flgFunctionPtr = BIT(31),
-    flgBuiltinMember = BIT(32)
+    flgBuiltinMember = BIT(32),
+    flgComptimeIterable = BIT(33)
 };
 
 struct Scope;

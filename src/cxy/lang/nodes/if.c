@@ -96,8 +96,8 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
     }
     else {
         // select next statement, reclaim if branch
-        if (node->next)
-            *node = *node->next;
+        if (next)
+            *node = *next;
         else {
             clearAstBody(node);
             node->tag = astNop;

@@ -216,8 +216,13 @@ bool isUnsignedType(const Type *type);
 bool isFloatType(const Type *type);
 bool isNumericType(const Type *type);
 bool isBuiltinType(const Type *type);
+bool isBooleanType(const Type *type);
+bool isCharacterType(const Type *type);
+bool isArrayType(const Type *type);
+bool isPointerType(const Type *type);
 
 void printType(FormatState *state, const Type *type);
+
 static inline bool isSliceType(const Type *type)
 {
     return typeIs(type, Array) && type->array.len == UINT64_MAX;

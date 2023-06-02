@@ -9,6 +9,7 @@
  */
 
 #include "lang/codegen.h"
+#include "lang/eval.h"
 #include "lang/semantics.h"
 
 #include "lang/ast.h"
@@ -296,5 +297,59 @@ void generateForStmt(ConstAstVisitor *visitor, const AstNode *node)
     }
     else {
         unreachable("currently not supported");
+    }
+}
+
+void evalForStmt(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    FileLoc rangeLoc = node->forStmt.range->loc;
+
+    if (!evaluate(visitor, node->forStmt.range)) {
+        node->tag = astError;
+        return;
+    }
+
+    AstNode *range = node->forStmt.range;
+    if (!hasFlag(range, ComptimeIterable)) {
+        logError(ctx->L,
+                 &rangeLoc,
+                 "`#for` loop range expression is not comptime iterable",
+                 NULL);
+        node->tag = astError;
+        return;
+    }
+
+    AstNode *it = nodeIs(range, ComptimeOnly) ? range->next : range;
+    // open a new scope
+    AstNodeList nodes = {NULL};
+    cstring name = node->forStmt.var->varDecl.names->ident.value;
+
+    while (it) {
+        AstNode *body = cloneAstNode(ctx->pool, node->forStmt.body);
+
+        pushScope(&ctx->eval.env, node);
+        SymbolRef *ref = updateSymbol(&ctx->eval.env, name, it);
+        if (!evaluate(ctx->eval.semanticsVisitor, body) ||
+            typeIs(body, Error)) {
+            node->tag = astError;
+            popScope(&ctx->eval.env);
+            return;
+        }
+        popScope(&ctx->eval.env);
+
+        if (!nodeIs(it, Nop))
+            insertAstNode(&nodes, body);
+
+        it = it->next;
+        ref->node = it;
+    }
+
+    if (nodes.first == NULL) {
+        node->tag = astNop;
+    }
+    else {
+        nodes.last->next = node->next;
+        *node = *nodes.first;
     }
 }

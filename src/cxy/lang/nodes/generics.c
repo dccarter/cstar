@@ -162,10 +162,9 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     const Env *upper = getUpperEnv(generic->genericDecl.env);
     __typeof(ctx->stack) saveStack = ctx->stack;
     ctx->env = generic->genericDecl.env;
-    if (upper)
+    if (upper && upper != saveEnv)
         ((Env *)upper)->up = saveEnv;
-    bool isMember = nodeIs(target->generic.decl, FuncDecl) &&
-                    nodeIs(target->generic.decl->parentScope, StructDecl);
+    bool isFunction = nodeIs(target->generic.decl, FuncDecl);
 
     pushScope(generic->genericDecl.env, NULL);
     param = node->pathElement.args;
@@ -177,7 +176,7 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     }
 
     addTopLevelDecl(ctx, name, substitute);
-    if (isMember) {
+    if (isFunction) {
         substitute->parentScope = target->generic.decl->parentScope;
         checkMethodDeclSignature(visitor, substitute);
         ((Type *)(goi.s))->applied.generated = substitute->type;

@@ -307,6 +307,9 @@ void generateArrayDeclaration(CodegenContext *context, const Type *type)
 void checkArrayType(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
+    if (node->type)
+        return;
+    
     const Type *element = evalType(visitor, node->arrayType.elementType);
 
     u64 size = UINT64_MAX;

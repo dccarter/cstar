@@ -117,6 +117,10 @@ void checkMember(AstVisitor *visitor, AstNode *node)
 
     AstNode *member = node->memberExpr.member;
     node->flags |= (node->memberExpr.target->flags & flgConst);
+    if (hasFlag(member, Comptime) && !evaluate(visitor, member)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
 
     if (member->tag == astIntegerLit) {
         u64 flags = target->flags;
@@ -175,6 +179,7 @@ void checkMember(AstVisitor *visitor, AstNode *node)
             nodeIs(symbol, GenericDecl)) {
             symbol = checkGenericDeclReference(
                 visitor, symbol, member->path.elements, rawTarget->tStruct.env);
+            member->path.elements->pathElement.resolvesTo = symbol;
         }
 
         if (symbol == NULL) {

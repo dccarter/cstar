@@ -382,7 +382,7 @@ const Type *makePointerType(TypeTable *table, const Type *pointed, u64 flags)
     Type type = make(Type,
                      .tag = typPointer,
                      .flags = flags,
-                     .pointer = {.pointed = pointed});
+                     .pointer = {.pointed = unwrapType(pointed, NULL)});
 
     return getOrInsertType(table, &type).s;
 }

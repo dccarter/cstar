@@ -169,7 +169,8 @@ AstNode *findSymbolByPath(SemanticsContext *ctx,
     do {
         const Type *type;
         AstNode *sym =
-            findSymbol(env, ctx->L, elem->pathElement.name, &elem->loc);
+            elem->pathElement.resolvesTo
+                ?: findSymbol(env, ctx->L, elem->pathElement.name, &elem->loc);
         if (elem->next == NULL || sym == NULL)
             return sym;
 
@@ -278,8 +279,10 @@ static AstNode *findSymbolOnlyByPath(const Env *env, const AstNode *node)
     AstNode *elem = node->path.elements;
     do {
         const Type *type;
-        AstNode *sym = findSymbolOnly(
-            env, elem->pathElement.alt ?: elem->pathElement.name);
+        AstNode *sym =
+            elem->pathElement.resolvesTo
+                ?: findSymbolOnly(
+                       env, elem->pathElement.alt ?: elem->pathElement.name);
         if (elem->next == NULL || sym == NULL)
             return sym;
 
@@ -481,7 +484,7 @@ void semanticsCheck(AstNode *program,
                                 .isBuiltins = builtins == NULL};
 
     context.env = makeEnvironment(pool, NULL);
-    
+
     if (context.isBuiltins || program->program.module) {
         context.exports = makeEnvironment(pool, NULL);
         pushScope(context.exports, program->program.module);
@@ -554,6 +557,7 @@ void semanticsCheck(AstNode *program,
     // clang-format on
     AstVisitor evalVisitor = {};
     initEvalVisitor(&evalVisitor, &context);
+    context.eval.semanticsVisitor = &visitor;
 
     astVisit(&visitor, program);
 }

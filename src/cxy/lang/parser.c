@@ -38,6 +38,7 @@ static AstNode *aliasDecl(Parser *P, bool isPublic, bool isNative);
 static AstNode *enumDecl(Parser *P, bool isPublic);
 static AstNode *structDecl(Parser *P, bool isPublic);
 static AstNode *attributes(Parser *P);
+static AstNode *substitute(Parser *P, bool allowStructs);
 
 static void listAddAstNode(AstNodeList *list, AstNode *node)
 {
@@ -129,8 +130,9 @@ static void parserError(Parser *parser,
                         cstring msg,
                         FormatArg *args)
 {
+    FileLoc copy = *loc;
     advance(parser);
-    logError(parser->L, loc, msg, args);
+    logError(parser->L, &copy, msg, args);
     E4C_THROW_CTX(ParserException, "", parser);
 }
 
@@ -330,6 +332,8 @@ static AstNode *member(Parser *P, const FilePos *begin, AstNode *operand)
 
     if (check(P, tokIntLiteral))
         member = parseInteger(P);
+    else if (check(P, tokSubstitutue))
+        member = substitute(P, false);
     else
         member = parseIdentifier(P);
 
@@ -949,6 +953,26 @@ static AstNode *untypedExpr(Parser *P, bool allowStructs)
     return expr;
 }
 
+static AstNode *substitute(Parser *P, bool allowStructs)
+{
+    AstNode *expr = NULL;
+    const Token tok = *consume0(P, tokSubstitutue);
+    if (match(P, tokHash, tokSubstitutue)) {
+        parserError(P,
+                    &previous(P)->fileLoc,
+                    "compile time markers `#` or `#{` cannot be used in "
+                    "current context",
+                    NULL);
+    }
+
+    expr = assign(P, primary);
+
+    consume0(P, tokRBrace);
+
+    expr->flags |= flgComptime;
+    return expr;
+}
+
 static AstNode *primary(Parser *P, bool allowStructs)
 {
     switch (current(P)->tag) {
@@ -975,6 +999,8 @@ static AstNode *primary(Parser *P, bool allowStructs)
         return array(P);
     case tokHash:
         return untypedExpr(P, allowStructs);
+    case tokSubstitutue:
+        return substitute(P, allowStructs);
     case tokIdent: {
         AstNode *path = parsePath(P);
         if (allowStructs && check(P, tokLBrace))
@@ -1078,6 +1104,24 @@ static AstNode *attributes(Parser *P)
     return attrs;
 }
 
+static AstNode *parseVarDeclName(Parser *P)
+{
+    if (check(P, tokSubstitutue)) {
+        return substitute(P, false);
+    }
+    return parseIdentifier(P);
+}
+
+static AstNode *parseMultipleVariables(Parser *P)
+{
+    AstNodeList nodes = {NULL};
+    do {
+        listAddAstNode(&nodes, parseVarDeclName(P));
+    } while (match(P, tokComma));
+
+    return nodes.first;
+}
+
 static AstNode *variable(
     Parser *P, bool isPublic, bool isNative, bool isExpression, bool woInit)
 {
@@ -1085,19 +1129,15 @@ static AstNode *variable(
     uint64_t flags = isPublic ? flgPublic : flgNone;
     flags |= isNative ? flgNative : flgNone;
     flags |= tok.tag == tokConst ? flgConst : flgNone;
+    bool isComptime = previous(P)->tag == tokHash ||
+                      previous(P)->tag == tokSubstitutue ||
+                      previous(P)->tag == tokAstMacroAccess;
 
     if (!match(P, tokConst, tokVar))
         reportUnexpectedToken(P, "var/const to start variable declaration");
 
     AstNode *names = NULL, *type = NULL, *init = NULL;
-    if (match(P, tokLParen)) {
-        names = parseAtLeastOne(
-            P, "variable names", tokRParen, tokComma, parseIdentifier);
-        consume0(P, tokRParen);
-    }
-    else {
-        names = parseIdentifier(P);
-    }
+    names = isComptime ? parseIdentifier(P) : parseMultipleVariables(P);
 
     if (!isExpression && (match(P, tokColon) != NULL))
         type = parseType(P);
@@ -1128,17 +1168,24 @@ static AstNode *variable(
                    .varDecl = {.names = names, .type = type, .init = init}});
 }
 
-static AstNode *forVariable(Parser *P)
+static AstNode *forVariable(Parser *P, bool isComptime)
 {
     Token tok = *current(P);
     uint64_t flags = tok.tag == tokConst ? flgConst : flgNone;
+
+    if (isComptime && !check(P, tokConst))
+        reportUnexpectedToken(P,
+                              "unexpect token, comptime `for` variable can "
+                              "only be declared as `const`");
 
     if (!match(P, tokConst, tokVar))
         reportUnexpectedToken(P, "var/const to start variable declaration");
 
     AstNode *names = NULL, *type = NULL, *init = NULL;
-    names = parseAtLeastOne(
-        P, "variable names", tokColon, tokComma, parseIdentifier);
+    names = isComptime
+                ? parseIdentifier(P)
+                : parseAtLeastOne(
+                      P, "variable names", tokColon, tokComma, parseIdentifier);
 
     return newAstNode(
         P,
@@ -1344,13 +1391,14 @@ static AstNode *ifStatement(Parser *P)
             .ifStmt = {.cond = cond, .body = body, .otherwise = ifElse}});
 }
 
-static AstNode *forStatement(Parser *P)
+static AstNode *forStatement(Parser *P, bool isComptime)
 {
     AstNode *body = NULL;
+
     Token tok = *consume0(P, tokFor);
 
     consume0(P, tokLParen);
-    AstNode *var = forVariable(P);
+    AstNode *var = forVariable(P, isComptime);
     consume0(P, tokColon);
     AstNode *range = expression(P, true);
     consume0(P, tokRParen);
@@ -1484,11 +1532,10 @@ static AstNode *continueStatement(Parser *P)
 static AstNode *statement(Parser *P)
 {
     bool isComptime = match(P, tokHash) != NULL;
-    if (isComptime &&
-        !check(P, tokIf, tokFor, tokWhile, tokSwitch, tokConst, tokVar)) {
+    if (isComptime && !check(P, tokIf, tokFor, tokWhile, tokSwitch, tokConst)) {
         parserError(P,
                     &current(P)->fileLoc,
-                    "current token is not a valid compile time statement",
+                    "current token is not a valid compile time token",
                     NULL);
     }
 
@@ -1499,7 +1546,7 @@ static AstNode *statement(Parser *P)
         stmt = ifStatement(P);
         break;
     case tokFor:
-        stmt = forStatement(P);
+        stmt = forStatement(P, isComptime);
         break;
     case tokSwitch:
         stmt = switchStatement(P);
@@ -1584,6 +1631,9 @@ static AstNode *parseType(Parser *P)
                 P->memPool,
                 &tok.fileLoc,
                 &(AstNode){.tag = astIdentifier, .ident.value = "char"});
+            break;
+        case tokSubstitutue:
+            type = substitute(P, false);
             break;
         default:
             reportUnexpectedToken(P, "a type");

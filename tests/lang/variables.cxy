@@ -12,4 +12,9 @@ func main(args: [string]) {
         var k = 10;
         var y = x;
     }
+    // typed
+    {
+        var x: i32;
+        var y: (bool, i32) = (true, 20);
+    }
 }

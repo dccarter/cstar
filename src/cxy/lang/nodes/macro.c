@@ -10,6 +10,8 @@
 
 #include "lang/semantics.h"
 
+#include "core/sb.h"
+#include "lang/eval.h"
 #include "lang/ttable.h"
 
 #include <string.h>
@@ -116,6 +118,95 @@ static AstNode *makeSizeofNode(AstVisitor *visitor,
                          .args = args}});
 }
 
+static AstNode *makeAstIdentifierNode(AstVisitor *visitor,
+                                      attr(unused) const AstNode *node,
+                                      attr(unused) AstNode *args)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    if (args == NULL) {
+        logError(ctx->L,
+                 &node->loc,
+                 "invalid number of arguments passed to `mkIdent!` macro, "
+                 "expecting at least 1, got 0",
+                 NULL);
+        return NULL;
+    }
+
+    StringBuilder sb = {0};
+    stringBuilderInit(&sb);
+
+    for (AstNode *arg = args; arg;) {
+        AstNode *it = arg;
+        arg = arg->next;
+        if (!evaluate(visitor, it)) {
+            return NULL;
+        }
+
+        if (!evalStringBuilderAppend(ctx, &sb, it))
+            return NULL;
+    }
+
+    memset(args, 0, sizeof(*args));
+
+    char *str = stringBuilderRelease(&sb);
+    args->tag = astIdentifier;
+    args->ident.value = makeString(ctx->strPool, str);
+    free(str);
+    args->flags |= flgVisited;
+    return args;
+}
+
+static AstNode *makeIsTypeNode(AstVisitor *visitor,
+                               attr(unused) const AstNode *node,
+                               attr(unused) AstNode *args,
+                               cstring name,
+                               TTag tag)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
+        return NULL;
+
+    if (args->type == NULL)
+        evalType(visitor, args);
+
+    if (!typeIs(args->type, Info)) {
+        logError(ctx->L,
+                 &args->loc,
+                 "macro native '{s}!' expecting a typeinfo object",
+                 (FormatArg[]){{.s = name}});
+        return NULL;
+    }
+
+    clearAstBody(args);
+    args->flags = flgNone;
+    args->tag = astBoolLit;
+    args->boolLiteral.value = args->type->info.target->tag == tag;
+    args->type = getPrimitiveType(ctx->typeTable, prtBool);
+
+    return args;
+}
+
+static AstNode *makeIsPointerNode(AstVisitor *visitor,
+                                  attr(unused) const AstNode *node,
+                                  attr(unused) AstNode *args)
+{
+    return makeIsTypeNode(visitor, node, args, "is_pointer", typPointer);
+}
+
+static AstNode *makeIsEnumNode(AstVisitor *visitor,
+                               attr(unused) const AstNode *node,
+                               attr(unused) AstNode *args)
+{
+    return makeIsTypeNode(visitor, node, args, "is_enum", typEnum);
+}
+
+static AstNode *makeIsStructNode(AstVisitor *visitor,
+                                 attr(unused) const AstNode *node,
+                                 attr(unused) AstNode *args)
+{
+    return makeIsTypeNode(visitor, node, args, "is_struct", typStruct);
+}
+
 static AstNode *makeTypeinfoNode(AstVisitor *visitor, const Type *type)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
@@ -208,8 +299,7 @@ static AstNode *makeLenNode(AstVisitor *visitor,
     case typStruct: {
         AstNode *symbol =
             findSymbol(raw->tStruct.env, ctx->L, "len", &args->loc);
-        if (symbol && nodeIs(symbol, StructField) &&
-            isUnsignedType(symbol->type)) {
+        if (nodeIs(symbol, StructField) && isUnsignedType(symbol->type)) {
             return makeAstNode(
                 ctx->pool,
                 &node->loc,
@@ -419,6 +509,42 @@ static AstNode *makeTypeofNode(AstVisitor *visitor,
     return args;
 }
 
+static AstNode *makeBaseOfNode(AstVisitor *visitor,
+                               const AstNode *node,
+                               AstNode *args)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
+        return NULL;
+
+    const Type *type = args->type ?: evalType(visitor, args);
+    if (!typeIs(type, Info)) {
+        logError(
+            ctx->L,
+            &node->loc,
+            "invalid `typeof!` macro argument, expecting a type info object",
+            NULL);
+        return NULL;
+    }
+
+    type = type->info.target;
+    if (!typeIs(type, Enum) && !typeIs(type, Struct)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "invalid `typeof!` macro argument, unexpected type '{t}', "
+                 "expecting a struct or enum type",
+                 (FormatArg[]){{.t = type}});
+        return NULL;
+    }
+
+    type = typeIs(type, Enum)
+               ? type->tEnum.base
+               : (type->tStruct.base ?: makeVoidType(ctx->typeTable));
+
+    args->type = makeTypeInfo(ctx->typeTable, type);
+    return args;
+}
+
 static AstNode *makePointerOfNode(AstVisitor *visitor,
                                   const AstNode *node,
                                   AstNode *args)
@@ -469,14 +595,18 @@ static int compareBuiltinMacros(const void *lhs, const void *rhs)
 
 static const BuiltinMacro builtinMacros[] = {
     {.name = "assert", makeAssertNode},
-    {.name = "column", makeColumnNumberNode},
+    {.name = "base_of", makeBaseOfNode},
     {.name = "column", makeColumnNumberNode},
     {.name = "cstr", makeCstrNode},
     {.name = "data", makeDataNode},
     {.name = "destructor", makeDestructorNode},
     {.name = "file", makeFilenameNode},
+    {.name = "is_enum", makeIsEnumNode},
+    {.name = "is_pointer", makeIsPointerNode},
+    {.name = "is_struct", makeIsStructNode},
     {.name = "len", makeLenNode},
     {.name = "line", makeLineNumberNode},
+    {.name = "mkIdent", makeAstIdentifierNode},
     {.name = "ptroff", makePointerOfNode},
     {.name = "sizeof", makeSizeofNode},
     {.name = "typeof", makeTypeofNode},
@@ -507,6 +637,29 @@ static EvaluateMacro findBuiltinMacroByNode(AstNode *node)
 }
 
 void checkMacroExpr(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    EvaluateMacro macro = findBuiltinMacroByNode(node->macroCallExpr.callee);
+    if (macro == NULL) {
+        logError(ctx->L,
+                 &node->macroCallExpr.callee->loc,
+                 "currently only native macros are supported",
+                 NULL);
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+    AstNode *substitute = macro(visitor, node, node->macroCallExpr.args);
+    if (!substitute) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    substitute->next = node->next;
+    substitute->parentScope = node->parentScope;
+    *node = *substitute;
+}
+
+void evalMacroCall(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     EvaluateMacro macro = findBuiltinMacroByNode(node->macroCallExpr.callee);

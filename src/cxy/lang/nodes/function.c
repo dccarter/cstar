@@ -373,6 +373,32 @@ void generateFuncDeclaration(CodegenContext *context, const Type *type)
     format(state, ")", NULL);
 }
 
+void generateFuncGeneratedDeclaration(CodegenContext *context, const Type *type)
+{
+    FormatState *state = context->state;
+    u32 index = type->func.decl->funcDecl.index;
+    if (hasFlag(type->func.decl, BuiltinMember))
+        return;
+
+    format(state, ";\n", NULL);
+    generateTypeUsage(context, type->func.retType);
+    if (typeIs(type->func.retType, This))
+        format(context->state, " *", NULL);
+    else
+        format(state, " ", NULL);
+    format(state, "{s}", (FormatArg[]){{.s = type->name}});
+    if (index)
+        format(state, "{u32}", (FormatArg[]){{.u32 = index}});
+
+    format(state, "(", NULL);
+    for (u64 i = 0; i < type->func.paramsCount; i++) {
+        if (i)
+            format(state, ", ", NULL);
+        generateTypeUsage(context, type->func.params[i]);
+    }
+    format(state, ")", NULL);
+}
+
 void generateFunctionTypedef(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
@@ -405,6 +431,8 @@ void generateFunctionTypedef(CodegenContext *context, const Type *type)
     format(state, ")", NULL);
     if (isMember)
         generateFuncDeclaration(context, type);
+    else if (type->func.decl->flags & flgGenerated)
+        generateFuncGeneratedDeclaration(context, type);
 }
 
 const Type *checkMethodDeclSignature(AstVisitor *visitor, AstNode *node)
@@ -464,41 +492,44 @@ void checkMethodDeclBody(AstVisitor *visitor, AstNode *node)
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *ret = NULL, *type = NULL;
     AstNode *param = node->funcDecl.params;
-    csAssert0(node->parentScope && nodeIs(node->parentScope, StructDecl));
-
-    const Type *parent = typeIs(node->parentScope->type, This)
-                             ? node->parentScope->type
-                             : makePointerType(ctx->typeTable,
-                                               node->parentScope->type,
-                                               node->parentScope->type->flags);
 
     const AstNode *lastReturn = ctx->lastReturn;
     ctx->lastReturn = NULL;
 
     pushScope(ctx->env, node);
-    defineSymbol(
-        ctx->env,
-        ctx->L,
-        "this",
-        makeAstNode(ctx->pool,
-                    &node->loc,
-                    &(AstNode){.tag = astIdentifier,
-                               .flags = (parent->flags & ~flgTopLevelDecl),
-                               .type = parent,
-                               .ident.value = "this"}));
 
-    if (node->parentScope->structDecl.base) {
+    if (nodeIs(node->parentScope, StructDecl)) {
+        const Type *parent =
+            typeIs(node->parentScope->type, This)
+                ? node->parentScope->type
+                : makePointerType(ctx->typeTable,
+                                  node->parentScope->type,
+                                  node->parentScope->type->flags);
+
         defineSymbol(
             ctx->env,
             ctx->L,
-            "super",
-            makeAstNode(
-                ctx->pool,
-                &node->loc,
-                &(AstNode){.tag = astIdentifier,
-                           .flags = parent->flags | flgAddThis,
-                           .type = node->parentScope->structDecl.base->type,
-                           .ident.value = "super"}));
+            "this",
+            makeAstNode(ctx->pool,
+                        &node->loc,
+                        &(AstNode){.tag = astIdentifier,
+                                   .flags = (parent->flags & ~flgTopLevelDecl),
+                                   .type = parent,
+                                   .ident.value = "this"}));
+
+        if (node->parentScope->structDecl.base) {
+            defineSymbol(
+                ctx->env,
+                ctx->L,
+                "super",
+                makeAstNode(
+                    ctx->pool,
+                    &node->loc,
+                    &(AstNode){.tag = astIdentifier,
+                               .flags = parent->flags | flgAddThis,
+                               .type = node->parentScope->structDecl.base->type,
+                               .ident.value = "super"}));
+        }
     }
 
     for (; param; param = param->next) {

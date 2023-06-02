@@ -14,6 +14,7 @@ pub native func __cxy_builtins_next_prime(i: u64) : u64;
 pub native func __cxy_builtins_mod_prime(i: u64, p: u64) : u64;
 
 
+@builtins(toString: false)
 struct HashMapNode[K, V] {
     key: K
     value: V
@@ -47,6 +48,7 @@ pub struct HashMap[K, V] {
                 index = incrementWrap(newCapacity, index);
 
             newData.[index] = data.[i]
+            data.[i] = HashMapNode[K, V]{}
             newHashes.[index] = hashCode;
         }
 
@@ -57,7 +59,7 @@ pub struct HashMap[K, V] {
     }
 
     @inline
-    - func remoteAt(key: K, index: u64) {
+    - func removeAt(key: K, index: u64) {
         var removed = Some(data.[index].value);
 
         var next = incrementWrap(len!(data), index);
@@ -122,7 +124,7 @@ pub struct HashMap[K, V] {
         var found = false;
         while (isBucketOccupied(index)) {
             if (hashes.[index] == hashCode && key == data.[index].key) {
-                return remoteAt(key, index)
+                return removeAt(key, index)
             }
             index = incrementWrap(len!(data), index)
         }
@@ -175,11 +177,12 @@ pub struct HashMap[K, V] {
         var first = true;
 
         while (i < len!(data)) {
-            if (!first)
-                sb << ", "
-
             if (isOccupiedHash(hashes.[i])) {
+                if (!first)
+                    sb << ", "
+
                 sb << data.[i].key << ": " << data.[i].value
+                first = false
             }
 
             i++
