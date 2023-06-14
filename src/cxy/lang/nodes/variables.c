@@ -8,10 +8,14 @@
 
 #include "lang/ttable.h"
 
-void generateVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static inline bool isTransientVariable(const AstNode *node) {
+    return findAttribute(node, "transient");
+}
+
+void generateVariableDecl(ConstAstVisitor *visitor, const AstNode *node) {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    if (!hasFlag(node, ImmediatelyReturned) && typeIs(node->type, Pointer))
+    bool isTransient = findAttribute(node, "transient");
+    if (!isTransient && !hasFlag(node, ImmediatelyReturned) && typeIs(node->type, Pointer))
         format(ctx->state, "__builtin_cxy_stack_cleanup ", NULL);
 
     if (node->flags & flgNative)
@@ -29,30 +33,29 @@ void generateVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
 
     if (node->varDecl.init) {
         format(ctx->state, " = ", NULL);
-        if (typeIs(node->varDecl.init->type, Pointer) &&
+        if (!isTransient &&
+            typeIs(node->varDecl.init->type, Pointer) &&
             !nodeIs(node->varDecl.init, NewExpr) &&
             !(nodeIs(node->varDecl.init, StmtExpr))) {
             format(ctx->state, "__builtin_cxy_get_ref(", NULL);
             astConstVisit(visitor, node->varDecl.init);
             format(ctx->state, ")", NULL);
-        }
-        else
+        } else
             astConstVisit(visitor, node->varDecl.init);
     }
     format(ctx->state, ";", NULL);
 }
 
-void checkVarDecl(AstVisitor *visitor, AstNode *node)
-{
+void checkVarDecl(AstVisitor *visitor, AstNode *node) {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *names = node->varDecl.names;
 
     if (node->varDecl.names->next) {
         logError(
-            ctx->L,
-            &node->loc,
-            "unsupported: multi-variable declaration currently not supported",
-            NULL);
+                ctx->L,
+                &node->loc,
+                "unsupported: multi-variable declaration currently not supported",
+                NULL);
 
         node->type = ERROR_TYPE(ctx);
         return;
@@ -81,8 +84,7 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
     if (node->varDecl.type) {
         node->varDecl.type->flags |= node->flags;
         node->type = evalType(visitor, node->varDecl.type);
-    }
-    else {
+    } else {
         node->type = makeAutoType(ctx->typeTable);
     }
 
@@ -91,25 +93,23 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
         value = evalType(visitor, node->varDecl.init);
         if (typeIs(value, Error)) {
             node->type = ERROR_TYPE(ctx);
-        }
-        else if (typeIs(value, Array) && !isSliceType(value) &&
-                 !nodeIs(node->varDecl.init, ArrayExpr)) {
+        } else if (typeIs(value, Array) && !isSliceType(value) &&
+                   !nodeIs(node->varDecl.init, ArrayExpr)) {
             logError(ctx->L,
                      &node->varDecl.init->loc,
                      "initializer for array declaration can only be an array "
                      "expression",
                      NULL);
             node->type = ERROR_TYPE(ctx);
-        }
-        else if (!isTypeAssignableFrom(node->type, value)) {
+        } else if (!isTypeAssignableFrom(node->type, value)) {
             logError(ctx->L,
                      &node->varDecl.init->loc,
                      "incompatible types, expecting type '{t}', got '{t}'",
-                     (FormatArg[]){{.t = node->type}, {.t = value}});
+                     (FormatArg[]) {{.t = node->type},
+                                    {.t = value}});
             node->type = ERROR_TYPE(ctx);
-        }
-        else if ((value->tag == typPointer) &&
-                 ((value->flags & flgConst) && !(node->flags & flgConst))) {
+        } else if ((value->tag == typPointer) &&
+                   ((value->flags & flgConst) && !(node->flags & flgConst))) {
             logError(ctx->L,
                      &node->varDecl.init->loc,
                      "assigning a const pointer to a non-const variable "
@@ -127,8 +127,7 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
     }
 }
 
-void evalVarDecl(AstVisitor *visitor, AstNode *node)
-{
+void evalVarDecl(AstVisitor *visitor, AstNode *node) {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *names = node->varDecl.names;
 

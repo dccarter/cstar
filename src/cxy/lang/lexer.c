@@ -14,16 +14,14 @@ typedef struct {
     TokenTag tag;
 } Keyword;
 
-static bool compareKeywords(const void *left, const void *right)
-{
-    return ((Keyword *)left)->len == ((Keyword *)right)->len &&
-           !memcmp(((Keyword *)left)->name,
-                   ((Keyword *)right)->name,
-                   ((Keyword *)left)->len);
+static bool compareKeywords(const void *left, const void *right) {
+    return ((Keyword *) left)->len == ((Keyword *) right)->len &&
+           !memcmp(((Keyword *) left)->name,
+                   ((Keyword *) right)->name,
+                   ((Keyword *) left)->len);
 }
 
-static void registerKeywords(HashTable *keywords)
-{
+static void registerKeywords(HashTable *keywords) {
 #define f(name, str, ...)                                                      \
     insertInHashTable(keywords,                                                \
                       &(Keyword){str, strlen(str), tok##name},                 \
@@ -37,35 +35,32 @@ static void registerKeywords(HashTable *keywords)
 Lexer newLexer(const char *fileName,
                const char *fileData,
                size_t fileSize,
-               Log *log)
-{
+               Log *log) {
     enum {
 #define f(name, str, ...) KEYWORD_##name,
         KEYWORD_LIST(f)
 #undef f
-            KEYWORD_COUNT
+        KEYWORD_COUNT
     };
     Lexer lexer = {.log = log,
-                   .fileName = fileName,
-                   .fileData = fileData,
-                   .fileSize = fileSize,
-                   .filePos = {.row = 1, .col = 1},
-                   .keywords =
-                       newHashTableWithCapacity(KEYWORD_COUNT, sizeof(Keyword)),
-                   .flags = lxNone};
+            .fileName = fileName,
+            .fileData = fileData,
+            .fileSize = fileSize,
+            .filePos = {.row = 1, .col = 1},
+            .keywords =
+            newHashTableWithCapacity(KEYWORD_COUNT, sizeof(Keyword)),
+            .flags = lxNone};
     registerKeywords(&lexer.keywords);
     return lexer;
 }
 
 void freeLexer(Lexer *lexer) { freeHashTable(&lexer->keywords); }
 
-static bool isEofReached(const Lexer *lexer)
-{
+static bool isEofReached(const Lexer *lexer) {
     return lexer->fileSize == lexer->filePos.byteOffset;
 }
 
-static const char *getCurPtr(const Lexer *lexer)
-{
+static const char *getCurPtr(const Lexer *lexer) {
     // assert(!isEofReached(lexer));
     static const char EoF = EOF;
     return isEofReached(lexer) ? &EoF
@@ -74,26 +69,22 @@ static const char *getCurPtr(const Lexer *lexer)
 
 static char getCurChar(const Lexer *lexer) { return *getCurPtr(lexer); }
 
-static char peekNextChar(const Lexer *lexer)
-{
+static char peekNextChar(const Lexer *lexer) {
     if (lexer->fileSize == (1 + lexer->filePos.byteOffset))
         return EOF;
     return lexer->fileData[lexer->filePos.byteOffset + 1];
 }
 
-static void skipChar(Lexer *lexer)
-{
+static void skipChar(Lexer *lexer) {
     if (getCurChar(lexer) == '\n') {
         lexer->filePos.row++;
         lexer->filePos.col = 1;
-    }
-    else
+    } else
         lexer->filePos.col++;
     lexer->filePos.byteOffset++;
 }
 
-static bool acceptChar(Lexer *lexer, char c)
-{
+static bool acceptChar(Lexer *lexer, char c) {
     if (!isEofReached(lexer)) {
         const char x = getCurChar(lexer);
         if (getCurChar(lexer) == c) {
@@ -104,20 +95,17 @@ static bool acceptChar(Lexer *lexer, char c)
     return false;
 }
 
-static void skipSpaces(Lexer *lexer)
-{
+static void skipSpaces(Lexer *lexer) {
     while (!isEofReached(lexer) && isspace(getCurChar(lexer)))
         skipChar(lexer);
 }
 
-static void skipSingleLineComment(Lexer *lexer)
-{
+static void skipSingleLineComment(Lexer *lexer) {
     while (!isEofReached(lexer) && getCurChar(lexer) != '\n')
         skipChar(lexer);
 }
 
-static void skipMultiLineComment(Lexer *lexer)
-{
+static void skipMultiLineComment(Lexer *lexer) {
     while (!isEofReached(lexer)) {
         while (acceptChar(lexer, '*')) {
             if (acceptChar(lexer, '/'))
@@ -127,25 +115,22 @@ static void skipMultiLineComment(Lexer *lexer)
     }
 }
 
-static Token makeToken(Lexer *lexer, const FilePos *begin, TokenTag tag)
-{
-    return (Token){
-        .tag = tag,
-        .fileLoc = {.fileName = lexer->fileName,
+static Token makeToken(Lexer *lexer, const FilePos *begin, TokenTag tag) {
+    return (Token) {
+            .tag = tag,
+            .fileLoc = {.fileName = lexer->fileName,
                     .begin = *begin,
                     .end = lexer->filePos},
     };
 }
 
-static Token makeIntLiteral(Lexer *lexer, const FilePos *begin, uintmax_t iVal)
-{
+static Token makeIntLiteral(Lexer *lexer, const FilePos *begin, uintmax_t iVal) {
     Token token = makeToken(lexer, begin, tokIntLiteral);
     token.iVal = iVal;
     return token;
 }
 
-static Token makeFloatLiteral(Lexer *lexer, const FilePos *begin, double fVal)
-{
+static Token makeFloatLiteral(Lexer *lexer, const FilePos *begin, double fVal) {
     Token token = makeToken(lexer, begin, tokFloatLiteral);
     token.fVal = fVal;
     return token;
@@ -153,15 +138,13 @@ static Token makeFloatLiteral(Lexer *lexer, const FilePos *begin, double fVal)
 
 static Token makeInvalidToken(Lexer *lexer,
                               const FilePos *begin,
-                              const char *errMsg)
-{
+                              const char *errMsg) {
     Token token = makeToken(lexer, begin, tokError);
     logError(lexer->log, &token.fileLoc, errMsg, NULL);
     return token;
 }
 
-Token advanceLexer(Lexer *lexer)
-{
+Token advanceLexer(Lexer *lexer) {
     if (lexer->flags & lxExitStringExpr) {
         lexer->flags &= ~lxExitStringExpr;
         return makeToken(lexer, &lexer->filePos, tokRString);
@@ -247,6 +230,10 @@ Token advanceLexer(Lexer *lexer)
             if (acceptChar(lexer, '='))
                 return makeToken(lexer, &begin, tokNotEqual);
             return makeToken(lexer, &begin, tokLNot);
+        }
+
+        if (acceptChar(lexer, '~')) {
+            return makeToken(lexer, &begin, tokBNot);
         }
 
         if (acceptChar(lexer, '+')) {
@@ -335,8 +322,7 @@ Token advanceLexer(Lexer *lexer)
             if (acceptChar(lexer, '/')) {
                 skipSingleLineComment(lexer);
                 continue;
-            }
-            else if (acceptChar(lexer, '*')) {
+            } else if (acceptChar(lexer, '*')) {
                 skipMultiLineComment(lexer);
                 continue;
             }
@@ -347,7 +333,7 @@ Token advanceLexer(Lexer *lexer)
 
         if (acceptChar(lexer, '\"')) {
             parsingStringLiteral = true;
-        lexerLexString:
+            lexerLexString:
             while (getCurChar(lexer) != '\"') {
                 if (acceptChar(lexer, '\n')) {
                     // Backslash to continue string on another line
@@ -383,7 +369,7 @@ Token advanceLexer(Lexer *lexer)
             }
             if (!acceptChar(lexer, '\"'))
                 return makeInvalidToken(
-                    lexer, &begin, "unterminated string literal");
+                        lexer, &begin, "unterminated string literal");
             return makeToken(lexer, &begin, tokStringLiteral);
         }
 
@@ -391,7 +377,7 @@ Token advanceLexer(Lexer *lexer)
             const char *ptr = getCurPtr(lexer);
             size_t charCount = 0;
             for (; getCurChar(lexer) != '\'' && getCurChar(lexer) != '\n';
-                 charCount++) {
+                   charCount++) {
                 if (getCurChar(lexer) == '\\') {
                     skipChar(lexer);
                     charCount++;
@@ -402,9 +388,9 @@ Token advanceLexer(Lexer *lexer)
             Token token = makeToken(lexer, &begin, tokCharLiteral);
             if (!acceptChar(lexer, '\'') ||
                 convertEscapeSeq(
-                    ptr, getCurPtr(lexer) - ptr - 1, &token.cVal) != charCount)
+                        ptr, getCurPtr(lexer) - ptr - 1, &token.cVal) != charCount)
                 return makeInvalidToken(
-                    lexer, &begin, "invalid character literal");
+                        lexer, &begin, "invalid character literal");
             return token;
         }
 
@@ -412,7 +398,7 @@ Token advanceLexer(Lexer *lexer)
             skipChar(lexer);
             if (lexer->flags & (lxEnterStringExpr | lxContinueStringExpr))
                 return makeInvalidToken(
-                    lexer, &begin, "unsupported nesting of string expressions");
+                        lexer, &begin, "unsupported nesting of string expressions");
             lexer->flags |= lxEnterStringExpr;
             return makeToken(lexer, &begin, tokLString);
         }
@@ -424,11 +410,11 @@ Token advanceLexer(Lexer *lexer)
             const char *name = lexer->fileData + begin.byteOffset;
             size_t len = lexer->filePos.byteOffset - begin.byteOffset;
             Keyword *keyword =
-                findInHashTable(&lexer->keywords,
-                                &(Keyword){.name = name, .len = len},
-                                hashRawBytes(hashInit(), name, len),
-                                sizeof(Keyword),
-                                compareKeywords);
+                    findInHashTable(&lexer->keywords,
+                                    &(Keyword) {.name = name, .len = len},
+                                    hashRawBytes(hashInit(), name, len),
+                                    sizeof(Keyword),
+                                    compareKeywords);
             return keyword ? makeToken(lexer, &begin, keyword->tag)
                            : makeToken(lexer, &begin, tokIdent);
         }
@@ -445,23 +431,21 @@ Token advanceLexer(Lexer *lexer)
                     while (getCurChar(lexer) == '0' || getCurChar(lexer) == '1')
                         skipChar(lexer);
                     return makeIntLiteral(
-                        lexer, &begin, strtoumax(ptr, NULL, 2));
-                }
-                else if (acceptChar(lexer, 'x')) {
+                            lexer, &begin, strtoumax(ptr, NULL, 2));
+                } else if (acceptChar(lexer, 'x')) {
                     // Hexadecimal literal
                     ptr = getCurPtr(lexer);
                     while (isxdigit(getCurChar(lexer)))
                         skipChar(lexer);
                     return makeIntLiteral(
-                        lexer, &begin, strtoumax(ptr, NULL, 16));
-                }
-                else if (acceptChar(lexer, 'o')) {
+                            lexer, &begin, strtoumax(ptr, NULL, 16));
+                } else if (acceptChar(lexer, 'o')) {
                     // Octal literal
                     ptr = getCurPtr(lexer);
                     while (getCurChar(lexer) >= '0' && getCurChar(lexer) <= '7')
                         skipChar(lexer);
                     return makeIntLiteral(
-                        lexer, &begin, strtoumax(ptr, NULL, 8));
+                            lexer, &begin, strtoumax(ptr, NULL, 8));
                 }
             }
 
@@ -490,7 +474,7 @@ Token advanceLexer(Lexer *lexer)
 
             return hasDot ? makeFloatLiteral(lexer, &begin, strtod(ptr, NULL))
                           : makeIntLiteral(
-                                lexer, &begin, strtoumax(ptr, NULL, 10));
+                            lexer, &begin, strtoumax(ptr, NULL, 10));
         }
 
         skipChar(lexer);
@@ -498,14 +482,13 @@ Token advanceLexer(Lexer *lexer)
     }
 }
 
-bool isKeyword(TokenTag tag)
-{
+bool isKeyword(TokenTag tag) {
     switch (tag) {
 #define f(T, ...) case tok##T:
         KEYWORD_LIST(f)
 #undef f
-        return true;
-    default:
-        return false;
+            return true;
+        default:
+            return false;
     }
 }

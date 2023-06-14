@@ -21,24 +21,39 @@ E4C_DEFINE_EXCEPTION(ErrorLimitExceeded,
                      RuntimeException);
 
 static void synchronize(Parser *P);
+
 static void synchronizeUntil(Parser *P, TokenTag tag);
+
 static AstNode *expression(Parser *P, bool allowStructs);
+
 static AstNode *statement(Parser *P);
+
 static AstNode *parseType(Parser *P);
 
 static AstNode *primary(Parser *P, bool allowStructs);
+
 static AstNode *macroExpression(Parser *P, AstNode *callee);
+
 static AstNode *callExpression(Parser *P, AstNode *callee);
+
 static AstNode *parsePath(Parser *P);
+
 static AstNode *variable(
     Parser *P, bool isPublic, bool isExport, bool isExpression, bool woInit);
+
 static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative);
 
 static AstNode *aliasDecl(Parser *P, bool isPublic, bool isNative);
+
 static AstNode *enumDecl(Parser *P, bool isPublic);
+
 static AstNode *structDecl(Parser *P, bool isPublic);
+
 static AstNode *attributes(Parser *P);
+
 static AstNode *substitute(Parser *P, bool allowStructs);
+
+static AstNode *block(Parser *P);
 
 static void listAddAstNode(AstNodeList *list, AstNode *node)
 {
@@ -399,6 +414,7 @@ static AstNode *postfix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 }
 
 static AstNode *fieldExpr(Parser *P);
+
 static AstNode *structExpr(Parser *P,
                            AstNode *lhs,
                            AstNode *(parseField)(Parser *));
@@ -469,7 +485,9 @@ static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
             &(AstNode){.tag = astAddressOf, .unaryExpr = {.operand = operand}});
     }
 }
+
 static AstNode *assign(Parser *P, AstNode *(parsePrimary)(Parser *, bool));
+
 static AstNode *binary(Parser *P,
                        AstNode *lhs,
                        int prec,
@@ -578,7 +596,10 @@ static AstNode *functionParam(Parser *P)
     u64 flags = match(P, tokElipsis) ? flgVariadic : flgNone;
     const char *name = getTokenString(P, consume0(P, tokIdent), false);
     consume0(P, tokColon);
+    bool isConst = match(P, tokConst);
     AstNode *type = parseType(P), *def = NULL;
+    type->flags |= (isConst ? flgConst : flgNone);
+
     if (match(P, tokAssign)) {
         def = expression(P, false);
     }
@@ -794,11 +815,14 @@ static AstNode *macroExpression(Parser *P, AstNode *callee)
         args = parseMany(P, tokRParen, tokComma, expressionWithStructs);
         consume0(P, tokRParen);
     }
+    else if (check(P, tokLBrace))
+        args = block(P);
 
     return newAstNode(
         P,
         &callee->loc.begin,
         &(AstNode){.tag = astMacroCallExpr,
+                   .flags = flgComptime,
                    .macroCallExpr = {.callee = callee, .args = args}});
 }
 
@@ -1222,6 +1246,7 @@ static AstNode *macroDecl(Parser *P, bool isPublic)
 }
 
 typedef Pair(Operator, cstring) OperatorOverload;
+
 static OperatorOverload operatorOverload(Parser *P)
 {
     OperatorOverload op = {};
@@ -1531,6 +1556,10 @@ static AstNode *continueStatement(Parser *P)
 
 static AstNode *statement(Parser *P)
 {
+    AstNode *attrs = NULL;
+    if (check(P, tokAt))
+        attrs = attributes(P);
+
     bool isComptime = match(P, tokHash) != NULL;
     if (isComptime && !check(P, tokIf, tokFor, tokWhile, tokSwitch, tokConst)) {
         parserError(P,
@@ -1585,6 +1614,7 @@ static AstNode *statement(Parser *P)
     }
     }
 
+    stmt->attrs = attrs;
     stmt->flags |= (isComptime ? flgComptime : flgNone);
     return stmt;
 }

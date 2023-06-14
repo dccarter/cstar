@@ -41,6 +41,11 @@ static inline bool isInlineFunction(const AstNode *node)
     return findAttribute(node, "inline") != NULL;
 }
 
+static inline bool isStaticFuncParam(SemanticsContext *ctx, const AstNode *node)
+{
+    return findAttribute(node, "static") != NULL;
+}
+
 static const Type *transformFuncTypeParam(SemanticsContext *ctx,
                                           const Type *type)
 {
@@ -93,7 +98,7 @@ static const Type **checkFunctionParams(AstVisitor *visitor,
         if (isVariadic && (param->flags & flgVariadic)) {
             logError(ctx->L,
                      &param->loc,
-                     "variadic parameters should the last parameter type in "
+                     "variadic parameters should be the last parameter type in "
                      "function declaration",
                      NULL);
             continue;
@@ -109,7 +114,8 @@ static const Type **checkFunctionParams(AstVisitor *visitor,
             continue;
         }
         *withDefaultValues = (param->funcParam.def != NULL);
-        if (params[i]->tag == typFunc) {
+        if (typeIs(params[i], Func) && !isStaticFuncParam(ctx, param) &&
+            !hasFlag(node, Native)) {
             params[i] = transformFuncTypeParam(ctx, params[i]);
             param->type = params[i];
 

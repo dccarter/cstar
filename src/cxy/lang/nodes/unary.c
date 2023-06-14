@@ -38,6 +38,16 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
             operand = ERROR_TYPE(ctx);
         }
         break;
+    case opCompl:
+        if (!isIntegerType(operand)) {
+            logError(ctx->L,
+                     &node->unaryExpr.operand->loc,
+                     "binary expression '{s}' no supported on type '{t}'",
+                     (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)},
+                                   {.t = operand}});
+            operand = ERROR_TYPE(ctx);
+        }
+        break;
     case opNot:
         if (operand != getPrimitiveType(ctx->typeTable, prtBool)) {
             logError(ctx->L,
@@ -68,11 +78,9 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
         }
         break;
     case opDelete:
-        if (!typeIs(operand, Pointer) && !typeIs(operand, Array)) {
-            logError(ctx->L,
-                     &node->loc,
-                     "cannot delete an none `new` allocated object",
-                     NULL);
+        if (typeIs(operand, Primitive)) {
+            logError(
+                ctx->L, &node->loc, "cannot delete a primitive value", NULL);
             operand = ERROR_TYPE(ctx);
         }
         else {

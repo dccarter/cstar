@@ -7,9 +7,99 @@ pub const STDERR = unchecked!(STDERR_FILENO, #i32);
 pub const STDIN  = unchecked!(STDERR_FILENO, #i32);
 
 pub native func write(fd: i32, data: &const void, size: u64) : i64;
+pub native func read(fd: i32, data: &void, size: u64) : i64;
+
+pub native func C__fcntl_GETFL(fd: i32): i32;
+pub native func C__fcntl_SETFL(fd: i32, flags: i32): i32;
 
 @inline
 pub func println(s: string) {
     write(STDOUT, cstr!(s), len!(s))
     write(STDOUT, cstr!("\n"), 1)
 }
+
+pub func setNonBlocking(fd: i32, value: bool = true)
+{
+    var flags = 0;
+    flags = C__fcntl_GETFL(fd);
+    assert!(flags != -1); // TODO raise
+
+    if (value)
+        flags |= unchecked!(O_NONBLOCK, #i32)
+    else
+        flags &= ~unchecked!(O_NONBLOCK, #i32)
+
+    flags = C__fcntl_SETFL(fd, flags);
+    assert!(flags != -1); // TODO raise
+}
+
+func fdWrite_(fd: i32, data: &const void, size: u64) : void
+{
+    var nwr : i64 = 0;
+    @transient const p = <&const u8> data;
+    while (nwr != size) {
+        const cwr = write(fd, <&const void> ptroff!(p + nwr), size - nwr);
+        assert!(cwr >= 0); // TODO raise error
+        nwr += cwr;
+    }
+}
+
+pub func fdWrite[T](fd: i32, data: const T) {
+    #if (T.isString)
+        fdWrite_(fd, <&const void>data, len!(data))
+    else #if (T.isSlice)
+        fdWrite_(fd, <&const void>data!(data), len!(data))
+    else {
+        const str = f"${data}";
+        fdWrite_(fd, <&const void>str, len!(str))
+    }
+}
+
+pub func fdRead(fd: i32, data: &void, size: u64) : i64
+{
+    var nread : i64 = 0;
+    @transient var p = <&u8> data;
+    while (nread != size) {
+        const cread = read(fd, <&void> ptroff!(p + nread), size - nread);
+        assert!(cread >= 0) // TODO raise error
+        nread += nread
+    }
+
+    return nread
+}
+
+/*
+func fdAsyncWrite_(fd: i32, data: &const void, size: u64, timeout: i64) : void
+{
+    var nwr : i64 = 0;
+    @transient const p = <&const u8> data;
+    while (nwr != size) {
+        const status = fdWaitWrite(fd, timeout);
+        assert!(status == 0); // TODO raise error
+        const cwr = write(fd, <&const void> ptroff!(p + nwr), size - nwr);
+        assert!(cwr >= 0); // TODO raise error
+        nwr += cwr;
+    }
+}
+
+pub func fdAsyncWrite[T](fd: i32, data: const T, timeout: i64 = 0) {
+    #if (T.isString)
+        fdWrite_(fd, <&const void>data, len!(data), timeout)
+    else #if (T.isSlice)
+        fdWrite_(fd, <&const void>data!(data), len!(data))
+    else {
+        const str = f"${data}";
+        fdWrite_(fd, <&const void>str, len!(str), timeout)
+    }
+}
+
+pub func fdAsyncRead(fd: i32, data: &const void, size: u64, timeout: i64) : i64
+{
+    const status = fdWaitRead(fd, timeout);
+    assert!(status == 0); // TODO raise error
+    const nread = write(fd, data, size);
+    assert!(nread >= 0);
+
+    return nread;
+}
+*/

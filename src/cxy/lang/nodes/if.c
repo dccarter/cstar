@@ -81,6 +81,7 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
 
     AstNode *next = node->next;
     AstNode *parent = node->parentScope;
+    u64 visited = node->flags & flgVisited;
 
     if (cond->boolLiteral.value) {
         // select then branch & reclaim else branch if any
@@ -91,7 +92,7 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
     else if (node->ifStmt.otherwise) {
         // select otherwise, reclaim if branch
         *node = *node->ifStmt.otherwise;
-        node->next = next;
+        getLastAstNode(node)->next = next;
         node->parentScope = parent;
     }
     else {
@@ -104,4 +105,5 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
             node->flags &= ~flgComptime;
         }
     }
+    node->flags |= visited;
 }

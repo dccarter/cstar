@@ -306,6 +306,9 @@ void writeTypename(CodegenContext *ctx, const Type *type)
                    CXY_ANONYMOUS_ENUM "{u64}_t",
                    (FormatArg[]){{.u64 = type->index}});
             break;
+        case typPointer:
+            writeTypename(ctx, type->pointer.pointed);
+            break;
         default:
             unreachable();
         }

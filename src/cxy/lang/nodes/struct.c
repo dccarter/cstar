@@ -668,6 +668,14 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
     u64 i = 0;
     for (; member; member = member->next, i++) {
         member->parentScope = node;
+        if (hasFlag(member, Comptime)) {
+            member->flags |= flgVisited;
+            if (!evaluate(visitor, member)) {
+                node->type = ERROR_TYPE(ctx);
+                goto checkStructDecl_cleanup;
+            }
+        }
+
         const Type *type;
         if (member->tag == astFuncDecl) {
             type = checkMethodDeclSignature(visitor, member);

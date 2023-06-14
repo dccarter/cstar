@@ -144,8 +144,9 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
         if (from->tag == typArray)
             return isTypeAssignableFrom(to->pointer.pointed,
                                         from->array.elementType);
-        if (typeIs(to->pointer.pointed, Void) && typeIs(from, Pointer))
-            return true;
+        if (typeIs(to->pointer.pointed, Void))
+            return typeIs(from, Pointer) || typeIs(from, String);
+
         return false;
 
     case typArray:
@@ -214,7 +215,7 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
 
     if (unwrappedTo->tag == unwrappedFrom->tag) {
         if (to->tag != typPrimitive)
-            return (toFlags & flgConst) ? (fromFlags & flgConst) : true;
+            return (fromFlags & flgConst) ? (toFlags & flgConst) : true;
     }
 
     if (unwrappedFrom->tag == typAuto)
@@ -367,6 +368,9 @@ bool isNumericType(const Type *type)
 
     if (typeIs(type, Info))
         return isNumericType(type->info.target);
+
+    if (typeIs(type, Enum))
+        return true;
 
     if (type == NULL || type->tag != typPrimitive ||
         type->primitive.id == prtBool)

@@ -351,6 +351,9 @@ AstNode *compileModule(CompilerDriver *driver,
 
 bool compileSource(const char *fileName, CompilerDriver *driver)
 {
+    if (driver->options.cmd == cmdBuild && !generateBuiltinSources(driver))
+        return false;
+
     AstNode *program = parseFile(driver, fileName);
 
     return compileProgram(driver, program, fileName);

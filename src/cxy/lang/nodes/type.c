@@ -27,6 +27,9 @@ void checkTypeDecl(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     defineSymbol(ctx->env, ctx->L, node->typeDecl.name, node);
+    addModuleExport(ctx, node, node->typeDecl.name);
+    defineDeclarationAliasName(ctx, node);
+
     if (node->typeDecl.aliased) {
         const Type *ref = evalType(visitor, node->typeDecl.aliased);
         node->type = makeAliasType(ctx->typeTable, ref, node->typeDecl.name);

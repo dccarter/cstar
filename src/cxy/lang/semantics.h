@@ -166,7 +166,6 @@ void checkUnaryExpr(AstVisitor *visitor, AstNode *node);
 void checkAddressOfExpr(AstVisitor *visitor, AstNode *node);
 void checkAssignExpr(AstVisitor *visitor, AstNode *node);
 void checkTernaryExpr(AstVisitor *visitor, AstNode *node);
-void checkMacroExpr(AstVisitor *visitor, AstNode *node);
 void checkVarDecl(AstVisitor *visitor, AstNode *node);
 void checkTypeDecl(AstVisitor *visitor, AstNode *node);
 void checkUnionDecl(AstVisitor *visitor, AstNode *node);

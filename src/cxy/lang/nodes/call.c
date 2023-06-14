@@ -233,7 +233,8 @@ static inline void checkCallWithStack(AstVisitor *visitor, AstNode *node)
         paramsEvaluated = true;
     }
 
-    if (callee->flags & flgFuncTypeParam) {
+    bool isNativeCallee = hasFlag(callee, Native);
+    if (hasFlag(callee, FuncTypeParam) && !isNativeCallee) {
         callee = functionTypeParamToCall(ctx, callee, node);
     }
 
@@ -279,7 +280,7 @@ static inline void checkCallWithStack(AstVisitor *visitor, AstNode *node)
     for (; arg; arg = arg->next, i++) {
         const Type *type = arg->type ?: evalType(visitor, arg);
         const Type *expected = callee->func.params[i];
-        if (expected->flags & flgFuncTypeParam) {
+        if (hasFlag(expected, FuncTypeParam) && !isNativeCallee) {
             if (!hasFlags(type, flgClosure | flgFuncTypeParam))
                 type = wrapFuncArgInClosure(visitor, arg);
 

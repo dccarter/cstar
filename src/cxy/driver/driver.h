@@ -19,6 +19,8 @@ typedef struct CompilerDriver {
 void makeDirectoryForPath(CompilerDriver *driver, cstring path);
 bool initCompilerDriver(CompilerDriver *compiler, Log *log);
 bool compileSource(const char *fileName, CompilerDriver *driver);
+bool generateBuiltinSources(CompilerDriver *driver);
+
 bool compileSourceString(CompilerDriver *driver,
                          cstring source,
                          u64 size,

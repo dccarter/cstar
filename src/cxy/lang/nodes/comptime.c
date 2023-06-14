@@ -173,7 +173,7 @@ static AstNode *isSlice(SemanticsContext *ctx,
         ctx->pool,
         loc,
         &(AstNode){.tag = astBoolLit,
-                   .boolLiteral.value = isArrayType(node->type)});
+                   .boolLiteral.value = isSliceType(node->type)});
 }
 
 static AstNode *isBoolean(SemanticsContext *ctx,
@@ -283,6 +283,16 @@ static AstNode *isStruct(SemanticsContext *ctx,
                    .boolLiteral.value = typeIs(node->type, Struct)});
 }
 
+static AstNode *isEnum(SemanticsContext *ctx, const FileLoc *loc, AstNode *node)
+{
+    node->type ?: evalType(ctx->eval.semanticsVisitor, node);
+    return makeAstNode(
+        ctx->pool,
+        loc,
+        &(AstNode){.tag = astBoolLit,
+                   .boolLiteral.value = typeIs(node->type, Enum)});
+}
+
 static AstNode *isField(SemanticsContext *ctx,
                         const FileLoc *loc,
                         AstNode *node)
@@ -316,6 +326,8 @@ static void initDefaultMembers(SemanticsContext *ctx)
     ADD_MEMBER("isBoolean", isBoolean);
     ADD_MEMBER("isChar", isChar);
     ADD_MEMBER("isArray", isArray);
+    ADD_MEMBER("isSlice", isSlice);
+    ADD_MEMBER("isEnum", isEnum);
 
 #undef ADD_MEMBER
 }

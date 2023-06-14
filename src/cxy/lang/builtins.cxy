@@ -111,6 +111,8 @@ pub struct StringBuilder {
             appendBool(val)
         else #if (#U == #wchar)
              appendChar(val)
+        else #if (T.isEnum)
+            appendInt(<i64>val)
         else
             val.toString(this)
         return this
@@ -160,7 +162,7 @@ pub struct Optional[T] {
     func `deref`() => val
 
     @inline
-    func toString(sb: StringBuilder) {
+    func toString(sb: &StringBuilder) {
         if (valid) {
             sb << "Some(" << val << ")"
         }

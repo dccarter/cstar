@@ -113,10 +113,12 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR}/generated)
 add_custom_target(
         cxy-code ALL
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMAND escape src/cxy/lang/native/c.c ${CMAKE_CURRENT_BINARY_DIR}/generated/c.inc.h CXY_C_WRAPPERS
         COMMAND escape src/cxy/lang/native/setup.h ${CMAKE_CURRENT_BINARY_DIR}/generated/setup.inc.h CXY_SETUP
         COMMAND escape src/cxy/lang/native/main.c.h ${CMAKE_CURRENT_BINARY_DIR}/generated/main.inc.h CXY_MAIN
         COMMAND escape src/cxy/lang/builtins.cxy ${CMAKE_CURRENT_BINARY_DIR}/generated/builtins.cxy.h CXY_BUILTINS
-        DEPENDS src/cxy/lang/native/setup.h
+        DEPENDS src/cxy/lang/native/c.c
+                src/cxy/lang/native/setup.h
                 src/cxy/lang/native/main.c.h
                 src/cxy/lang/builtins.cxy
                 escape

@@ -1,32 +1,8 @@
-import { println } from "stdlib/io.cxy"
-import { toJson } from "stdlib/json.cxy"
+import { println, fdRead, STDIN } from "stdlib/io.cxy"
 
-struct Greet {
-    name: bool
-    points: [i32]
-}
-
-struct Hello {
-    a: u32
-    b: u64
-    c: &i32
-    greet: Greet
-
-    const func with(cb: func(a: i32) -> void) => cb(<i32>a)
-    func slice(data: [i32]) => greet.points = data
-}
+async func get(url: string) => f"You said: ${url}"
 
 func main(args: [string]) {
-    var y = 0;
-    var arr = [10, 20, 30];
-    var x = Hello{a: 100, b: 200, c: &y, greet: Greet{name: false, points: [10, 20, 30, 40]}};
-    x.with((a: i32) => println(f"${a} - ${y}"))
-    var z : [i32, 3]  = [10, 20, 30];
-    x.slice([10, 20, 30])
-
-//    println(f"${x}")
-
-    var sb = StringBuilder();
-    toJson[Hello](&sb, &x);
-    println(sb.toString())
+    var x: [u8, 128];
+    fdRead(STDIN, unchecked!(x, #&void), 128);
 }

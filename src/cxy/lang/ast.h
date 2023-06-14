@@ -60,6 +60,7 @@
     f(Minus,  Minus, "-")               \
     f(Plus,   Plus, "+")                \
     f(Not,    LNot, "!")                \
+    f(Compl,  BNot, "~")                \
     f(New,    New,  "new")              \
     f(Await,  Await, "await")           \
     f(Delete, Delete,"delete")          \
@@ -233,8 +234,12 @@ typedef struct CaptureSet {
     struct AstNode *next;                                                      \
     struct AstNode *attrs;
 
-typedef enum { iptModule, iptPath } ImportKind;
-typedef enum { cInclude, cDefine } CCodeKind;
+typedef enum {
+    iptModule, iptPath
+} ImportKind;
+typedef enum {
+    cInclude, cDefine
+} CCodeKind;
 
 struct AstNode {
     union {
@@ -567,24 +572,32 @@ struct AstNode {
 #define CXY_AST_NODE_BODY_SIZE (sizeof(AstNode) - sizeof(((AstNode *)0)->_head))
 
 typedef struct AstVisitor AstVisitor;
+
 typedef void (*Visitor)(struct AstVisitor *, AstNode *);
 
 typedef struct AstVisitor {
     void *context;
     AstNode *current;
+
     void (*visitors[COUNT])(struct AstVisitor *, AstNode *node);
+
     void (*fallback)(struct AstVisitor *, AstNode *);
+
     void (*dispatch)(Visitor, struct AstVisitor *, AstNode *);
 } AstVisitor;
 
 typedef struct ConstAstVisitor ConstAstVisitor;
+
 typedef void (*ConstVisitor)(struct ConstAstVisitor *, const AstNode *);
+
 typedef struct ConstAstVisitor {
     void *context;
     const AstNode *current;
 
     void (*visitors[COUNT])(struct ConstAstVisitor *, const AstNode *node);
+
     void (*fallback)(struct ConstAstVisitor *, const AstNode *);
+
     void (*dispatch)(ConstVisitor, struct ConstAstVisitor *, const AstNode *);
 } ConstAstVisitor;
 
@@ -596,11 +609,15 @@ typedef struct ConstAstVisitor {
 // clang-format on
 
 void astVisit(AstVisitor *visitor, AstNode *node);
+
 void astConstVisit(ConstAstVisitor *visitor, const AstNode *node);
 
 void clearAstBody(AstNode *node);
+
 AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *node);
+
 AstNode *copyAstNode(MemPool *pool, const AstNode *node);
+
 AstNode *cloneAstNode(MemPool *pool, const AstNode *node);
 
 void printAst(FormatState *state, const AstNode *node, bool cleanAst);
@@ -612,28 +629,41 @@ void printAst(FormatState *state, const AstNode *node, bool cleanAst);
 bool isTuple(const AstNode *node);
 
 bool isAssignableExpr(const AstNode *node);
+
 bool isLiteralExpr(const AstNode *node);
+
 bool isEnumLiteral(const AstNode *node);
+
 bool isIntegralLiteral(const AstNode *node);
+
 bool isTypeExpr(const AstNode *node);
+
 bool isBuiltinTypeExpr(const AstNode *node);
+
 bool comptimeCompareTypes(const AstNode *lhs, const AstNode *rhs);
 
 u64 countAstNodes(const AstNode *node);
 
 AstNode *getLastAstNode(AstNode *node);
+
 AstNode *getNodeAtIndex(AstNode *node, u64 index);
+
 AstNode *findStructMemberByName(AstNode *node, cstring name);
+
 AstNode *findEnumOptionByName(AstNode *node, cstring name);
 
 AstNode *getParentScopeWithTag(AstNode *node, AstTag tag);
 
 const AstNode *getLastAstNodeConst(const AstNode *node);
+
 const AstNode *getConstNodeAtIndex(const AstNode *node, u64 index);
+
 const AstNode *getParentScopeWithTagConst(const AstNode *node, AstTag tag);
 
 void insertAstNodeAfter(AstNode *before, AstNode *after);
+
 void insertAstNode(AstNodeList *list, AstNode *node);
+
 void unlinkAstNode(AstNode **head, AstNode *prev, AstNode *node);
 
 const char *getPrimitiveTypeName(PrtId tag);
@@ -657,9 +687,13 @@ int getMaxBinaryOpPrecedence(void);
 int getBinaryOpPrecedence(Operator op);
 
 const AstNode *findAttribute(const AstNode *node, cstring name);
+
 const AstNode *findAttributeArgument(const AstNode *attr, cstring name);
 
 Operator tokenToUnaryOperator(TokenTag tag);
+
 Operator tokenToBinaryOperator(TokenTag tag);
+
 Operator tokenToAssignmentOperator(TokenTag tag);
+
 bool isPrefixOpKeyword(Operator op);

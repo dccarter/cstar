@@ -114,7 +114,7 @@ bool defineSymbol(Env *env, Log *L, const char *name, AstNode *node)
     if (!wasInserted && L) {
         logError(L,
                  &node->loc,
-                 "symbol {s} already defined",
+                 "symbol '{s}' already defined in current scope",
                  (FormatArg[]){{.s = name}});
         const Symbol *prev = findInHashTable(&env->scope->symbols,
                                              &symbol,
@@ -162,7 +162,7 @@ SymbolRef *defineFunctionDecl(Env *env, Log *L, const char *name, AstNode *node)
     if (!wasInserted && L && !nodeIs(sym->ref.node, FuncDecl)) {
         logError(L,
                  &node->loc,
-                 "symbol {s} already defined",
+                 "symbol '{s}' already defined in current scope",
                  (FormatArg[]){{.s = name}});
 
         logNote(L, &sym->ref.node->loc, "previously declared here", NULL);

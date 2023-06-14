@@ -55,6 +55,36 @@ static AstNode *makeFilenameNode(AstVisitor *visitor,
                        visitor->current->loc.fileName ?: "<native>"});
 }
 
+static AstNode *makeGoNode(AstVisitor *visitor,
+                           attr(unused) const AstNode *node,
+                           attr(unused) AstNode *args)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
+        return NULL;
+    // __builtin_go(() => { hello() })
+    AstNode *closure = makeAstNode(
+        ctx->pool,
+        &node->loc,
+        &(AstNode){.tag = astClosureExpr, .closureExpr = {.body = args}});
+
+    AstNode *builtinGo = makeAstNode(
+        ctx->pool,
+        &node->loc,
+        &(AstNode){.tag = astPath,
+                   .path.elements = makeAstNode(
+                       ctx->pool,
+                       &node->loc,
+                       &(AstNode){.tag = astPathElem,
+                                  .pathElement.name = makeString(
+                                      ctx->strPool, "__builtin_go")})});
+    return makeAstNode(
+        ctx->pool,
+        &node->loc,
+        &(AstNode){.tag = astCallExpr,
+                   .callExpr = {.callee = builtinGo, .args = closure}});
+}
+
 static AstNode *makeLineNumberNode(AstVisitor *visitor,
                                    attr(unused) const AstNode *node,
                                    attr(unused) AstNode *args)
@@ -96,7 +126,7 @@ static AstNode *makeSizeofNode(AstVisitor *visitor,
         return NULL;
 
     if (args->type == NULL)
-        evalType(visitor, args);
+        evalType(ctx->eval.semanticsVisitor, args);
 
     AstNode *sizeOf = findSymbolOnly(ctx->env, "__builtin_sizeof");
     csAssert0(sizeOf);
@@ -167,7 +197,7 @@ static AstNode *makeIsTypeNode(AstVisitor *visitor,
         return NULL;
 
     if (args->type == NULL)
-        evalType(visitor, args);
+        evalType(ctx->eval.semanticsVisitor, args);
 
     if (!typeIs(args->type, Info)) {
         logError(ctx->L,
@@ -225,8 +255,8 @@ static AstNode *makeLenNode(AstVisitor *visitor,
     if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
         return NULL;
 
-    const Type *type = args->type ?: evalType(visitor, args);
-    const Type *raw = stripPointer(type);
+    const Type *type = args->type ?: evalType(ctx->eval.semanticsVisitor, args);
+    const Type *raw = stripAll(type);
 
     switch (raw->tag) {
     case typString: {
@@ -337,7 +367,7 @@ static AstNode *makeDataNode(AstVisitor *visitor,
     if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
         return NULL;
 
-    const Type *type = args->type ?: evalType(visitor, args);
+    const Type *type = args->type ?: evalType(ctx->eval.semanticsVisitor, args);
     const Type *raw = stripAll(type);
 
     switch (raw->tag) {
@@ -381,7 +411,7 @@ static AstNode *makeAssertNode(AstVisitor *visitor,
     if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
         return NULL;
 
-    const Type *type = args->type ?: evalType(visitor, args);
+    const Type *type = args->type ?: evalType(ctx->eval.semanticsVisitor, args);
     if (!typeIs(type, Primitive) || type->primitive.id != prtBool) {
         logError(ctx->L,
                  &args->loc,
@@ -423,7 +453,7 @@ static AstNode *makeUncheckedNode(AstVisitor *visitor,
     if (!validateMacroArgumentCount(ctx, &node->loc, args, 2))
         return NULL;
     AstNode *expr = args, *next = args->next;
-    const Type *type = next->type ?: evalType(visitor, next);
+    const Type *type = next->type ?: evalType(ctx->eval.semanticsVisitor, next);
     if (!typeIs(type, Info)) {
         logError(ctx->L,
                  &next->loc,
@@ -434,6 +464,7 @@ static AstNode *makeUncheckedNode(AstVisitor *visitor,
     }
 
     expr->type = type->info.target;
+    expr->flags |= flgVisited;
     return expr;
 }
 
@@ -445,7 +476,7 @@ static AstNode *makeCstrNode(AstVisitor *visitor,
     if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
         return NULL;
 
-    const Type *type = args->type ?: evalType(visitor, args);
+    const Type *type = args->type ?: evalType(ctx->eval.semanticsVisitor, args);
     if (!typeIs(type, String)) {
         logError(ctx->L,
                  &args->loc,
@@ -468,7 +499,7 @@ static AstNode *makeDestructorNode(AstVisitor *visitor,
     if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
         return NULL;
 
-    const Type *type = args->type ?: evalType(visitor, args);
+    const Type *type = args->type ?: evalType(ctx->eval.semanticsVisitor, args);
     if (!typeIs(type, Info)) {
         logError(ctx->L,
                  &args->loc,
@@ -495,7 +526,7 @@ static AstNode *makeTypeofNode(AstVisitor *visitor,
     if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
         return NULL;
 
-    const Type *type = args->type ?: evalType(visitor, args);
+    const Type *type = args->type ?: evalType(ctx->eval.semanticsVisitor, args);
     if (typeIs(type, Info)) {
         logError(ctx->L,
                  &node->loc,
@@ -517,13 +548,13 @@ static AstNode *makeBaseOfNode(AstVisitor *visitor,
     if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
         return NULL;
 
-    const Type *type = args->type ?: evalType(visitor, args);
+    const Type *type = args->type ?: evalType(ctx->eval.semanticsVisitor, args);
     if (!typeIs(type, Info)) {
-        logError(
-            ctx->L,
-            &node->loc,
-            "invalid `typeof!` macro argument, expecting a type info object",
-            NULL);
+        logError(ctx->L,
+                 &node->loc,
+                 "invalid `typeof!` macro argument, expecting a type info "
+                 "object",
+                 NULL);
         return NULL;
     }
 
@@ -563,7 +594,8 @@ static AstNode *makePointerOfNode(AstVisitor *visitor,
         return NULL;
     }
     const Type *lhs =
-        args->binaryExpr.lhs->type ?: evalType(visitor, args->binaryExpr.lhs);
+        args->binaryExpr.lhs->type
+            ?: evalType(ctx->eval.semanticsVisitor, args->binaryExpr.lhs);
     if (!typeIs(lhs, Pointer)) {
         logError(ctx->L,
                  &args->binaryExpr.lhs->loc,
@@ -574,7 +606,8 @@ static AstNode *makePointerOfNode(AstVisitor *visitor,
     }
 
     const Type *rhs =
-        args->binaryExpr.rhs->type ?: evalType(visitor, args->binaryExpr.rhs);
+        args->binaryExpr.rhs->type
+            ?: evalType(ctx->eval.semanticsVisitor, args->binaryExpr.rhs);
     if (!isIntegerType(rhs)) {
         logError(ctx->L,
                  &args->binaryExpr.rhs->loc,
@@ -585,6 +618,7 @@ static AstNode *makePointerOfNode(AstVisitor *visitor,
     }
 
     args->type = lhs;
+    args->flags |= flgVisited;
     return args;
 }
 
@@ -601,6 +635,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "data", makeDataNode},
     {.name = "destructor", makeDestructorNode},
     {.name = "file", makeFilenameNode},
+    {.name = "go", makeGoNode},
     {.name = "is_enum", makeIsEnumNode},
     {.name = "is_pointer", makeIsPointerNode},
     {.name = "is_struct", makeIsStructNode},
@@ -634,29 +669,6 @@ static EvaluateMacro findBuiltinMacroByNode(AstNode *node)
     if (nodeIs(node, Path) && node->path.elements->next == NULL)
         return findBuiltinMacro(node->path.elements->pathElement.name);
     return NULL;
-}
-
-void checkMacroExpr(AstVisitor *visitor, AstNode *node)
-{
-    SemanticsContext *ctx = getAstVisitorContext(visitor);
-    EvaluateMacro macro = findBuiltinMacroByNode(node->macroCallExpr.callee);
-    if (macro == NULL) {
-        logError(ctx->L,
-                 &node->macroCallExpr.callee->loc,
-                 "currently only native macros are supported",
-                 NULL);
-        node->type = ERROR_TYPE(ctx);
-        return;
-    }
-    AstNode *substitute = macro(visitor, node, node->macroCallExpr.args);
-    if (!substitute) {
-        node->type = ERROR_TYPE(ctx);
-        return;
-    }
-
-    substitute->next = node->next;
-    substitute->parentScope = node->parentScope;
-    *node = *substitute;
 }
 
 void evalMacroCall(AstVisitor *visitor, AstNode *node)

@@ -1235,9 +1235,18 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         break;
 
     case astEnumOption:
+        CLONE_ONE(enumOption, value);
+        break;
+
     case astEnumDecl:
+        CLONE_MANY(enumDecl, options);
+        CLONE_ONE(enumDecl, base);
+        break;
+
     case astStructField:
-        break; // TODO
+        CLONE_ONE(structField, value)
+        CLONE_ONE(structField, type)
+        break;
 
     case astGroupExpr:
         CLONE_ONE(groupExpr, expr);
@@ -1289,9 +1298,14 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
     case astTupleExpr:
         CLONE_MANY(tupleExpr, args);
         break;
+
     case astFieldExpr:
+        CLONE_ONE(fieldExpr, value);
+        break;
     case astStructExpr:
-        break; // TODO
+        CLONE_MANY(structExpr, fields);
+        CLONE_ONE(structExpr, left);
+        break;
 
     case astMemberExpr:
         CLONE_ONE(memberExpr, target);
@@ -1311,8 +1325,8 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         break;
     case astIfStmt:
         CLONE_ONE(ifStmt, cond);
-        CLONE_ONE(ifStmt, body);
-        CLONE_ONE(ifStmt, otherwise);
+        CLONE_MANY(ifStmt, body);
+        CLONE_MANY(ifStmt, otherwise);
         break;
     case astForStmt:
         CLONE_ONE(forStmt, var);

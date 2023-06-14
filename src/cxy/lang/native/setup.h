@@ -1,12 +1,15 @@
 #ifndef CXY_SETUP_CODE
 #define CXY_SETUP_CODE
 
+#include <errno.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 typedef uint8_t u8;
 typedef uint16_t u16;
@@ -148,6 +151,7 @@ enum {
 
 typedef struct cxy_memory_hdr_t {
     void (*dctor)(void *);
+
     union {
         struct {
             u32 refs;
@@ -250,7 +254,7 @@ attr(always_inline) void *cxy_default_get_ref(void *ptr)
 #endif
 
 #ifndef __builtin_cxy_get_ref
-#define __builtin_cxy_get_ref cxy_default_get_ref
+#define __builtin_cxy_get_ref(P) cxy_default_get_ref((void *)(P))
 #endif
 
 typedef struct __cxy_builtin_slice_t {
@@ -718,3 +722,5 @@ static u64 __cxy_builtins_mod_prime(u64 i, u64 p)
 }
 
 #endif
+
+#include "c.c"
