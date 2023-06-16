@@ -106,6 +106,38 @@ static AstNode *getName(SemanticsContext *ctx,
         &(AstNode){.tag = astStringLit, .stringLiteral.value = name});
 }
 
+static AstNode *getMembers(SemanticsContext *ctx,
+                           const FileLoc *loc,
+                           AstNode *node)
+{
+    switch (node->tag) {
+    case astTupleType:
+        return comptimeWrapped(
+            ctx, &node->loc, node->tupleExpr.args, flgComptimeIterable);
+    default:
+        break;
+    }
+    return NULL;
+}
+
+static AstNode *getVarargs(SemanticsContext *ctx,
+                           const FileLoc *loc,
+                           AstNode *node)
+{
+    switch (node->tag) {
+    case astFuncParam:
+        if (hasFlag(node, Variadic))
+            return comptimeWrapped(ctx,
+                                   &node->loc,
+                                   node->funcParam.type->tupleType.args,
+                                   flgComptimeIterable);
+        break;
+    default:
+        break;
+    }
+    return NULL;
+}
+
 static AstNode *getElementType(SemanticsContext *ctx,
                                const FileLoc *loc,
                                AstNode *node)
@@ -311,6 +343,8 @@ static void initDefaultMembers(SemanticsContext *ctx)
     insertAstNodeGetter(&defaultMembers, makeString(ctx->strPool, name), G)
 
     ADD_MEMBER("name", getName);
+    ADD_MEMBER("members", getMembers);
+    ADD_MEMBER("varargs", getVarargs);
     ADD_MEMBER("elementType", getElementType);
     ADD_MEMBER("pointedType", getPointedType);
     ADD_MEMBER("isInteger", isInteger);

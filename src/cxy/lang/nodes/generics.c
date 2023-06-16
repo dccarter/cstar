@@ -61,6 +61,68 @@ static AstNode *getGenericDeclFromPath(AstNode *node)
     return nodeIs(node->parentScope, CallExpr) ? node->parentScope : NULL;
 }
 
+static void variadicParamsToTuple(SemanticsContext *ctx, AstNode *node)
+{
+    AstNode *args = ctx->currentCall->callExpr.args, *arg;
+    u64 count = countAstNodes(node->funcDecl.params);
+
+    if (count == 1) {
+        arg = copyAstNodeAsIs(ctx->pool, args);
+    }
+    else {
+        args = getNodeAtIndex(args, count - 1);
+        arg = copyAstNodeAsIs(ctx->pool, args);
+    }
+
+    clearAstBody(args);
+    args->tag = astTupleExpr;
+    args->tupleExpr.args = arg;
+    args->next = NULL;
+    args->type = getNodeAtIndex(node->funcDecl.params, count - 1)->type;
+}
+
+static void addVariadicParams(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getConstAstVisitorContext(visitor);
+    AstNode *vararg = getLastAstNode(node->funcDecl.params),
+            *type = vararg->funcParam.type;
+    AstNode *args = ctx->currentCall->callExpr.args;
+
+    vararg->funcParam.type =
+        makeAstNode(ctx->pool, &type->loc, &(AstNode){.tag = astTupleType});
+
+    u64 count = countAstNodes(node->funcDecl.params);
+    if (count == 0)
+        return;
+
+    AstNode *arg;
+
+    if (count == 1) {
+        arg = copyAstNodeAsIs(ctx->pool, args);
+    }
+    else {
+        args = getNodeAtIndex(args, count - 1);
+        arg = copyAstNodeAsIs(ctx->pool, args);
+    }
+
+    clearAstBody(args);
+    args->tag = astTupleExpr;
+    args->flags |= flgVariadic;
+    args->tupleExpr.args = arg;
+    args->next = NULL;
+
+    AstNode *param = vararg->funcParam.type->tupleType.args =
+        makeTypeReferenceNode(ctx, arg->type);
+
+    for (arg = arg->next; arg; arg = arg->next) {
+        param->next = makeTypeReferenceNode(ctx, arg->type);
+        param = param->next;
+    }
+
+    args->type =
+        evalType(visitor, getNodeAtIndex(node->funcDecl.params, count - 1));
+}
+
 AstNode *checkGenericDeclReference(AstVisitor *visitor,
                                    AstNode *generic,
                                    AstNode *node,
@@ -73,12 +135,16 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
         return NULL;
     }
 
-    u64 count = countAstNodes(node->pathElement.args);
-    if (target->generic.inferrable && count < target->generic.paramsCount) {
+    bool isVariadic = hasFlag(target, Variadic);
+    u64 count = countAstNodes(node->pathElement.args),
+        paramsCount = target->generic.paramsCount, variadicCount = 0;
+
+    if (target->generic.inferrable && count < paramsCount) {
         AstNode *call = ctx->currentCall,
                 *args = call ? call->callExpr.args : NULL;
+
         AstNodeList genericArgs = {NULL};
-        for (u32 i = count; i < target->generic.paramsCount; i++) {
+        for (u32 i = count; i < paramsCount; i++) {
             AstNode *arg =
                 getNodeAtIndex(args, target->generic.params[i].inferIndex);
             if (arg == NULL) {
@@ -107,7 +173,49 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
         count = target->generic.paramsCount;
     }
 
-    if (count != target->generic.paramsCount) {
+    AstNode *firstArg = NULL;
+    if (isVariadic) {
+        AstNode *declParams = generic->genericDecl.decl->funcDecl.params;
+        u64 declParamsCount = countAstNodes(declParams), argsCount = 0;
+        AstNode *arg = ctx->currentCall->callExpr.args;
+        AstNode *variadicParam = getLastAstNode(declParams);
+        const Type *variadicType =
+            variadicParam->funcParam.type->type
+                ?: evalType(visitor, variadicParam->funcParam.type);
+
+        for (; arg; arg = arg->next) {
+            const Type *type = arg->type ?: evalType(visitor, arg);
+            if (typeIs(type, Error)) {
+                node->type = type;
+                return NULL;
+            }
+
+            if (!isExplicitConstructibleFrom(ctx, variadicType, type)) {
+                logError(ctx->L,
+                         &arg->loc,
+                         "variadic argument type '{t}' cannot be assigned to "
+                         "parameter constraint type '{t}'",
+                         (FormatArg[]){{.t = type}, {.t = variadicType}});
+                logNote(ctx->L,
+                        &variadicParam->loc,
+                        "variadic parameter declared here",
+                        NULL);
+
+                node->type = ERROR_TYPE(ctx);
+                return NULL;
+            }
+            argsCount++;
+        }
+
+        if (argsCount > declParamsCount) {
+            variadicCount = argsCount - (declParamsCount - 1);
+            firstArg = getNodeAtIndex(ctx->currentCall->callExpr.args,
+                                      declParamsCount - 1);
+        }
+    }
+
+    if ((!isVariadic && count != paramsCount) ||
+        (isVariadic && count < paramsCount)) {
         logError(ctx->L,
                  &node->loc,
                  "generic parameter substitution for '{t}' error, expecting "
@@ -119,9 +227,11 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
         return NULL;
     }
 
-    const Type **args = mallocOrDie(sizeof(Type *) * count);
+    const Type **args = mallocOrDie(sizeof(Type *) * (count + variadicCount));
     AstNode *param = node->pathElement.args;
-    for (u64 i = 0; param; param = param->next, i++) {
+
+    u64 i = 0;
+    for (i = 0; param; param = param->next, i++) {
         const Type *type = evalType(visitor, param);
         if (typeIs(type, Error)) {
             node->type = type;
@@ -131,10 +241,17 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
         args[i] = type;
     }
 
+    for (AstNode *arg = firstArg; arg; arg = arg->next, i++) {
+        args[i] = arg->type;
+    }
+
     GetOrInset goi = makeAppliedType(
         ctx->typeTable,
         &(Type){.tag = typApplied,
-                .applied = {.args = args, .argsCount = count, .from = target}});
+                .applied = {.args = args,
+                            .argsCount = count,
+                            .totalArgsCount = count + variadicCount,
+                            .from = target}});
     free(args);
 
     if (goi.f) {
@@ -142,7 +259,13 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
         node->type = goi.s->applied.generated;
         node->pathElement.alt2 = node->pathElement.name;
         node->pathElement.name = node->type->name;
-        return findSymbolOnly(generic->genericDecl.env, node->type->name);
+
+        AstNode *sym =
+            findSymbolOnly(generic->genericDecl.env, node->type->name);
+        if (sym && isVariadic) {
+            variadicParamsToTuple(ctx, sym);
+        }
+        return sym;
     }
 
     // Substitute
@@ -168,7 +291,7 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
 
     pushScope(generic->genericDecl.env, NULL);
     param = node->pathElement.args;
-    for (u64 i = 0; i < count; i++, param = param->next) {
+    for (i = 0; i < paramsCount; i++, param = param->next) {
         defineSymbol(generic->genericDecl.env,
                      ctx->L,
                      target->generic.params[i].name,
@@ -178,9 +301,16 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     addTopLevelDecl(ctx, name, substitute);
     if (isFunction) {
         substitute->parentScope = target->generic.decl->parentScope;
-        checkMethodDeclSignature(visitor, substitute);
-        ((Type *)(goi.s))->applied.generated = substitute->type;
-        checkMethodDeclBody(visitor, substitute);
+        if (isVariadic) {
+            substitute->flags |= flgVariadic;
+            addVariadicParams(visitor, substitute);
+        }
+
+        if (!typeIs(substitute->type, Error)) {
+            checkMethodDeclSignature(visitor, substitute);
+            ((Type *)(goi.s))->applied.generated = substitute->type;
+            checkMethodDeclBody(visitor, substitute);
+        }
         node->type = substitute->type;
     }
     else {
@@ -201,7 +331,7 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     Type *generated = (Type *)goi.s->applied.generated;
     if (typeIs(generated, Struct)) {
         param = node->pathElement.args;
-        for (u64 i = 0; i < count; i++, param = param->next) {
+        for (i = 0; i < count; i++, param = param->next) {
             defineSymbol(generated->tStruct.env,
                          ctx->L,
                          target->generic.params[i].name,
@@ -302,7 +432,7 @@ void checkGenericDecl(AstVisitor *visitor, AstNode *node)
         node->type =
             makeGenericType(ctx->typeTable,
                             &(Type){.tag = typGeneric,
-                                    .flags = flgNone,
+                                    .flags = node->flags & flgVariadic,
                                     .generic = {.params = params,
                                                 .paramsCount = count,
                                                 .decl = node->genericDecl.decl,

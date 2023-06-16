@@ -9,6 +9,15 @@
 
 #include "core/alloc.h"
 
+static AstNode *resolveAliasedNode(SemanticsContext *ctx, AstNode *node)
+{
+    AstNode *aliased = node->typeDecl.aliased;
+    if (nodeIs(aliased, Path) || nodeIs(aliased, Identifier)) {
+        aliased = findSymbolOnlyByNode(ctx->env, aliased);
+    }
+    return aliased;
+}
+
 void generateTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -27,14 +36,19 @@ void checkTypeDecl(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     defineSymbol(ctx->env, ctx->L, node->typeDecl.name, node);
-    addModuleExport(ctx, node, node->typeDecl.name);
-    defineDeclarationAliasName(ctx, node);
 
     if (node->typeDecl.aliased) {
         const Type *ref = evalType(visitor, node->typeDecl.aliased);
+        AstNode *aliased = resolveAliasedNode(ctx, node);
+        updateSymbol(ctx->env, node->typeDecl.name, aliased);
+        addModuleExport(ctx, aliased, node->typeDecl.name);
+        defineDeclarationAliasWithTarget(ctx, node, aliased);
+
         node->type = makeAliasType(ctx->typeTable, ref, node->typeDecl.name);
     }
     else {
+        addModuleExport(ctx, node, node->typeDecl.name);
+        defineDeclarationAliasName(ctx, node);
         node->type = makeOpaqueType(ctx->typeTable, node->typeDecl.name);
     }
 }
@@ -67,6 +81,9 @@ void checkBuiltinType(AstVisitor *visitor, AstNode *node)
     switch (node->tag) {
     case astVoidType:
         node->type = makeVoidType(ctx->typeTable);
+        break;
+    case astAutoType:
+        node->type = makeAutoType(ctx->typeTable);
         break;
     case astStringType:
         node->type = makeStringType(ctx->typeTable);
@@ -114,7 +131,7 @@ static bool comptimeCompareManyTypes(const AstNode *lhs, const AstNode *rhs)
 bool comptimeCompareTypes(const AstNode *lhs, const AstNode *rhs)
 {
     if (lhs->tag != rhs->tag)
-        return false;
+        return lhs->tag == astAutoType;
 
     switch (lhs->tag) {
     case astStringType:

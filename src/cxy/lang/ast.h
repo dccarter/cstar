@@ -61,6 +61,7 @@
     f(Plus,   Plus, "+")                \
     f(Not,    LNot, "!")                \
     f(Compl,  BNot, "~")                \
+    f(Spread, Elipsis, "...")           \
     f(New,    New,  "new")              \
     f(Await,  Await, "await")           \
     f(Delete, Delete,"delete")          \
@@ -108,6 +109,7 @@ typedef enum {
     astDestructorRef,
     /* Types */
     astVoidType,
+    astAutoType,
     astStringType,
     astTupleType,
     astArrayType,
@@ -234,12 +236,8 @@ typedef struct CaptureSet {
     struct AstNode *next;                                                      \
     struct AstNode *attrs;
 
-typedef enum {
-    iptModule, iptPath
-} ImportKind;
-typedef enum {
-    cInclude, cDefine
-} CCodeKind;
+typedef enum { iptModule, iptPath } ImportKind;
+typedef enum { cInclude, cDefine } CCodeKind;
 
 struct AstNode {
     union {
@@ -618,13 +616,17 @@ AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *node);
 
 AstNode *copyAstNode(MemPool *pool, const AstNode *node);
 
+AstNode *copyAstNodeAsIs(MemPool *pool, const AstNode *node);
+
 AstNode *cloneAstNode(MemPool *pool, const AstNode *node);
+
+AstNode *replaceAstNode(AstNode *node, const AstNode *with);
 
 void printAst(FormatState *state, const AstNode *node, bool cleanAst);
 
 #define nodeIs(NODE, TAG) ((NODE) && ((NODE)->tag == ast##TAG))
-#define hasFlag(ITEM, FLG) ((ITEM)->flags & (flg##FLG))
-#define hasFlags(ITEM, FLGS) ((ITEM)->flags & (FLGS))
+#define hasFlag(ITEM, FLG) ((ITEM) && ((ITEM)->flags & (flg##FLG)))
+#define hasFlags(ITEM, FLGS) ((ITEM) && ((ITEM)->flags & (FLGS)))
 
 bool isTuple(const AstNode *node);
 

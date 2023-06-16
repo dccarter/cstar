@@ -68,7 +68,15 @@ void addModuleExport(SemanticsContext *ctx, AstNode *node, cstring name);
 void addModuleFunctionExport(SemanticsContext *ctx,
                              AstNode *node,
                              cstring name);
-void defineDeclarationAliasName(SemanticsContext *ctx, AstNode *node);
+void defineDeclarationAliasWithTarget(SemanticsContext *ctx,
+                                      AstNode *node,
+                                      AstNode *target);
+
+static inline void defineDeclarationAliasName(SemanticsContext *ctx,
+                                              AstNode *node)
+{
+    defineDeclarationAliasWithTarget(ctx, node, node);
+}
 
 void initializeModule(AstVisitor *visitor, AstNode *node);
 void finalizeModule(AstVisitor *visitor, AstNode *node, cstring namespace);

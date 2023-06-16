@@ -74,6 +74,43 @@ static const Type *transformFuncTypeParam(SemanticsContext *ctx,
     return type;
 }
 
+static bool isVariadicFunction(SemanticsContext *ctx, AstNode *node)
+{
+    AstNode *param = node->funcDecl.params;
+    bool isVariadic = false;
+    for (u64 i = 0; param; param = param->next, i++) {
+        param->parentScope = node;
+        if (isVariadic && (param->flags & flgVariadic)) {
+            logError(ctx->L,
+                     &param->loc,
+                     "variadic parameters should be the last parameter type in "
+                     "function declaration",
+                     NULL);
+            continue;
+        }
+
+        isVariadic = (param->flags & flgVariadic);
+    }
+
+    return isVariadic;
+}
+
+static void transformVariadicDeclToGenericDecl(AstVisitor *visitor,
+                                               AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    AstNode *next = node->next, *parent = node->parentScope;
+
+    AstNode *decl = copyAstNode(ctx->pool, node);
+    *node = (AstNode){.tag = astGenericDecl,
+                      .next = next,
+                      .parentScope = parent,
+                      .flags = node->flags | flgVariadic,
+                      .genericDecl = {.decl = decl}};
+
+    evalType(visitor, node);
+}
+
 static const Type **checkFunctionParams(AstVisitor *visitor,
                                         AstNode *node,
                                         u64 *paramsCount,
@@ -83,7 +120,6 @@ static const Type **checkFunctionParams(AstVisitor *visitor,
     const Type **params = NULL;
 
     AstNode *param = node->funcDecl.params;
-    bool isVariadic = false;
 
     *paramsCount = countAstNodes(node->funcDecl.params);
     if (*paramsCount == 0) {
@@ -95,16 +131,6 @@ static const Type **checkFunctionParams(AstVisitor *visitor,
     for (u64 i = 0; param; param = param->next, i++) {
         param->parentScope = node;
         params[i] = evalType(visitor, param);
-        if (isVariadic && (param->flags & flgVariadic)) {
-            logError(ctx->L,
-                     &param->loc,
-                     "variadic parameters should be the last parameter type in "
-                     "function declaration",
-                     NULL);
-            continue;
-        }
-
-        isVariadic = (param->flags & flgVariadic);
 
         if (*withDefaultValues && param->funcParam.def == NULL) {
             logError(ctx->L,
@@ -449,6 +475,10 @@ const Type *checkMethodDeclSignature(AstVisitor *visitor, AstNode *node)
 {
     const Type *ret = NULL, **params, *type = NULL;
     SemanticsContext *ctx = getAstVisitorContext(visitor);
+    if (!hasFlag(node, Variadic) && isVariadicFunction(ctx, node)) {
+        transformVariadicDeclToGenericDecl(visitor, node);
+        return node->type;
+    }
 
     u64 paramsCount = 0;
     bool withDefaultValues = false;
@@ -594,6 +624,12 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
 {
     const Type *ret = NULL, **params, *type = NULL;
     SemanticsContext *ctx = getAstVisitorContext(visitor);
+
+    if (isVariadicFunction(ctx, node)) {
+        transformVariadicDeclToGenericDecl(visitor, node);
+        return;
+    }
+
     const AstNode *lastReturn = ctx->lastReturn;
     ctx->lastReturn = NULL;
 

@@ -16,6 +16,7 @@
 
 AstNode *makeTypeReferenceNode(SemanticsContext *ctx, const Type *type)
 {
+
     switch (type->tag) {
     case typPrimitive:
         return makeAstNode(ctx->pool,
@@ -37,6 +38,10 @@ AstNode *makeTypeReferenceNode(SemanticsContext *ctx, const Type *type)
         return makeAstNode(ctx->pool,
                            builtinLoc(),
                            &(AstNode){.tag = astArrayType, .type = type});
+    case typTuple:
+        return makeAstNode(ctx->pool,
+                           builtinLoc(),
+                           &(AstNode){.tag = astTupleType, .type = type});
     case typStruct:
         return makeAstNode(
             ctx->pool,
@@ -59,6 +64,9 @@ AstNode *makeTypeReferenceNode(SemanticsContext *ctx, const Type *type)
             &(AstNode){.tag = astPointerType,
                        .pointerType = {.pointed = makeTypeReferenceNode(
                                            ctx, stripAll(type))}});
+    case typWrapped:
+        return makeTypeReferenceNode(ctx, unwrapType(type, NULL));
+
     case typEnum:
 
     default:

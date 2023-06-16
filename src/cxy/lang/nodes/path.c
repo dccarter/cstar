@@ -142,17 +142,17 @@ void generatePathElement(ConstAstVisitor *visitor, const AstNode *node)
 void generatePath(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    if (typeIs(node->type, Enum) && node->path.elements->next &&
-        (node->path.elements->next->flags & flgMember)) {
+    const AstNode *parent =
+        typeIs(node->type, Func) ? node->type->func.decl->parentScope : NULL;
+
+    if (typeIs(node->type, Enum) &&
+        hasFlag(node->path.elements->next, Member)) {
         writeEnumPrefix(ctx, node->type);
         generateManyAstsWithDelim(
             visitor, "_", "_", "", node->path.elements->next);
     }
-    else if (hasFlag(node, BuiltinMember) ||
-             (node->type->tag == typFunc &&
-              node->type->func.decl->parentScope &&
-              node->type->func.decl->parentScope->tag == astStructDecl)) {
-        const Type *scope = node->type->func.decl->parentScope->type;
+    else if (hasFlag(node, BuiltinMember) || nodeIs(parent, StructDecl)) {
+        const Type *scope = parent->type;
         const AstNode *func = node->type->func.decl;
         writeTypename(ctx, scope);
         format(ctx->state, "__{s}", (FormatArg[]){{.s = func->funcDecl.name}});
@@ -324,6 +324,7 @@ void evalPath(AstVisitor *visitor, AstNode *node)
         else {
             while (elem) {
                 cstring name = elem->pathElement.alt ?: elem->pathElement.name;
+                AstNode *keep = symbol;
                 symbol = evalAstNodeMemberAccess(ctx, &elem->loc, symbol, name);
                 if (symbol == NULL) {
                     logError(ctx->L,

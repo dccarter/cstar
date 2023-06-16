@@ -9,6 +9,47 @@
 
 #include "core/alloc.h"
 
+static void spreadTupleExpr(AstVisitor *visitor,
+                            const Type *operand,
+                            AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    AstNode *expr = node->unaryExpr.operand;
+    AstNode *parts = NULL, *part = NULL;
+
+    for (i64 i = 0; i < operand->tuple.count; i++) {
+        const Type *type = operand->tuple.members[i];
+        AstNode *next = makeAstNode(
+            ctx->pool,
+            &node->loc,
+            &(AstNode){.tag = astMemberExpr,
+                       .flags = expr->flags,
+                       .memberExpr = {.target = cloneAstNode(ctx->pool, expr),
+                                      .member = makeAstNode(
+                                          ctx->pool,
+                                          &node->loc,
+                                          &(AstNode){.flags = type->flags,
+                                                     .type = type,
+                                                     .tag = astIntegerLit,
+                                                     .intLiteral.value = i})}});
+        type = evalType(visitor, next);
+        if (typeIs(type, Error)) {
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+
+        if (parts) {
+            part->next = next;
+            part = part->next;
+        }
+        else {
+            parts = part = next;
+        }
+    }
+
+    replaceAstNode(node, parts);
+}
+
 static const Type *checkPrefixExpr(AstVisitor *visitor,
                                    const Type *operand,
                                    AstNode *node)
@@ -42,11 +83,25 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
         if (!isIntegerType(operand)) {
             logError(ctx->L,
                      &node->unaryExpr.operand->loc,
-                     "binary expression '{s}' no supported on type '{t}'",
+                     "prefix expression '{s}' no supported on type '{t}'",
                      (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)},
                                    {.t = operand}});
             operand = ERROR_TYPE(ctx);
         }
+        break;
+    case opSpread:
+        if (!typeIs(operand, Tuple)) {
+            logError(
+                ctx->L,
+                &node->unaryExpr.operand->loc,
+                "prefix spread expression '{s}' no supported on type '{t}'",
+                (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)},
+                              {.t = operand}});
+            operand = ERROR_TYPE(ctx);
+            break;
+        }
+        spreadTupleExpr(visitor, operand, node);
+        operand = node->type;
         break;
     case opNot:
         if (operand != getPrimitiveType(ctx->typeTable, prtBool)) {

@@ -12,9 +12,22 @@ pub native func read(fd: i32, data: &void, size: u64) : i64;
 pub native func C__fcntl_GETFL(fd: i32): i32;
 pub native func C__fcntl_SETFL(fd: i32, flags: i32): i32;
 
+pub func print[T](it: T) {
+    #if (T.isString) {
+        write(STDOUT, cstr!(it), len!(it))
+    }
+    else {
+        print[string](f"${it}")
+    }
+}
+
 @inline
-pub func println(s: string) {
-    write(STDOUT, cstr!(s), len!(s))
+pub func println(...args: auto) {
+    #const i = 0;
+    #for (const arg: #{args.varargs}) {
+        print[#{arg}](args.#{mkInteger!(i)})
+        #{i = i + 1}
+    }
     write(STDOUT, cstr!("\n"), 1)
 }
 

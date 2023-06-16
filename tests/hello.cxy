@@ -1,8 +1,20 @@
-import { println, fdRead, STDIN } from "stdlib/io.cxy"
+import { print, println, fdRead, STDIN } from "stdlib/io.cxy"
 
-async func get(url: string) => f"You said: ${url}"
+struct Thing {
+    id: i32
+    func print(x: i32, ...args: auto) {
+        println(id, " ", x, " ", ...args)
+    }
+}
+
+func many(x: i32, ...args: auto) {
+    println(x, ...args)
+}
 
 func main(args: [string]) {
-    var x: [u8, 128];
-    fdRead(STDIN, unchecked!(x, #&void), 128);
+    const name = "Carter";
+    println(10, 20, "Carters");
+    many(1, 2, name, Thing{id: 12});
+
+    Thing{id: 10}.print(20, name)
 }

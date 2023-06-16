@@ -58,7 +58,7 @@ void evalStringConcatenation(SemanticsContext *ctx,
     stringBuilderInit(&sb);
     evalStringBuilderAppend(ctx, &sb, lhs);
     csAssert0(evalStringBuilderAppend(ctx, &sb, rhs));
-    
+
     char *str = stringBuilderRelease(&sb);
     node->tag = astStringLit;
     node->stringLiteral.value = makeString(ctx->strPool, str);
@@ -69,7 +69,7 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
 
-    const Type *type = node->type;
+    const Type *type = unwrapType(node->type, NULL);
     cstring namespace = type->namespace ?: "";
     cstring scopeOp = type->namespace ? ":" : "";
     cstring name = type->name ?: "";

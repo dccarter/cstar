@@ -197,7 +197,8 @@ typedef struct Type {
 
         struct {
             const Type **args;
-            u64 argsCount;
+            u32 argsCount;
+            u64 totalArgsCount;
             const Type *generated;
             const Type *from;
         } applied;

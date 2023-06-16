@@ -30,7 +30,9 @@ void addModuleFunctionExport(SemanticsContext *ctx, AstNode *node, cstring name)
     }
 }
 
-void defineDeclarationAliasName(SemanticsContext *ctx, AstNode *node)
+void defineDeclarationAliasWithTarget(SemanticsContext *ctx,
+                                      AstNode *node,
+                                      AstNode *target)
 {
     const AstNode *alias = findAttribute(node, "alias");
     if (alias == NULL)
@@ -56,8 +58,8 @@ void defineDeclarationAliasName(SemanticsContext *ctx, AstNode *node)
         return;
     }
 
-    defineSymbol(ctx->env, ctx->L, name->stringLiteral.value, node);
-    addModuleExport(ctx, node, name->stringLiteral.value);
+    defineSymbol(ctx->env, ctx->L, name->stringLiteral.value, target);
+    addModuleExport(ctx, target, name->stringLiteral.value);
 }
 
 void checkImportDecl(AstVisitor *visitor, AstNode *node)

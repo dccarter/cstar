@@ -252,6 +252,8 @@ void checkTupleExpr(AstVisitor *visitor, AstNode *node)
 void checkTupleType(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
+    if (node->type)
+        return;
 
     u64 count = countAstNodes(node->tupleType.args);
     const Type **args = mallocOrDie(sizeof(Type *) * count);

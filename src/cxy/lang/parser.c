@@ -1665,6 +1665,11 @@ static AstNode *parseType(Parser *P)
         case tokSubstitutue:
             type = substitute(P, false);
             break;
+        case tokAuto:
+            advance(P);
+            type = makeAstNode(
+                P->memPool, &tok.fileLoc, &(AstNode){.tag = astAutoType});
+            break;
         default:
             reportUnexpectedToken(P, "a type");
             unreachable("");

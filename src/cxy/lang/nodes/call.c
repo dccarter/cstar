@@ -257,6 +257,7 @@ static inline void checkCallWithStack(AstVisitor *visitor, AstNode *node)
     }
 
     u64 withoutDefaulted = paramsCount - callee->func.defaultValuesCount;
+    count = countAstNodes(arg);
     if (count < withoutDefaulted) {
         logError(ctx->L,
                  &node->loc,
@@ -335,29 +336,31 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     u32 index = type->func.decl ? type->func.decl->funcDecl.index : 0;
 
     const char *name =
-        (type->flags & (flgClosureStyle | flgClosure))
+        hasFlags(type, flgClosureStyle | flgClosure)
             ? makeAnonymousVariable(ctx->strPool, "_closure_capture")
             : "";
 
-    if (type->flags & (flgClosureStyle | flgClosure))
+    if (hasFlags(type, flgClosureStyle | flgClosure))
         format(ctx->state, "({{{>}\n", NULL);
-    if (type->flags & flgClosureStyle) {
+    if (hasFlag(type, ClosureStyle)) {
         const AstNode *arg = node->callExpr.args;
         for (u64 i = 1; arg; arg = arg->next, i++) {
-            if (arg->type->flags & flgClosure) {
+            if (hasFlag(arg->type, Closure)) {
                 generateClosureCapture(ctx, arg->type, name, i);
             }
         }
     }
-    else if (type->flags & flgClosure) {
+    else if (hasFlag(type, Closure)) {
         generateClosureCapture(ctx, type, name, 0);
     }
 
     astConstVisit(visitor, node->callExpr.callee);
+    
     if (index)
         format(ctx->state, "{u32}", (FormatArg[]){{.u32 = index}});
-    bool isMember = parent && parent->tag == astStructDecl;
-    if (type->flags & flgClosure) {
+
+    bool isMember = nodeIs(parent, StructDecl);
+    if (hasFlag(type, Closure)) {
         format(ctx->state, "(&{s}0", (FormatArg[]){{.s = name}});
         if (type->func.paramsCount > 1)
             format(ctx->state, ", ", NULL);
@@ -365,9 +368,9 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     else if (isMember) {
         const AstNode *callee = node->callExpr.callee;
         bool needsThis =
-            (callee->tag == astIdentifier) ||
-            ((callee->tag != astMemberExpr) &&
-             (callee->tag == astPath && callee->path.elements->next == NULL));
+            nodeIs(callee, Identifier) ||
+            (!nodeIs(callee, MemberExpr) &&
+             (nodeIs(callee, Path) && callee->path.elements->next == NULL));
 
         if (needsThis) {
             if (hasFlag(node->callExpr.callee, AddSuper))
@@ -378,7 +381,7 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
         else {
             format(ctx->state, "(", NULL);
             const AstNode *target, *elem;
-            if (callee->tag == astPath) {
+            if (nodeIs(callee, Path)) {
                 target = callee->path.elements, elem = callee->path.elements;
                 while (true) {
                     if (target->next == NULL || target->next->next == NULL)
@@ -386,14 +389,14 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
                     target = target->next;
                 }
 
-                if (target->type->tag != typPointer)
+                if (!typeIs(target->type, Pointer))
                     format(ctx->state, "&", NULL);
 
                 for (;; elem = elem->next) {
                     astConstVisit(visitor, elem);
                     if (elem == target)
                         break;
-                    if (elem->type->tag == typPointer)
+                    if (typeIs(elem->type, Pointer))
                         format(ctx->state, "->", NULL);
                     else
                         format(ctx->state, ".", NULL);
@@ -401,7 +404,7 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
             }
             else {
                 target = callee->memberExpr.target;
-                if (target->type->tag != typPointer)
+                if (!typeIs(target->type, Pointer))
                     format(ctx->state, "&", NULL);
                 astConstVisit(visitor, target);
             }
@@ -417,7 +420,7 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
             if (isMember || i != 0)
                 format(ctx->state, ", ", NULL);
 
-            if (arg->type->flags & flgClosure) {
+            if (hasFlag(arg->type, Closure)) {
                 format(ctx->state, "(", NULL);
                 generateTypeUsage(ctx, param);
                 format(ctx->state,
@@ -435,7 +438,7 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
         }
     }
 
-    if (type->flags & (flgClosureStyle | flgClosure))
+    if (hasFlags(type, flgClosureStyle | flgClosure))
         format(ctx->state, ");{<}\n})", NULL);
     else
         format(ctx->state, ")", NULL);

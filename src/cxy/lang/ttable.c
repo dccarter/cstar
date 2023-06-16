@@ -82,7 +82,8 @@ static HashCode hashType(HashCode hash, const Type *type)
         break;
     case typApplied:
         hash = hashType(hash, type->applied.from);
-        hash = hashTypes(hash, type->applied.args, type->applied.argsCount);
+        hash =
+            hashTypes(hash, type->applied.args, type->applied.totalArgsCount);
         break;
     default:
         csAssert0("invalid type");
@@ -153,9 +154,10 @@ static bool compareTypes(const Type *left, const Type *right)
                                 right->func.paramsCount);
     case typApplied:
         return compareTypes(left->applied.from, right->applied.from) &&
+               right->applied.totalArgsCount == left->applied.totalArgsCount &&
                compareManyTypes(left->applied.args,
                                 right->applied.args,
-                                right->applied.argsCount);
+                                right->applied.totalArgsCount);
     case typEnum:
     case typStruct:
     case typGeneric:
@@ -527,10 +529,10 @@ GetOrInset makeAppliedType(TypeTable *table, const Type *init)
     if (!ret.f) {
         Type *applied = (Type *)ret.s;
         applied->applied.args = allocFromMemPool(
-            table->memPool, sizeof(Type) * init->applied.argsCount);
+            table->memPool, sizeof(Type) * init->applied.totalArgsCount);
         memcpy(applied->applied.args,
                init->applied.args,
-               sizeof(Type) * init->applied.argsCount);
+               sizeof(Type) * init->applied.totalArgsCount);
     }
 
     return ret;

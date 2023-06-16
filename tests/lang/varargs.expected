@@ -1,0 +1,36 @@
+func varargs(...args: ) {}
+
+func add(...nums: f32) {
+    const sum : f32 = 0
+    for (var num : nums.varargs) {
+        sum += num
+    }
+}
+
+func many(x: i32, ...rest: f32) {
+    add(<f32>x, ...rest)
+}
+
+func varargs_0(...args: (i32, string, wchar, f32)) {}
+
+func many_1(x: i32, ...rest: (f32, f32)) {
+    add_2(<f32>x, rest.0, rest.1)
+}
+
+func add_2(...nums: (f32, f32, f32)) {
+    const sum : f32 = 0
+    {
+        sum += f32
+    }
+    {
+        sum += f32
+    }
+    {
+        sum += f32
+    }
+}
+
+func main(args: [string]) {
+    varargs_0(10, "Hello", 'c', 2.000600e+03)
+    many_1(10, (1.000000e+01, 1.006000e+02))
+}

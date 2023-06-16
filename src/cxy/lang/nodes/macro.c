@@ -186,6 +186,32 @@ static AstNode *makeAstIdentifierNode(AstVisitor *visitor,
     return args;
 }
 
+static AstNode *makeAstIntegerNode(AstVisitor *visitor,
+                                   attr(unused) const AstNode *node,
+                                   attr(unused) AstNode *args)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    if (args == NULL) {
+        logError(ctx->L,
+                 &node->loc,
+                 "invalid number of arguments passed to `mkIdent!` macro, "
+                 "expecting at least 1, got 0",
+                 NULL);
+        return NULL;
+    }
+
+    if (!evaluate(visitor, args) || !isIntegralLiteral(args)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "invalid argument type passed to `mkIdent!` macro, "
+                 "expecting an integral type",
+                 NULL);
+        return NULL;
+    }
+
+    return args;
+}
+
 static AstNode *makeIsTypeNode(AstVisitor *visitor,
                                attr(unused) const AstNode *node,
                                attr(unused) AstNode *args,
@@ -642,6 +668,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "len", makeLenNode},
     {.name = "line", makeLineNumberNode},
     {.name = "mkIdent", makeAstIdentifierNode},
+    {.name = "mkInteger", makeAstIntegerNode},
     {.name = "ptroff", makePointerOfNode},
     {.name = "sizeof", makeSizeofNode},
     {.name = "typeof", makeTypeofNode},

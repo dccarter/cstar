@@ -857,6 +857,13 @@ AstNode *copyAstNode(MemPool *pool, const AstNode *node)
     return copy;
 }
 
+AstNode *copyAstNodeAsIs(MemPool *pool, const AstNode *node)
+{
+    AstNode *copy = allocFromMemPool(pool, sizeof(AstNode));
+    memcpy(copy, node, sizeof(AstNode));
+    return copy;
+}
+
 void astVisit(AstVisitor *visitor, AstNode *node)
 {
     Visitor func = visitor->visitors[node->tag] ?: visitor->fallback;
@@ -1024,6 +1031,7 @@ bool isTypeExpr(const AstNode *node)
 {
     switch (node->tag) {
     case astVoidType:
+    case astAutoType:
     case astStringType:
     case astTupleType:
     case astArrayType:
@@ -1045,6 +1053,7 @@ bool isBuiltinTypeExpr(const AstNode *node)
 {
     switch (node->tag) {
     case astVoidType:
+    case astAutoType:
     case astStringType:
     case astPrimitiveType:
     case astOptionalType:
@@ -1064,7 +1073,7 @@ u64 countAstNodes(const AstNode *node)
 
 AstNode *getLastAstNode(AstNode *node)
 {
-    while (node->next)
+    while (node && node->next)
         node = node->next;
     return node;
 }
@@ -1154,6 +1163,16 @@ AstNode *cloneManyAstNodes(MemPool *pool, const AstNode *nodes)
         nodes = nodes->next;
     }
     return first;
+}
+
+AstNode *replaceAstNode(AstNode *node, const AstNode *with)
+{
+    AstNode *next = node->next, *parent = node->parentScope;
+    *node = *with;
+    node->parentScope = parent;
+    getLastAstNode(node)->next = next;
+
+    return node;
 }
 
 AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
@@ -1349,6 +1368,7 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
     case astError:
     case astIdentifier:
     case astVoidType:
+    case astAutoType:
     case astStringType:
     case astPrimitiveType:
     case astNullLit:

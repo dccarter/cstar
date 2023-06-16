@@ -86,8 +86,10 @@ void generateMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
     const Type *scope = isStructMethodRef(node);
 
     if (scope) {
-        writeTypename(ctx, scope);
-        format(ctx->state, "__", NULL);
+        if (nodeIs(member, Identifier)) {
+            writeTypename(ctx, scope);
+            format(ctx->state, "__", NULL);
+        }
         astConstVisit(visitor, member);
     }
     else {
@@ -165,7 +167,20 @@ void checkMember(AstVisitor *visitor, AstNode *node)
             node->type = target;
     }
     else if (typeIs(rawTarget, Struct)) {
-        if (!nodeIs(member, Identifier) && !nodeIs(member, Path)) {
+        if (nodeIs(member, Identifier)) {
+            AstNode *element = makeAstNode(
+                ctx->pool,
+                &member->loc,
+                &(AstNode){.tag = astPathElem,
+                           .flags = member->flags,
+                           .type = member->type,
+                           .pathElement.name = member->ident.value});
+            clearAstBody(member);
+            member->tag = astPath;
+            member->path.elements = element;
+        }
+
+        if (!nodeIs(member, Path)) {
             logError(ctx->L,
                      &member->loc,
                      "unexpected member expression, expecting a struct member",
@@ -179,6 +194,8 @@ void checkMember(AstVisitor *visitor, AstNode *node)
             nodeIs(symbol, GenericDecl)) {
             symbol = checkGenericDeclReference(
                 visitor, symbol, member->path.elements, rawTarget->tStruct.env);
+            member->type = symbol->type;
+            member->path.elements->type = symbol->type;
             member->path.elements->pathElement.resolvesTo = symbol;
         }
 
