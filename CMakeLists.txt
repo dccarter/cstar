@@ -26,6 +26,9 @@ option(ENABLE_TESTS "Enable CMake tests" ON)
 
 include_directories(src/cxy)
 
+set(CXY_3RD_PARTY_SOURCES
+        src/cxy/3rdparty/cJSON.c)
+
 set(CXY_CORE_SOURCES
         src/cxy/core/args.c
         src/cxy/core/array.c
@@ -50,6 +53,7 @@ set(CXY_LANG_NODE_SOURCES
         src/cxy/lang/nodes/ccode.c
         src/cxy/lang/nodes/closure.c
         src/cxy/lang/nodes/comptime.c
+        src/cxy/lang/nodes/coroutine.c
         src/cxy/lang/nodes/enum.c
         src/cxy/lang/nodes/forstmt.c
         src/cxy/lang/nodes/function.c
@@ -114,10 +118,18 @@ add_custom_target(
         cxy-code ALL
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMAND escape src/cxy/lang/native/c.c ${CMAKE_CURRENT_BINARY_DIR}/generated/c.inc.h CXY_C_WRAPPERS
+        COMMAND escape src/cxy/lang/native/coro.c ${CMAKE_CURRENT_BINARY_DIR}/generated/coro.inc.h CXY_CORO
+        COMMAND escape src/cxy/lang/native/thread.c ${CMAKE_CURRENT_BINARY_DIR}/generated/thread.inc.h CXY_THREAD
+        COMMAND escape src/cxy/lang/native/scheduler.c ${CMAKE_CURRENT_BINARY_DIR}/generated/scheduler.inc.h CXY_SCHEDULER
+        COMMAND escape src/cxy/lang/native/evloop.c ${CMAKE_CURRENT_BINARY_DIR}/generated/evloop.inc.h CXY_EV_LOOP
         COMMAND escape src/cxy/lang/native/setup.h ${CMAKE_CURRENT_BINARY_DIR}/generated/setup.inc.h CXY_SETUP
         COMMAND escape src/cxy/lang/native/main.c.h ${CMAKE_CURRENT_BINARY_DIR}/generated/main.inc.h CXY_MAIN
         COMMAND escape src/cxy/lang/builtins.cxy ${CMAKE_CURRENT_BINARY_DIR}/generated/builtins.cxy.h CXY_BUILTINS
         DEPENDS src/cxy/lang/native/c.c
+                src/cxy/lang/native/coro.c
+                src/cxy/lang/native/thread.c
+                src/cxy/lang/native/scheduler.c
+                src/cxy/lang/native/evloop.c
                 src/cxy/lang/native/setup.h
                 src/cxy/lang/native/main.c.h
                 src/cxy/lang/builtins.cxy

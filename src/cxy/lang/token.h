@@ -109,6 +109,7 @@
     f(As,      "as")                \
     f(From,    "from")              \
     f(Unsafe,  "unsafe")            \
+    f(DebugBreak, "__DebugBreak")   \
     PRIM_TYPE_LIST(f)
 
 #define SPECIAL_TOKEN_LIST(f)                   \

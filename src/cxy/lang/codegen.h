@@ -28,6 +28,9 @@ void generateTypeUsage(CodegenContext *ctx, const Type *type);
 void writeTypename(CodegenContext *ctx, const Type *type);
 cstring getNativeDeclarationAliasName(const AstNode *node);
 
+void generateCoroutineFunctions(ConstAstVisitor *visitor, const AstNode *node);
+void generateCoroutineLaunch(ConstAstVisitor *visitor, const AstNode *node);
+
 void generateManyAstsWithinBlock(ConstAstVisitor *visitor,
                                  const char *sep,
                                  const AstNode *nodes,

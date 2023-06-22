@@ -11,10 +11,14 @@ pub func toJson[T](sb: &StringBuilder, it: &const T)
         sb << '"' << *it << '"'
     }
     else #if (T.isOptional) {
-        if (it)
-            toJson(sb, *it);
-        else
-            sb << "null";
+        #const U = typeof!(**it);
+        #if (U.isPointer) {
+            toJson[#{U.pointedType}](sb, *it)
+        }
+        else {
+            __DebugBreak
+            toJson[#{U}](sb, &it.val)
+        }
     }
     else #if (T.isStruct) {
         sb << "{";

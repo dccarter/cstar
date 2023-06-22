@@ -277,6 +277,9 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     setDeclName(substitute, name);
     node->pathElement.name = name;
 
+    if (nodeIs(substitute, StructDecl))
+        substitute->structDecl.generatedFrom = target;
+
     cstring namespace = ctx->typeTable->currentNamespace;
     ctx->typeTable->currentNamespace = target->namespace;
 
@@ -393,14 +396,24 @@ static bool buildInferenceIndices(GenericParam *params,
 void checkGenericDecl(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getConstAstVisitorContext(visitor);
-    AstNode *param = node->genericDecl.params;
+    AstNode *param = node->genericDecl.params, *decl = node->genericDecl.decl;
+    if (!hasFlag(node, Variadic) && isVariadicFunction(ctx, decl)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "generic variadic functions are not supported",
+                 NULL);
+
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
 
     cstring name = genericDeclName(node->genericDecl.decl);
     if (!defineSymbol(ctx->env, ctx->L, name, node)) {
         node->type = ERROR_TYPE(ctx);
         return;
     }
-    addModuleExport(ctx, node, name);
+    if (!nodeIs(node->parentScope, StructDecl))
+        addModuleExport(ctx, node, name);
 
     node->genericDecl.env = allocFromMemPool(ctx->pool, sizeof(Env));
     environmentInit(node->genericDecl.env);
@@ -422,13 +435,13 @@ void checkGenericDecl(AstVisitor *visitor, AstNode *node)
         params[i].decl = param;
     }
 
-    bool isInferrable = false;
-    if (nodeIs(node->genericDecl.decl, FuncDecl)) {
-        isInferrable =
-            buildInferenceIndices(params, count, node->genericDecl.decl);
-    }
+    if (!typeIs(node->type, Error)) {
+        bool isInferrable = false;
+        if (nodeIs(decl, FuncDecl)) {
+            isInferrable =
+                buildInferenceIndices(params, count, node->genericDecl.decl);
+        }
 
-    if (node->type == NULL || !typeIs(node->type, Error)) {
         node->type =
             makeGenericType(ctx->typeTable,
                             &(Type){.tag = typGeneric,

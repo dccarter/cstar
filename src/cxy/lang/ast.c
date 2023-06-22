@@ -843,6 +843,26 @@ AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *init)
     return node;
 }
 
+AstNode *makeSingleNodePath(MemPool *pool,
+                            const FileLoc *loc,
+                            cstring name,
+                            u64 flags,
+                            const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astPath,
+                                  .flags = flags,
+                                  .type = type,
+                                  .path.elements = makeAstNode(
+                                      pool,
+                                      loc,
+                                      &(AstNode){.flags = flags,
+                                                 .type = type,
+                                                 .tag = astPathElem,
+                                                 .pathElement.name = name})});
+}
+
 void clearAstBody(AstNode *node)
 {
     memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);

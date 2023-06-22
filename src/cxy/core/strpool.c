@@ -4,6 +4,7 @@
 #include "core/utils.h"
 
 #include <assert.h>
+#include <stdarg.h>
 #include <string.h>
 
 StrPool newStrPool(MemPool *mem_pool)
@@ -58,7 +59,7 @@ const char *makeStringSized(StrPool *pool, const char *str, u64 len)
 
 const char *makeAnonymousVariable(StrPool *pool, const char *prefix)
 {
-    static char variable[MAX_ANONYMOUS_PREFIX_SIZE + 32];
+    char variable[MAX_ANONYMOUS_PREFIX_SIZE + 32];
     static u64 postfix = 0;
     u64 len;
     if (prefix == NULL) {
@@ -68,10 +69,30 @@ const char *makeAnonymousVariable(StrPool *pool, const char *prefix)
     else
         len = strlen(prefix);
 
-    if (len > MAX_ANONYMOUS_PREFIX_SIZE)
-        return NULL;
+    csAssert0(len < +MAX_ANONYMOUS_PREFIX_SIZE);
     memcpy(variable, prefix, len);
     sprintf(&variable[len], "_%llu", postfix++);
+
+    return makeString(pool, variable);
+}
+
+const char *makeStringConcat(StrPool *pool, const char *s1, ...)
+{
+    char variable[MAX_ANONYMOUS_PREFIX_SIZE + 32];
+    size_t len = strlen(s1);
+    csAssert0(len < MAX_ANONYMOUS_PREFIX_SIZE);
+    memcpy(variable, s1, len);
+
+    va_list ap;
+    va_start(ap, s1);
+    const char *s = va_arg(ap, const char *);
+    while (s) {
+        len += strlen(s);
+        csAssert0(len < MAX_ANONYMOUS_PREFIX_SIZE);
+        memcpy(&variable[len], s, len);
+        s = va_arg(ap, const char *);
+    }
+    va_end(ap);
 
     return makeString(pool, variable);
 }

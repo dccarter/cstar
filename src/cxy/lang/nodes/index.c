@@ -15,7 +15,7 @@
 
 static inline bool isParentAssignExpr(const AstNode *node)
 {
-    return node->parentScope && nodeIs(node->parentScope, AssignExpr);
+    return nodeIs(node->parentScope, AssignExpr);
 }
 
 static void checkIndexOperator(AstVisitor *visitor, AstNode *node)
@@ -93,7 +93,7 @@ static bool evalIntegerIndexExpr(SemanticsContext *ctx, AstNode *node)
         return false;
     }
 
-    i64 i = getNumericLiteral(index);
+    i64 i = (i64)getNumericLiteral(index);
     u64 len = nodeIs(target, StringLit) ? strlen(target->stringLiteral.value)
                                         : target->arrayExpr.len;
     if (i < 0 || i >= len) {

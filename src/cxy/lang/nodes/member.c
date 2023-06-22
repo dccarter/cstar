@@ -98,14 +98,13 @@ void generateMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
             format(ctx->state, "->", NULL);
         else
             format(ctx->state, ".", NULL);
-        if (member->tag == astIntegerLit) {
+        if (nodeIs(member, IntegerLit)) {
             format(ctx->state,
                    "_{u64}",
                    (FormatArg[]){{.u64 = member->intLiteral.value}});
         }
         else {
-            format(
-                ctx->state, "{s}", (FormatArg[]){{.s = member->ident.value}});
+            astConstVisit(visitor, member);
         }
     }
 }
@@ -190,13 +189,19 @@ void checkMember(AstVisitor *visitor, AstNode *node)
         }
 
         AstNode *symbol = findSymbolByNode(ctx, rawTarget->tStruct.env, member);
-        if (symbol != NULL && nodeIs(member, Path) &&
-            nodeIs(symbol, GenericDecl)) {
-            symbol = checkGenericDeclReference(
-                visitor, symbol, member->path.elements, rawTarget->tStruct.env);
-            member->type = symbol->type;
-            member->path.elements->type = symbol->type;
-            member->path.elements->pathElement.resolvesTo = symbol;
+        if (symbol != NULL) {
+            if (nodeIs(symbol, GenericDecl)) {
+                symbol = checkGenericDeclReference(visitor,
+                                                   symbol,
+                                                   member->path.elements,
+                                                   rawTarget->tStruct.env);
+            }
+
+            if (symbol != NULL) {
+                member->type = symbol->type;
+                member->path.elements->type = symbol->type;
+                member->path.elements->pathElement.resolvesTo = symbol;
+            }
         }
 
         if (symbol == NULL) {
@@ -204,10 +209,7 @@ void checkMember(AstVisitor *visitor, AstNode *node)
             return;
         }
 
-        if (symbol == NULL)
-            node->type = ERROR_TYPE(ctx);
-        else
-            node->type = symbol->type;
+        node->type = symbol->type;
     }
     else {
         csAssert(nodeIs(member, Identifier), "TODO");

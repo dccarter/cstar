@@ -210,7 +210,8 @@ enum {
     flgUnsafe = BIT(30),
     flgFunctionPtr = BIT(31),
     flgBuiltinMember = BIT(32),
-    flgComptimeIterable = BIT(33)
+    flgComptimeIterable = BIT(33),
+    flgDebugBreak = BIT(33)
 };
 
 struct Scope;
@@ -466,6 +467,7 @@ struct AstNode {
             const char *name;
             struct AstNode *base;
             struct AstNode *members;
+            const Type *generatedFrom;
         } structDecl;
 
         struct {
@@ -564,6 +566,11 @@ struct AstNode {
             struct AstNode *match;
             struct AstNode *body;
         } caseStmt;
+
+        struct {
+            AstNode *original;
+            cstring message;
+        } error;
     };
 };
 
@@ -613,6 +620,11 @@ void astConstVisit(ConstAstVisitor *visitor, const AstNode *node);
 void clearAstBody(AstNode *node);
 
 AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *node);
+AstNode *makeSingleNodePath(MemPool *pool,
+                            const FileLoc *loc,
+                            cstring name,
+                            u64 flags,
+                            const Type *type);
 
 AstNode *copyAstNode(MemPool *pool, const AstNode *node);
 

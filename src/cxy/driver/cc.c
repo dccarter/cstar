@@ -15,6 +15,8 @@
 #include "c.inc.h"
 #include "coro.inc.h"
 #include "evloop.inc.h"
+#include "scheduler.inc.h"
+#include "thread.inc.h"
 
 #include <errno.h>
 #include <string.h>
@@ -29,7 +31,13 @@ static struct {
     {.name = "evloop.c",
      .data = CXY_EV_LOOP_CODE,
      .len = CXY_EV_LOOP_CODE_SIZE},
-    {.name = "c.c", .data = CXY_C_WRAPPERS_CODE, CXY_C_WRAPPERS_CODE_SIZE}};
+    {.name = "c.c",
+     .data = CXY_C_WRAPPERS_CODE,
+     .len = CXY_C_WRAPPERS_CODE_SIZE},
+    {.name = "scheduler.c",
+     .data = CXY_SCHEDULER_CODE,
+     .len = CXY_SCHEDULER_CODE_SIZE},
+    {.name = "thread.c", .data = CXY_THREAD_CODE, .len = CXY_THREAD_CODE_SIZE}};
 
 bool generateBuiltinSources(CompilerDriver *driver)
 {

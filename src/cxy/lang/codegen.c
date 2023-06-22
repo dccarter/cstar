@@ -143,6 +143,10 @@ static void generateExpressionStmt(ConstAstVisitor *visitor,
                                    const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    if (findAttribute(node, "go")) {
+        generateCoroutineLaunch(visitor, node->exprStmt.expr);
+        return;
+    }
     astConstVisit(visitor, node->exprStmt.expr);
     format(ctx->state, ";", NULL);
 }

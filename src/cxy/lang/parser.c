@@ -1254,25 +1254,30 @@ static OperatorOverload operatorOverload(Parser *P)
     if (match(P, tokLBracket)) {
         consume0(P, tokRBracket);
         if (match(P, tokAssign)) {
-            op = (OperatorOverload){.f = opIndexAssignOverload,
-                                    .s = "op_idx_assign"};
+            op = (OperatorOverload){
+                .f = opIndexAssignOverload,
+                .s = makeString(P->strPool, "op_idx_assign")};
         }
         else {
-            op = (OperatorOverload){.f = opIndexOverload, .s = "op_idx"};
+            op = (OperatorOverload){.f = opIndexOverload,
+                                    .s = makeString(P->strPool, "op_idx")};
         }
     }
     else if (match(P, tokLParen)) {
-        op = (OperatorOverload){.f = opCallOverload, .s = "op_call"};
+        op = (OperatorOverload){.f = opCallOverload,
+                                .s = makeString(P->strPool, "op_call")};
         consume0(P, tokRParen);
     }
     else if (match(P, tokIdent)) {
         Token ident = *previous(P);
         cstring name = getTokenString(P, &ident, false);
         if (strcmp(name, "str") == 0) {
-            op = (OperatorOverload){.f = opStringOverload, .s = "op_str"};
+            op = (OperatorOverload){.f = opStringOverload,
+                                    .s = makeString(P->strPool, "op_str")};
         }
         else if (strcmp(name, "deref") == 0) {
-            op = (OperatorOverload){.f = opDeref, .s = "op_deref"};
+            op = (OperatorOverload){.f = opDeref,
+                                    .s = makeString(P->strPool, "op_deref")};
         }
         else {
             parserError(P,
@@ -1284,23 +1289,28 @@ static OperatorOverload operatorOverload(Parser *P)
     else {
         switch (current(P)->tag) {
         case tokNew:
-            op = (OperatorOverload){.f = opNew, .s = "op_new"};
+            op = (OperatorOverload){.f = opNew,
+                                    .s = makeString(P->strPool, "op_new")};
             break;
         case tokDelete:
-            op = (OperatorOverload){.f = opDelete, .s = "op_delete"};
+            op = (OperatorOverload){.f = opDelete,
+                                    .s = makeString(P->strPool, "op_delete")};
             break;
         case tokLNot:
             if (checkPeek(P, 1, tokLNot)) {
-                op = (OperatorOverload){.f = opTruthy, .s = "op_truthy"};
+                op = (OperatorOverload){
+                    .f = opTruthy, .s = makeString(P->strPool, "op_truthy")};
                 advance(P);
             }
             else
-                op = (OperatorOverload){.f = opNot, .s = "op_not"};
+                op = (OperatorOverload){.f = opNot,
+                                        .s = makeString(P->strPool, "op_not")};
             break;
 
-#define f(O, P, T, S, N)                                                       \
+#define f(O, PP, T, S, N)                                                      \
     case tok##T:                                                               \
-        op = (OperatorOverload){.f = op##O, .s = "op_" N};                     \
+        op = (OperatorOverload){.f = op##O,                                    \
+                                .s = makeString(P->strPool, "op_" N)};         \
         break;
             AST_BINARY_EXPR_LIST(f);
 
@@ -1557,6 +1567,7 @@ static AstNode *continueStatement(Parser *P)
 static AstNode *statement(Parser *P)
 {
     AstNode *attrs = NULL;
+    u64 flags = match(P, tokDebugBreak) == NULL ? flgNone : flgDebugBreak;
     if (check(P, tokAt))
         attrs = attributes(P);
 
@@ -1615,7 +1626,7 @@ static AstNode *statement(Parser *P)
     }
 
     stmt->attrs = attrs;
-    stmt->flags |= (isComptime ? flgComptime : flgNone);
+    stmt->flags |= (isComptime ? flgComptime : flgNone) | flags;
     return stmt;
 }
 
@@ -1837,8 +1848,9 @@ static AstNode *parseComptimeFor(Parser *P, AstNode *(*parser)(Parser *))
 
 static AstNode *parseComptimeVarDecl(Parser *P, AstNode *(*parser)(Parser *))
 {
-    E4C_THROW_CTX(ParserException, "Not Implemented", P);
-    unreachable();
+    AstNode *node = variable(P, false, false, true, false);
+    node->flags |= flgComptime;
+    return node;
 }
 
 static AstNode *comptime(Parser *P, AstNode *(*parser)(Parser *))

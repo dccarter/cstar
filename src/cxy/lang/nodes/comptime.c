@@ -120,9 +120,9 @@ static AstNode *getMembers(SemanticsContext *ctx,
     return NULL;
 }
 
-static AstNode *getVarargs(SemanticsContext *ctx,
-                           const FileLoc *loc,
-                           AstNode *node)
+static AstNode *getTypeInfo(SemanticsContext *ctx,
+                            const FileLoc *loc,
+                            AstNode *node)
 {
     switch (node->tag) {
     case astFuncParam:
@@ -131,7 +131,8 @@ static AstNode *getVarargs(SemanticsContext *ctx,
                                    &node->loc,
                                    node->funcParam.type->tupleType.args,
                                    flgComptimeIterable);
-        break;
+
+        return node->funcParam.type;
     default:
         break;
     }
@@ -166,153 +167,174 @@ static AstNode *isString(SemanticsContext *ctx,
                          const FileLoc *loc,
                          AstNode *node)
 {
-    node->type ?: evalType(ctx->eval.semanticsVisitor, node);
-    return makeAstNode(
-        ctx->pool,
-        loc,
-        &(AstNode){.tag = astBoolLit,
-                   .boolLiteral.value = typeIs(node->type, String)});
+    const Type *type = node->type ?: evalType(ctx->eval.semanticsVisitor, node);
+    type = resolveType(type);
+
+    return makeAstNode(ctx->pool,
+                       loc,
+                       &(AstNode){.tag = astBoolLit,
+                                  .boolLiteral.value = typeIs(type, String)});
 }
 
 static AstNode *isChar(SemanticsContext *ctx, const FileLoc *loc, AstNode *node)
 {
-    node->type ?: evalType(ctx->eval.semanticsVisitor, node);
-    return makeAstNode(
-        ctx->pool,
-        loc,
-        &(AstNode){.tag = astBoolLit,
-                   .boolLiteral.value = isCharacterType(node->type)});
+    const Type *type = node->type ?: evalType(ctx->eval.semanticsVisitor, node);
+    type = resolveType(type);
+
+    return makeAstNode(ctx->pool,
+                       loc,
+                       &(AstNode){.tag = astBoolLit,
+                                  .boolLiteral.value = isCharacterType(type)});
 }
 
 static AstNode *isArray(SemanticsContext *ctx,
                         const FileLoc *loc,
                         AstNode *node)
 {
-    node->type ?: evalType(ctx->eval.semanticsVisitor, node);
+    const Type *type = node->type ?: evalType(ctx->eval.semanticsVisitor, node);
+    type = resolveType(type);
+
     return makeAstNode(
         ctx->pool,
         loc,
-        &(AstNode){.tag = astBoolLit,
-                   .boolLiteral.value = isArrayType(node->type)});
+        &(AstNode){.tag = astBoolLit, .boolLiteral.value = isArrayType(type)});
 }
 
 static AstNode *isSlice(SemanticsContext *ctx,
                         const FileLoc *loc,
                         AstNode *node)
 {
-    node->type ?: evalType(ctx->eval.semanticsVisitor, node);
+    const Type *type = node->type ?: evalType(ctx->eval.semanticsVisitor, node);
+    type = resolveType(type);
+
     return makeAstNode(
         ctx->pool,
         loc,
-        &(AstNode){.tag = astBoolLit,
-                   .boolLiteral.value = isSliceType(node->type)});
+        &(AstNode){.tag = astBoolLit, .boolLiteral.value = isSliceType(type)});
 }
 
 static AstNode *isBoolean(SemanticsContext *ctx,
                           const FileLoc *loc,
                           AstNode *node)
 {
-    node->type ?: evalType(ctx->eval.semanticsVisitor, node);
-    return makeAstNode(
-        ctx->pool,
-        loc,
-        &(AstNode){.tag = astBoolLit,
-                   .boolLiteral.value = isBooleanType(node->type)});
+    const Type *type = node->type ?: evalType(ctx->eval.semanticsVisitor, node);
+    type = resolveType(type);
+
+    return makeAstNode(ctx->pool,
+                       loc,
+                       &(AstNode){.tag = astBoolLit,
+                                  .boolLiteral.value = isBooleanType(type)});
 }
 
 static AstNode *isNumeric(SemanticsContext *ctx,
                           const FileLoc *loc,
                           AstNode *node)
 {
-    node->type ?: evalType(ctx->eval.semanticsVisitor, node);
-    return makeAstNode(
-        ctx->pool,
-        loc,
-        &(AstNode){.tag = astBoolLit,
-                   .boolLiteral.value = isNumericType(node->type)});
+    const Type *type = node->type ?: evalType(ctx->eval.semanticsVisitor, node);
+    type = resolveType(type);
+
+    return makeAstNode(ctx->pool,
+                       loc,
+                       &(AstNode){.tag = astBoolLit,
+                                  .boolLiteral.value = isNumericType(type)});
 }
 
 static AstNode *isInteger(SemanticsContext *ctx,
                           const FileLoc *loc,
                           AstNode *node)
 {
-    node->type ?: evalType(ctx->eval.semanticsVisitor, node);
-    return makeAstNode(
-        ctx->pool,
-        loc,
-        &(AstNode){.tag = astBoolLit,
-                   .boolLiteral.value = isIntegerType(node->type)});
+    const Type *type = node->type ?: evalType(ctx->eval.semanticsVisitor, node);
+    type = resolveType(type);
+
+    return makeAstNode(ctx->pool,
+                       loc,
+                       &(AstNode){.tag = astBoolLit,
+                                  .boolLiteral.value = isIntegerType(type)});
 }
 
 static AstNode *isSigned(SemanticsContext *ctx,
                          const FileLoc *loc,
                          AstNode *node)
 {
-    node->type ?: evalType(ctx->eval.semanticsVisitor, node);
+    const Type *type = node->type ?: evalType(ctx->eval.semanticsVisitor, node);
+    type = resolveType(type);
+
     return makeAstNode(
         ctx->pool,
         loc,
-        &(AstNode){.tag = astBoolLit,
-                   .boolLiteral.value = isSignedType(node->type)});
+        &(AstNode){.tag = astBoolLit, .boolLiteral.value = isSignedType(type)});
 }
 
 static AstNode *isUnsigned(SemanticsContext *ctx,
                            const FileLoc *loc,
                            AstNode *node)
 {
-    node->type ?: evalType(ctx->eval.semanticsVisitor, node);
-    return makeAstNode(
-        ctx->pool,
-        loc,
-        &(AstNode){.tag = astBoolLit,
-                   .boolLiteral.value = isUnsignedType(node->type)});
+    const Type *type = node->type ?: evalType(ctx->eval.semanticsVisitor, node);
+    type = resolveType(type);
+
+    return makeAstNode(ctx->pool,
+                       loc,
+                       &(AstNode){.tag = astBoolLit,
+                                  .boolLiteral.value = isUnsignedType(type)});
 }
 
 static AstNode *isFloat(SemanticsContext *ctx,
                         const FileLoc *loc,
                         AstNode *node)
 {
-    node->type ?: evalType(ctx->eval.semanticsVisitor, node);
+    const Type *type = node->type ?: evalType(ctx->eval.semanticsVisitor, node);
+    type = resolveType(type);
+
     return makeAstNode(
         ctx->pool,
         loc,
-        &(AstNode){.tag = astBoolLit,
-                   .boolLiteral.value = isFloatType(node->type)});
+        &(AstNode){.tag = astBoolLit, .boolLiteral.value = isFloatType(type)});
 }
 
 static AstNode *isOptional(SemanticsContext *ctx,
                            const FileLoc *loc,
                            AstNode *node)
 {
-    node->type ?: evalType(ctx->eval.semanticsVisitor, node);
+    const Type *type = node->type ?: evalType(ctx->eval.semanticsVisitor, node);
+    type = resolveType(type);
+
+    const Type *optional = getBuiltinOptionalType(ctx->typeTable);
+    bool isOptional = false;
+    if (optional != NULL && typeIs(type, Struct))
+        isOptional =
+            optional ==
+            unwrapType(type->tStruct.decl->structDecl.generatedFrom, NULL);
+
     return makeAstNode(
         ctx->pool,
         loc,
-        &(AstNode){.tag = astBoolLit, .boolLiteral.value = false});
+        &(AstNode){.tag = astBoolLit, .boolLiteral.value = isOptional});
 }
 
 static AstNode *isPointer(SemanticsContext *ctx,
                           const FileLoc *loc,
                           AstNode *node)
 {
-    node->type ?: evalType(ctx->eval.semanticsVisitor, node);
-    return makeAstNode(
-        ctx->pool,
-        loc,
-        &(AstNode){.tag = astBoolLit,
-                   .boolLiteral.value = typeIs(node->type, Pointer)});
+    const Type *type = node->type ?: evalType(ctx->eval.semanticsVisitor, node);
+    type = resolveType(type);
+
+    return makeAstNode(ctx->pool,
+                       loc,
+                       &(AstNode){.tag = astBoolLit,
+                                  .boolLiteral.value = typeIs(type, Pointer)});
 }
 
 static AstNode *isStruct(SemanticsContext *ctx,
                          const FileLoc *loc,
                          AstNode *node)
 {
-    node->type ?: evalType(ctx->eval.semanticsVisitor, node);
-    return makeAstNode(
-        ctx->pool,
-        loc,
-        &(AstNode){.tag = astBoolLit,
-                   .boolLiteral.value = typeIs(node->type, Struct)});
+    const Type *type = node->type ?: evalType(ctx->eval.semanticsVisitor, node);
+    type = resolveType(type);
+
+    return makeAstNode(ctx->pool,
+                       loc,
+                       &(AstNode){.tag = astBoolLit,
+                                  .boolLiteral.value = typeIs(type, Struct)});
 }
 
 static AstNode *isEnum(SemanticsContext *ctx, const FileLoc *loc, AstNode *node)
@@ -344,7 +366,7 @@ static void initDefaultMembers(SemanticsContext *ctx)
 
     ADD_MEMBER("name", getName);
     ADD_MEMBER("members", getMembers);
-    ADD_MEMBER("varargs", getVarargs);
+    ADD_MEMBER("Tinfo", getTypeInfo);
     ADD_MEMBER("elementType", getElementType);
     ADD_MEMBER("pointedType", getPointedType);
     ADD_MEMBER("isInteger", isInteger);

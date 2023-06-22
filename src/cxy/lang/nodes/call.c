@@ -355,7 +355,7 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     }
 
     astConstVisit(visitor, node->callExpr.callee);
-    
+
     if (index)
         format(ctx->state, "{u32}", (FormatArg[]){{.u32 = index}});
 

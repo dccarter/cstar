@@ -144,7 +144,19 @@ void evalAssignExpr(AstVisitor *visitor, AstNode *node)
         node->tag = astError;
         return;
     }
-    symbol->node = right;
 
     node->tag = astNop;
+    if (node->assignExpr.op == opAssign) {
+        symbol->node = right;
+        return;
+    }
+
+    AstNode lhs = *symbol->node;
+    AstNode binary = (AstNode){
+        .tag = astBinaryExpr,
+        .loc = node->loc,
+        .binaryExpr = {.op = node->assignExpr.op, .lhs = &lhs, .rhs = right}};
+
+    evalBinaryExpr(visitor, &binary);
+    *symbol->node = binary;
 }

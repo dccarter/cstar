@@ -26,3 +26,4 @@ void freeStrPool(StrPool *);
 const char *makeString(StrPool *, const char *);
 const char *makeStringSized(StrPool *, const char *, u64);
 const char *makeAnonymousVariable(StrPool *pool, const char *prefix);
+const char *makeStringConcat(StrPool *, const char *, ...);

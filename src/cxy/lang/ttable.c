@@ -287,6 +287,9 @@ const Type *resolveType(const Type *type)
         case typAlias:
             type = resolveType(type->alias.aliased);
             break;
+        case typInfo:
+            type = resolveType(type->info.target);
+            break;
         default:
             return type;
         }
@@ -641,4 +644,16 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right)
     default:
         return NULL;
     }
+}
+
+const Type *getBuiltinOptionalType(TypeTable *table)
+{
+    static const Type *optionalType = NULL;
+    if (optionalType == NULL && getBuiltinEnv() != NULL) {
+        AstNode *node = findSymbolOnly(getBuiltinEnv(), "Optional");
+        if (node != NULL) {
+            optionalType = node->type;
+        }
+    }
+    return optionalType;
 }

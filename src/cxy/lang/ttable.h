@@ -25,6 +25,7 @@ typedef struct TypeTable {
     const Type *anySliceType;
     const Type *primitiveTypes[prtCOUNT];
     const Type *destructorType;
+    const Type *optionalType;
 } TypeTable;
 
 typedef Pair(bool, const Type *) GetOrInset;
@@ -97,3 +98,4 @@ void enumerateTypeTable(TypeTable *table,
                         bool(with)(void *, const void *));
 
 const Type *promoteType(TypeTable *table, const Type *left, const Type *right);
+const Type *getBuiltinOptionalType(TypeTable *table);

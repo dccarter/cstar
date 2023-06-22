@@ -1,20 +1,13 @@
-import { print, println, fdRead, STDIN } from "stdlib/io.cxy"
+import { println } from "stdlib/io.cxy"
 
-struct Thing {
-    id: i32
-    func print(x: i32, ...args: auto) {
-        println(id, " ", x, " ", ...args)
-    }
-}
-
-func many(x: i32, ...args: auto) {
-    println(x, ...args)
+async func hello(name: string, age: i32) {
+    const start = now();
+    asleep(1000 + 100*age)
+    println(now()-start, " - Hello ", name, ", You are ", age, " yrs old!")
 }
 
 func main(args: [string]) {
-    const name = "Carter";
-    println(10, 20, "Carters");
-    many(1, 2, name, Thing{id: 12});
-
-    Thing{id: 10}.print(20, name)
+    for (const i: 22..44)
+        @go hello("John", <i32>i)
+    asleep(5000);
 }

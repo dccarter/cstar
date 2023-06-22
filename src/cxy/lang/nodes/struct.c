@@ -51,8 +51,13 @@ bool isExplicitConstructibleFrom(SemanticsContext *ctx,
     if (!typeIs(type, Struct))
         return isTypeAssignableFrom(type, from);
 
-    AstNode *constructor = findFunctionWithSignature(
-        ctx, type->tStruct.env, "op_new", flgNone, (const Type *[]){from}, 1);
+    AstNode *constructor =
+        findFunctionWithSignature(ctx,
+                                  type->tStruct.env,
+                                  makeString(ctx->strPool, "op_new"),
+                                  flgNone,
+                                  (const Type *[]){from},
+                                  1);
 
     if (constructor == NULL || findAttribute(constructor, "explicit"))
         return false;
@@ -86,7 +91,7 @@ bool evalExplicitConstruction(AstVisitor *visitor,
     AstNode *constructor =
         findFunctionWithSignature(ctx,
                                   type->tStruct.env,
-                                  "op_new",
+                                  makeString(ctx->strPool, "op_new"),
                                   flgNone,
                                   (const Type *[]){node->type},
                                   1);
@@ -152,20 +157,23 @@ const Type *evalConstructorCall(AstVisitor *visitor,
     AstNode *newCallee = makeAstNode(
         ctx->pool,
         &callee->loc,
-        &(AstNode){
-            .tag = astMemberExpr,
-            .flags = callee->flags,
-            .memberExpr = {
-                .target = makeAstNode(ctx->pool,
+        &(AstNode){.tag = astPath,
+                   .flags = callee->flags,
+                   .path.elements = makeAstNode(
+                       ctx->pool,
+                       &node->loc,
+                       &(AstNode){.tag = astPathElem,
+                                  .flags = callee->flags,
+                                  .pathElement.name = name,
+                                  .next = makeAstNode(
+                                      ctx->pool,
                                       &node->loc,
-                                      &(AstNode){.tag = astIdentifier,
-                                                 .flags = callee->flags,
-                                                 .ident.value = name}),
-                .member = makeAstNode(ctx->pool,
-                                      &node->loc,
-                                      &(AstNode){.tag = astIdentifier,
-                                                 .flags = callee->flags,
-                                                 .ident.value = "op_new"})}});
+                                      &(AstNode){
+                                          .tag = astPathElem,
+                                          .flags = callee->flags,
+                                          .pathElement.name = makeString(
+                                              ctx->strPool, "op_new"),
+                                      })})});
 
     AstNode *ret =
         makeAstNode(ctx->pool,

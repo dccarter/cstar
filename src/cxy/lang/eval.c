@@ -177,6 +177,7 @@ void initEvalVisitor(AstVisitor *visitor, SemanticsContext *ctx)
         [astTupleExpr] = evalTupleExpr,
         [astBinaryExpr] = evalBinaryExpr,
         [astAssignExpr] = evalAssignExpr,
+        [astUnaryExpr] = evalUnaryExpr,
         [astIndexExpr] = evalIndexExpr,
         [astMemberExpr] = evalMemberExpr,
         [astArrayExpr]= evalArrayExpr,

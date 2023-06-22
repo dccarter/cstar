@@ -101,17 +101,17 @@ pub struct StringBuilder {
 
     @inline
     func `<<`[U](val: U) {
-        #if (U.isString)
+        #if (#U.isString)
             appendString(val)
-        else #if (U.isInteger)
+        else #if (#U.isInteger)
             appendInt(<i64>val)
-        else #if (U.isFloat)
+        else #if (#U.isFloat)
             appendFloat(val)
-        else #if (U.isBoolean)
+        else #if (#U.isBoolean)
             appendBool(val)
         else #if (#U == #wchar)
              appendChar(val)
-        else #if (T.isEnum)
+        else #if (#U.isEnum)
             appendInt(<i64>val)
         else
             val.toString(this)
@@ -162,7 +162,7 @@ pub struct Optional[T] {
     func `deref`() => val
 
     @inline
-    func toString(sb: &StringBuilder) {
+    const func toString(sb: &StringBuilder) {
         if (valid) {
             sb << "Some(" << val << ")"
         }
@@ -180,3 +180,27 @@ pub func None[T]() => Optional[T]{valid: false}
 
 @inline
 pub func Some[T](val: T) => Optional[T]{valid: true, val: val}
+
+@alias(name: "asleep")
+pub native func __cxy_eventloop_sleep(ms: i64) : void;
+
+@alias(name: "Coroutine")
+pub native type tina;
+
+@alias(name: "launchCoroutine")
+pub native func __cxy_launch_coro(
+    @static fn: func(args: &void) -> void,
+    args: &void,
+    dbg: &const i8,
+    ss: u64 = unchecked!(TINA_MIN_CORO_STACK_SIZE, #u64)
+) : void;
+
+pub native func __cxy_coroutine_name(co: &Coroutine) : &const char;
+
+pub func coroutineName(co: &Coroutine = null): string {
+    @transient const name = __cxy_coroutine_name(co);
+    return unchecked!(name, #string)
+}
+
+@alias(name: "now")
+pub native func __cxy_now_ms() : i64;

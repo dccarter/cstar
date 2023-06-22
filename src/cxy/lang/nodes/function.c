@@ -74,7 +74,7 @@ static const Type *transformFuncTypeParam(SemanticsContext *ctx,
     return type;
 }
 
-static bool isVariadicFunction(SemanticsContext *ctx, AstNode *node)
+bool isVariadicFunction(SemanticsContext *ctx, AstNode *node)
 {
     AstNode *param = node->funcDecl.params;
     bool isVariadic = false;
@@ -104,6 +104,7 @@ static void transformVariadicDeclToGenericDecl(AstVisitor *visitor,
     AstNode *decl = copyAstNode(ctx->pool, node);
     *node = (AstNode){.tag = astGenericDecl,
                       .next = next,
+                      .loc = node->loc,
                       .parentScope = parent,
                       .flags = node->flags | flgVariadic,
                       .genericDecl = {.decl = decl}};
@@ -364,6 +365,12 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         astConstVisit(visitor, node->funcDecl.body);
         format(ctx->state, ";", NULL);
         format(ctx->state, "{<}\n}", NULL);
+    }
+
+    if (hasFlag(node, Async)) {
+        format(ctx->state, "\n", NULL);
+        generateCoroutineFunctions(visitor, node);
+        format(ctx->state, "\n", NULL);
     }
 
     if (node->funcDecl.operatorOverload == opDelete) {

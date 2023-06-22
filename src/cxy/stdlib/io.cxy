@@ -12,6 +12,12 @@ pub native func read(fd: i32, data: &void, size: u64) : i64;
 pub native func C__fcntl_GETFL(fd: i32): i32;
 pub native func C__fcntl_SETFL(fd: i32, flags: i32): i32;
 
+@alias(name: "fdWaitRead")
+pub native func __cxy_eventloop_wait_read(fd: i32, timeout: u64 = 0) : i32;
+
+@alias(name: "fdWaitWrite")
+pub native func __cxy_eventloop_wait_write(fd: i32, timeout: u64 = 0) : i32;
+
 pub func print[T](it: T) {
     #if (T.isString) {
         write(STDOUT, cstr!(it), len!(it))
@@ -24,10 +30,12 @@ pub func print[T](it: T) {
 @inline
 pub func println(...args: auto) {
     #const i = 0;
-    #for (const arg: #{args.varargs}) {
-        print[#{arg}](args.#{mkInteger!(i)})
-        #{i = i + 1}
+
+    #for (const argT: #{args.Tinfo}) {
+        print[#{argT}](args.#{i})
+        #{i += 1}
     }
+
     write(STDOUT, cstr!("\n"), 1)
 }
 
@@ -81,7 +89,7 @@ pub func fdRead(fd: i32, data: &void, size: u64) : i64
     return nread
 }
 
-/*
+
 func fdAsyncWrite_(fd: i32, data: &const void, size: u64, timeout: i64) : void
 {
     var nwr : i64 = 0;
@@ -115,4 +123,3 @@ pub func fdAsyncRead(fd: i32, data: &const void, size: u64, timeout: i64) : i64
 
     return nread;
 }
-*/

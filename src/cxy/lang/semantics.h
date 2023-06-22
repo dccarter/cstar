@@ -90,6 +90,9 @@ void transformToMemberCallExpr(AstVisitor *visitor,
                                AstNode *target,
                                cstring member,
                                AstNode *args);
+
+AstNode *makeLaunchCoroutine(SemanticsContext *ctx, AstNode *node);
+
 const Type *evalConstructorCall(AstVisitor *visitor,
                                 const Type *type,
                                 AstNode *node,
@@ -101,6 +104,8 @@ bool evalExplicitConstruction(AstVisitor *visitor,
 bool isExplicitConstructibleFrom(SemanticsContext *ctx,
                                  const Type *type,
                                  const Type *from);
+
+bool isVariadicFunction(SemanticsContext *ctx, AstNode *node);
 
 bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node);
 bool transformToDerefOperator(AstVisitor *visitor, AstNode *node);

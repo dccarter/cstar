@@ -724,3 +724,231 @@ static u64 __cxy_builtins_mod_prime(u64 i, u64 p)
 #endif
 
 #include "c.c"
+
+#define _TINYCTHREAD_ASSERT cxyAssert
+#define _TINYCTHREAD_ALLOC(size) cxy_alloc(size, nullptr)
+#define _TINYCTHREAD_FREE cxy_free
+
+#define _TINYCTHREAD_IMPLEMENTATION
+#include "thread.c"
+#undef _TINYCTHREAD_IMPLEMENTATION
+
+#undef _TINYCTHREAD_FREE
+#undef _TINYCTHREAD_ALLOC
+#undef _TINYCTHREAD_ASSERT
+
+#define _TINA_ASSERT cxyAssert
+#define _TINA_ALLOC(size) cxy_alloc(size, nullptr)
+#define _TINA_FREE cxy_free
+
+#define TINA_IMPLEMENTATION
+#include "coro.c"
+#undef TINA_IMPLEMENTATION
+
+#define TINA_JOB_IMPLEMENTATION
+#include "scheduler.c"
+#undef TINA_JOB_IMPLEMENTATION
+
+#undef _TINA_ALLOC
+#undef _TINA_FREE
+#undef _TINA_ASSERT
+
+#ifndef CXY_DEFAULT_CORO_STACK_SIZE
+#define CXY_DEFAULT_CORO_STACK_SIZE 256 * 1024
+#endif
+
+#include "evloop.c"
+
+#ifndef CXY_MAX_EVENT_LOOP_FDS
+#define CXY_MAX_EVENT_LOOP_FDS 1024
+#endif
+
+aeEventLoop *__cxy_loop;
+tina *__cxy_main_coro;
+
+struct {
+    tina *first;
+    tina *last;
+    tina *loop_coro;
+    tina *this_coro;
+    tina *cleanup_coro;
+    bool running;
+} __cxy_scheduler = {NULL};
+
+attr(always_inline) static tina *__cxy_scheduler_pop()
+{
+    if (__cxy_scheduler.first == NULL)
+        return NULL;
+
+    tina *co = __cxy_scheduler.first;
+    if (__cxy_scheduler.first == __cxy_scheduler.last) {
+        __cxy_scheduler.first = __cxy_scheduler.last = NULL;
+    }
+    else {
+        __cxy_scheduler.first = co->next;
+    }
+
+    return co;
+}
+
+attr(always_inline) static void __cxy_scheduler_push(tina *co)
+{
+    if (__cxy_scheduler.last) {
+        __cxy_scheduler.last->next = co;
+        __cxy_scheduler.last = co;
+    }
+    else
+        __cxy_scheduler.first = __cxy_scheduler.last = co;
+}
+
+attr(always_inline) static void __cxy_cleanup_coroutine(tina *co)
+{
+    tina_swap(co, __cxy_scheduler.cleanup_coro, co);
+}
+
+static void *__cxy_scheduler_func(attr(unused) tina *this, void *arg)
+{
+    do {
+        tina *co = __cxy_scheduler_pop() ?: __cxy_scheduler.loop_coro;
+        tina_swap(this, co, NULL);
+    } while (__cxy_scheduler.running);
+
+    __cxy_cleanup_coroutine(this);
+
+    unreachable("DONE!!!");
+}
+
+attr(always_inline) static void __cxy_scheduler_stop()
+{
+    __cxy_scheduler.running = false;
+    tina_swap(tina_running(), __cxy_scheduler.this_coro, NULL);
+}
+
+static void *__cxy_eventloop_coro(tina *co, void *arg)
+{
+    printf("Running event loop\n");
+    aeMain(__cxy_loop);
+    aeDeleteEventLoop(__cxy_loop);
+    printf("Done running event loop\n");
+
+    return NULL;
+}
+
+static void *__cxy_cleanup_coro_handler(tina *co, void *arg)
+{
+    while (arg) {
+        tina *done = arg;
+        cxy_free(done->buffer);
+
+        if (arg == __cxy_scheduler.this_coro)
+            break;
+
+        arg = tina_swap(co, __cxy_scheduler.this_coro, NULL);
+    }
+
+    tina_swap(co, __cxy_main_coro, NULL);
+
+    unreachable("coroutine should never exit!!!");
+}
+
+static void __cxy_eventloop_init()
+{
+    __cxy_loop = aeCreateEventLoop(10);
+
+    csAssert0(__cxy_loop != NULL);
+    __cxy_scheduler.loop_coro =
+        tina_init(NULL, TINA_MIN_CORO_STACK_SIZE, __cxy_eventloop_coro, NULL);
+    __cxy_scheduler.loop_coro->name = "mainLoopCoroutine";
+
+    __cxy_scheduler.cleanup_coro = tina_init(
+        NULL, TINA_MIN_CORO_STACK_SIZE, __cxy_cleanup_coro_handler, NULL);
+    __cxy_scheduler.cleanup_coro->name = "cleanupCoroutine";
+
+    __cxy_scheduler.this_coro =
+        tina_init(NULL, TINA_MIN_CORO_STACK_SIZE, __cxy_scheduler_func, NULL);
+    __cxy_scheduler.this_coro->name = "schedulingCoroutine";
+}
+
+static void __cxy_eventloop_callback(aeEventLoop *loop,
+                                     int fd,
+                                     void *arg,
+                                     int mask)
+{
+    tina *co = arg;
+    tina_swap(tina_running(), co, (void *)(intptr_t)mask);
+}
+
+static int __cxy_eventloop_timer_fired(struct aeEventLoop *loop,
+                                       i64 id,
+                                       void *arg)
+{
+    tina *co = arg;
+    tina_swap(tina_running(), co, &id);
+    return AE_NOMORE;
+}
+
+static int __cxy_eventloop_wait_read(int fd, int timeout)
+{
+    int status = aeCreateFileEvent(
+        __cxy_loop, fd, AE_READABLE, __cxy_eventloop_callback, tina_running());
+
+    csAssert0(status != AE_ERR);
+    void *result = tina_swap(tina_running(), __cxy_scheduler.this_coro, NULL);
+
+    return (int)(intptr_t)result;
+}
+
+static int __cxy_eventloop_wait_write(int fd, int timeout)
+{
+    int status = aeCreateFileEvent(
+        __cxy_loop, fd, AE_WRITABLE, __cxy_eventloop_callback, tina_running());
+
+    csAssert0(status);
+    void *result = tina_swap(tina_running(), __cxy_scheduler.this_coro, NULL);
+
+    return (int)(intptr_t)result;
+}
+
+static void __cxy_eventloop_sleep(i64 ms)
+{
+    if (ms > 0) {
+        int status = aeCreateTimeEvent(
+            __cxy_loop, ms, __cxy_eventloop_timer_fired, tina_running(), NULL);
+        csAssert0(status != AE_ERR);
+
+        tina_swap(tina_running(), __cxy_scheduler.this_coro, NULL);
+    }
+}
+
+static void *__cxy_coro_fn(tina *co, void *arg)
+{
+    void (*fn)(void *) = co->user_data;
+    fn(arg);
+
+    __cxy_cleanup_coroutine(co);
+    unreachable("COROUTINE SHOULD HAVE EXITED");
+}
+
+static void __cxy_launch_coro(void (*fn)(void *),
+                              void *args,
+                              const char *dbg,
+                              u64 ss)
+{
+    tina *co = tina_init(NULL, ss, __cxy_coro_fn, fn);
+    co->name = dbg;
+
+    __cxy_scheduler_push(tina_running());
+    tina_swap(tina_running(), co, args);
+}
+
+attr(always_inline) static const char *__cxy_coroutine_name(tina *co)
+{
+    return (co ?: tina_running())->name ?: "<unnamed>";
+}
+
+attr(always_inline) i64 __cxy_now_ms()
+{
+    long seconds = 0, ms = 0;
+    aeGetTime(&seconds, &ms);
+    return (seconds * 1000) + ms;
+}

@@ -119,8 +119,8 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
 void generatePathElement(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    if (node->flags & flgCapture) {
-        if (node->type->tag == typPrimitive || node->type->tag == typPointer)
+    if (hasFlag(node, Capture)) {
+        if (typeIs(node->type, Primitive) || typeIs(node->type, Pointer))
             format(ctx->state,
                    "self->_{u64}",
                    (FormatArg[]){{.u64 = node->pathElement.index}});
@@ -129,10 +129,10 @@ void generatePathElement(ConstAstVisitor *visitor, const AstNode *node)
                    "(*self->_{u64})",
                    (FormatArg[]){{.u64 = node->pathElement.index}});
     }
-    else if (node->flags & flgAddThis) {
+    else if (hasFlag(node, AddThis)) {
         format(ctx->state,
                "this->{s}{s}",
-               (FormatArg[]){{.s = (node->flags & flgAddSuper) ? "super." : ""},
+               (FormatArg[]){{.s = hasFlag(node, AddSuper) ? "super." : ""},
                              {.s = node->pathElement.name}});
     }
     else
@@ -298,8 +298,9 @@ void evalPath(AstVisitor *visitor, AstNode *node)
     if (symbol == NULL) {
         logError(ctx->L,
                  &elem->loc,
-                 "reference to undefined compile time symbol",
-                 NULL);
+                 "reference to undefined compile time symbol '{s}'",
+                 (FormatArg[]){
+                     {.s = elem->pathElement.alt ?: elem->pathElement.name}});
         node->tag = astError;
         return;
     }
@@ -344,11 +345,12 @@ void evalPath(AstVisitor *visitor, AstNode *node)
             node->tag = astError;
             return;
         }
-
-        switch (symbol->type->tag) {
+        const Type *type = symbol->type;
+    retry:
+        switch (type->tag) {
         case typPrimitive:
             node->tag = astPrimitiveType;
-            node->primitiveType.id = symbol->type->primitive.id;
+            node->primitiveType.id = type->primitive.id;
             break;
         case typVoid:
             node->tag = astVoidType;
@@ -358,9 +360,8 @@ void evalPath(AstVisitor *visitor, AstNode *node)
             break;
         case typEnum:
         case typStruct: {
-            AstNode *decl = typeIs(symbol->type, Enum)
-                                ? symbol->type->tEnum.decl
-                                : symbol->type->tStruct.decl;
+            AstNode *decl =
+                typeIs(type, Enum) ? type->tEnum.decl : type->tStruct.decl;
             if (decl == NULL) {
                 logError(ctx->L,
                          &node->loc,
@@ -376,6 +377,9 @@ void evalPath(AstVisitor *visitor, AstNode *node)
         case typArray:
             *node = *symbol;
             break;
+        case typInfo:
+            type = symbol->type->info.target;
+            goto retry;
         default:
             csAssert0(false);
         }

@@ -8,6 +8,7 @@
 #include "lang/ttable.h"
 
 #include "core/alloc.h"
+#include "lang/eval.h"
 
 static void spreadTupleExpr(AstVisitor *visitor,
                             const Type *operand,
@@ -230,4 +231,20 @@ void checkUnaryExpr(AstVisitor *visitor, AstNode *node)
                                {.t = operand}});
         operand = ERROR_TYPE(ctx);
     }
+}
+
+static inline bool isSupportedUnaryOperand(AstNode *node)
+{
+    return isIntegralLiteral(node);
+}
+
+void evalUnaryExpr(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    AstNode *next = node->next, *parentScope = node->parentScope;
+    if (!evaluate(visitor, node->unaryExpr.operand)) {
+        node->tag = astError;
+        return;
+    }
+    csAssert(false, "Not yet supported");
 }

@@ -11,8 +11,13 @@
 #include "lang/semantics.h"
 
 #include "core/sb.h"
+#include "lang/ast.h"
+#include "lang/capture.h"
+#include "lang/codegen.h"
 #include "lang/eval.h"
+#include "lang/node.h"
 #include "lang/ttable.h"
+#include "lang/types.h"
 
 #include <string.h>
 
@@ -53,36 +58,6 @@ static AstNode *makeFilenameNode(AstVisitor *visitor,
                    .type = makeStringType(ctx->typeTable),
                    .stringLiteral.value =
                        visitor->current->loc.fileName ?: "<native>"});
-}
-
-static AstNode *makeGoNode(AstVisitor *visitor,
-                           attr(unused) const AstNode *node,
-                           attr(unused) AstNode *args)
-{
-    SemanticsContext *ctx = getAstVisitorContext(visitor);
-    if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
-        return NULL;
-    // __builtin_go(() => { hello() })
-    AstNode *closure = makeAstNode(
-        ctx->pool,
-        &node->loc,
-        &(AstNode){.tag = astClosureExpr, .closureExpr = {.body = args}});
-
-    AstNode *builtinGo = makeAstNode(
-        ctx->pool,
-        &node->loc,
-        &(AstNode){.tag = astPath,
-                   .path.elements = makeAstNode(
-                       ctx->pool,
-                       &node->loc,
-                       &(AstNode){.tag = astPathElem,
-                                  .pathElement.name = makeString(
-                                      ctx->strPool, "__builtin_go")})});
-    return makeAstNode(
-        ctx->pool,
-        &node->loc,
-        &(AstNode){.tag = astCallExpr,
-                   .callExpr = {.callee = builtinGo, .args = closure}});
 }
 
 static AstNode *makeLineNumberNode(AstVisitor *visitor,
@@ -320,6 +295,7 @@ static AstNode *makeLenNode(AstVisitor *visitor,
                 &node->loc,
                 &(AstNode){
                     .tag = astMemberExpr,
+                    .flags = flgVisited,
                     .type = getPrimitiveType(ctx->typeTable, prtU64),
                     .memberExpr = {.target = args,
                                    .member = makeAstNode(
@@ -514,6 +490,7 @@ static AstNode *makeCstrNode(AstVisitor *visitor,
 
     args->type = makePointerType(
         ctx->typeTable, getPrimitiveType(ctx->typeTable, prtI8), flgConst);
+    args->flags |= flgVisited;
     return args;
 }
 
@@ -537,7 +514,7 @@ static AstNode *makeDestructorNode(AstVisitor *visitor,
 
     args->type = makeDestructorType(ctx->typeTable);
     args->tag = astDestructorRef;
-    args->flags = flgNone;
+    args->flags = flgVisited;
     memset(&args->_body, 0, CXY_AST_NODE_BODY_SIZE);
     args->destructorRef.target = type->info.target;
 
@@ -661,7 +638,6 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "data", makeDataNode},
     {.name = "destructor", makeDestructorNode},
     {.name = "file", makeFilenameNode},
-    {.name = "go", makeGoNode},
     {.name = "is_enum", makeIsEnumNode},
     {.name = "is_pointer", makeIsPointerNode},
     {.name = "is_struct", makeIsStructNode},
