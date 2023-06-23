@@ -141,11 +141,13 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
             return to->primitive.id == from->primitive.id;
         }
     case typPointer:
+        if (typeIs(to->pointer.pointed, Void))
+            return typeIs(from, Pointer) || typeIs(from, String) ||
+                   typeIs(from, Array);
+
         if (from->tag == typArray)
             return isTypeAssignableFrom(to->pointer.pointed,
                                         from->array.elementType);
-        if (typeIs(to->pointer.pointed, Void))
-            return typeIs(from, Pointer) || typeIs(from, String);
 
         return false;
 

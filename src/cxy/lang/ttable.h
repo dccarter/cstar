@@ -51,6 +51,7 @@ const Type *makePointerType(TypeTable *table, const Type *pointed, u64 flags);
 const Type *makeOptionalType(TypeTable *table, const Type *target, u64 flags);
 const Type *makeTypeInfo(TypeTable *table, const Type *target);
 const Type *makeArrayType(TypeTable *table, const Type *elementType, u64 size);
+const Type *makeContainerType(TypeTable *table, cstring name, Env *env);
 
 static inline const Type *makeVoidPointerType(TypeTable *table, u64 flags)
 {

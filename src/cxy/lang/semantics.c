@@ -495,6 +495,7 @@ void semanticsCheck(AstNode *program,
     AstVisitor visitor = makeAstVisitor(&context,
     {
         [astProgram] = checkProgram,
+        [astDefine] = checkDefine,
         [astImportDecl] = checkImportDecl,
         [astPathElem] = checkPathElement,
         [astPath] = checkPath,

@@ -146,6 +146,7 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
                                    AstNode *node,
                                    AstNode *path,
                                    const Env *env);
+void checkDefine(AstVisitor *visitor, AstNode *node);
 void checkGenericParam(AstVisitor *visitor, AstNode *node);
 void checkGenericDecl(AstVisitor *visitor, AstNode *node);
 void checkPathElement(AstVisitor *visitor, AstNode *node);

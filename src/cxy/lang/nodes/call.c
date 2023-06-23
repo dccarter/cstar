@@ -333,7 +333,8 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     const Type *type = resolveType(node->callExpr.callee->type);
     const AstNode *parent =
         type->func.decl ? type->func.decl->parentScope : NULL;
-    u32 index = type->func.decl ? type->func.decl->funcDecl.index : 0;
+    u32 index =
+        nodeIs(type->func.decl, FuncDecl) ? type->func.decl->funcDecl.index : 0;
 
     const char *name =
         hasFlags(type, flgClosureStyle | flgClosure)

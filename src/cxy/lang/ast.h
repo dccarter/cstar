@@ -99,6 +99,7 @@ typedef enum {
     astComptimeOnly,
     astProgram,
     astCCode,
+    astDefine,
     astAttr,
     astPathElem,
     astPath,
@@ -211,7 +212,9 @@ enum {
     flgFunctionPtr = BIT(31),
     flgBuiltinMember = BIT(32),
     flgComptimeIterable = BIT(33),
-    flgDebugBreak = BIT(33)
+    flgDebugBreak = BIT(33),
+    flgDefine = BIT(34),
+    flgCPointerCast = BIT(35)
 };
 
 struct Scope;
@@ -266,6 +269,12 @@ struct AstNode {
         } cCode;
 
         struct {
+            AstNode *names;
+            AstNode *type;
+            AstNode *container;
+        } define;
+
+        struct {
             ImportKind kind;
             struct AstNode *module;
             struct AstNode *exports;
@@ -291,6 +300,7 @@ struct AstNode {
 
         struct {
             cstring value;
+            cstring alias;
         } ident;
 
         struct {

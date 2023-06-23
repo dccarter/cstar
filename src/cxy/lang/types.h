@@ -53,6 +53,7 @@ typedef enum {
 
 typedef enum {
     typError,
+    typContainer,
     typAuto,
     typVoid,
     typNull,
@@ -171,6 +172,11 @@ typedef struct Type {
             AstNode *decl;
             Env *env;
         } func;
+
+        struct {
+            const Type *base;
+            Env *env;
+        } container;
 
         struct {
             const Type *base;

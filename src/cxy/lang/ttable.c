@@ -54,6 +54,7 @@ static HashCode hashType(HashCode hash, const Type *type)
         hash = hashType(hash, type->alias.aliased);
         break;
     case typOpaque:
+    case typContainer:
         hash = hashStr(hash, type->name);
         break;
     case typOptional:
@@ -356,6 +357,14 @@ const Type *makeNullType(TypeTable *table) { return table->nullType; }
 
 const Type *makeStringType(TypeTable *table) { return table->stringType; }
 
+const Type *makeContainerType(TypeTable *table, cstring name, Env *env)
+{
+    Type type = make(
+        Type, .tag = typContainer, .name = name, .container = {.env = env});
+
+    return getOrInsertType(table, &type).s;
+}
+
 const Type *getPrimitiveType(TypeTable *table, PrtId id)
 {
     csAssert(id != prtCOUNT, "");
@@ -611,6 +620,11 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right)
     if ((typeIs(_left, String) || typeIs(_left, Pointer)) &&
         typeIs(stripPointer(_right), Null))
         return left;
+
+    if (typeIs(_left, Enum))
+        _left = _left->tEnum.base;
+    if (typeIs(_right, Enum))
+        _right = _right->tEnum.base;
 
     left = _left, right = _right;
     switch (left->tag) {

@@ -317,6 +317,23 @@ static inline AstNode *parseIdentifier(Parser *P)
                    .ident.value = getTokenString(P, &tok, false)});
 }
 
+static inline AstNode *parseIdentifierWithAlias(Parser *P)
+{
+    Token tok = *consume0(P, tokIdent);
+    cstring name = getTokenString(P, &tok, false);
+
+    cstring alias = NULL;
+    if (match(P, tokFatArrow)) {
+        alias = name;
+        name = getTokenString(P, consume0(P, tokIdent), false);
+    }
+
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astIdentifier,
+                                 .ident = {.value = name, .alias = alias}});
+}
+
 static inline AstNode *primitive(Parser *P)
 {
     const Token tok = *current(P);
@@ -1047,12 +1064,15 @@ static AstNode *primary(Parser *P, bool allowStructs)
 static AstNode *expression(Parser *P, bool allowStructs)
 {
     AstNode *expr = ternary(P, primary);
-    if (!P->inCase && match(P, tokColon)) {
+    Token *tok = NULL;
+    if (!P->inCase && (tok = match(P, tokColon, tokBangColon))) {
+        u64 flags = tok->tag == tokBangColon ? flgCPointerCast : flgNone;
         AstNode *type = parseType(P);
         return newAstNode(
             P,
             &expr->loc.begin,
             &(AstNode){.tag = astTypedExpr,
+                       .flags = flags,
                        .typedExpr = {.expr = expr, .type = type}});
     }
 
@@ -1126,6 +1146,39 @@ static AstNode *attributes(Parser *P)
     }
 
     return attrs;
+}
+
+static AstNode *define(Parser *P)
+{
+    Token tok = *consume0(P, tokDefine);
+    u64 flags = flgNone;
+    if (match(P, tokPub))
+        flags |= flgPublic;
+
+    AstNode *names, *type = NULL;
+    if (match(P, tokLParen)) {
+        names = parseMany(P, tokRParen, tokComma, parseIdentifierWithAlias);
+        consume0(P, tokRParen);
+    }
+    else {
+        names = parseIdentifier(P);
+    }
+
+    consume0(P, tokColon);
+    type = parseType(P);
+    type->flags |= flgNative;
+
+    AstNode *container = NULL;
+    if (match(P, tokAs))
+        container = parseIdentifier(P);
+
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){
+            .tag = astDefine,
+            .flags = flags,
+            .define = {.names = names, .type = type, .container = container}});
 }
 
 static AstNode *parseVarDeclName(Parser *P)
@@ -2060,6 +2113,9 @@ static AstNode *declaration(Parser *P)
     case tokAsync:
         decl = funcDecl(P, isPublic, isNative);
         break;
+    case tokDefine:
+        decl = define(P);
+        break;
     case tokMacro:
         if (attrs)
             parserError(P,
@@ -2101,6 +2157,8 @@ static void synchronize(Parser *P)
         case tokFunc:
         case tokAt:
         case tokEoF:
+        case tokDefine:
+        case tokCDefine:
             return;
         default:
             advance(P);

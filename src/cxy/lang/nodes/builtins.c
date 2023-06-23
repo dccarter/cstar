@@ -67,6 +67,11 @@ AstNode *makeTypeReferenceNode(SemanticsContext *ctx, const Type *type)
     case typWrapped:
         return makeTypeReferenceNode(ctx, unwrapType(type, NULL));
 
+    case typOpaque:
+        return makeAstNode(ctx->pool,
+                           builtinLoc(),
+                           &(AstNode){.tag = astTypeDecl, .type = type});
+
     case typEnum:
 
     default:

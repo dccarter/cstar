@@ -81,7 +81,8 @@ static const Type *checkFirstPathElement(AstVisitor *visitor, AstNode *node)
     }
 
     node->type = symbol->type;
-    flags = (symbol->flags & (flgConst | flgTypeAst | flgImportAlias));
+    flags =
+        (symbol->flags & (flgConst | flgTypeAst | flgImportAlias | flgDefine));
     if (hasFlag(symbol, TopLevelDecl)) {
         node->parentScope = symbol->parentScope;
         const AstNode *module =
@@ -197,6 +198,9 @@ void checkPathElement(AstVisitor *visitor, AstNode *node)
     const Env *env = NULL;
     Env thisEnv = {};
     switch (scope->tag) {
+    case typContainer:
+        env = scope->container.env;
+        break;
     case typEnum:
         env = scope->tEnum.env;
         break;
@@ -246,6 +250,10 @@ void checkPathElement(AstVisitor *visitor, AstNode *node)
             node->type = scope;
         }
         break;
+    case typContainer:
+        node->tag = astIdentifier;
+        node->ident.value = symbol->ident.value;
+        break;
     default:
         break;
     }
@@ -263,6 +271,21 @@ void checkPath(AstVisitor *visitor, AstNode *node)
         node->flags = flags;
         elem->flags = elemFlags;
         substituteImportPath(visitor, node, elem);
+        return;
+    }
+
+    if (typeIs(type, Container) && elem->next) {
+        elem = elem->next;
+        AstNode *symbol = findSymbol(
+            type->container.env, ctx->L, elem->pathElement.name, &elem->loc);
+        if (symbol == NULL) {
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+
+        node->tag = astIdentifier;
+        node->type = symbol->type;
+        node->ident.value = symbol->ident.value;
         return;
     }
 
@@ -284,8 +307,17 @@ void checkPath(AstVisitor *visitor, AstNode *node)
         prev = elem;
     }
 
-    node->type = type;
-    node->flags |= flags;
+    if (flags & flgDefine) {
+        AstNode *symbol = findSymbolOnlyByNode(ctx->env, node);
+        csAssert0(symbol != NULL);
+        node->tag = astIdentifier;
+        node->ident.value = symbol->ident.value;
+        node->type = symbol->type;
+    }
+    else {
+        node->type = type;
+        node->flags |= flags;
+    }
 }
 
 void evalPath(AstVisitor *visitor, AstNode *node)
@@ -327,6 +359,7 @@ void evalPath(AstVisitor *visitor, AstNode *node)
                 cstring name = elem->pathElement.alt ?: elem->pathElement.name;
                 AstNode *keep = symbol;
                 symbol = evalAstNodeMemberAccess(ctx, &elem->loc, symbol, name);
+
                 if (symbol == NULL) {
                     logError(ctx->L,
                              &elem->loc,

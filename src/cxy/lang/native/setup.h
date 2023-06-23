@@ -892,10 +892,13 @@ static int __cxy_eventloop_wait_read(int fd, int timeout)
     int status = aeCreateFileEvent(
         __cxy_loop, fd, AE_READABLE, __cxy_eventloop_callback, tina_running());
 
-    csAssert0(status != AE_ERR);
-    void *result = tina_swap(tina_running(), __cxy_scheduler.this_coro, NULL);
+    if (status == AE_OK) {
+        void *result =
+            tina_swap(tina_running(), __cxy_scheduler.this_coro, NULL);
+        return (int)(intptr_t)result;
+    }
 
-    return (int)(intptr_t)result;
+    return status;
 }
 
 static int __cxy_eventloop_wait_write(int fd, int timeout)
@@ -903,10 +906,13 @@ static int __cxy_eventloop_wait_write(int fd, int timeout)
     int status = aeCreateFileEvent(
         __cxy_loop, fd, AE_WRITABLE, __cxy_eventloop_callback, tina_running());
 
-    csAssert0(status);
-    void *result = tina_swap(tina_running(), __cxy_scheduler.this_coro, NULL);
+    if (status == AE_OK) {
+        void *result =
+            tina_swap(tina_running(), __cxy_scheduler.this_coro, NULL);
+        return (int)(intptr_t)result;
+    }
 
-    return (int)(intptr_t)result;
+    return status;
 }
 
 static void __cxy_eventloop_sleep(i64 ms)

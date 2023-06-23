@@ -1,51 +1,237 @@
-pub native func memcpy(dst: &void, src: &const void, len: u64) : &void;
-pub native func memmove(dst: &void, src: &const void, len: u64) : &void;
-pub native func memset(dst: &void, ch: i32, len: u64) : &void;
+/**
+ * Builtin cxy functions, types and constants
+ */
+
+// Unix Error Codes
+ ##pub (
+    errno,
+    EPERM,
+    ENOENT,
+    ESRCH,
+    EINTR,
+    EIO,
+    ENXIO,
+    E2BIG,
+    ENOEXEC,
+    EBADF,
+    ECHILD,
+    EAGAIN,
+    ENOMEM,
+    EACCES,
+    EFAULT,
+    ENOTBLK,
+    EBUSY,
+    EEXIST,
+    EXDEV,
+    ENODEV,
+    ENOTDIR,
+    EISDIR,
+    EINVAL,
+    ENFILE,
+    EMFILE,
+    ENOTTY,
+    ETXTBSY,
+    EFBIG,
+    ENOSPC,
+    ESPIPE,
+    EROFS,
+    EMLINK,
+    EPIPE,
+    EDOM,
+    ERANGE,
+    ENOMSG,
+    EIDRM,
+    ECHRNG,
+    EL2NSYNC,
+    EL3HLT,
+    EL3RST,
+    ELNRNG,
+    EUNATCH,
+    ENOCSI,
+    EL2HLT,
+    EDEADLK,
+    ENOLCK,
+    EBADE,
+    EBADR,
+    EXFULL,
+    ENOANO,
+    EBADRQC,
+    EBADSLT,
+    EDEADLOCK,
+    EBFONT,
+    ENOSTR,
+    ENODATA,
+    ETIME,
+    ENOSR,
+    ENONET,
+    ENOPKG,
+    EREMOTE,
+    ENOLINK,
+    EADV,
+    ESRMNT,
+    ECOMM,
+    EPROTO,
+    EMULTIHOP,
+    ELBIN,
+    EDOTDOT,
+    EBADMSG,
+    EFTYPE,
+    ENOTUNIQ,
+    EBADFD,
+    EREMCHG,
+    ELIBACC,
+    ELIBBAD,
+    ELIBSCN,
+    ELIBMAX,
+    ELIBEXEC,
+    ENOSYS,
+    ENMFILE,
+    ENOTEMPTY,
+    ENAMETOOLONG,
+    ELOOP,
+    EOPNOTSUPP,
+    EPFNOSUPPORT,
+    ECONNRESET,
+    ENOBUFS,
+    EAFNOSUPPORT,
+    EPROTOTYPE,
+    ENOTSOCK,
+    ENOPROTOOPT,
+    ESHUTDOWN,
+    ECONNREFUSED,
+    EADDRINUSE,
+    ECONNABORTED,
+    ENETUNREACH,
+    ENETDOWN,
+    ETIMEDOUT,
+    EHOSTDOWN,
+    EHOSTUNREACH,
+    EINPROGRESS,
+    EALREADY,
+    EDESTADDRREQ,
+    EMSGSIZE,
+    EPROTONOSUPPORT,
+    ESOCKTNOSUPPORT,
+    EADDRNOTAVAIL,
+    ENETRESET,
+    EISCONN,
+    ENOTCONN,
+    ETOOMANYREFS,
+    EPROCLIM,
+    EUSERS,
+    EDQUOT,
+    ESTALE,
+    ENOTSUP,
+    ENOMEDIUM,
+    ENOSHARE,
+    ECASECLASH,
+    EILSEQ,
+    EOVERFLOW,
+ ) : i32
+
+## pub (
+    memcpy,
+    memmove
+) : func(dst: &void, src: &const void, len: u64) -> &void
+
+pub native func memset(
+    dst: &void,
+    ch: i32,
+    len: u64
+) : &void;
 
 type HashCode = u32
 
-@alias(name: "hashInit")
-pub native func __cxy_builtins_fnv1a_init(): u32;
-@alias(name: "hashPointer")
-pub native func __cxy_builtins_fnv1a_pointer(init: HashCode, ptr: &const void): u32;
-@alias(name: "hashUint8")
-pub native func __cxy_builtins_fnv1a_uint8(init: HashCode, val: u8): u32;
-@alias(name: "hashUint16")
-pub native func __cxy_builtins_fnv1a_uint16(init: HashCode, val: u16): u32;
-@alias(name: "hashUint32")
-pub native func __cxy_builtins_fnv1a_uint32(init: HashCode, val: u32): u32;
-@alias(name: "hashUint64")
-pub native func __cxy_builtins_fnv1a_uint64(init: HashCode, val: u64): u32;
-@alias(name: "hashBytes")
-pub native func __cxy_builtins_fnv1a_bytes(init: HashCode, str: &const void, size: u64): u32;
-pub native func __cxy_builtins_fnv1a_string(init: HashCode, str: &const char): u32;
-@inline
-pub func hashString(init: HashCode, str: string) => __cxy_builtins_fnv1a_string(init, unchecked!(str, #&const char))
-@inline
-pub func hashStringSize(init: HashCode, str: string, len: u64) => __cxy_builtins_fnv1a_bytes(init, unchecked!(str, #&const char), len)
+## pub(hashInit => __cxy_builtins_fnv1a_init):  func() -> u32
+
+## pub (
+    hashPointer => __cxy_builtins_fnv1a_pointer
+): func(init: HashCode, ptr: &const void) -> u32
+
+## pub(
+    hashUint8 => __cxy_builtins_fnv1a_uint8
+): func(init: HashCode, val: u8) -> u32
+
+## pub(
+    hashUint16 => __cxy_builtins_fnv1a_uint16
+): func(init: HashCode, val: u16) -> u32
+
+## pub(
+    hashUint32 => __cxy_builtins_fnv1a_uint32
+): func(init: HashCode, val: u32) -> u32
+
+## pub(
+    hashUint64 => __cxy_builtins_fnv1a_uint64
+): func(init: HashCode, val: u64) -> u32
+
+## pub(
+    hashBytes => __cxy_builtins_fnv1a_bytes
+): func(init: HashCode, str: &const void, size: u64) -> u32
+
+## pub(
+    __cxy_builtins_fnv1a_string
+): func(init: HashCode, str: &const char) -> u32
 
 @inline
-pub func allocSlice[T](count: u64) => <[T]> __builtin_alloc_slice(#[T], count, destructor!(#[T]))
+pub func hashString(
+    init: HashCode,
+    str: string
+) => __cxy_builtins_fnv1a_string(init, unchecked!(str, #&const char))
 
 @inline
-pub func reallocSlice[T](data: [T], count: u64) => <[T]> __builtin_realloc_slice(#[T], data, count, destructor!(#[T]))
+pub func hashStringSize(
+    init: HashCode,
+    str: string,
+    len: u64
+) => hashBytes(init, unchecked!(str, #&const char), len)
+
+@inline
+pub func allocSlice[T](
+    count: u64
+) => <[T]> __builtin_alloc_slice(#[T], count, destructor!(#[T]))
+
+@inline
+pub func reallocSlice[T](
+    data: [T], count: u64
+) => <[T]> __builtin_realloc_slice(#[T], data, count, destructor!(#[T]));
 
 pub native type __cxy_builtins_string_builder_t;
 
 pub native func __cxy_builtins_string_builder_new(): &__cxy_builtins_string_builder_t;
-pub native func __cxy_builtins_string_builder_delete(this: &__cxy_builtins_string_builder_t) : void;
-pub native func __cxy_builtins_string_builder_release(this: &__cxy_builtins_string_builder_t) : &char;
+
+pub native func __cxy_builtins_string_builder_delete(
+    this: &__cxy_builtins_string_builder_t
+) : void;
+
+pub native func __cxy_builtins_string_builder_release(
+    this: &__cxy_builtins_string_builder_t
+) : &char;
 
 pub native func __cxy_builtins_string_builder_append_cstr0(
-                    this: &__cxy_builtins_string_builder_t, str:  &const i8, len:  u64) : void;
+    this: &__cxy_builtins_string_builder_t,
+    str:  &const i8,
+    len:  u64
+) : void;
+
 pub native func __cxy_builtins_string_builder_append_int(
-                    this: &__cxy_builtins_string_builder_t, num: i64) : void;
+    this: &__cxy_builtins_string_builder_t,
+    num: i64
+) : void;
+
 pub native func __cxy_builtins_string_builder_append_float(
-                    this: &__cxy_builtins_string_builder_t, num: f64) : void;
+    this: &__cxy_builtins_string_builder_t,
+    num: f64
+) : void;
+
 pub native func __cxy_builtins_string_builder_append_char(
-                    this: &__cxy_builtins_string_builder_t, ch: wchar): void;
+    this: &__cxy_builtins_string_builder_t,
+    ch: wchar
+): void;
+
 pub native func __cxy_builtins_string_builder_append_bool(
-                    this: &__cxy_builtins_string_builder_t, val: bool): void;
+    this: &__cxy_builtins_string_builder_t,
+    val: bool
+): void;
 
 pub func hash[T](val: T) {
     #if (#T == #string) {
@@ -181,26 +367,34 @@ pub func None[T]() => Optional[T]{valid: false}
 @inline
 pub func Some[T](val: T) => Optional[T]{valid: true, val: val}
 
-@alias(name: "asleep")
-pub native func __cxy_eventloop_sleep(ms: i64) : void;
+## pub(
+    asleep => __cxy_eventloop_sleep
+): func(ms: i64) -> void
 
 @alias(name: "Coroutine")
 pub native type tina;
+
+## (
+    TINA_MIN_CORO_STACK_SIZE
+): u64
 
 @alias(name: "launchCoroutine")
 pub native func __cxy_launch_coro(
     @static fn: func(args: &void) -> void,
     args: &void,
     dbg: &const i8,
-    ss: u64 = unchecked!(TINA_MIN_CORO_STACK_SIZE, #u64)
-) : void;
+    ss: u64 = TINA_MIN_CORO_STACK_SIZE
+): void;
 
-pub native func __cxy_coroutine_name(co: &Coroutine) : &const char;
+pub native func __cxy_coroutine_name(
+    co: &Coroutine
+) : &const char;
 
-pub func coroutineName(co: &Coroutine = null): string {
+pub func coroname(co: &Coroutine = null): string {
     @transient const name = __cxy_coroutine_name(co);
     return unchecked!(name, #string)
 }
 
-@alias(name: "now")
-pub native func __cxy_now_ms() : i64;
+## pub(
+    now => __cxy_now_ms
+): func() -> i64

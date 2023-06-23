@@ -102,7 +102,7 @@ void checkEnumDecl(AstVisitor *visitor, AstNode *node)
             node->type = ERROR_TYPE(ctx);
             return;
         }
-
+        
         i64 value = option->enumOption.value
                         ? option->enumOption.value->intLiteral.value
                         : lastValue;

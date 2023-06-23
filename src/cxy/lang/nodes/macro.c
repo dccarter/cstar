@@ -467,6 +467,22 @@ static AstNode *makeUncheckedNode(AstVisitor *visitor,
 
     expr->type = type->info.target;
     expr->flags |= flgVisited;
+
+    if (type->info.target)
+        return makeAstNode(
+            ctx->pool,
+            &node->loc,
+            &(AstNode){
+                .tag = astCastExpr,
+                .type = type->info.target,
+                .flags = expr->flags,
+                .castExpr = {
+                    .expr = expr,
+                    .to = makeAstNode(ctx->pool,
+                                      &expr->loc,
+                                      &(AstNode){.tag = astNop,
+                                                 .type = type->info.target})}});
+
     return expr;
 }
 
@@ -538,9 +554,10 @@ static AstNode *makeTypeofNode(AstVisitor *visitor,
                  (FormatArg[]){{.t = type}});
         return NULL;
     }
+    u64 flags = flgNone;
+    type = unwrapType(type, &flags);
 
-    args->type = makeTypeInfo(ctx->typeTable, type);
-    return args;
+    return makeTypeinfoNode(ctx->eval.semanticsVisitor, type);
 }
 
 static AstNode *makeBaseOfNode(AstVisitor *visitor,
