@@ -137,6 +137,10 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
             FLOAT_TYPE_LIST(f)
 #undef f
             return isFloatType(from) || isIntegerType(from);
+        case prtChar:
+        case prtCChar:
+            return isCharacterType(from);
+
         default:
             return to->primitive.id == from->primitive.id;
         }
@@ -403,7 +407,8 @@ bool isCharacterType(const Type *type)
     if (typeIs(type, Info))
         return isCharacterType(type->info.target);
 
-    return (type && type->tag == typPrimitive && type->primitive.id == prtChar);
+    return typeIs(type, Primitive) &&
+           (type->primitive.id == prtChar || type->primitive.id == prtCChar);
 }
 
 bool isArrayType(const Type *type)
@@ -424,12 +429,12 @@ bool isPointerType(const Type *type)
     type = resolveType(type);
 
     if (typeIs(type, Wrapped))
-        return isArrayType(unwrapType(type, NULL));
+        return isPointerType(unwrapType(type, NULL));
 
     if (typeIs(type, Info))
-        return isArrayType(type->info.target);
+        return isPointerType(type->info.target);
 
-    return typeIs(type, Pointer);
+    return typeIs(type, Pointer) || typeIs(type, Array) || typeIs(type, String);
 }
 
 bool isBuiltinType(const Type *type)

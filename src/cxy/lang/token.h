@@ -102,7 +102,6 @@
     f(Macro, "macro")               \
     f(Void, "void")                 \
     f(String, "string")             \
-    f(CChar,  "char")               \
     f(Range,  "range")              \
     f(Module, "module")             \
     f(Import, "import")             \

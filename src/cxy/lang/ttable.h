@@ -60,7 +60,10 @@ static inline const Type *makeVoidPointerType(TypeTable *table, u64 flags)
 
 const Type *makeMapType(TypeTable *table, const Type *key, const Type *value);
 
-const Type *makeAliasType(TypeTable *table, const Type *aliased, cstring name);
+const Type *makeAliasType(TypeTable *table,
+                          const Type *aliased,
+                          cstring name,
+                          u64 flags);
 
 const Type *makeOpaqueType(TypeTable *table, cstring name);
 

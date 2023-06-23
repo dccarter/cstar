@@ -269,7 +269,7 @@ void initializeBuiltins(SemanticsContext *ctx)
 
     {
         addBuiltinType(
-            ctx, "char", flgNative, makeOpaqueType(ctx->typeTable, "char"));
+            ctx, "char", flgNative, getPrimitiveType(ctx->typeTable, prtI8));
 
         addBuiltinType(ctx,
                        "cxy_range_t",

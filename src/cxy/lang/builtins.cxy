@@ -176,14 +176,14 @@ type HashCode = u32
 pub func hashString(
     init: HashCode,
     str: string
-) => __cxy_builtins_fnv1a_string(init, unchecked!(str, #&const char))
+) => __cxy_builtins_fnv1a_string(init, str !: &const char)
 
 @inline
 pub func hashStringSize(
     init: HashCode,
     str: string,
     len: u64
-) => hashBytes(init, unchecked!(str, #&const char), len)
+) => hashBytes(init, str !: &const char, len)
 
 @inline
 pub func allocSlice[T](
@@ -266,7 +266,7 @@ pub struct StringBuilder {
 
     @inline
     func appendString(str: string) =>
-        __cxy_builtins_string_builder_append_cstr0(sb, unchecked!(str, #&const i8), len!(str))
+        __cxy_builtins_string_builder_append_cstr0(sb, str !: &const char, len!(str))
 
     @inline
     func appendInt(num: i64) =>
@@ -307,7 +307,7 @@ pub struct StringBuilder {
     @inline
     func toString() {
         var ret = __cxy_builtins_string_builder_release(sb);
-        return unchecked!(ret, #string)
+        return ret !: string
     }
 
     @inline
@@ -392,7 +392,7 @@ pub native func __cxy_coroutine_name(
 
 pub func coroname(co: &Coroutine = null): string {
     @transient const name = __cxy_coroutine_name(co);
-    return unchecked!(name, #string)
+    return name!:string
 }
 
 ## pub(

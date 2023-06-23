@@ -1721,10 +1721,10 @@ static AstNode *parseType(Parser *P)
             break;
         case tokCChar:
             advance(P);
-            type = makeAstNode(
-                P->memPool,
-                &tok.fileLoc,
-                &(AstNode){.tag = astIdentifier, .ident.value = "char"});
+            type = makeAstNode(P->memPool,
+                               &tok.fileLoc,
+                               &(AstNode){.tag = astPrimitiveType,
+                                          .primitiveType.id = prtCChar});
             break;
         case tokSubstitutue:
             type = substitute(P, false);

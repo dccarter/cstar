@@ -39,6 +39,7 @@
 #define PRIM_TYPE_LIST(f)  \
     f(Bool, "bool", 1)     \
     f(Char, "wchar", 4)    \
+    f(CChar, "char", 1)    \
     INTEGER_TYPE_LIST(f)   \
     FLOAT_TYPE_LIST(f)
 

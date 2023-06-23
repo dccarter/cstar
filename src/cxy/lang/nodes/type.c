@@ -44,7 +44,8 @@ void checkTypeDecl(AstVisitor *visitor, AstNode *node)
         addModuleExport(ctx, aliased, node->typeDecl.name);
         defineDeclarationAliasWithTarget(ctx, node, aliased);
 
-        node->type = makeAliasType(ctx->typeTable, ref, node->typeDecl.name);
+        node->type = makeAliasType(
+            ctx->typeTable, ref, node->typeDecl.name, node->flags & flgNative);
     }
     else {
         addModuleExport(ctx, node, node->typeDecl.name);

@@ -3,11 +3,11 @@ import { println, STDIN, FileDescriptor } from "stdlib/io.cxy"
 async func hello() {
     var fd = FileDescriptor(STDIN);
     fd.nonBlocking()
-    var data: [i8, 256];
+    var data: [char, 256];
     println("Reading data...")
     const n = fd.asyncRead(data, 256);
-    data.[n] = <i8>'\0'
-    println(data!:string, "");
+    data.[n] = '\0'
+    println( data!:string, "");
 }
 
 func main(args: [string]) {

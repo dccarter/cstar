@@ -98,6 +98,7 @@ static void buildStringFormatForIndex(CodegenContext *context,
                    (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = target}});
             break;
         case prtChar:
+        case prtCChar:
             format(state,
                    "__cxy_builtins_string_builder_append_char(sb->sb, "
                    "{cl}this{s}[i]);\n",
