@@ -65,20 +65,6 @@ static void checkFallback(AstVisitor *visitor, AstNode *node)
     }
 }
 
-static void checkCastExpr(AstVisitor *visitor, AstNode *node)
-{
-    SemanticsContext *ctx = getAstVisitorContext(visitor);
-    const Type *expr = evalType(visitor, node->castExpr.expr);
-    const Type *target = evalType(visitor, node->castExpr.to);
-    if (!isTypeCastAssignable(target, expr)) {
-        logError(ctx->L,
-                 &node->loc,
-                 "type '{t}' cannot be cast to type '{t}'",
-                 (FormatArg[]){{.t = expr}, {.t = target}});
-    }
-    node->type = target;
-}
-
 static void checkIdentifier(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
@@ -523,7 +509,8 @@ void semanticsCheck(AstNode *program,
         [astStructExpr] = checkStructExpr,
         [astCallExpr] = checkCall,
         [astClosureExpr] = checkClosure,
-        [astCastExpr] = checkCastExpr,
+        [ astCastExpr] = checkCastExpr,
+        [ astTypedExpr] = checkTypedExpr,
         [astRangeExpr] = checkRangeExpr,
         [astTernaryExpr] = checkTernaryExpr,
         [astNewExpr] = checkNewExpr,

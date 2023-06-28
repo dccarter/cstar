@@ -50,6 +50,7 @@ set(CXY_LANG_NODE_SOURCES
         src/cxy/lang/nodes/block.c
         src/cxy/lang/nodes/builtins.c
         src/cxy/lang/nodes/call.c
+        src/cxy/lang/nodes/cast.c
         src/cxy/lang/nodes/ccode.c
         src/cxy/lang/nodes/closure.c
         src/cxy/lang/nodes/comptime.c

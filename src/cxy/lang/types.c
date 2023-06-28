@@ -153,7 +153,7 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
             return isTypeAssignableFrom(to->pointer.pointed,
                                         from->array.elementType);
 
-        return false;
+        return typeIs(from->pointer.pointed, Void);
 
     case typArray:
         if (!typeIs(from, Array) ||

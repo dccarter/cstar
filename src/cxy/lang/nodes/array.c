@@ -179,10 +179,7 @@ static void generateArrayToString(CodegenContext *context, const Type *type)
     writeTypename(context, type);
     format(state, "__toString(", NULL);
     writeTypename(context, type);
-    if (isSliceType(type))
-        format(state, " this, StringBuilder* sb) {{{>}\n", NULL);
-    else
-        format(state, " *this, StringBuilder* sb) {{{>}\n", NULL);
+    format(state, " this, StringBuilder* sb) {{{>}\n", NULL);
 
     format(
         state, "__cxy_builtins_string_builder_append_char(sb->sb, '[');", NULL);

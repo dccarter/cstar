@@ -209,7 +209,7 @@ pub native func __cxy_builtins_string_builder_release(
 
 pub native func __cxy_builtins_string_builder_append_cstr0(
     this: &__cxy_builtins_string_builder_t,
-    str:  &const i8,
+    str:  &const char,
     len:  u64
 ) : void;
 
@@ -270,11 +270,11 @@ pub struct StringBuilder {
 
     @inline
     func appendInt(num: i64) =>
-        __cxy_builtins_string_builder_append_int(sb, <i64> num)
+        __cxy_builtins_string_builder_append_int(sb, num)
 
     @inline
     func appendFloat(num: f64) =>
-        __cxy_builtins_string_builder_append_float(sb, <f64> num)
+        __cxy_builtins_string_builder_append_float(sb, num)
 
     @inline
     func appendChar(ch: wchar) =>

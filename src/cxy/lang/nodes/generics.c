@@ -95,14 +95,31 @@ static void addVariadicParams(AstVisitor *visitor, AstNode *node)
     if (count == 0)
         return;
 
-    AstNode *arg;
+    AstNode *arg = NULL;
 
     if (count == 1) {
-        arg = copyAstNodeAsIs(ctx->pool, args);
+        if (args) {
+            arg = copyAstNodeAsIs(ctx->pool, args);
+        }
+        else {
+            args = ctx->currentCall->callExpr.args =
+                makeAstNode(ctx->pool, builtinLoc(), &(AstNode){});
+        }
     }
     else {
-        args = getNodeAtIndex(args, count - 1);
-        arg = copyAstNodeAsIs(ctx->pool, args);
+        // a, ...b
+        AstNode *tmp = getNodeAtIndex(args, count - 1);
+        if (tmp == NULL) {
+            tmp = makeAstNode(ctx->pool, builtinLoc(), &(AstNode){});
+            if (args == NULL)
+                ctx->currentCall->callExpr.args = tmp;
+            else
+                getLastAstNode(args)->next = tmp;
+        }
+        else {
+            arg = copyAstNodeAsIs(ctx->pool, tmp);
+        }
+        args = tmp;
     }
 
     clearAstBody(args);
@@ -111,12 +128,14 @@ static void addVariadicParams(AstVisitor *visitor, AstNode *node)
     args->tupleExpr.args = arg;
     args->next = NULL;
 
-    AstNode *param = vararg->funcParam.type->tupleType.args =
-        makeTypeReferenceNode(ctx, arg->type);
+    if (arg) {
+        AstNode *param = vararg->funcParam.type->tupleType.args =
+            makeTypeReferenceNode(ctx, arg->type);
 
-    for (arg = arg->next; arg; arg = arg->next) {
-        param->next = makeTypeReferenceNode(ctx, arg->type);
-        param = param->next;
+        for (arg = arg->next; arg; arg = arg->next) {
+            param->next = makeTypeReferenceNode(ctx, arg->type);
+            param = param->next;
+        }
     }
 
     args->type =
@@ -176,7 +195,7 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
     AstNode *firstArg = NULL;
     if (isVariadic) {
         AstNode *declParams = generic->genericDecl.decl->funcDecl.params;
-        u64 declParamsCount = countAstNodes(declParams), argsCount = 0;
+        u64 declParamsCount = countAstNodes(declParams) - 1, argsCount = 0;
         AstNode *arg = ctx->currentCall->callExpr.args;
         AstNode *variadicParam = getLastAstNode(declParams);
         const Type *variadicType =
@@ -208,9 +227,9 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
         }
 
         if (argsCount > declParamsCount) {
-            variadicCount = argsCount - (declParamsCount - 1);
+            variadicCount = argsCount - declParamsCount;
             firstArg = getNodeAtIndex(ctx->currentCall->callExpr.args,
-                                      declParamsCount - 1);
+                                      declParamsCount);
         }
     }
 

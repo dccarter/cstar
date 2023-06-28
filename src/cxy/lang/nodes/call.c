@@ -257,6 +257,7 @@ static inline void checkCallWithStack(AstVisitor *visitor, AstNode *node)
     }
 
     u64 withoutDefaulted = paramsCount - callee->func.defaultValuesCount;
+    arg = node->callExpr.args;
     count = countAstNodes(arg);
     if (count < withoutDefaulted) {
         logError(ctx->L,

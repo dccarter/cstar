@@ -169,6 +169,8 @@ const Type *checkMethodDeclSignature(AstVisitor *visitor, AstNode *node);
 void checkFuncParam(AstVisitor *visitor, AstNode *node);
 void checkFunctionDecl(AstVisitor *visitor, AstNode *node);
 void checkCall(AstVisitor *visitor, AstNode *node);
+void checkCastExpr(AstVisitor *visitor, AstNode *node);
+void checkTypedExpr(AstVisitor *visitor, AstNode *node);
 void checkRangeExpr(AstVisitor *visitor, AstNode *node);
 void checkNewExpr(AstVisitor *visitor, AstNode *node);
 void checkTupleExpr(AstVisitor *visitor, AstNode *node);
