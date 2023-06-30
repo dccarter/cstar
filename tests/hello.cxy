@@ -1,24 +1,2 @@
-import { println, STDIN, FileDescriptor } from "stdlib/io.cxy"
-
-async func hello() {
-    var fd = FileDescriptor(STDIN);
-    var data: [char, 256];
-
-    fd.nonBlocking()
-    const n = fd.asyncRead(data, 256);
-    data.[n] = '\0'
-
-    println(10)
-    println(data !: string)
-}
-
-func many(...b: i32) {
-}
-
 func main(args: [string]) {
-//    @go hello()
-//    asleep(5000);
-    many()
-    many(10, 20, 30)
-    println(10)
 }

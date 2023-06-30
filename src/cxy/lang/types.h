@@ -229,6 +229,9 @@ bool isCharacterType(const Type *type);
 bool isArrayType(const Type *type);
 bool isPointerType(const Type *type);
 
+const char *getPrimitiveTypeName(PrtId tag);
+u64 getPrimitiveTypeSize(PrtId tag);
+
 void printType(FormatState *state, const Type *type);
 
 static inline bool isSliceType(const Type *type)

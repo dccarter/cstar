@@ -2,9 +2,10 @@
  * Credits: https://github.com/madmann91/fu/blob/master/src/fu/lang/parser.c
  */
 
-#include "lang/parser.h"
-#include "lang/ast.h"
-#include "lang/lexer.h"
+#include "parser.h"
+#include "ast.h"
+#include "flag.h"
+#include "lexer.h"
 
 #include "driver/driver.h"
 

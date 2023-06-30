@@ -6,17 +6,15 @@
 #include "core/utils.h"
 #include "driver/options.h"
 #include "lang/ast.h"
-#include "lang/codegen.h"
 #include "lang/lexer.h"
 #include "lang/parser.h"
-#include "lang/semantics.h"
 #include "lang/ttable.h"
+
+#include "lang/operations/json.h"
 
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
-
-#include "builtins.cxy.h"
 
 #define BYTES_TO_GB(B) (((double)(B)) / 1000000000)
 #define BYTES_TO_MB(B) (((double)(B)) / 1000000)
@@ -175,8 +173,8 @@ static bool generateSourceFiles(CompilerDriver *driver,
     }
 
     FormatState state = newFormatState("  ", true);
-    generateCode(
-        &state, driver->typeTable, &driver->strPool, program, isImport);
+    //    generateCode(
+    //        &state, driver->typeTable, &driver->strPool, program, isImport);
     writeFormatState(&state, output);
     freeFormatState(&state);
     fclose(output);
@@ -192,12 +190,9 @@ static bool generateSourceFiles(CompilerDriver *driver,
 
 static void dumpGeneratedAst(CompilerDriver *driver, const AstNode *program)
 {
-    FormatState state = newFormatState(
-        "    ", driver->L->state->ignoreStyle || !isColorSupported(stdout));
-    printAst(&state, program, driver->options.cleanAst);
-    writeFormatState(&state, stdout);
-    freeFormatState(&state);
-    printf("\n");
+    cJSON *object = convertToJson(&driver->memPool, program);
+    cstring out = cJSON_Print(object);
+    printf("%s", out);
 }
 
 static bool compileProgram(CompilerDriver *driver,
@@ -211,12 +206,12 @@ static bool compileProgram(CompilerDriver *driver,
 
     if (options->cmd == cmdBuild ||
         (!options->noTypeCheck && !hasErrors(driver))) {
-        semanticsCheck(program,
-                       driver->L,
-                       &driver->memPool,
-                       &driver->strPool,
-                       driver->typeTable,
-                       driver->builtins);
+        //        semanticsCheck(program,
+        //                       driver->L,
+        //                       &driver->memPool,
+        //                       &driver->strPool,
+        //                       driver->typeTable,
+        //                       driver->builtins);
     }
 
     if (options->printAst && !hasErrors(driver)) {
@@ -249,12 +244,12 @@ static bool compileBuiltin(CompilerDriver *driver,
         return false;
 
     if (!hasErrors(driver)) {
-        semanticsCheck(program,
-                       driver->L,
-                       &driver->memPool,
-                       &driver->strPool,
-                       driver->typeTable,
-                       NULL);
+        //        semanticsCheck(program,
+        //                       driver->L,
+        //                       &driver->memPool,
+        //                       &driver->strPool,
+        //                       driver->typeTable,
+        //                       NULL);
     }
 
     if (!hasErrors(driver)) {
@@ -272,9 +267,6 @@ bool initCompilerDriver(CompilerDriver *compiler, Log *log)
     compiler->typeTable = newTypeTable(&compiler->memPool, &compiler->strPool);
     compiler->moduleCache = newHashTable(sizeof(CachedModule));
     compiler->L = log;
-
-    return compileBuiltin(
-        compiler, CXY_BUILTINS_CODE, CXY_BUILTINS_CODE_SIZE, "__builtins.cxy");
 }
 
 AstNode *compileModule(CompilerDriver *driver,
@@ -312,12 +304,12 @@ AstNode *compileModule(CompilerDriver *driver,
 
         if (options->cmd == cmdBuild ||
             (!options->noTypeCheck && !hasErrors(driver))) {
-            semanticsCheck(program,
-                           driver->L,
-                           &driver->memPool,
-                           &driver->strPool,
-                           driver->typeTable,
-                           driver->builtins);
+            //            semanticsCheck(program,
+            //                           driver->L,
+            //                           &driver->memPool,
+            //                           &driver->strPool,
+            //                           driver->typeTable,
+            //                           driver->builtins);
         }
 
         if (hasErrors(driver))

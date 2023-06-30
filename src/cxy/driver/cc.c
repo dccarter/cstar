@@ -11,13 +11,6 @@
 #include "cc.h"
 
 #include "lang/ast.h"
-
-#include "c.inc.h"
-#include "coro.inc.h"
-#include "evloop.inc.h"
-#include "scheduler.inc.h"
-#include "thread.inc.h"
-
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
@@ -26,18 +19,7 @@ static struct {
     cstring name;
     cstring data;
     u64 len;
-} sGeneratedFiles[] = {
-    {.name = "coro.c", .data = CXY_CORO_CODE, .len = CXY_CORO_CODE_SIZE},
-    {.name = "evloop.c",
-     .data = CXY_EV_LOOP_CODE,
-     .len = CXY_EV_LOOP_CODE_SIZE},
-    {.name = "c.c",
-     .data = CXY_C_WRAPPERS_CODE,
-     .len = CXY_C_WRAPPERS_CODE_SIZE},
-    {.name = "scheduler.c",
-     .data = CXY_SCHEDULER_CODE,
-     .len = CXY_SCHEDULER_CODE_SIZE},
-    {.name = "thread.c", .data = CXY_THREAD_CODE, .len = CXY_THREAD_CODE_SIZE}};
+} sGeneratedFiles[] = {};
 
 bool generateBuiltinSources(CompilerDriver *driver)
 {

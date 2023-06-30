@@ -4,6 +4,7 @@
 
 #include "ttable.h"
 #include "ast.h"
+#include "flag.h"
 #include "scope.h"
 
 #include <core/alloc.h>
