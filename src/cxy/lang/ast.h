@@ -289,7 +289,8 @@ struct AstNode {
                 const char *alt2;
                 struct Scope *scope;
             };
-            struct AstNode *args, *resolvesTo;
+            struct AstNode *args;
+            struct AstNode *resolvesTo;
             u64 index;
         } pathElement;
 
@@ -538,3 +539,5 @@ const char *getDeclName(const AstNode *node);
 const AstNode *findAttribute(const AstNode *node, cstring name);
 
 const AstNode *findAttributeArgument(const AstNode *attr, cstring name);
+
+cstring getAstNodeName(const AstNode *node);

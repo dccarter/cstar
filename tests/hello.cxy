@@ -1,2 +1,15 @@
-func main(args: [string]) {
+
+## pub (
+    STATUS
+) : i32 as Codes
+
+enum Commands {
+    First,
+    Second = 10
 }
+
+func main(args: [string]) {
+    20 + 10;
+    20 % 10;
+}
+

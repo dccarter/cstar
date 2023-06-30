@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <core/strpool.h>
 #include <core/utils.h>
 
 // clang-format off
@@ -37,15 +38,14 @@
     f(EnumLiteral,          26)                 \
     f(Comptime,             27)                 \
     f(Visited,              28)                 \
-    f(ImplementsDelete,     28)                 \
-    f(ImmediatelyReturned,  29)                 \
-    f(Unsafe,               30)                 \
-    f(FunctionPtr,          31)                 \
-    f(BuiltinMember,        32)                 \
-    f(ComptimeIterable,     33)                 \
-    f(DebugBreak,           33)                 \
-    f(Define,               34)                 \
-    f(CPointerCast,         35)
+    f(ImplementsDelete,     29)                 \
+    f(ImmediatelyReturned,  30)                 \
+    f(Unsafe,               31)                 \
+    f(FunctionPtr,          32)                 \
+    f(BuiltinMember,        33)                 \
+    f(ComptimeIterable,     34)                 \
+    f(Define,               35)                 \
+    f(CPointerCast,         36)
 
 // clang-format on
 
@@ -55,3 +55,5 @@ typedef enum {
     CXY_LANG_FLAGS(f)
 #undef f
 } Flags;
+
+char *flagsToString(u64 flags);

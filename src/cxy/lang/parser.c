@@ -1621,7 +1621,7 @@ static AstNode *continueStatement(Parser *P)
 static AstNode *statement(Parser *P)
 {
     AstNode *attrs = NULL;
-    u64 flags = match(P, tokDebugBreak) == NULL ? flgNone : flgDebugBreak;
+    u64 flags = flgNone;
     if (check(P, tokAt))
         attrs = attributes(P);
 

@@ -3,6 +3,7 @@
 //
 
 #include "operator.h"
+#include "flag.h"
 
 const char *getUnaryOpString(Operator op)
 {
@@ -166,4 +167,41 @@ bool isPrefixOpKeyword(Operator op)
     default:
         return false;
     }
+}
+
+static void appendFlagName(FormatState *state, u64 index)
+{
+    switch (index) {
+#define f(name, index)                                                         \
+    case index:                                                                \
+        format(state, #name, NULL);                                            \
+        break;
+        CXY_LANG_FLAGS(f)
+#undef f
+    default:
+        format(state, "flg_{u64}", (FormatArg[]){{.u64 = index}});
+        break;
+    }
+}
+
+char *flagsToString(u64 flags)
+{
+    FormatState state = newFormatState("", true);
+    int index = 0;
+    bool first = true;
+    format(&state, "(", NULL);
+    while (flags >> index) {
+        if (flags & (1 << index)) {
+            if (!first)
+                format(&state, "|", NULL);
+            appendFlagName(&state, index);
+            first = false;
+        }
+        index++;
+    }
+    format(&state, ")", NULL);
+
+    char *str = formatStateToString(&state);
+    freeFormatState(&state);
+    return str;
 }

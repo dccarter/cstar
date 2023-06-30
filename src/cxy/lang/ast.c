@@ -526,3 +526,16 @@ const char *getDeclName(const AstNode *node)
         return false;
     }
 }
+
+cstring getAstNodeName(const AstNode *node)
+{
+    switch (node->tag) {
+#define f(name)                                                                \
+    case ast##name:                                                            \
+        return #name;
+        CXY_LANG_AST_TAGS(f)
+#undef f
+    default:
+        return "<max>";
+    }
+}

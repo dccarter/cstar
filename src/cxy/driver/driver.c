@@ -190,7 +190,10 @@ static bool generateSourceFiles(CompilerDriver *driver,
 
 static void dumpGeneratedAst(CompilerDriver *driver, const AstNode *program)
 {
-    cJSON *object = convertToJson(&driver->memPool, program);
+    cJSON *object =
+        convertToJson(&(AstNodeToJsonConfig){.withNamedEnums = true},
+                      &driver->memPool,
+                      program);
     cstring out = cJSON_Print(object);
     printf("%s", out);
 }

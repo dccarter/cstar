@@ -7,4 +7,12 @@
 #include "3rdParty/cJSON.h"
 #include "lang/visitor.h"
 
-cJSON *convertToJson(MemPool *pool, const AstNode *node);
+typedef struct {
+    bool includeLocation;
+    bool withoutAttrs;
+    bool withNamedEnums;
+} AstNodeToJsonConfig;
+
+cJSON *convertToJson(AstNodeToJsonConfig *config,
+                     MemPool *pool,
+                     const AstNode *node);
