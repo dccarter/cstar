@@ -1,15 +1,5 @@
-
-## pub (
-    STATUS
-) : i32 as Codes
-
-enum Commands {
-    First,
-    Second = 10
-}
-
-func main(args: [string]) {
-    20 + 10;
-    20 % 10;
+func test() {
+    "Hello World"
+    f"Hello ${10}"
 }
 

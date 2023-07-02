@@ -73,7 +73,31 @@ add_executable(cxy
         ${CXY_DRIVER_SOURCES}
         ${CXY_OPERATIONS_SOURCES})
 
+include(FetchContent)
+# Fetch message-pack library
+set(MSGPACK_BUILD_TESTS OFF)
+set(MSGPACK_BUILD_EXAMPLES OFF)
+set(MSGPACK_ENABLE_STATIC ON)
+set(MSGPACK_ENABLE_SHARED OFF)
+set(MSGPACK_GEN_COVERAGE OFF)
+
+cmake_policy(PUSH)
+set(CMAKE_POLICY_DEFAULT_CMP0048 "NEW")
+set(CMAKE_POLICY_DEFAULT_CMP0077 "NEW")
+FetchContent_Declare(
+    msgpack-c
+    GIT_REPOSITORY https://github.com/msgpack/msgpack-c
+    GIT_TAG c-6.0.0
+)
+
+FetchContent_MakeAvailable(msgpack-c)
+cmake_policy(POP)
+
+target_link_libraries(cxy msgpack-c)
+
+
 add_executable(escape src/tools/escape.c src/cxy/core/utils.c)
+
 
 target_compile_definitions(cxy PRIVATE
         -DCXY_VERSION="${CXY_VERSION}"

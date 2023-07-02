@@ -309,6 +309,14 @@ static void visitPrimitiveType(ConstAstVisitor *visitor, const AstNode *node)
     Return(ctx, jsonNode);
 }
 
+static void visitStringType(ConstAstVisitor *visitor, const AstNode *node)
+{
+    JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
+    cJSON *jsonNode = nodeCreateJSON(visitor, node);
+
+    Return(ctx, jsonNode);
+}
+
 static void visitPointerType(ConstAstVisitor *visitor, const AstNode *node)
 {
     JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
@@ -736,6 +744,101 @@ static void visitStructExpr(ConstAstVisitor *visitor, const AstNode *node)
     Return(ctx, jsonNode);
 }
 
+static void visitExpressionStmt(ConstAstVisitor *visitor, const AstNode *node)
+{
+    JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
+    cJSON *jsonNode = nodeCreateJSON(visitor, node);
+
+    cJSON_AddItemToObject(
+        jsonNode, "expr", nodeToJson(visitor, node->exprStmt.expr));
+
+    Return(ctx, jsonNode);
+}
+
+static void visitContinueStmt(ConstAstVisitor *visitor, const AstNode *node)
+{
+    JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
+    cJSON *jsonNode = nodeCreateJSON(visitor, node);
+
+    Return(ctx, jsonNode);
+}
+
+static void visitReturnStmt(ConstAstVisitor *visitor, const AstNode *node)
+{
+    JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
+    cJSON *jsonNode = nodeCreateJSON(visitor, node);
+
+    cJSON_AddItemToObject(
+        jsonNode, "expr", nodeToJson(visitor, node->returnStmt.expr));
+
+    Return(ctx, jsonNode);
+}
+
+static void visitBlockStmt(ConstAstVisitor *visitor, const AstNode *node)
+{
+    JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
+    cJSON *jsonNode = nodeCreateJSON(visitor, node);
+
+    cJSON_AddItemToObject(
+        jsonNode, "stmts", manyNodesToJson(visitor, node->blockStmt.stmts));
+
+    Return(ctx, jsonNode);
+}
+
+static void visitForStmt(ConstAstVisitor *visitor, const AstNode *node)
+{
+    JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
+    cJSON *jsonNode = nodeCreateJSON(visitor, node);
+
+    cJSON_AddItemToObject(
+        jsonNode, "stmts", nodeToJson(visitor, node->forStmt.var));
+    cJSON_AddItemToObject(
+        jsonNode, "range", nodeToJson(visitor, node->forStmt.range));
+    cJSON_AddItemToObject(
+        jsonNode, "body", nodeToJson(visitor, node->forStmt.body));
+
+    Return(ctx, jsonNode);
+}
+
+static void visitWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
+{
+    JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
+    cJSON *jsonNode = nodeCreateJSON(visitor, node);
+
+    cJSON_AddItemToObject(
+        jsonNode, "cond", nodeToJson(visitor, node->whileStmt.cond));
+    cJSON_AddItemToObject(
+        jsonNode, "body", nodeToJson(visitor, node->whileStmt.body));
+
+    Return(ctx, jsonNode);
+}
+
+static void visitSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
+{
+    JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
+    cJSON *jsonNode = nodeCreateJSON(visitor, node);
+
+    cJSON_AddItemToObject(
+        jsonNode, "cond", nodeToJson(visitor, node->switchStmt.cond));
+    cJSON_AddItemToObject(
+        jsonNode, "cases", manyNodesToJson(visitor, node->switchStmt.cases));
+
+    Return(ctx, jsonNode);
+}
+
+static void visitCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
+{
+    JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
+    cJSON *jsonNode = nodeCreateJSON(visitor, node);
+
+    cJSON_AddItemToObject(
+        jsonNode, "match", nodeToJson(visitor, node->caseStmt.match));
+    cJSON_AddItemToObject(
+        jsonNode, "body", manyNodesToJson(visitor, node->caseStmt.body));
+
+    Return(ctx, jsonNode);
+}
+
 static void visitFallback(ConstAstVisitor *visitor, const AstNode *node)
 {
     JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
@@ -773,6 +876,7 @@ cJSON *convertToJson(AstNodeToJsonConfig *config,
         [astArrayType] = visitArrayType,
         [astFuncType] = visitFuncType,
         [astOptionalType] = visitOptionalType,
+        [astStringType] = visitStringType,
         [astPrimitiveType] = visitPrimitiveType,
         [astPointerType] = visitPointerType,
         [astArrayExpr] = visitArrayExpr,
@@ -805,7 +909,19 @@ cJSON *convertToJson(AstNodeToJsonConfig *config,
         [astCallExpr] = visitCallExpr,
         [astMacroCallExpr] = visitCallExpr,
         [astClosureExpr] = visitClosureExpr,
-
+        [astFieldExpr] = visitFieldExpr,
+        [astStructExpr] = visitStructExpr,
+        [astExprStmt] = visitExpressionStmt,
+        [astDeferStmt] = visitExpressionStmt,
+        [astGroupExpr] = visitExpressionStmt,
+        [astBreakStmt] = visitContinueStmt,
+        [astContinueStmt] = visitContinueStmt,
+        [astReturnStmt] = visitReturnStmt,
+        [astBlockStmt] = visitBlockStmt,
+        [astForStmt] = visitForStmt,
+        [astWhileStmt] = visitWhileStmt,
+        [astSwitchStmt] = visitSwitchStmt,
+        [astCaseStmt] = visitCaseStmt
     }, .fallback = visitFallback );
 
     // clang-format on
