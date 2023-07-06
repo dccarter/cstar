@@ -2,7 +2,7 @@
 // Created by Carter on 2023-06-30.
 //
 
-#include "binary.h"
+#include "codec.h"
 #include <lang/visitor.h>
 
 #include <msgpack.h>
@@ -10,14 +10,19 @@
 typedef struct {
     msgpack_sbuffer *buffer;
     msgpack_packer packer;
-} AstNodePackContext;
+} AstNodeUnpackContext;
 
-#define Return(CTX, NODE) (CTX)->value = (NODE)
+attr(always_inline) static void packString(msgpack_packer *packer, cstring str)
+{
+    size_t len = strlen(str);
+    msgpack_pack_str(packer, len);
+    msgpack_pack_str_body(packer, str, len);
+}
 
 attr(always_inline) static void nodeToBinary(ConstAstVisitor *visitor,
                                              const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     if (node)
         astConstVisit(visitor, node);
     else
@@ -26,7 +31,7 @@ attr(always_inline) static void nodeToBinary(ConstAstVisitor *visitor,
 
 static void manyNodesToBinary(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     u64 count = countAstNodes(node);
     msgpack_pack_array(&ctx->packer, count);
     for (const AstNode *it = node; it; it = it->next)
@@ -48,7 +53,7 @@ static void nodePopulateLocation(msgpack_packer *packer, const FileLoc *loc)
 
 static void nodePackHeader(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     msgpack_pack_int32(&ctx->packer, node->tag);
     msgpack_pack_int64(&ctx->packer, node->flags);
     nodePopulateLocation(&ctx->packer, &node->loc);
@@ -57,36 +62,29 @@ static void nodePackHeader(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitProgram(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
     nodeToBinary(visitor, node->program.module);
     manyNodesToBinary(visitor, node->program.top);
     manyNodesToBinary(visitor, node->program.decls);
 }
 
-attr(always_inline) static void packString(msgpack_packer *packer, cstring str)
-{
-    size_t len = strlen(str);
-    msgpack_pack_str(packer, len);
-    msgpack_pack_str_body(packer, str, len);
-}
-
 static void visitError(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
     packString(&ctx->packer, node->error.message);
 }
 
 static void visitNoop(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 }
 
 static void visitLiteral(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
     switch (node->tag) {
     case astNullLit:
@@ -114,7 +112,7 @@ static void visitLiteral(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitAttr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     packString(&ctx->packer, node->attr.name);
@@ -123,7 +121,7 @@ static void visitAttr(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitStrExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     manyNodesToBinary(visitor, node->stringExpr.parts);
@@ -131,17 +129,17 @@ static void visitStrExpr(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitDefine(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     manyNodesToBinary(visitor, node->define.names);
     nodeToBinary(visitor, node->define.type);
-    manyNodesToBinary(visitor, node->define.container);
+    nodeToBinary(visitor, node->define.container);
 }
 
 static void visitImport(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
     nodeToBinary(visitor, node->import.alias);
     nodeToBinary(visitor, node->import.module);
@@ -150,7 +148,7 @@ static void visitImport(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitImportEntity(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     packString(&ctx->packer, node->importEntity.name);
@@ -161,7 +159,7 @@ static void visitImportEntity(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitModuleDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     packString(&ctx->packer, node->moduleDecl.name);
@@ -169,28 +167,24 @@ static void visitModuleDecl(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitIdentifier(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
-    packString(&ctx->packer, node->ident.alias);
     packString(&ctx->packer, node->ident.value);
+    packString(&ctx->packer, node->ident.alias);
 }
 
 static void visitTuple(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
-    cJSON_AddItemToObject(
-        jsonNode, "members", manyNodesToBinary(visitor, node->tupleType.args));
-
-    if (node->tupleType.len)
-        cJSON_AddNumberToObject(jsonNode, "len", node->tupleType.len);
+    manyNodesToBinary(visitor, node->tupleType.args);
 }
 
 static void visitArrayType(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->arrayType.elementType);
@@ -199,7 +193,7 @@ static void visitArrayType(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitFuncType(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->funcType.ret);
@@ -208,7 +202,7 @@ static void visitFuncType(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitOptionalType(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->optionalType.type);
@@ -216,7 +210,7 @@ static void visitOptionalType(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitPrimitiveType(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     msgpack_pack_uint8(&ctx->packer, node->primitiveType.id);
@@ -224,13 +218,13 @@ static void visitPrimitiveType(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitStringType(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 }
 
 static void visitPointerType(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->pointerType.pointed);
@@ -238,7 +232,7 @@ static void visitPointerType(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     manyNodesToBinary(visitor, node->arrayExpr.elements);
@@ -246,7 +240,7 @@ static void visitArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->memberExpr.target);
@@ -255,7 +249,7 @@ static void visitMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitRangeExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->rangeExpr.start);
@@ -265,7 +259,7 @@ static void visitRangeExpr(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitNewExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->newExpr.type);
@@ -274,7 +268,7 @@ static void visitNewExpr(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitCastExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->castExpr.to);
@@ -283,7 +277,7 @@ static void visitCastExpr(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitIndexExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->indexExpr.target);
@@ -292,7 +286,7 @@ static void visitIndexExpr(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitGenericParam(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     packString(&ctx->packer, node->genericParam.name);
@@ -301,7 +295,7 @@ static void visitGenericParam(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitGenericDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->genericDecl.decl);
@@ -310,7 +304,7 @@ static void visitGenericDecl(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitPathElement(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     manyNodesToBinary(visitor, node->pathElement.args);
@@ -323,7 +317,7 @@ static void visitPathElement(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitPath(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     manyNodesToBinary(visitor, node->path.elements);
@@ -332,7 +326,7 @@ static void visitPath(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     msgpack_pack_uint32(&ctx->packer, node->funcDecl.operatorOverload);
@@ -345,7 +339,7 @@ static void visitFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitMacroDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     packString(&ctx->packer, node->macroDecl.name);
@@ -356,7 +350,7 @@ static void visitMacroDecl(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitFuncParam(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     packString(&ctx->packer, node->funcParam.name);
@@ -367,7 +361,7 @@ static void visitFuncParam(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitVarDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     manyNodesToBinary(visitor, node->varDecl.names);
@@ -377,16 +371,16 @@ static void visitVarDecl(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     packString(&ctx->packer, node->typeDecl.name);
-    manyNodesToBinary(visitor, node->typeDecl.aliased);
+    nodeToBinary(visitor, node->typeDecl.aliased);
 }
 
 static void visitUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     packString(&ctx->packer, node->unionDecl.name);
@@ -395,7 +389,7 @@ static void visitUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitEnumOption(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     packString(&ctx->packer, node->enumOption.name);
@@ -404,7 +398,7 @@ static void visitEnumOption(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitEnumDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     packString(&ctx->packer, node->enumDecl.name);
@@ -414,7 +408,7 @@ static void visitEnumDecl(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitStructField(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     packString(&ctx->packer, node->structField.name);
@@ -424,7 +418,7 @@ static void visitStructField(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitStructDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     packString(&ctx->packer, node->structDecl.name);
@@ -434,7 +428,7 @@ static void visitStructDecl(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     msgpack_pack_uint8(&ctx->packer, node->binaryExpr.op);
@@ -445,190 +439,162 @@ static void visitBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
-    msgpack_pack_uint8(&ctx->packer, node->unaryExpr.op);
     msgpack_pack_uint8(&ctx->packer, node->unaryExpr.isPrefix);
+    msgpack_pack_uint8(&ctx->packer, node->unaryExpr.op);
 
     nodeToBinary(visitor, node->unaryExpr.operand);
 }
 
 static void visitTernaryExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
-    cJSON_AddItemToObject(
-        jsonNode, "cond", nodeToBinary(visitor, node->ternaryExpr.cond));
-    cJSON_AddItemToObject(
-        jsonNode, "body", nodeToBinary(visitor, node->ternaryExpr.body));
-    cJSON_AddItemToObject(jsonNode,
-                          "otherwise",
-                          nodeToBinary(visitor, node->ternaryExpr.otherwise));
+    nodeToBinary(visitor, node->ternaryExpr.cond);
+    nodeToBinary(visitor, node->ternaryExpr.body);
+    nodeToBinary(visitor, node->ternaryExpr.otherwise);
 }
 
 static void visitStmtExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
-    cJSON_AddItemToObject(
-        jsonNode, "stmt", nodeToBinary(visitor, node->stmtExpr.stmt));
+    nodeToBinary(visitor, node->stmtExpr.stmt);
 }
 
 static void visitTypedExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
-    cJSON_AddItemToObject(
-        jsonNode, "teType", nodeToBinary(visitor, node->typedExpr.type));
-    cJSON_AddItemToObject(
-        jsonNode, "expr", nodeToBinary(visitor, node->typedExpr.expr));
+    nodeToBinary(visitor, node->typedExpr.type);
+    nodeToBinary(visitor, node->typedExpr.expr);
 }
 
 static void visitCallExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
-    cJSON_AddItemToObject(
-        jsonNode, "callee", nodeToBinary(visitor, node->callExpr.callee));
-    cJSON_AddItemToObject(
-        jsonNode, "args", manyNodesToBinary(visitor, node->callExpr.args));
-    cJSON_AddNumberToObject(jsonNode, "overload", node->callExpr.overload);
+    msgpack_pack_uint32(&ctx->packer, node->callExpr.overload);
+    nodeToBinary(visitor, node->callExpr.callee);
+    manyNodesToBinary(visitor, node->callExpr.args);
 }
 
 static void visitClosureExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
-    cJSON_AddItemToObject(
-        jsonNode, "ret", nodeToBinary(visitor, node->closureExpr.ret));
-    cJSON_AddItemToObject(jsonNode,
-                          "params",
-                          manyNodesToBinary(visitor, node->closureExpr.params));
-    cJSON_AddItemToObject(
-        jsonNode, "body", nodeToBinary(visitor, node->closureExpr.body));
+    nodeToBinary(visitor, node->closureExpr.ret);
+    manyNodesToBinary(visitor, node->closureExpr.params);
+    nodeToBinary(visitor, node->closureExpr.body);
 }
 
 static void visitFieldExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     packString(&ctx->packer, node->fieldExpr.name);
-    cJSON_AddItemToObject(
-        jsonNode, "value", nodeToBinary(visitor, node->fieldExpr.value));
+    nodeToBinary(visitor, node->fieldExpr.value);
 }
 
 static void visitStructExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
-    cJSON_AddItemToObject(
-        jsonNode, "left", nodeToBinary(visitor, node->structExpr.left));
-    cJSON_AddItemToObject(jsonNode,
-                          "fields",
-                          manyNodesToBinary(visitor, node->structExpr.fields));
+    nodeToBinary(visitor, node->structExpr.left);
+    manyNodesToBinary(visitor, node->structExpr.fields);
 }
 
 static void visitExpressionStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
-    cJSON_AddItemToObject(
-        jsonNode, "expr", nodeToBinary(visitor, node->exprStmt.expr));
+    nodeToBinary(visitor, node->exprStmt.expr);
 }
 
 static void visitContinueStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 }
 
 static void visitReturnStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
-    cJSON_AddItemToObject(
-        jsonNode, "expr", nodeToBinary(visitor, node->returnStmt.expr));
+    nodeToBinary(visitor, node->returnStmt.expr);
 }
 
 static void visitBlockStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
-    cJSON_AddItemToObject(
-        jsonNode, "stmts", manyNodesToBinary(visitor, node->blockStmt.stmts));
+    manyNodesToBinary(visitor, node->blockStmt.stmts);
 }
 
 static void visitForStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
-    cJSON_AddItemToObject(
-        jsonNode, "stmts", nodeToBinary(visitor, node->forStmt.var));
-    cJSON_AddItemToObject(
-        jsonNode, "range", nodeToBinary(visitor, node->forStmt.range));
-    cJSON_AddItemToObject(
-        jsonNode, "body", nodeToBinary(visitor, node->forStmt.body));
+    nodeToBinary(visitor, node->forStmt.var);
+    nodeToBinary(visitor, node->forStmt.range);
+    nodeToBinary(visitor, node->forStmt.body);
 }
 
 static void visitWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
-    cJSON_AddItemToObject(
-        jsonNode, "cond", nodeToBinary(visitor, node->whileStmt.cond));
-    cJSON_AddItemToObject(
-        jsonNode, "body", nodeToBinary(visitor, node->whileStmt.body));
+    nodeToBinary(visitor, node->whileStmt.cond);
+    nodeToBinary(visitor, node->whileStmt.body);
 }
 
 static void visitSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
-    cJSON_AddItemToObject(
-        jsonNode, "cond", nodeToBinary(visitor, node->switchStmt.cond));
-    cJSON_AddItemToObject(
-        jsonNode, "cases", manyNodesToBinary(visitor, node->switchStmt.cases));
+    nodeToBinary(visitor, node->switchStmt.cond);
+    manyNodesToBinary(visitor, node->switchStmt.cases);
 }
 
 static void visitCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
-    cJSON_AddItemToObject(
-        jsonNode, "match", nodeToBinary(visitor, node->caseStmt.match));
-    cJSON_AddItemToObject(
-        jsonNode, "body", manyNodesToBinary(visitor, node->caseStmt.body));
+    nodeToBinary(visitor, node->caseStmt.match);
+    manyNodesToBinary(visitor, node->caseStmt.body);
 }
 
 static void visitFallback(ConstAstVisitor *visitor, const AstNode *node)
 {
-    AstNodePackContext *ctx = getConstAstVisitorContext(visitor);
+    AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
-    cJSON_AddNullToObject(jsonNode, "__fallback");
+    msgpack_pack_nil(&ctx->packer);
 }
 
-bool convertAstNodeToBinary(struct msgpack_sbuffer *sbuf,
-                            MemPool *pool,
-                            const AstNode *node)
+bool binaryEncodeAstNode(struct msgpack_sbuffer *sbuf,
+                         MemPool *pool,
+                         const AstNode *node)
 {
     msgpack_sbuffer_init(sbuf);
-    AstNodePackContext ctx = {.buffer = sbuf};
+    AstNodeUnpackContext ctx = {.buffer = sbuf};
     msgpack_packer_init(&ctx.packer, sbuf, msgpack_sbuffer_write);
+    packString(&ctx.packer, node->loc.fileName);
 
     // clang-format off
     ConstAstVisitor visitor = makeConstAstVisitor(&ctx, {

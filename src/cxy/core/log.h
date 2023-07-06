@@ -48,6 +48,25 @@ static inline FileLoc locSubrange(const FileLoc *start, const FileLoc *end)
         .fileName = start->fileName, .begin = start->begin, .end = end->begin};
 }
 
+static inline FileLoc *locExtend(FileLoc *dst,
+                                 const FileLoc *start,
+                                 const FileLoc *end)
+{
+    csAssert0(start->fileName == end->fileName);
+    csAssert0(start->begin.byteOffset <= end->end.byteOffset);
+
+    *dst = (FileLoc){
+        .fileName = start->fileName, .begin = start->begin, .end = end->end};
+    return dst;
+}
+
+static inline FileLoc *locAfter(FileLoc *dst, const FileLoc *loc)
+{
+    *dst = (FileLoc){
+        .fileName = loc->fileName, .begin = loc->end, .end = loc->end};
+    return dst;
+}
+
 #ifdef __cplusplus
 }
 #endif

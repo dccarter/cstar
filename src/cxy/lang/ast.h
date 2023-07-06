@@ -480,6 +480,10 @@ AstNode *makePath(MemPool *pool,
                   u64 flags,
                   const Type *type);
 
+AstNode *makePathFromIdent(MemPool *pool, const AstNode *ident);
+
+AstNode *makeGenIdent(MemPool *pool, const FileLoc *loc);
+
 AstNode *copyAstNode(MemPool *pool, const AstNode *node);
 
 AstNode *duplicateAstNode(MemPool *pool, const AstNode *node);

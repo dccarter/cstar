@@ -192,7 +192,7 @@ static void visitDefine(ConstAstVisitor *visitor, const AstNode *node)
     cJSON_AddItemToObject(
         jsonNode, "defineType", nodeToJson(visitor, node->define.type));
     cJSON_AddItemToObject(
-        jsonNode, "args", manyNodesToJson(visitor, node->define.container));
+        jsonNode, "args", nodeToJson(visitor, node->define.container));
 
     Return(ctx, jsonNode);
 }
@@ -533,7 +533,7 @@ static void visitTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
 
     cJSON_AddStringToObject(jsonNode, "name", node->typeDecl.name);
     cJSON_AddItemToObject(
-        jsonNode, "aliased", manyNodesToJson(visitor, node->typeDecl.aliased));
+        jsonNode, "aliased", nodeToJson(visitor, node->typeDecl.aliased));
 
     Return(ctx, jsonNode);
 }

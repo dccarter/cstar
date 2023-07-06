@@ -14,6 +14,7 @@
 
 #include <errno.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #define BYTES_TO_GB(B) (((double)(B)) / 1000000000)
@@ -29,6 +30,25 @@ static bool compareCachedModules(const void *lhs, const void *rhs)
 {
     return strcmp(((CachedModule *)lhs)->path, ((CachedModule *)rhs)->path) ==
            0;
+}
+
+static int compareModifiedTime(const struct stat *lhs, const struct stat *rhs)
+{
+    if (lhs->st_mtimespec.tv_sec < rhs->st_mtimespec.tv_sec) {
+        return -1;
+    }
+    else if (lhs->st_mtimespec.tv_sec > rhs->st_mtimespec.tv_sec) {
+        return 1;
+    }
+    else if (lhs->st_mtimespec.tv_nsec < rhs->st_mtimespec.tv_nsec) {
+        return -1;
+    }
+    else if (lhs->st_mtimespec.tv_nsec > rhs->st_mtimespec.tv_nsec) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
 }
 
 static AstNode *findCachedModule(CompilerDriver *driver, cstring path)
@@ -57,6 +77,18 @@ static void addCachedModule(CompilerDriver *driver,
                                     sizeof(CachedModule),
                                     compareCachedModules);
     csAssert0(status);
+}
+
+attr(always_inline) static char *getCachedAstPath(Options *options,
+                                                  const char *fileName)
+{
+    FormatState state = newFormatState("", true);
+    format(&state,
+           "{s}/cache/{s}",
+           (FormatArg[]){{.s = options->buildDir}, {.s = fileName}});
+    char *path = formatStateToString(&state);
+    freeFormatState(&state);
+    return path;
 }
 
 static AstNode *parseFile(CompilerDriver *driver, const char *fileName)
@@ -285,7 +317,8 @@ AstNode *compileModule(CompilerDriver *driver,
     if (program == NULL) {
         cached = false;
 
-        if (access(name, F_OK) != 0) {
+        struct stat srcStat, onDiskCacheStat;
+        if (stat(name, &srcStat) != 0) {
             logError(driver->L,
                      &source->loc,
                      "module source file '{s}' does not exist",
@@ -293,7 +326,14 @@ AstNode *compileModule(CompilerDriver *driver,
             return NULL;
         }
 
-        program = parseFile(driver, name);
+        char *onDiskCache = getCachedAstPath(&driver->options, name);
+        if (stat(name, &onDiskCacheStat) == 0 &&
+            compareModifiedTime(&srcStat, &onDiskCacheStat) <= 0) {
+        }
+        else {
+            program = parseFile(driver, name);
+        }
+        
         if (program->program.module == NULL) {
             logError(driver->L,
                      &source->loc,

@@ -57,12 +57,15 @@ set(CXY_LANG_SOURCES
 
 
 set(CXY_OPERATIONS_SOURCES
-        src/cxy/lang/operations/json.c)
+        src/cxy/lang/operations/json.c
+        src/cxy/lang/operations/serialize.c
+        src/cxy/lang/operations/deserialize.c)
 
 set(CXY_DRIVER_SOURCES
         src/cxy/driver/cc.c
         src/cxy/driver/driver.c
-        src/cxy/driver/options.c)
+        src/cxy/driver/options.c
+        src/cxy/driver/stages.c)
 
 add_executable(cxy
         src/cxy/driver/main.c
