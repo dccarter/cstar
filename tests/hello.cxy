@@ -1,5 +1,11 @@
+@[option1]
 func test() {
-    "Hello World"
-    f"Hello ${10}"
+    var a, _, b = ("Jake", 20, "Paul");
+    if (const a = hello(a, b))
+        if (const z = true)
+            println(a, z)
+
+    while (const x = hello(a, b))
+        println(a, b)
 }
 

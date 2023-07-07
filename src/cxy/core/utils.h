@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -254,6 +255,21 @@ int binarySearch(const void *arr,
 static inline bool isIgnoreVar(cstring s)
 {
     return s && s[0] == '_' && s[1] == '\0';
+}
+
+static inline u64 timespecToNanoSeconds(struct timespec *ts)
+{
+    return ts->tv_sec * 1000000000 + ts->tv_nsec;
+}
+
+static inline u64 timespecToMicroSeconds(struct timespec *ts)
+{
+    return ts->tv_sec * 1000000 + ts->tv_nsec / 1000;
+}
+
+static inline u64 timespecToMilliseconds(struct timespec *ts)
+{
+    return ts->tv_sec * 1000 + ts->tv_nsec / 1000000;
 }
 
 #ifdef __cplusplus

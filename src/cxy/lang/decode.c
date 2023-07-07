@@ -5,7 +5,7 @@
 #include "codec.h"
 #include "core/strpool.h"
 
-#include <msgpack.h>
+#include "msgpack.h"
 
 typedef struct {
     size_t off, size;
@@ -340,7 +340,7 @@ static AstNode *unpackNode(AstNodeUnpackContext *ctx)
     node->loc.fileName = ctx->fname;
     unpackPosition(ctx, &node->loc.begin);
     unpackPosition(ctx, &node->loc.end);
-    
+
     node->attrs = unpackManyNodes(ctx, NULL);
 
     unpackNodeBody(ctx, node);

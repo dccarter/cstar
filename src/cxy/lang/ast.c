@@ -32,6 +32,21 @@ AstNode *makePath(MemPool *pool,
                                                  .pathElement.name = name})});
 }
 
+AstNode *makePathFromIdent(MemPool *pool, const AstNode *ident)
+{
+    return makePath(
+        pool, &ident->loc, ident->ident.value, ident->flags, ident->type);
+}
+
+AstNode *makeGenIdent(MemPool *pool, StrPool *strPool, const FileLoc *loc)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astIdentifier,
+                   .ident.value = makeAnonymousVariable(strPool, "__gen_var")});
+}
+
 void clearAstBody(AstNode *node)
 {
     memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);

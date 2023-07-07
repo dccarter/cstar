@@ -2272,7 +2272,7 @@ Parser makeParser(Lexer *lexer, CompilerDriver *cc)
     Parser parser = {.cc = cc,
                      .lexer = lexer,
                      .L = lexer->log,
-                     .memPool = &cc->memPool,
+                     .memPool = &cc->pool,
                      .strPool = &cc->strPool};
     parser.ahead[0] = (Token){.tag = tokEoF};
     for (u32 i = 1; i < TOKEN_BUFFER; i++)

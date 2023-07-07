@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <lang/ast.h>
+#include "ast.h"
 
 struct msgpack_sbuffer;
 

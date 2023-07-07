@@ -47,6 +47,9 @@ set(CXY_3RD_PARTY_SOURCES
 
 set(CXY_LANG_SOURCES
         src/cxy/lang/ast.c
+        src/cxy/lang/encode.c
+        src/cxy/lang/decode.c
+        src/cxy/lang/operations/dump.c
         src/cxy/lang/lexer.c
         src/cxy/lang/operator.c
         src/cxy/lang/parser.c
@@ -57,15 +60,14 @@ set(CXY_LANG_SOURCES
 
 
 set(CXY_OPERATIONS_SOURCES
-        src/cxy/lang/operations/json.c
-        src/cxy/lang/operations/serialize.c
-        src/cxy/lang/operations/deserialize.c)
+        src/cxy/lang/operations/shake.c)
 
 set(CXY_DRIVER_SOURCES
         src/cxy/driver/cc.c
         src/cxy/driver/driver.c
         src/cxy/driver/options.c
-        src/cxy/driver/stages.c)
+        src/cxy/driver/stages.c
+        src/cxy/driver/stats.c)
 
 add_executable(cxy
         src/cxy/driver/main.c

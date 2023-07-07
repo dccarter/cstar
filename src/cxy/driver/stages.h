@@ -4,40 +4,48 @@
 
 #pragma once
 
-#include <driver/driver.h>
 #include <lang/ast.h>
 
+struct CompilerDriver;
+
 // clang-format off
-#define CXY_COMPILER_STAGES(f)                          \
-    f(Parse,          1, "Parse")                       \
-    f(Desugar,        2, "De-sugar")                    \
-    f(NameRes,        3, "Name Resolution")             \
-    f(ConstCheck,     4, "Const Check")                 \
-    f(TypeCheck,      5, "Type Check")                  \
-    f(Comptime,       6, "Compile Time Evaluation")     \
-    f(Optimization,   7, "Optimization")                \
-    f(MemoryMgmt,     8, "Memory Management")           \
-    f(Codegen,        9, "Code Generation")
+#define CXY_COMPILER_STAGES(f)                         \
+    f(_Parse,           "Parse")                       \
+    f(_Dump,            "Dump Ast")                    \
+    f(_First,           "First Marker")                \
+    f(Shake,            "Shake")                       \
+    f(NameRes,          "Name Resolution")             \
+    f(ConstCheck,       "Const Check")                 \
+    f(TypeCheck,        "Type Check")                  \
+    f(Desugar,          "De-sugar")                    \
+    f(Comptime,         "Compile Time Evaluation")     \
+    f(Optimization,     "Optimization")                \
+    f(MemoryMgmt,       "Memory Management")           \
+    f(Codegen,          "Code Generation")
 
 typedef enum {
     ccsInvalid = 0,
-#define f(NAME, IDX, ...) ccs##NAME = 1 << IDX,
+#define f(NAME, ...) ccs##NAME,
     CXY_COMPILER_STAGES(f)
 #undef f
-} CompilerStages;
+    ccsCOUNT
+} CompilerStage;
 
 // clang-format on
 
-CompilerStages parseCompilerStages(cstring str);
-const char *getCompilerStageName(CompilerStages stage);
-const char *getCompilerStageDescription(CompilerStages stage);
+u64 parseCompilerStages(Log *L, cstring str);
+const char *getCompilerStageName(CompilerStage stage);
+const char *getCompilerStageDescription(CompilerStage stage);
 
-AstNode *compilerParseFile(const CompilerDriver *driver, cstring filename);
-AstNode *compilerParseString(const CompilerDriver *driver,
-                             cstring code,
-                             cstring filename);
-AstNode *compilerDesugar(const CompilerDriver *driver, AstNode *node);
-AstNode *compilerNameResolution(const CompilerDriver *driver, AstNode *node);
-AstNode *compilerConstCheck(const CompilerDriver *driver, AstNode *node);
-AstNode *compilerTypeCheck(const CompilerDriver *driver, AstNode *node);
-AstNode *compilerComptimeEval(const CompilerDriver *driver, AstNode *node);
+/**
+ * Executes the given compiler stage on the given AST node
+ *
+ * @param driver
+ * @param stage
+ * @param node
+ *
+ * @return The AST not after executing the given compiler stage
+ */
+AstNode *executeCompilerStage(struct CompilerDriver *driver,
+                              CompilerStage stage,
+                              AstNode *node);

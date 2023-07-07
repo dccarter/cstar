@@ -3,11 +3,39 @@
 //
 
 #include "stages.h"
+#include "lang/operations.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <string.h>
 
-const char *getCompilerStageName(CompilerStages stage)
+typedef struct {
+    const char *name;
+    size_t len;
+    CompilerStage stage;
+} Stage;
+
+static bool compareStages(const void *left, const void *right)
+{
+    return ((Stage *)left)->len == ((Stage *)right)->len &&
+           !memcmp(((Stage *)left)->name,
+                   ((Stage *)right)->name,
+                   ((Stage *)left)->len);
+}
+
+static void registerStages(HashTable *stages)
+{
+#define f(name, ...)                                                           \
+    insertInHashTable(stages,                                                  \
+                      &(Stage){#name, strlen(#name), ccs##name},               \
+                      hashStr(hashInit(), #name),                              \
+                      sizeof(Stage),                                           \
+                      compareStages);
+    CXY_COMPILER_STAGES(f)
+#undef f
+}
+
+const char *getCompilerStageName(CompilerStage stage)
 {
     switch (stage) {
 #define f(NAME, ...)                                                           \
@@ -20,10 +48,10 @@ const char *getCompilerStageName(CompilerStages stage)
     }
 }
 
-const char *getCompilerStageDescription(CompilerStages stage)
+const char *getCompilerStageDescription(CompilerStage stage)
 {
     switch (stage) {
-#define f(NAME, _, DESC)                                                       \
+#define f(NAME, DESC)                                                          \
     case ccs##NAME:                                                            \
         return DESC;
         CXY_COMPILER_STAGES(f)
@@ -33,59 +61,110 @@ const char *getCompilerStageDescription(CompilerStages stage)
     }
 }
 
-static CompilerStages parseNextCompilerStage(char *start, char *end)
+static CompilerStage parseNextCompilerStage(Log *L, char *start, char *end)
 {
-    while (isspace(*start))
-        start++;
-    if (*start == '0')
+    static bool initialized = false;
+    static HashTable stages;
+    if (!initialized) {
+        initialized = true;
+        stages = newHashTable(sizeof(Stage));
+        registerStages(&stages);
+    }
+    char *p = start;
+    while (isspace(*p))
+        p++;
+    if (*p == '0') {
+        logError(L,
+                 NULL,
+                 "parsing stage('s) failed, expecting a stage name (got '{s}')",
+                 (FormatArg[]){{.s = start}});
         return ccsInvalid;
+    }
 
     u64 len;
     if (end) {
         while (isspace(*end))
             end--;
         end[1] = '\0';
-        len = end - start;
+        len = end - p;
     }
     else
-        len = strlen(start);
+        len = strlen(p);
 
-    if (len < 5)
-        return ccsInvalid;
+    Stage *stage = findInHashTable(&stages,
+                                   &(Stage){.name = p, .len = len},
+                                   hashRawBytes(hashInit(), p, len),
+                                   sizeof(Stage),
+                                   compareStages);
 
-    switch (start[0]) {
-    case 'C':
-        if (start[0] == 'o') {
-            if (start[2] == 'd')
-                return strcmp("egen", &start[3]) == 0 ? ccsCodegen : ccsInvalid;
-            else if (start[2] == 'm')
-                return strcmp("ptime", &start[3]) == 0 ? ccsComptime
-                                                       : ccsInvalid;
-            else if (start[2] == 'n')
-                return strcmp("st", &start[3]) == 0 ? ccsConstCheck
-                                                    : ccsInvalid;
-        }
-        return ccsInvalid;
-    case 'D':
-        return strcmp("esugar", &start[1]) == 0 ? ccsDesugar : ccsInvalid;
-    case 'N':
-        return strcmp("ameRes", &start[1]) == 0 ? ccsNameRes : ccsInvalid;
-
-    case 'O':
-        return strcmp("ptimization", &start[1]) == 0 ? ccsOptimization
-                                                     : ccsInvalid;
-    case 'T':
-        return strcmp("ypeCheck", &start[1]) == 0 ? ccsTypeCheck : ccsInvalid;
-    case 'M':
-        return strcmp("emoryMgmt", &start[1]) == 0 ? ccsMemoryMgmt : ccsInvalid;
-    default:
-        break;
-    }
+    return stage ? stage->stage : ccsInvalid;
 }
 
-CompilerStages parseCompilerStages(cstring str)
+typedef AstNode *(*CompilerStageExecutor)(CompilerDriver *, AstNode *);
+
+static AstNode *executeDumpAst(CompilerDriver *driver, AstNode *node)
 {
-    CompilerStages stages = ccsInvalid;
+    if (!nodeIs(node, Metadata)) {
+        logError(
+            driver->L, NULL, "dump only supported on metadata nodes", NULL);
+        return NULL;
+    }
+    node->metadata.stages |= (1 << ccs_Dump);
+
+    node = dumpAst(driver, node);
+
+    if (driver->options.output) {
+        FILE *fp = fopen(driver->options.output, "w+");
+        if (fp == NULL) {
+            logError(driver->L,
+                     NULL,
+                     "opening output file '{s}' failed: {s}",
+                     (FormatArg[]){{.s = driver->options.output},
+                                   {.s = strerror(errno)}});
+            goto dumpExit;
+        }
+        fputs(node->metadata.node->stringLiteral.value, fp);
+        putc('\n', stdout);
+    }
+    else {
+        fputs(node->metadata.node->stringLiteral.value, stdout);
+        putc('\n', stdout);
+    }
+
+dumpExit:
+    free((void *)node->metadata.node->stringLiteral.value);
+    node->tag = astNop;
+    return node;
+}
+
+static AstNode *executeShakeAst(CompilerDriver *driver, AstNode *node)
+{
+    if (nodeIs(node, Metadata)) {
+        logError(driver->L, NULL, "cannot shake an already shaken node", NULL);
+        return node;
+    }
+
+    node = shakeAstNode(driver, node);
+
+    if (hasErrors(driver->L))
+        return NULL;
+
+    return makeAstNode(
+        &driver->pool,
+        builtinLoc(),
+        &(AstNode){.tag = astMetadata,
+                   .metadata = {.node = node, .stages = (1 << ccsShake)}});
+}
+
+static CompilerStageExecutor compilerStageExecutors[ccsCOUNT] = {
+    [ccsInvalid] = NULL,
+    [ccs_Dump] = executeDumpAst,
+    [ccsShake] = executeShakeAst,
+    NULL};
+
+u64 parseCompilerStages(Log *L, cstring str)
+{
+    CompilerStage stages = ccsInvalid;
     char *copy = strdup(str);
     char *start = copy, *end = strchr(str, '|');
 
@@ -96,18 +175,56 @@ CompilerStages parseCompilerStages(cstring str)
             last--;
             end++;
         }
-        CompilerStages stage = parseNextCompilerStage(start, last);
+        if (start[0] == '_') {
+            logError(
+                L,
+                NULL,
+                "parsing compiler stage failed, '{s}' is an internal stage",
+                (FormatArg[]){{.s = start}});
+            return ccsInvalid;
+        }
+
+        CompilerStage stage = parseNextCompilerStage(L, start, last);
         if (stage == ccsInvalid)
-            return stage;
-        stages |= stage;
-        while (*end == '|')
+            return ccsInvalid;
+
+        stages |= (1 << stage);
+        while (end && *end == '|')
             end++;
 
-        last = end;
-        end = strchr(last, '|');
+        start = end;
+        end = last ? strchr(last, '|') : NULL;
     }
 
     free(copy);
 
     return stages;
+}
+
+AstNode *executeCompilerStage(CompilerDriver *driver,
+                              CompilerStage stage,
+                              AstNode *node)
+{
+    cstring stageName = getCompilerStageName(stage);
+    CompilerStageExecutor executor = compilerStageExecutors[stage];
+    if (executor == NULL) {
+        logWarning(driver->L,
+                   NULL,
+                   "unsupported compiler stage '{s}'",
+                   (FormatArg[]){{.s = stageName}});
+        return node;
+    }
+
+    logNote(driver->L,
+            NULL,
+            "executing '{s}' stage",
+            (FormatArg[]){{.s = stageName}});
+    compilerStatsSnapshot(driver);
+    node = executor(driver, node);
+    compilerStatsRecord(driver, stage);
+    
+    if (hasErrors(driver->L))
+        return NULL;
+
+    return node;
 }

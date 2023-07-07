@@ -2,15 +2,17 @@
 #pragma once
 
 #include <driver/options.h>
+#include <driver/stats.h>
 
 #include <core/strpool.h>
 #include <lang/scope.h>
 
 typedef struct CompilerDriver {
     Options options;
-    MemPool memPool;
+    MemPool pool;
     StrPool strPool;
     HashTable moduleCache;
+    CompilerStats stats;
     Log *L;
     TypeTable *typeTable;
     Env *builtins;
@@ -18,13 +20,13 @@ typedef struct CompilerDriver {
 
 void makeDirectoryForPath(CompilerDriver *driver, cstring path);
 bool initCompilerDriver(CompilerDriver *compiler, Log *log);
-bool compileSource(const char *fileName, CompilerDriver *driver);
+bool compileFile(const char *fileName, CompilerDriver *driver);
 bool generateBuiltinSources(CompilerDriver *driver);
 
-bool compileSourceString(CompilerDriver *driver,
-                         cstring source,
-                         u64 size,
-                         cstring filename);
+bool compileString(CompilerDriver *driver,
+                   cstring source,
+                   u64 size,
+                   cstring filename);
 AstNode *compileModule(CompilerDriver *driver,
                        const AstNode *source,
                        const AstNode *entities);

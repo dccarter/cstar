@@ -40,6 +40,9 @@ void freeLog(Log *);
 void logError(Log *, const FileLoc *, const char *, const FormatArg *);
 void logWarning(Log *, const FileLoc *, const char *, const FormatArg *);
 void logNote(Log *, const FileLoc *, const char *, const FormatArg *);
+
+static inline bool hasErrors(Log *L) { return L->errorCount > 0; }
+
 const FileLoc *builtinLoc(void);
 static inline FileLoc locSubrange(const FileLoc *start, const FileLoc *end)
 {

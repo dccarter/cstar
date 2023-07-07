@@ -2,13 +2,21 @@
 // Created by Carter on 2023-06-29.
 //
 
-#include "json.h"
 #include "lang/flag.h"
+#include "lang/operations.h"
+#include "lang/visitor.h"
+
+#include "3rdParty/cJSON.h"
+#include "lang/ast.h"
 
 typedef struct {
     cJSON *value;
     MemPool *pool;
-    AstNodeToJsonConfig config;
+    struct {
+        bool withLocation;
+        bool withoutAttrs;
+        bool withNamedEnums;
+    } config;
 } JsonConverterContext;
 
 #define Return(CTX, NODE) (CTX)->value = (NODE)
@@ -86,7 +94,7 @@ static cJSON *nodeCreateJSON(ConstAstVisitor *visitor, const AstNode *node)
         }
     }
 
-    if (ctx->config.includeLocation) {
+    if (ctx->config.withLocation) {
         cJSON *loc = NULL;
         cJSON_AddItemToObject(jsonNode, "loc", loc = cJSON_CreateObject());
 
@@ -848,11 +856,16 @@ static void visitFallback(ConstAstVisitor *visitor, const AstNode *node)
     Return(ctx, jsonNode);
 }
 
-cJSON *convertToJson(AstNodeToJsonConfig *config,
-                     MemPool *pool,
-                     const AstNode *node)
+AstNode *dumpAst(CompilerDriver *driver, AstNode *node)
 {
-    JsonConverterContext ctx = {.pool = pool, .config = *config};
+    JsonConverterContext ctx = {
+        .pool = &driver->pool,
+        .config = {.withNamedEnums = driver->options.dev.withNamedEnums,
+                   .withoutAttrs = driver->options.dev.withoutAttrs,
+                   .withLocation = driver->options.dev.withLocation}};
+
+    csAssert0(nodeIs(node, Metadata));
+
     // clang-format off
     ConstAstVisitor visitor = makeConstAstVisitor(&ctx, {
         [astProgram] = visitProgram,
@@ -925,6 +938,14 @@ cJSON *convertToJson(AstNodeToJsonConfig *config,
     }, .fallback = visitFallback );
 
     // clang-format on
-    astConstVisit(&visitor, node);
-    return ctx.value;
+    astConstVisit(&visitor, node->metadata.node);
+
+    node->metadata.node =
+        makeAstNode(ctx.pool,
+                    builtinLoc(),
+                    &(AstNode){.tag = astStringLit,
+                               .stringLiteral.value = cJSON_Print(ctx.value)});
+    cJSON_Delete(ctx.value);
+
+    return node;
 }

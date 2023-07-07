@@ -8,6 +8,8 @@
 #include "lang/operator.h"
 #include "lang/token.h"
 
+struct StrPool;
+
 // clang-format off
 
 #define CXY_LANG_AST_TAGS(f) \
@@ -15,6 +17,7 @@
     f(Nop)                  \
     f(ComptimeOnly)         \
     f(Program)              \
+    f(Metadata)             \
     f(CCode)                \
     f(Define)               \
     f(Attr)                 \
@@ -466,6 +469,11 @@ struct AstNode {
             AstNode *original;
             cstring message;
         } error;
+
+        struct {
+            AstNode *node;
+            u16 stages;
+        } metadata;
     };
 };
 
@@ -482,7 +490,9 @@ AstNode *makePath(MemPool *pool,
 
 AstNode *makePathFromIdent(MemPool *pool, const AstNode *ident);
 
-AstNode *makeGenIdent(MemPool *pool, const FileLoc *loc);
+AstNode *makeGenIdent(MemPool *pool,
+                      struct StrPool *strPool,
+                      const FileLoc *loc);
 
 AstNode *copyAstNode(MemPool *pool, const AstNode *node);
 

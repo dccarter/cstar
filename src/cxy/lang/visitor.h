@@ -43,6 +43,11 @@ typedef struct ConstAstVisitor {
 #define makeConstAstVisitor(C, ...) (ConstAstVisitor){.context = (C), .visitors = __VA_ARGS__}
 // clang-format on
 
-void astVisit(AstVisitor *visitor, AstNode *node);
+AstNode *astVisitFallbackVisitAll(AstVisitor *visitor, AstNode *node);
+void astConstVisitFallbackVisitAll(ConstAstVisitor *visitor,
+                                   const AstNode *node);
 
+void astVisit(AstVisitor *visitor, AstNode *node);
+void astVisitManyNodes(AstVisitor *visitor, AstNode *node);
 void astConstVisit(ConstAstVisitor *visitor, const AstNode *node);
+void astConstVisitManyNodes(ConstAstVisitor *visitor, const AstNode *node);

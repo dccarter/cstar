@@ -2,19 +2,18 @@
 // Created by Carter Mbotho on 2023-07-06.
 //
 
-#include <driver/driver.h>
-#include <lang/ast.h>
-#include <lang/visitor.h>
+#include "lang/operations.h"
+#include "lang/visitor.h"
 
 typedef struct {
-    Env env;
     Log *L;
     MemPool *pool;
-} DesugarContext;
+    StrPool *strPool;
+} ShakeAstContext;
 
 AstNode *visitVariableDecl(AstVisitor *visitor, AstNode *node)
 {
-    DesugarContext *ctx = getAstVisitorContext(visitor);
+    ShakeAstContext *ctx = getAstVisitorContext(visitor);
     bool isMultipleVariable = node->varDecl.names->next != NULL;
     if (!isMultipleVariable)
         return node;
@@ -56,7 +55,7 @@ AstNode *visitVariableDecl(AstVisitor *visitor, AstNode *node)
     AstNode *name = names, *value = init ? init->tupleExpr.args : NULL;
     AstNode *vars = NULL, *next = NULL;
     for (; name; name = name->next, value = value ? value->next : NULL) {
-        if (name->ident.value[0] == '_' && name->ident.value[1] == '\0') {
+        if (isIgnoreVar(name->ident.value)) {
             if (init == NULL) {
                 logError(
                     ctx->L,
@@ -66,6 +65,7 @@ AstNode *visitVariableDecl(AstVisitor *visitor, AstNode *node)
                     NULL);
                 return node;
             }
+            continue;
         }
 
         AstNode *var = makeAstNode(
@@ -73,7 +73,7 @@ AstNode *visitVariableDecl(AstVisitor *visitor, AstNode *node)
             &node->loc,
             &(AstNode){.tag = astVarDecl,
                        .flags = node->flags,
-                       .varDecl = {.names = names,
+                       .varDecl = {.names = copyAstNode(ctx->pool, name),
                                    .init = copyAstNode(ctx->pool, value),
                                    .type = type ? cloneAstNode(ctx->pool, type)
                                                 : NULL}});
@@ -105,8 +105,8 @@ AstNode *visitVariableDecl(AstVisitor *visitor, AstNode *node)
 
 AstNode *visitIfStmt(AstVisitor *visitor, AstNode *node)
 {
-    DesugarContext *ctx = getAstVisitorContext(visitor);
-    AstNode *cond = node->ifStmt.cond;
+    ShakeAstContext *ctx = getAstVisitorContext(visitor);
+    AstNode *cond = node->ifStmt.cond, *ifNode = node;
     if (nodeIs(cond, VarDecl)) {
         AstNode *var = makeAstNode(
             ctx->pool,
@@ -114,36 +114,48 @@ AstNode *visitIfStmt(AstVisitor *visitor, AstNode *node)
             &(AstNode){
                 .tag = astVarDecl,
                 .flags = cond->flags,
+                .next = duplicateAstNode(ctx->pool, node),
                 .varDecl = {
-                    .names = makeGenIdent(ctx->pool, &cond->varDecl.names->loc),
+                    .names = makeGenIdent(
+                        ctx->pool, ctx->strPool, &cond->varDecl.names->loc),
                     .init = cond->varDecl.init,
                     .type = cloneAstNode(ctx->pool, cond->varDecl.type)}});
 
-        node->ifStmt.cond = makePathFromIdent(ctx->pool, var->varDecl.names);
-        if (!nodeIs(node->ifStmt.body, BlockStmt)) {
-            node->ifStmt.body = makeAstNode(
+        ifNode = var->next;
+        ifNode->ifStmt.cond = makePathFromIdent(ctx->pool, var->varDecl.names);
+        if (!nodeIs(ifNode->ifStmt.body, BlockStmt)) {
+            ifNode->ifStmt.body = makeAstNode(
                 ctx->pool,
-                &node->ifStmt.body->loc,
+                &ifNode->ifStmt.body->loc,
                 &(AstNode){.tag = astBlockStmt,
-                           .blockStmt = {.stmts = node->ifStmt.body}});
+                           .blockStmt = {.stmts = ifNode->ifStmt.body}});
         }
 
-        cond->next = node->ifStmt.body->blockStmt.stmts;
-        cond->varDecl.init = makePathFromIdent(ctx->pool, var->varDecl.names);
-        node->ifStmt.body->blockStmt.stmts = cond;
+        cond->next = ifNode->ifStmt.body->blockStmt.stmts;
+        cond->varDecl.init = makeAstNode(
+            ctx->pool,
+            &cond->loc,
+            &(AstNode){.tag = astUnaryExpr,
+                       .unaryExpr = {.op = opAddrOf,
+                                     .isPrefix = true,
+                                     .operand = makePathFromIdent(
+                                         ctx->pool, var->varDecl.names)}});
+        ifNode->ifStmt.body->blockStmt.stmts = cond;
+        *node = *var;
+        ifNode = node->next;
     }
 
-    astVisit(visitor, node->ifStmt.body);
-    if (node->ifStmt.otherwise)
-        astVisit(visitor, node->ifStmt.otherwise);
+    astVisit(visitor, ifNode->ifStmt.body);
+    if (ifNode->ifStmt.otherwise)
+        astVisit(visitor, ifNode->ifStmt.otherwise);
 
     return node;
 }
 
 AstNode *visitWhileStmt(AstVisitor *visitor, AstNode *node)
 {
-    DesugarContext *ctx = getAstVisitorContext(visitor);
-    AstNode *cond = node->whileStmt.cond;
+    ShakeAstContext *ctx = getAstVisitorContext(visitor);
+    AstNode *cond = node->whileStmt.cond, *whileNode = node;
     if (nodeIs(cond, VarDecl)) {
         AstNode *var = makeAstNode(
             ctx->pool,
@@ -151,50 +163,66 @@ AstNode *visitWhileStmt(AstVisitor *visitor, AstNode *node)
             &(AstNode){
                 .tag = astVarDecl,
                 .flags = cond->flags,
+                .next = duplicateAstNode(ctx->pool, node),
                 .varDecl = {
-                    .names = makeGenIdent(ctx->pool, &cond->varDecl.names->loc),
-                    .init = cond->varDecl.init,
+                    .names = makeGenIdent(
+                        ctx->pool, ctx->strPool, &cond->varDecl.names->loc),
+                    .init = NULL,
                     .type = cloneAstNode(ctx->pool, cond->varDecl.type)}});
 
-        node->whileStmt.cond = makePathFromIdent(ctx->pool, var->varDecl.names);
-        if (!nodeIs(node->whileStmt.body, BlockStmt)) {
-            node->whileStmt.body = makeAstNode(
+        whileNode = var->next;
+        whileNode->whileStmt.cond = makeAstNode(
+            ctx->pool,
+            &cond->loc,
+            &(AstNode){.tag = astGroupExpr,
+                       .groupExpr.expr = makeAstNode(
+                           ctx->pool,
+                           &cond->loc,
+                           &(AstNode){.tag = astAssignExpr,
+                                      .assignExpr = {
+                                          .op = opAssign,
+                                          .lhs = makePathFromIdent(
+                                              ctx->pool, var->varDecl.names),
+                                          .rhs = cond->varDecl.init}})});
+
+        if (!nodeIs(whileNode->whileStmt.body, BlockStmt)) {
+            whileNode->whileStmt.body = makeAstNode(
                 ctx->pool,
-                &node->whileStmt.body->loc,
+                &whileNode->whileStmt.body->loc,
                 &(AstNode){.tag = astBlockStmt,
-                           .blockStmt = {.stmts = node->whileStmt.body}});
+                           .blockStmt = {.stmts = whileNode->whileStmt.body}});
         }
 
-        cond->next = node->whileStmt.body->blockStmt.stmts;
-        cond->varDecl.init = makePathFromIdent(ctx->pool, var->varDecl.names);
-        node->whileStmt.body->blockStmt.stmts = cond;
+        cond->next = whileNode->whileStmt.body->blockStmt.stmts;
+        cond->varDecl.init = makeAstNode(
+            ctx->pool,
+            &cond->loc,
+            &(AstNode){.tag = astUnaryExpr,
+                       .unaryExpr = {.op = opAddrOf,
+                                     .isPrefix = true,
+                                     .operand = makePathFromIdent(
+                                         ctx->pool, var->varDecl.names)}});
+        whileNode->whileStmt.body->blockStmt.stmts = cond;
+        *node = *var;
+        whileNode = node->next;
     }
 
-    if (node->whileStmt.body)
-        astVisit(visitor, node->whileStmt.body);
-
+    astVisit(visitor, whileNode->whileStmt.body);
     return node;
 }
 
-AstNode *visitForStmt(AstVisitor *visitor, AstNode *node)
+AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
 {
-    DesugarContext *ctx = getAstVisitorContext(visitor);
-    if (nodeIs(node->forStmt.range, RangeExpr))
-        return node;
-}
-
-AstNode *desugarNodes(CompilerDriver *driver, AstNode *node)
-{
-    DesugarContext context = {};
-    environmentInit(&context.env);
+    ShakeAstContext context = {
+        .L = driver->L, .pool = &driver->pool, .strPool = &driver->strPool};
 
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context, {
         [astVarDecl] = visitVariableDecl,
         [astIfStmt] = visitIfStmt,
         [astWhileStmt] = visitWhileStmt,
-    });
 
+    }, .fallback = astVisitFallbackVisitAll);
     // clang-format on
 
     astVisit(&visitor, node);
