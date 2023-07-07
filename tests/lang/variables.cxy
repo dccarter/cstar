@@ -17,4 +17,11 @@ func main(args: [string]) {
         var x: i32;
         var y: (bool, i32) = (true, 20);
     }
+    // multi variables
+    {
+        var x, y = (20, true);
+        var m, n: i32;
+        var a, _, b = (20, ' ', true);
+        var d, e = (20, ' ', true);
+    }
 }

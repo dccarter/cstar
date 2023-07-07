@@ -24,6 +24,7 @@ typedef struct Options {
             u64 num;
         } lastStage;
     } dev;
+    bool progress;
 } Options;
 
 /// Parse command-line options, and remove those parsed options from the

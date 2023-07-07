@@ -176,7 +176,7 @@ run_test () {
   test_case="${2}"
 
   echo -e "Running test case ${test_case}"
-  output=$(${CXY_COMPILER} dev "${1}" --print-ast --no-color --clean-ast)
+  output=$(${CXY_COMPILER} dev "${1}" --print-ast --no-color --clean-ast --with-named-enums)
   [ $? -ne 0 ] && {
       echo -e "  ${Bred}FAILED${reset}: Compilation failed for test case ${test_case}"
       echo -e "${output}"

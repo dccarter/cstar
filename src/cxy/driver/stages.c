@@ -76,7 +76,7 @@ static CompilerStage parseNextCompilerStage(Log *L, char *start, char *end)
     if (*p == '0') {
         logError(L,
                  NULL,
-                 "parsing stage('s) failed, expecting a stage name (got '{s}')",
+                 "parsing id('s) failed, expecting a id name (got '{s}')",
                  (FormatArg[]){{.s = start}});
         return ccsInvalid;
     }
@@ -176,11 +176,10 @@ u64 parseCompilerStages(Log *L, cstring str)
             end++;
         }
         if (start[0] == '_') {
-            logError(
-                L,
-                NULL,
-                "parsing compiler stage failed, '{s}' is an internal stage",
-                (FormatArg[]){{.s = start}});
+            logError(L,
+                     NULL,
+                     "parsing compiler id failed, '{s}' is an internal id",
+                     (FormatArg[]){{.s = start}});
             return ccsInvalid;
         }
 
@@ -208,21 +207,25 @@ AstNode *executeCompilerStage(CompilerDriver *driver,
     cstring stageName = getCompilerStageName(stage);
     CompilerStageExecutor executor = compilerStageExecutors[stage];
     if (executor == NULL) {
-        logWarning(driver->L,
-                   NULL,
-                   "unsupported compiler stage '{s}'",
-                   (FormatArg[]){{.s = stageName}});
+        logWarningWithId(driver->L,
+                         wrnMissingStage,
+                         NULL,
+                         "unsupported compiler id '{s}'",
+                         (FormatArg[]){{.s = stageName}});
         return node;
     }
 
-    logNote(driver->L,
-            NULL,
-            "executing '{s}' stage",
-            (FormatArg[]){{.s = stageName}});
+    if (driver->options.progress) {
+        logNote(driver->L,
+                NULL,
+                "executing '{s}' id",
+                (FormatArg[]){{.s = stageName}});
+    }
+    
     compilerStatsSnapshot(driver);
     node = executor(driver, node);
     compilerStatsRecord(driver, stage);
-    
+
     if (hasErrors(driver->L))
         return NULL;
 

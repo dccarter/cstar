@@ -245,7 +245,8 @@ static bool compileProgram(CompilerDriver *driver,
     }
 
 compileProgramDone:
-    compilerStatsPrint(driver);
+    if (!options->dev.cleanAst)
+        compilerStatsPrint(driver);
     return true;
 }
 

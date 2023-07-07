@@ -1,0 +1,166 @@
+{
+ "tag": "Program",
+ "decls": [{
+   "tag": "FuncDecl",
+   "flags": "(TopLevelDecl)",
+   "overload": 51,
+   "index": 0,
+   "name": "main",
+   "params": [{
+     "tag": "FuncParam",
+     "name": "args",
+     "index": 0,
+     "paramType": {
+      "tag": "ArrayType",
+      "flags": "(TypeAst)",
+      "element": {
+       "tag": "StringType",
+       "flags": "(TypeAst)"
+      }
+     }
+    }],
+   "body": {
+    "tag": "BlockStmt",
+    "stmts": [{
+      "tag": "VarDecl",
+      "flags": "(Const)",
+      "names": [{
+        "tag": "Identifier",
+        "value": "one"
+       }],
+      "init": {
+       "tag": "ClosureExpr",
+       "body": {
+        "tag": "IntegerLit",
+        "value": 1
+       }
+      }
+     }, {
+      "tag": "ExprStmt",
+      "expr": {
+       "tag": "CallExpr",
+       "callee": {
+        "tag": "Path",
+        "elements": [{
+          "tag": "PathElem",
+          "name": "one",
+          "index": 0
+         }],
+        "isType": false
+       },
+       "overload": 0
+      }
+     }, {
+      "tag": "ExprStmt",
+      "expr": {
+       "tag": "CallExpr",
+       "callee": {
+        "tag": "GroupExpr",
+        "expr": {
+         "tag": "ClosureExpr",
+         "params": [{
+           "tag": "FuncParam",
+           "name": "name",
+           "index": 0,
+           "paramType": {
+            "tag": "StringType",
+            "flags": "(TypeAst)"
+           }
+          }],
+         "body": {
+          "tag": "BlockStmt",
+          "stmts": [{
+            "tag": "ReturnStmt",
+            "expr": {
+             "tag": "StringExpr",
+             "parts": [{
+               "tag": "StringLit",
+               "value": "Hello "
+              }, {
+               "tag": "Path",
+               "elements": [{
+                 "tag": "PathElem",
+                 "name": "name",
+                 "index": 0
+                }],
+               "isType": false
+              }, {
+               "tag": "StringLit",
+               "value": ""
+              }]
+            }
+           }]
+         }
+        }
+       },
+       "args": [{
+         "tag": "StringLit",
+         "value": "User"
+        }],
+       "overload": 0
+      }
+     }, {
+      "tag": "VarDecl",
+      "names": [{
+        "tag": "Identifier",
+        "value": "x"
+       }],
+      "init": {
+       "tag": "IntegerLit",
+       "value": 100
+      }
+     }, {
+      "tag": "VarDecl",
+      "names": [{
+        "tag": "Identifier",
+        "value": "b"
+       }],
+      "init": {
+       "tag": "StringLit",
+       "value": "Hello"
+      }
+     }, {
+      "tag": "ExprStmt",
+      "expr": {
+       "tag": "CallExpr",
+       "callee": {
+        "tag": "GroupExpr",
+        "expr": {
+         "tag": "ClosureExpr",
+         "body": {
+          "tag": "StringExpr",
+          "parts": [{
+            "tag": "StringLit",
+            "value": ""
+           }, {
+            "tag": "Path",
+            "elements": [{
+              "tag": "PathElem",
+              "name": "b",
+              "index": 0
+             }],
+            "isType": false
+           }, {
+            "tag": "StringLit",
+            "value": " -> "
+           }, {
+            "tag": "Path",
+            "elements": [{
+              "tag": "PathElem",
+              "name": "x",
+              "index": 0
+             }],
+            "isType": false
+           }, {
+            "tag": "StringLit",
+            "value": ""
+           }]
+         }
+        }
+       },
+       "overload": 0
+      }
+     }]
+   }
+  }]
+}

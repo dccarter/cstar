@@ -54,6 +54,9 @@ void clearAstBody(AstNode *node)
 
 AstNode *copyAstNode(MemPool *pool, const AstNode *node)
 {
+    if (node == NULL)
+        return NULL;
+
     AstNode *copy = allocFromMemPool(pool, sizeof(AstNode));
     memcpy(copy, node, sizeof(AstNode));
     copy->next = NULL;
@@ -63,6 +66,9 @@ AstNode *copyAstNode(MemPool *pool, const AstNode *node)
 
 AstNode *duplicateAstNode(MemPool *pool, const AstNode *node)
 {
+    if (node == NULL)
+        return NULL;
+    
     AstNode *copy = allocFromMemPool(pool, sizeof(AstNode));
     memcpy(copy, node, sizeof(AstNode));
     return copy;

@@ -1,18 +1,267 @@
-const X = 10
-
-var Y = ("Hello", "World")
-
-func main(args: [string]) {
-    const x
-    const y = 10
-    var k = y
-    x = k
-    {
-        const k = 10
-        const y = x
-    }
-    {
-        const x : i32
-        const y : (bool, i32) = (true, 20)
-    }
+{
+ "tag": "Program",
+ "decls": [{
+   "tag": "VarDecl",
+   "flags": "(TopLevelDecl)",
+   "names": [{
+     "tag": "Identifier",
+     "value": "X"
+    }],
+   "init": {
+    "tag": "IntegerLit",
+    "value": 10
+   }
+  }, {
+   "tag": "VarDecl",
+   "flags": "(Const|TopLevelDecl)",
+   "names": [{
+     "tag": "Identifier",
+     "value": "Y"
+    }],
+   "init": {
+    "tag": "TupleExpr",
+    "members": [{
+      "tag": "StringLit",
+      "value": "Hello"
+     }, {
+      "tag": "StringLit",
+      "value": "World"
+     }]
+   }
+  }, {
+   "tag": "FuncDecl",
+   "flags": "(TopLevelDecl)",
+   "overload": 51,
+   "index": 0,
+   "name": "main",
+   "params": [{
+     "tag": "FuncParam",
+     "name": "args",
+     "index": 0,
+     "paramType": {
+      "tag": "ArrayType",
+      "flags": "(TypeAst)",
+      "element": {
+       "tag": "StringType",
+       "flags": "(TypeAst)"
+      }
+     }
+    }],
+   "body": {
+    "tag": "BlockStmt",
+    "stmts": [{
+      "tag": "VarDecl",
+      "names": [{
+        "tag": "Identifier",
+        "value": "x"
+       }]
+     }, {
+      "tag": "VarDecl",
+      "names": [{
+        "tag": "Identifier",
+        "value": "y"
+       }],
+      "init": {
+       "tag": "IntegerLit",
+       "value": 10
+      }
+     }, {
+      "tag": "VarDecl",
+      "flags": "(Const)",
+      "names": [{
+        "tag": "Identifier",
+        "value": "k"
+       }],
+      "init": {
+       "tag": "Path",
+       "elements": [{
+         "tag": "PathElem",
+         "name": "y",
+         "index": 0
+        }],
+       "isType": false
+      }
+     }, {
+      "tag": "ExprStmt",
+      "expr": {
+       "tag": "AssignExpr",
+       "op": 34,
+       "lhs": {
+        "tag": "Path",
+        "elements": [{
+          "tag": "PathElem",
+          "name": "x",
+          "index": 0
+         }],
+        "isType": false
+       },
+       "rhs": {
+        "tag": "Path",
+        "elements": [{
+          "tag": "PathElem",
+          "name": "x",
+          "index": 0
+         }],
+        "isType": false
+       }
+      }
+     }, {
+      "tag": "BlockStmt",
+      "stmts": [{
+        "tag": "VarDecl",
+        "names": [{
+          "tag": "Identifier",
+          "value": "k"
+         }],
+        "init": {
+         "tag": "IntegerLit",
+         "value": 10
+        }
+       }, {
+        "tag": "VarDecl",
+        "names": [{
+          "tag": "Identifier",
+          "value": "y"
+         }],
+        "init": {
+         "tag": "Path",
+         "elements": [{
+           "tag": "PathElem",
+           "name": "x",
+           "index": 0
+          }],
+         "isType": false
+        }
+       }]
+     }, {
+      "tag": "BlockStmt",
+      "stmts": [{
+        "tag": "VarDecl",
+        "names": [{
+          "tag": "Identifier",
+          "value": "x"
+         }],
+        "varType": {
+         "tag": "PrimitiveType",
+         "flags": "(TypeAst)",
+         "prtId": 9
+        }
+       }, {
+        "tag": "VarDecl",
+        "names": [{
+          "tag": "Identifier",
+          "value": "y"
+         }],
+        "varType": {
+         "tag": "TupleType",
+         "flags": "(TypeAst)",
+         "members": [{
+           "tag": "PrimitiveType",
+           "flags": "(TypeAst)",
+           "prtId": 0
+          }, {
+           "tag": "PrimitiveType",
+           "flags": "(TypeAst)",
+           "prtId": 9
+          }]
+        },
+        "init": {
+         "tag": "TupleExpr",
+         "members": [{
+           "tag": "BoolLit",
+           "value": 1
+          }, {
+           "tag": "IntegerLit",
+           "value": 20
+          }]
+        }
+       }]
+     }, {
+      "tag": "BlockStmt",
+      "stmts": [{
+        "tag": "VarDecl",
+        "names": [{
+          "tag": "Identifier",
+          "value": "x"
+         }],
+        "init": {
+         "tag": "IntegerLit",
+         "value": 20
+        }
+       }, {
+        "tag": "VarDecl",
+        "names": [{
+          "tag": "Identifier",
+          "value": "y"
+         }],
+        "init": {
+         "tag": "BoolLit",
+         "value": 1
+        }
+       }, {
+        "tag": "VarDecl",
+        "names": [{
+          "tag": "Identifier",
+          "value": "m"
+         }],
+        "varType": {
+         "tag": "PrimitiveType",
+         "flags": "(TypeAst)",
+         "prtId": 9
+        }
+       }, {
+        "tag": "VarDecl",
+        "names": [{
+          "tag": "Identifier",
+          "value": "n"
+         }],
+        "varType": {
+         "tag": "PrimitiveType",
+         "flags": "(TypeAst)",
+         "prtId": 9
+        }
+       }, {
+        "tag": "VarDecl",
+        "names": [{
+          "tag": "Identifier",
+          "value": "a"
+         }],
+        "init": {
+         "tag": "IntegerLit",
+         "value": 20
+        }
+       }, {
+        "tag": "VarDecl",
+        "names": [{
+          "tag": "Identifier",
+          "value": "b"
+         }],
+        "init": {
+         "tag": "BoolLit",
+         "value": 1
+        }
+       }, {
+        "tag": "VarDecl",
+        "names": [{
+          "tag": "Identifier",
+          "value": "d"
+         }],
+        "init": {
+         "tag": "IntegerLit",
+         "value": 20
+        }
+       }, {
+        "tag": "VarDecl",
+        "names": [{
+          "tag": "Identifier",
+          "value": "e"
+         }],
+        "init": {
+         "tag": "CharLit",
+         "value": 32
+        }
+       }]
+     }]
+   }
+  }]
 }

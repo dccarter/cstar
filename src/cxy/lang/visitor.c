@@ -8,10 +8,12 @@
     switch (node->tag) {                                                       \
     case astNop:                                                               \
     case astStringType:                                                        \
+    case astAutoType:                                                          \
     case astContinueStmt:                                                      \
     case astBreakStmt:                                                         \
     case astNullLit:                                                           \
     case astBoolLit:                                                           \
+    case astCharLit:                                                           \
     case astIntegerLit:                                                        \
     case astFloatLit:                                                          \
     case astStringLit:                                                         \
@@ -21,7 +23,6 @@
     case astModuleDecl:                                                        \
     case astIdentifier:                                                        \
         break;                                                                 \
-                                                                               \
     case astAttr:                                                              \
         MODE##VisitManyNodes(visitor, node->attr.args);                        \
         break;                                                                 \
@@ -62,9 +63,11 @@
     case astPointerType:                                                       \
         MODE##Visit(visitor, node->pointerType.pointed);                       \
         break;                                                                 \
+    case astStringExpr:                                                        \
+        MODE##VisitManyNodes(visitor, node->stringExpr.parts);                 \
+        break;                                                                 \
     case astArrayExpr:                                                         \
         MODE##VisitManyNodes(visitor, node->arrayExpr.elements);               \
-        ;                                                                      \
         break;                                                                 \
     case astMemberExpr:                                                        \
         MODE##Visit(visitor, node->memberExpr.target);                         \
@@ -140,6 +143,7 @@
         MODE##VisitManyNodes(visitor, node->structDecl.members);               \
         break;                                                                 \
     case astBinaryExpr:                                                        \
+    case astAssignExpr:                                                        \
         MODE##Visit(visitor, node->binaryExpr.lhs);                            \
         MODE##Visit(visitor, node->binaryExpr.lhs);                            \
         break;                                                                 \
@@ -176,6 +180,8 @@
         MODE##VisitManyNodes(visitor, node->structExpr.fields);                \
         break;                                                                 \
     case astExprStmt:                                                          \
+    case astGroupExpr:                                                         \
+    case astDeferStmt:                                                         \
         MODE##Visit(visitor, node->exprStmt.expr);                             \
         break;                                                                 \
     case astReturnStmt:                                                        \

@@ -82,6 +82,7 @@ static void unpackNodeBody(AstNodeUnpackContext *ctx, AstNode *node)
     switch (node->tag) {
     case astNop:
     case astStringType:
+    case astAutoType:
     case astContinueStmt:
     case astBreakStmt:
         break;
@@ -293,6 +294,8 @@ static void unpackNodeBody(AstNodeUnpackContext *ctx, AstNode *node)
         node->structExpr.fields = unpackManyNodes(ctx, NULL);
         break;
     case astExprStmt:
+    case astDeferStmt:
+    case astGroupExpr:
         node->exprStmt.expr = unpackNode(ctx);
         break;
     case astReturnStmt:

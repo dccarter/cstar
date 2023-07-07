@@ -206,7 +206,7 @@ static void visitPrimitiveType(ConstAstVisitor *visitor, const AstNode *node)
     msgpack_pack_uint8(&ctx->packer, node->primitiveType.id);
 }
 
-static void visitStringType(ConstAstVisitor *visitor, const AstNode *node)
+static void visitHeaderOnly(ConstAstVisitor *visitor, const AstNode *node)
 {
     nodePackHeader(visitor, node);
 }
@@ -583,7 +583,8 @@ bool binaryEncodeAstNode(struct msgpack_sbuffer *sbuf,
         [astArrayType] = visitArrayType,
         [astFuncType] = visitFuncType,
         [astOptionalType] = visitOptionalType,
-        [astStringType] = visitStringType,
+        [astStringType] = visitHeaderOnly,
+        [astAutoType] = visitHeaderOnly,
         [astPrimitiveType] = visitPrimitiveType,
         [astPointerType] = visitPointerType,
         [astArrayExpr] = visitArrayExpr,

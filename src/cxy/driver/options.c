@@ -13,7 +13,8 @@ Command(dev,
         "development mode build, useful when developing the compiler",
         Positionals(),
         Str(Name("last-stage"),
-            Help("the last stage of the compiler to execute, e.g 'Codegen'"),
+            Help("the last compiler stage to execute, e.g "
+                 "'Codegen'"),
             Def("Codegen")),
         Opt(Name("print-ast"),
             Help("prints the AST to standard output or given output file after "
@@ -26,10 +27,10 @@ Command(dev,
             Help("Include the node location on the dumped AST"),
             Def("false")),
         Opt(Name("without-attrs"),
-            Help("Exclude node attributes from the dumped AST"),
+            Help("Exclude node attributes when dumping AST"),
             Def("false")),
         Opt(Name("with-named-enums"),
-            Help("Use named enums on the dumped AST"),
+            Help("Use named enums on the when dumping AST"),
             Def("true")),
         Str(Name("output"),
             Sf('o'),
@@ -90,6 +91,12 @@ bool parseCommandLineOptions(int *argc, char **argv, Options *options, Log *log)
                 "Set the maximum number of errors incurred before the compiler "
                 "aborts"),
             Def("10")),
+        Str(Name("warnings"),
+            Help("Sets a list of enabled/disabled compiler warning (eg "
+                 "'~Warning' disables a flag, 'Warn1|~Warn2' combines flag "
+                 "configurations))"),
+            Def("None")),
+        Opt(Name("warnings-all"), Help("enables all compiler warnings")),
         Opt(Name("no-color"),
             Help("disable colored output when formatting outputs")));
 
@@ -108,7 +115,15 @@ bool parseCommandLineOptions(int *argc, char **argv, Options *options, Log *log)
     CmdCommand *cmd = parser.cmds[selected];
 
     log->maxErrors = getGlobalInt(cmd, 0);
-    log->state->ignoreStyle = getGlobalOption(cmd, 1);
+    log->state->ignoreStyle = getGlobalOption(cmd, 3);
+
+    if (getGlobalOption(cmd, 2))
+        log->enabledWarnings.num = wrnAll;
+    log->enabledWarnings.str = getGlobalString(cmd, 1);
+    log->enabledWarnings.num |=
+        parseWarningLevels(log, log->enabledWarnings.str);
+    if (log->enabledWarnings.num & wrn_Error)
+        return false;
 
     if (cmd->id == CMD_dev) {
         UnloadCmd(cmd, options, DEV_CMD_LAYOUT);

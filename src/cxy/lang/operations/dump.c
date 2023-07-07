@@ -317,7 +317,7 @@ static void visitPrimitiveType(ConstAstVisitor *visitor, const AstNode *node)
     Return(ctx, jsonNode);
 }
 
-static void visitStringType(ConstAstVisitor *visitor, const AstNode *node)
+static void visitHeaderOnly(ConstAstVisitor *visitor, const AstNode *node)
 {
     JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
     cJSON *jsonNode = nodeCreateJSON(visitor, node);
@@ -889,7 +889,8 @@ AstNode *dumpAst(CompilerDriver *driver, AstNode *node)
         [astArrayType] = visitArrayType,
         [astFuncType] = visitFuncType,
         [astOptionalType] = visitOptionalType,
-        [astStringType] = visitStringType,
+        [astStringType] = visitHeaderOnly,
+        [astAutoType] = visitHeaderOnly,
         [astPrimitiveType] = visitPrimitiveType,
         [astPointerType] = visitPointerType,
         [astArrayExpr] = visitArrayExpr,

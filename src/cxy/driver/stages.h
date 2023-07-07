@@ -38,13 +38,13 @@ const char *getCompilerStageName(CompilerStage stage);
 const char *getCompilerStageDescription(CompilerStage stage);
 
 /**
- * Executes the given compiler stage on the given AST node
+ * Executes the given compiler id on the given AST node
  *
  * @param driver
  * @param stage
  * @param node
  *
- * @return The AST not after executing the given compiler stage
+ * @return The AST not after executing the given compiler id
  */
 AstNode *executeCompilerStage(struct CompilerDriver *driver,
                               CompilerStage stage,
