@@ -42,22 +42,59 @@ set(CXY_CORE_SOURCES
         src/cxy/core/strpool.c
         src/cxy/core/utils.c)
 
-set(CXY_3RD_PARTY_SOURCES
-        src/cxy/3rdParty/cJSON.c)
-
 set(CXY_LANG_SOURCES
         src/cxy/lang/ast.c
+        src/cxy/lang/capture.c
         src/cxy/lang/encode.c
         src/cxy/lang/decode.c
+        src/cxy/lang/node.c
         src/cxy/lang/operations/dump.c
         src/cxy/lang/lexer.c
         src/cxy/lang/operator.c
         src/cxy/lang/parser.c
+        src/cxy/lang/semantics.c
         src/cxy/lang/scope.c
         src/cxy/lang/ttable.c
         src/cxy/lang/types.c
         src/cxy/lang/visitor.c)
 
+set(CXY_LANG_NODE_SOURCES
+        src/cxy/lang/nodes/while.c
+        src/cxy/lang/nodes/builtins.c
+        src/cxy/lang/nodes/block.c
+        src/cxy/lang/nodes/tuple.c
+        src/cxy/lang/nodes/array.c
+        src/cxy/lang/nodes/cast.c
+        src/cxy/lang/nodes/switch.c
+        src/cxy/lang/nodes/ternary.c
+        src/cxy/lang/nodes/module.c
+        src/cxy/lang/nodes/variables.c
+        src/cxy/lang/nodes/closure.c
+        src/cxy/lang/nodes/comptime.c
+        src/cxy/lang/nodes/binary.c
+        src/cxy/lang/nodes/member.c
+        src/cxy/lang/nodes/if.c
+        src/cxy/lang/nodes/function.c
+        src/cxy/lang/nodes/unary.c
+        src/cxy/lang/nodes/ccode.c
+        src/cxy/lang/nodes/range.c
+        src/cxy/lang/nodes/generics.c
+        src/cxy/lang/nodes/assign.c
+        src/cxy/lang/nodes/index.c
+        src/cxy/lang/nodes/type.c
+        src/cxy/lang/nodes/enum.c
+        src/cxy/lang/nodes/define.c
+        src/cxy/lang/nodes/path.c
+        src/cxy/lang/nodes/strexpr.c
+        src/cxy/lang/nodes/forstmt.c
+        src/cxy/lang/nodes/struct.c
+        src/cxy/lang/nodes/literals.c
+        src/cxy/lang/nodes/call.c
+        src/cxy/lang/nodes/attributes.c
+        src/cxy/lang/nodes/return.c
+        src/cxy/lang/nodes/new.c
+        src/cxy/lang/nodes/coroutine.c
+        src/cxy/lang/nodes/macro.c)
 
 set(CXY_OPERATIONS_SOURCES
         src/cxy/lang/operations/shake.c)

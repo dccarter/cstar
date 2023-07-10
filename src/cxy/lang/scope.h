@@ -30,24 +30,18 @@ typedef struct Scope {
 struct Env {
     Scope *scope;
     Scope *first;
-    const struct Env *up;
+    struct Env *prev;
 };
 
-void environmentInit(Env *env);
+void environmentInit(Env *env, AstNode *node);
 
 void setBuiltinEnvironment(Env *env);
 
-Env *makeEnvironment(MemPool *pool, Env *up);
+Env *makeEnvironment(MemPool *pool, AstNode *node);
 
-static inline void environmentAttachUp(Env *env, const Env *up)
-{
-    env->up = up;
-}
-static inline void environmentDetachUp(Env *env)
-{
-    if (env)
-        env->up = NULL;
-}
+Env *environmentPush(Env *this, Env *env);
+Env *environmentPop(Env *env);
+
 void environmentFree(Env *env);
 Env *environmentCopy(MemPool *pool, const Env *env);
 void environmentDump(const Env *env, const char *name);

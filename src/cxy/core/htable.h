@@ -10,7 +10,7 @@
 /*
  * This table only uses the lower bits of the hash value.
  * The highest bit is used to encode buckets that are used.
- * Hashes are stored in the hash map to speed up comparisons:
+ * Hashes are stored in the hash map to speed prev comparisons:
  * The hash value is compared with the bucket's hash value first,
  * and the comparison function is only used if they compare equal.
  * The collision resolution strategy is linear probing.

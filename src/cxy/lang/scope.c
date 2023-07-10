@@ -226,8 +226,8 @@ AstNode *findSymbolAndScope(const Env *env,
         }
     }
 
-    if (env->up) {
-        return findSymbolAndScope(env->up, L, name, loc, outScope);
+    if (env->prev) {
+        return findSymbolAndScope(env->prev, L, name, loc, outScope);
     }
 
     if (__builtins && __builtins != env) {
@@ -255,8 +255,8 @@ SymbolRef *findSymbolRef(const Env *env,
             return &symbol->ref;
     }
 
-    if (env->up) {
-        return findSymbolRef(env->up, L, name, loc);
+    if (env->prev) {
+        return findSymbolRef(env->prev, L, name, loc);
     }
 
     if (__builtins && env != __builtins) {
@@ -403,14 +403,14 @@ void releaseScope(Env *env, Env *into)
 
 const Env *getUpperEnv(const Env *env)
 {
-    if (env->up == NULL)
+    if (env->prev == NULL)
         return env;
 
-    const Env *it = env->up;
-    while (env && env->up && env != it) {
-        env = env->up;
-        if (it && it->up)
-            it = it->up->up;
+    const Env *it = env->prev;
+    while (env && env->prev && env != it) {
+        env = env->prev;
+        if (it && it->prev)
+            it = it->prev->prev;
     }
     return it != env ? env : NULL;
 }
@@ -421,10 +421,11 @@ void popScope(Env *env)
     env->scope = env->scope->prev;
 }
 
-void environmentInit(Env *env)
+void environmentInit(Env *env, AstNode *node)
 {
     env->first = newScope(NULL);
     env->scope = NULL;
+    pushScope(env, node);
 }
 
 void setBuiltinEnvironment(Env *env)
@@ -433,12 +434,26 @@ void setBuiltinEnvironment(Env *env)
     __builtins = env;
 }
 
-Env *makeEnvironment(MemPool *pool, Env *up)
+Env *makeEnvironment(MemPool *pool, AstNode *node)
 {
     Env *env = allocFromMemPool(pool, sizeof(Env));
-    env->up = up;
-    environmentInit(env);
+    environmentInit(env, node);
     return env;
+}
+
+Env *environmentPush(Env *this, Env *env)
+{
+    csAssert0(env->prev == NULL);
+    env->prev = this;
+    return env;
+}
+
+Env *environmentPop(Env *env)
+{
+    Env *prev = env->prev;
+    csAssert0(env->prev);
+    env->prev = NULL;
+    return prev;
 }
 
 Env *environmentCopy(MemPool *pool, const Env *env)

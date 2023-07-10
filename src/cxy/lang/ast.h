@@ -125,7 +125,8 @@ typedef struct CaptureSet {
     const Type *type;                                                          \
     struct AstNode *parentScope;                                               \
     struct AstNode *next;                                                      \
-    struct AstNode *attrs;
+    struct AstNode *attrs;                                                     \
+    Env *env;
 
 typedef enum { iptModule, iptPath } ImportKind;
 typedef enum { cInclude, cDefine } CCodeKind;
@@ -178,7 +179,6 @@ struct AstNode {
 
         struct {
             cstring name;
-            Env *env;
         } moduleDecl;
 
         struct {
@@ -280,7 +280,6 @@ struct AstNode {
         } genericParam;
 
         struct {
-            Env *env;
             struct AstNode *params;
             struct AstNode *decl;
         } genericDecl;

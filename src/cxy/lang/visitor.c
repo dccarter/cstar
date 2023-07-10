@@ -236,19 +236,10 @@ void astVisit(AstVisitor *visitor, AstNode *node)
     AstNode *stack = visitor->current;
     visitor->current = node;
 
-    AstNode *ret = NULL, *next = node->next;
-    if (visitor->dispatch) {
-        ret = visitor->dispatch(func, visitor, node);
-    }
-    else {
-        ret = func(visitor, node);
-    }
-
-    if (ret && ret != node) {
-        // replace node
-        getLastAstNode(ret)->next = next;
-        *node = *ret;
-    }
+    if (visitor->dispatch)
+        visitor->dispatch(func, visitor, node);
+    else
+        func(visitor, node);
 
     visitor->current = stack;
 }
@@ -274,10 +265,9 @@ void astConstVisit(ConstAstVisitor *visitor, const AstNode *node)
     visitor->current = stack;
 }
 
-AstNode *astVisitFallbackVisitAll(AstVisitor *visitor, AstNode *node)
+void astVisitFallbackVisitAll(AstVisitor *visitor, AstNode *node)
 {
     AST_VISIT_ALL_NODES(ast)
-    return node;
 }
 
 void astConstVisitFallbackVisitAll(ConstAstVisitor *visitor,
