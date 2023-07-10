@@ -6,7 +6,9 @@
 #include "lang/eval.h"
 #include "lang/semantics.h"
 
+#include "lang/flag.h"
 #include "lang/ttable.h"
+#include "lang/visitor.h"
 
 #include "core/alloc.h"
 

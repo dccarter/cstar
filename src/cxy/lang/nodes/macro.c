@@ -324,7 +324,7 @@ static AstNode *makeLenNode(AstVisitor *visitor,
 
     case typStruct: {
         AstNode *symbol =
-            findSymbol(raw->tStruct.env, ctx->L, "len", &args->loc);
+            findSymbol(raw->tStruct.decl->env, ctx->L, "len", &args->loc);
         if (nodeIs(symbol, StructField) && isUnsignedType(symbol->type)) {
             return makeAstNode(
                 ctx->pool,

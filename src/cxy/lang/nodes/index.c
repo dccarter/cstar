@@ -7,7 +7,9 @@
 #include "lang/semantics.h"
 
 #include "lang/capture.h"
+#include "lang/flag.h"
 #include "lang/ttable.h"
+#include "lang/visitor.h"
 
 #include "core/alloc.h"
 
@@ -21,10 +23,10 @@ static inline bool isParentAssignExpr(const AstNode *node)
 static void checkIndexOperator(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
-    const Type *target = stripAll(node->indexExpr.target->type);
     csAssert0(!isParentAssignExpr(node));
+    const Type *target = stripAll(node->indexExpr.target->type);
 
-    AstNode *func = findSymbolOnly(target->tStruct.env, "op_idx");
+    AstNode *func = findSymbolOnly(target->tStruct.decl->env, "op_idx");
     if (func == NULL) {
         logError(ctx->L,
                  &node->indexExpr.target->loc,
@@ -65,10 +67,7 @@ static bool evalStringIndexExpr(SemanticsContext *ctx, AstNode *node)
         return false;
     }
 
-    AstNode *member =
-        nodeIs(target, EnumDecl)
-            ? findEnumOptionByName(target, index->stringLiteral.value)
-            : findStructMemberByName(target, index->stringLiteral.value);
+    AstNode *member = findSymbolOnly(target->env, index->stringLiteral.value);
 
     if (member == NULL)
         node->tag = astNullLit;

@@ -13,8 +13,10 @@
 #include "lang/semantics.h"
 
 #include "lang/ast.h"
+#include "lang/flag.h"
 #include "lang/node.h"
 #include "lang/ttable.h"
+#include "lang/visitor.h"
 
 #include <memory.h>
 
@@ -47,8 +49,8 @@ static void checkForStmtGenerator(AstVisitor *visitor, AstNode *node)
     //            return;
     //        }
 
-    SymbolRef *symbols = findSymbolRefByNode(
-                  ctx, ctx->env, range->callExpr.callee, true),
+    SymbolRef *symbols =
+                  findSymbolRefByNode(ctx->env, ctx->L, range->callExpr.callee),
               *symbol = symbols;
     csAssert0(symbols);
 
@@ -161,7 +163,7 @@ static void checkForStmtRangeOperator(AstVisitor *visitor, AstNode *node)
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *range = stripAll(node->forStmt.range->type);
     SymbolRef *symbol =
-        findSymbolRef(range->tStruct.env, NULL, "op_range", NULL);
+        findSymbolRef(range->tStruct.decl->env, NULL, "op_range", NULL);
     if (symbol == NULL) {
         logError(ctx->L,
                  &node->forStmt.range->loc,
@@ -221,6 +223,7 @@ void checkForStmt(AstVisitor *visitor, AstNode *node)
     const Type *type = evalType(visitor, node->forStmt.var);
     if (typeIs(type, Error)) {
         node->type = ERROR_TYPE(ctx);
+        popScope(ctx->env);
         return;
     }
 
@@ -229,18 +232,18 @@ void checkForStmt(AstVisitor *visitor, AstNode *node)
                                  node->forStmt.var->varDecl.names->ident.value,
                                  &node->loc);
     csAssert0(symbol);
-    if (node->forStmt.range->tag == astRangeExpr) {
-        if (type->tag != typAuto && !isIntegerType(type)) {
+    if (nodeIs(node->forStmt.range, RangeExpr)) {
+        if (typeIs(type, Auto)) {
+            symbol->type = getPrimitiveType(ctx->typeTable, prtI64);
+            node->forStmt.var->type = symbol->type;
+        }
+        else if (!isIntegerType(type)) {
             logError(ctx->L,
                      &node->forStmt.var->loc,
                      "unexpected type for loop variable type '{t}', expecting "
                      "an integral type",
                      (FormatArg[]){{.t = type}});
             type = ERROR_TYPE(ctx);
-        }
-        else if (type->tag == typAuto) {
-            symbol->type = getPrimitiveType(ctx->typeTable, prtI64);
-            node->forStmt.var->type = symbol->type;
         }
     }
     else {
@@ -258,8 +261,12 @@ void checkForStmt(AstVisitor *visitor, AstNode *node)
             //                                         .operand =
             //                                         node->forStmt.range,
             //                                         .isPrefix = true}});
-            if (type->tag != typAuto &&
-                !isTypeAssignableFrom(elementType, type)) {
+
+            if (typeIs(type, Auto)) {
+                symbol->type = elementType;
+                node->forStmt.var->type = elementType;
+            }
+            else if (!isTypeAssignableFrom(elementType, type)) {
                 logError(ctx->L,
                          &node->forStmt.var->loc,
                          "unexpected type '{t}' for loop variable, "
@@ -267,10 +274,6 @@ void checkForStmt(AstVisitor *visitor, AstNode *node)
                          "element type '{t}'",
                          (FormatArg[]){{.t = type}, {.t = elementType}});
                 type = ERROR_TYPE(ctx);
-            }
-            else if (type->tag == typAuto) {
-                symbol->type = elementType;
-                node->forStmt.var->type = elementType;
             }
         }
         else {
@@ -289,10 +292,10 @@ void generateForStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
     const AstNode *range = node->forStmt.range;
 
-    if (range->tag == astRangeExpr) {
+    if (nodeIs(range, RangeExpr)) {
         generateForStmtRange(visitor, node);
     }
-    else if (range->type->tag == typArray) {
+    else if (typeIs(range->type, Array)) {
         generateForStmtArray(visitor, node);
     }
     else {

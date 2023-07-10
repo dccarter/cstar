@@ -221,7 +221,7 @@ AstNode *executeCompilerStage(CompilerDriver *driver,
                 "executing '{s}' id",
                 (FormatArg[]){{.s = stageName}});
     }
-    
+
     compilerStatsSnapshot(driver);
     node = executor(driver, node);
     compilerStatsRecord(driver, stage);

@@ -10,11 +10,11 @@
 
 #include "codegen.h"
 
+#include "flag.h"
 #include "ttable.h"
+#include "visitor.h"
 
 #include "core/alloc.h"
-#include "main.inc.h"
-#include "setup.inc.h"
 
 #define CXY_ANONYMOUS_FUNC "cxy_anonymous_func"
 #define CXY_ANONYMOUS_TUPLE "cxy_anonymous_tuple"
@@ -143,10 +143,6 @@ static void generateExpressionStmt(ConstAstVisitor *visitor,
                                    const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    if (findAttribute(node, "go")) {
-        generateCoroutineLaunch(visitor, node->exprStmt.expr);
-        return;
-    }
     astConstVisit(visitor, node->exprStmt.expr);
     format(ctx->state, ";", NULL);
 }
@@ -178,7 +174,7 @@ static void epilogue(ConstAstVisitor *visitor, const AstNode *node)
            NULL);
 
     if (!ctx->importedFile) {
-        append(ctx->state, CXY_MAIN_CODE, CXY_MAIN_CODE_SIZE);
+        format(ctx->state, "#include <runtime/main.c.h>", NULL);
     }
 
     format(ctx->state, "\n", NULL);
@@ -195,7 +191,7 @@ static void prologue(ConstAstVisitor *visitor, const AstNode *node)
                "\n",
                NULL);
         format(ctx->state, "\n\n", NULL);
-        append(ctx->state, CXY_SETUP_CODE, CXY_SETUP_CODE_SIZE);
+        format(ctx->state, "#include <runtime/runtime.h>\n", NULL);
         format(ctx->state, "#include <__builtins.cxy.c>\n", NULL);
         format(ctx->state, "\n\n", NULL);
     }

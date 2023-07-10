@@ -22,6 +22,7 @@ typedef struct SemanticsContext {
     TypeTable *typeTable;
     AstNode *previousTopLevelDecl;
     AstNode *currentTopLevelDecl;
+    AstNode *previousStatement;
     AstNode *program;
     HashTable builtinMacros;
     Env *env;
@@ -36,6 +37,7 @@ typedef struct SemanticsContext {
 
     u64 anonymousDeclsIndex;
     bool mainOptimized : 1;
+    cstring main;
     union {
         struct {
             Scope *closure;

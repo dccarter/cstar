@@ -11,7 +11,9 @@
 #include "lang/codegen.h"
 #include "lang/semantics.h"
 
+#include "lang/flag.h"
 #include "lang/ttable.h"
+#include "lang/visitor.h"
 
 void generateWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
@@ -40,8 +42,15 @@ void checkWhileStmt(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     pushScope(ctx->env, node);
+
     const Type *cond = evalType(visitor, node->whileStmt.cond);
     const Type *body = evalType(visitor, node->whileStmt.body);
+
+    if (typeIs(cond, Error) || typeIs(body, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        popScope(ctx->env);
+        return;
+    }
 
     if (!isTruthyType(ctx->typeTable, cond)) {
         logError(ctx->L,

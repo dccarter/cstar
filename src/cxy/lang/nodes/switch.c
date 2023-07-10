@@ -11,7 +11,9 @@
 #include "lang/codegen.h"
 #include "lang/semantics.h"
 
+#include "lang/flag.h"
 #include "lang/ttable.h"
+#include "lang/visitor.h"
 
 #include "core/alloc.h"
 
@@ -26,7 +28,7 @@ typedef struct {
 
 const i64 *getEnumValue(SemanticsContext *ctx, const AstNode *node)
 {
-    AstNode *symbol = findSymbolOnlyByNode(ctx->env, node);
+    AstNode *symbol = findSymbolByNode(ctx->env, NULL, node);
     csAssert0(symbol && nodeIs(symbol, EnumOption));
 
     return &symbol->enumOption.value->intLiteral.value;
@@ -77,7 +79,7 @@ void checkDuplicateCaseMatches(SemanticsContext *ctx,
                      NULL);
             logNote(ctx->L,
                     &prev->node->loc,
-                    "previous similar match statement here",
+                    "previous similar case statement declared here",
                     NULL);
             cases[i].node->type = ERROR_TYPE(ctx);
             node->type = cases[i].node->type;

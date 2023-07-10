@@ -11,7 +11,7 @@
 #pragma once
 
 #include "core/strpool.h"
-#include "lang/ast.h"
+#include "lang/visitor.h"
 
 typedef struct {
     FormatState *state;

@@ -12,7 +12,9 @@
 #include "lang/semantics.h"
 
 #include "lang/eval.h"
+#include "lang/flag.h"
 #include "lang/ttable.h"
+#include "lang/visitor.h"
 
 #include <memory.h>
 
@@ -24,7 +26,7 @@ static void checkIndexExprAssignment(AstVisitor *visitor, AstNode *node)
     const Type *lhs = left->indexExpr.target->type;
     const Type *target = stripPointer(lhs);
 
-    AstNode *func = findSymbolOnly(target->tStruct.env, "op_idx_assign");
+    AstNode *func = findSymbolOnly(target->tStruct.decl->env, "op_idx_assign");
     if (func == NULL) {
         logError(ctx->L,
                  &node->assignExpr.rhs->loc,
@@ -82,14 +84,14 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
     bool isLeftAuto = typeIs(lhs, Auto);
 
     // TODO check r-value-ness
-    if ((left->flags & flgConst) || (lhs->flags & flgConst)) {
+    if (hasFlag(left, Const) || hasFlag(lhs, Const)) {
         logError(ctx->L,
                  &node->loc,
-                 "lhs of assignment expressions is a constant",
+                 "lhs of assignment expression is a constant",
                  (FormatArg[]){{.t = lhs}});
         node->type = ERROR_TYPE(ctx);
     }
-    else if (typeIs(rhs, Array) && rhs->array.len != UINT64_MAX) {
+    else if (!isSliceType(rhs)) {
         if (isLeftAuto)
             logError(ctx->L,
                      &node->loc,
@@ -114,7 +116,7 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
         return;
 
     if (isLeftAuto) {
-        csAssert0(left->tag == astPath);
+        csAssert0(nodeIs(left, Path));
         const char *variable = left->path.elements->pathElement.name;
         AstNode *symbol = findSymbol(ctx->env, ctx->L, variable, &left->loc);
         csAssert0(symbol);
@@ -130,10 +132,9 @@ void evalAssignExpr(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *left = node->assignExpr.lhs, *right = node->assignExpr.rhs;
-    const Env *up = ctx->eval.env.up;
-    ctx->eval.env.up = NULL;
-    SymbolRef *symbol = findSymbolRefByNode(ctx, &ctx->eval.env, left, true);
-    ctx->eval.env.up = up;
+    ctx->env = environmentPop(ctx->env);
+    SymbolRef *symbol = findSymbolRefByNode(&ctx->eval.env, ctx->L, left);
+    ctx->env = environmentPush(ctx->env, &ctx->eval.env);
 
     if (symbol == NULL) {
         node->tag = astError;

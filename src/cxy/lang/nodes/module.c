@@ -24,7 +24,7 @@ bool exportDeclaration(SemanticsContext *ctx,
     AstNode *exports = ctx->program->program.module;
     if (exports && (node->flags & flgPublic)) {
         if (nodeIs(node, FuncDecl)) {
-            if (!defineFunctionDecl(ctx->exports, ctx->L, name, node))
+            if (defineFunctionDecl(ctx->exports, ctx->L, name, node) == NULL)
                 return false;
         }
         else {

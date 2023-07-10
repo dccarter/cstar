@@ -4,8 +4,10 @@
 
 #include "lang/node.h"
 
+#include "lang/flag.h"
 #include "lang/semantics.h"
 #include "lang/ttable.h"
+#include "lang/visitor.h"
 
 #include <string.h>
 
@@ -138,7 +140,7 @@ bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node)
     if (!typeIs(type, Struct))
         return false;
 
-    AstNode *symbol = findSymbolOnly(type->tStruct.env, "op_truthy");
+    AstNode *symbol = findSymbolOnly(type->tStruct.decl->env, "op_truthy");
     if (symbol == NULL)
         return false;
 
@@ -160,7 +162,7 @@ bool transformToDerefOperator(AstVisitor *visitor, AstNode *node)
     if (!typeIs(type, Struct))
         return false;
 
-    AstNode *symbol = findSymbolOnly(type->tStruct.env, "op_deref");
+    AstNode *symbol = findSymbolOnly(type->tStruct.decl->env, "op_deref");
     if (symbol == NULL)
         return false;
 

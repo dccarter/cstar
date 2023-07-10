@@ -358,10 +358,10 @@ const Type *makeNullType(TypeTable *table) { return table->nullType; }
 
 const Type *makeStringType(TypeTable *table) { return table->stringType; }
 
-const Type *makeContainerType(TypeTable *table, cstring name, Env *env)
+const Type *makeContainerType(TypeTable *table, cstring name, AstNode *decl)
 {
     Type type = make(
-        Type, .tag = typContainer, .name = name, .container = {.env = env});
+        Type, .tag = typContainer, .name = name, .container = {.decl = decl});
 
     return getOrInsertType(table, &type).s;
 }
@@ -498,8 +498,6 @@ const Type *makeEnum(TypeTable *table, const Type *init)
         memcpy(tEnum->tEnum.options,
                init->tEnum.options,
                sizeof(EnumOption) * init->tEnum.count);
-        tEnum->tEnum.env = allocFromMemPool(table->memPool, sizeof(Env));
-        *tEnum->tEnum.env = *init->tEnum.env;
     }
 
     return ret.s;

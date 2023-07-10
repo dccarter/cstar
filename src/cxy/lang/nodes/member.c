@@ -194,10 +194,11 @@ void checkMember(AstVisitor *visitor, AstNode *node)
             findSymbolByNode(rawTarget->tStruct.decl->env, ctx->L, member);
         if (symbol != NULL) {
             if (nodeIs(symbol, GenericDecl)) {
-                symbol = checkGenericDeclReference(visitor,
-                                                   symbol,
-                                                   member->path.elements,
-                                                   rawTarget->tStruct.env);
+                symbol =
+                    checkGenericDeclReference(visitor,
+                                              symbol,
+                                              member->path.elements,
+                                              rawTarget->tStruct.decl->env);
             }
 
             if (symbol != NULL) {

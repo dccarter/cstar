@@ -191,7 +191,6 @@ typedef struct Type {
             StructField *fields;
             u64 fieldsCount;
             AstNode *decl;
-            Env *env;
         } tStruct;
 
         struct {

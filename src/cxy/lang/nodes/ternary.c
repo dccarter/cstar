@@ -11,7 +11,9 @@
 #include "lang/codegen.h"
 #include "lang/semantics.h"
 
+#include "lang/flag.h"
 #include "lang/ttable.h"
+#include "lang/visitor.h"
 
 void generateTernaryExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
@@ -30,15 +32,24 @@ void checkTernaryExpr(AstVisitor *visitor, AstNode *node)
     const Type *body = evalType(visitor, node->ternaryExpr.body);
     const Type *otherwise = evalType(visitor, node->ternaryExpr.otherwise);
 
-    if (!isTypeAssignableFrom(getPrimitiveType(ctx->typeTable, prtBool),
-                              cond)) {
+    if (typeIs(cond, Error) || //
+        typeIs(body, Error) || //
+        typeIs(otherwise, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    if (!isTruthyType(ctx->typeTable, cond)) {
         logError(ctx->L,
                  &node->ternaryExpr.cond->loc,
-                 "expecting a ternary expression ('?') condition type of bool, "
+                 "expecting a ternary expression ('?') condition type to be "
+                 "truthy evaluable, "
                  "got '{t}'",
                  (FormatArg[]){{.t = cond}});
         node->type = ERROR_TYPE(ctx);
+        return;
     }
+
     if (!isTypeAssignableFrom(body, otherwise)) {
         logError(ctx->L,
                  &node->loc,

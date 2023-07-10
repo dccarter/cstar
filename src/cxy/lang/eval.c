@@ -2,10 +2,12 @@
 // Created by Carter on 2023-04-26.
 //
 
+#include "lang/eval.h"
 #include "lang/semantics.h"
 
-#include "lang/eval.h"
+#include "lang/flag.h"
 #include "lang/ttable.h"
+#include "lang/visitor.h"
 
 #include <string.h>
 
@@ -157,6 +159,19 @@ static void evalFallback(AstVisitor *visitor, AstNode *node)
     node->tag = astError;
 }
 
+static void evalDispatch(Visitor func, AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+
+    if (ctx->eval.env.prev == NULL) {
+        ctx->env = environmentPush(ctx->env, &ctx->eval.env);
+        func(visitor, node);
+        ctx->env = environmentPop(ctx->env);
+    }
+    else
+        func(visitor, node);
+}
+
 bool evaluate(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
@@ -184,14 +199,12 @@ void initEvalVisitor(AstVisitor *visitor, SemanticsContext *ctx)
         [astEnumDecl] = evalEnumDecl,
         [astMacroCallExpr] = evalMacroCall,
         [astVarDecl] = evalVarDecl
-    }, .fallback = evalFallback);
+    }, .fallback = evalFallback, .dispatch = evalDispatch);
 
     // clang-format on
 
     ctx->eval.visitor = visitor;
-    environmentInit(&ctx->eval.env);
-    environmentAttachUp(&ctx->eval.env, ctx->env);
-    pushScope(&ctx->eval.env, NULL);
+    environmentInit(&ctx->eval.env, NULL);
 
     initComptime(ctx);
 }

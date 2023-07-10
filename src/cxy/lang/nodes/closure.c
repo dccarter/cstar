@@ -12,7 +12,9 @@
 #include "lang/semantics.h"
 
 #include "lang/capture.h"
+#include "lang/flag.h"
 #include "lang/ttable.h"
+#include "lang/visitor.h"
 
 #include "core/alloc.h"
 
@@ -52,7 +54,7 @@ void generateClosureExpr(ConstAstVisitor *visitor, const AstNode *node)
     TypeTable *table = (ctx)->types;
 
     const AstNode *parent = node->parentScope;
-    bool isMember = parent && parent->tag == astStructDecl;
+    bool isMember = nodeIs(parent, StructDecl);
 
     format(ctx->state, "attr(always_inline)\n", NULL);
 
@@ -103,14 +105,20 @@ void generateClosureExpr(ConstAstVisitor *visitor, const AstNode *node)
 
 void checkClosure(AstVisitor *visitor, AstNode *node)
 {
-    const Type *ret, **params;
     SemanticsContext *ctx = getAstVisitorContext(visitor);
+    const Type *ret, **params;
     const AstNode *lastReturn = ctx->lastReturn;
     ctx->lastReturn = NULL;
 
     u64 paramsCount = countAstNodes(node->closureExpr.params) + 1;
     AstNode *param = node->closureExpr.params;
     u64 i = 1;
+
+    if (node->closureExpr.ret) {
+        node->type = evalType(visitor, node->closureExpr.ret);
+        if (typeIs(node->type, Error))
+            return;
+    }
 
     pushScope(ctx->env, node);
 
@@ -121,23 +129,31 @@ void checkClosure(AstVisitor *visitor, AstNode *node)
     for (; param; param = param->next, i++) {
         param->parentScope = node;
         params[i] = evalType(visitor, param);
-        if (param->flags & flgVariadic) {
+        if (hasFlag(param, Variadic)) {
             logError(ctx->L,
                      &param->loc,
                      "variadic parameters are not supported on closures",
                      NULL);
+            node->type = ERROR_TYPE(ctx);
         }
     }
 
-    if (node->closureExpr.ret)
-        evalType(visitor, node->closureExpr.ret);
+    if (typeIs(node->type, Error)) {
+        ctx->closure = stack;
+        popScope(ctx->env);
+        return;
+    }
 
     node->closureExpr.body->parentScope = node;
     ret = evalType(visitor, node->closureExpr.body);
 
     ctx->closure = stack;
-
     popScope(ctx->env);
+
+    if (typeIs(ret, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
 
     // We need to create a tuple for the capture
     u64 index = node->closureExpr.capture.index;
@@ -151,22 +167,17 @@ void checkClosure(AstVisitor *visitor, AstNode *node)
         flgNone);
     free((void *)capturedTypes);
 
-    cstring name = makeAnonymousVariable(ctx->strPool, "cxy_closure_expr");
-    node->type = makeFuncType(
-        ctx->typeTable,
-        &(Type){
-            .tag = typFunc,
-            .name = NULL,
-            .flags = node->flags | flgClosure,
-            .func = {.retType = ret,
-                     .params = params,
-                     .captureNames = names,
-                     .capturedNamesCount = index,
-                     .paramsCount = paramsCount,
-                     .decl = makeAstNode(ctx->pool,
-                                         &node->loc,
-                                         &(AstNode){.tag = astIdentifier,
-                                                    .ident.value = name})}});
+    AstNode *name = makeGenIdent(ctx->pool, ctx->strPool, &node->loc);
+    node->type = makeFuncType(ctx->typeTable,
+                              &(Type){.tag = typFunc,
+                                      .name = NULL,
+                                      .flags = node->flags | flgClosure,
+                                      .func = {.retType = ret,
+                                               .params = params,
+                                               .captureNames = names,
+                                               .capturedNamesCount = index,
+                                               .paramsCount = paramsCount,
+                                               .decl = name}});
 
     ctx->lastReturn = lastReturn;
 
@@ -188,7 +199,7 @@ void checkClosure(AstVisitor *visitor, AstNode *node)
                                                    }});
 
     copy->funcDecl.body = closureExpr.body;
-    copy->funcDecl.name = name;
+    copy->funcDecl.name = name->ident.value;
     copy->flags |= flgClosure;
 
     addTopLevelDecl(ctx, copy->funcDecl.name, copy);

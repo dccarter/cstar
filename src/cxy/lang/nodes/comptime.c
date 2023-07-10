@@ -18,8 +18,6 @@ typedef struct {
     AstNodeMemberGetter get;
 } AstNodeGetMember;
 
-static HashTable structDeclMembers;
-static HashTable fieldDeclMembers;
 static HashTable defaultMembers;
 
 static bool compareAstNodeGetMember(const void *lhs, const void *rhs)
@@ -116,6 +114,9 @@ static AstNode *getMembers(SemanticsContext *ctx,
     case astTupleType:
         return comptimeWrapped(
             ctx, &node->loc, node->tupleExpr.args, flgComptimeIterable);
+    case astStructDecl:
+        return comptimeWrapped(
+            ctx, &node->loc, node->structDecl.members, flgComptimeIterable);
     default:
         break;
     }
@@ -133,7 +134,6 @@ static AstNode *getTypeInfo(SemanticsContext *ctx,
                                    &node->loc,
                                    node->funcParam.type->tupleType.args,
                                    flgComptimeIterable);
-
         return node->funcParam.type;
     default:
         break;
@@ -390,68 +390,11 @@ static void initDefaultMembers(SemanticsContext *ctx)
 #undef ADD_MEMBER
 }
 
-static AstNode *getStructMembers(SemanticsContext *ctx,
-                                 const FileLoc *loc,
-                                 AstNode *node)
-{
-    return comptimeWrapped(
-        ctx, loc, node->structDecl.members, flgComptimeIterable);
-}
-
-static AstNode *getStructBase(SemanticsContext *ctx,
-                              const FileLoc *loc,
-                              AstNode *node)
-{
-    if (node->structDecl.base) {
-        return findSymbolOnlyByNode(&ctx->eval.env, node->structDecl.base);
-    }
-
-    logError(ctx->L,
-             loc,
-             "struct '{s}' does not extend any base type",
-             (FormatArg[]){{.s = node->structDecl.name}});
-    logNote(ctx->L, &node->loc, "struct declared here", NULL);
-
-    return NULL;
-}
-
-static void initStructDeclMembers(SemanticsContext *ctx)
-{
-    structDeclMembers = newHashTable(sizeof(AstNodeGetMember));
-#define ADD_MEMBER(name, G)                                                    \
-    insertAstNodeGetter(&structDeclMembers, makeString(ctx->strPool, name), G)
-
-    ADD_MEMBER("members", getStructMembers);
-    ADD_MEMBER("base", getStructBase);
-
-#undef ADD_MEMBER
-}
-
-static AstNode *getStructFieldType(SemanticsContext *ctx,
-                                   const FileLoc *loc,
-                                   AstNode *node)
-{
-    return makeTypeReferenceNode(ctx, node->type);
-}
-
-static void initStructFieldMembers(SemanticsContext *ctx)
-{
-    fieldDeclMembers = newHashTable(sizeof(AstNodeGetMember));
-#define ADD_MEMBER(name, G)                                                    \
-    insertAstNodeGetter(&fieldDeclMembers, makeString(ctx->strPool, name), G)
-
-    ADD_MEMBER("Tinfo", getStructFieldType);
-
-#undef ADD_MEMBER
-}
-
 void initComptime(SemanticsContext *ctx)
 {
     static bool initialized = false;
     if (!initialized) {
         initDefaultMembers(ctx);
-        initStructDeclMembers(ctx);
-        initStructFieldMembers(ctx);
         initialized = true;
     }
 }
@@ -461,9 +404,7 @@ void checkComptime(AstVisitor *visitor, AstNode *node)
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     node->flags &= ~flgComptime;
 
-    ctx->env = environmentPush(ctx->env, &ctx->eval.env);
     bool status = evaluate(ctx->eval.visitor, node);
-    ctx->env = environmentPop(ctx->env);
 
     if (!status) {
         node->type = ERROR_TYPE(ctx);
@@ -481,22 +422,8 @@ AstNode *evalAstNodeMemberAccess(SemanticsContext *ctx,
                                  AstNode *node,
                                  cstring name)
 {
-    HashTable *table = NULL;
-    switch (node->tag) {
-    case astStructDecl:
-        table = &structDeclMembers;
-        break;
-    case astStructField:
-        table = &fieldDeclMembers;
-        break;
-    default:
-        break;
-    }
 
-    AstNodeMemberGetter getter =
-        findAstNodeGetter(table ?: &defaultMembers, name)
-            ?: (table != NULL ? findAstNodeGetter(&defaultMembers, name)
-                              : NULL);
+    AstNodeMemberGetter getter = findAstNodeGetter(&defaultMembers, name);
     if (getter == NULL)
         return NULL;
 

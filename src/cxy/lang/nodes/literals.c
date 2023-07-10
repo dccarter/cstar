@@ -12,6 +12,7 @@
 #include "lang/semantics.h"
 
 #include "lang/ttable.h"
+#include "lang/visitor.h"
 
 f64 getNumericLiteral(const AstNode *node)
 {

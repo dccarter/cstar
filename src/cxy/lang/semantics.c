@@ -123,12 +123,17 @@ static SymbolRef *findSymbolRefByPath(const Env *env,
         const Type *type = stripAll(ref->node->type);
         elem = elem->next;
 
-        switch (ref->node->tag) {
-        case astEnumDecl:
-        case astStructDecl:
-        case astModuleDecl:
-        case astDefine:
-        case astImportDecl:
+        switch (type->tag) {
+        case typEnum:
+            env = type->tEnum.decl->env;
+            break;
+        case typStruct:
+            env = type->tStruct.decl->env;
+            break;
+        case typContainer:
+            env = type->container.decl->env;
+            break;
+        case typModule:
             env = ref->node->env;
             break;
         default:

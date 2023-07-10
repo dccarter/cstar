@@ -10,6 +10,8 @@
 
 #include "lang/codegen.h"
 
+#include "lang/visitor.h"
+
 void generateCCode(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);

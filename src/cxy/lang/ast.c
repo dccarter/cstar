@@ -68,7 +68,7 @@ AstNode *duplicateAstNode(MemPool *pool, const AstNode *node)
 {
     if (node == NULL)
         return NULL;
-    
+
     AstNode *copy = allocFromMemPool(pool, sizeof(AstNode));
     memcpy(copy, node, sizeof(AstNode));
     return copy;
@@ -558,5 +558,44 @@ cstring getAstNodeName(const AstNode *node)
 #undef f
     default:
         return "<max>";
+    }
+}
+
+cstring getGenericDeclarationName(const AstNode *decl)
+{
+    csAssert0(nodeIs(decl, GenericDecl));
+    const AstNode *node = decl->genericDecl.decl;
+
+    switch (node->tag) {
+    case astFuncDecl:
+        return node->funcDecl.name;
+    case astStructDecl:
+        return node->structDecl.name;
+    case astTypeDecl:
+        return node->typeDecl.name;
+    case astUnionDecl:
+        return node->unionDecl.name;
+    default:
+        unreachable("unsupported generics");
+    }
+}
+
+void setDeclarationName(AstNode *decl, cstring name)
+{
+    switch (decl->tag) {
+    case astFuncDecl:
+        decl->funcDecl.name = name;
+        break;
+    case astStructDecl:
+        decl->structDecl.name = name;
+        break;
+    case astTypeDecl:
+        decl->typeDecl.name = name;
+        break;
+    case astUnionDecl:
+        decl->unionDecl.name = name;
+        break;
+    default:
+        unreachable("unsupported generics");
     }
 }

@@ -76,7 +76,6 @@ void checkEnumDecl(AstVisitor *visitor, AstNode *node)
     AstNode *option = node->enumDecl.options;
     i64 lastValue = 0, i = 0;
     const Type *base = NULL;
-    Env env;
 
     if (node->enumDecl.base)
         base = evalType(visitor, node->enumDecl.base);
@@ -149,8 +148,10 @@ void evalEnumDecl(AstVisitor *visitor, AstNode *node)
                 &option->loc,
                 &(AstNode){.tag = astIntegerLit, .intLiteral.value = value++});
         }
-        else
-            value++;
+        else {
+            AstNode *lit = option->enumOption.value;
+            value = lit->intLiteral.value + 1;
+        }
     }
 
     node->enumDecl.len = len;

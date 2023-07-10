@@ -6,7 +6,9 @@
 #include "lang/eval.h"
 #include "lang/semantics.h"
 
+#include "lang/flag.h"
 #include "lang/ttable.h"
+#include "lang/visitor.h"
 
 static inline bool isTransientVariable(const AstNode *node)
 {
@@ -21,16 +23,16 @@ void generateVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
         typeIs(node->type, Pointer))
         format(ctx->state, "__builtin_cxy_stack_cleanup ", NULL);
 
-    if (node->flags & flgNative)
+    if (hasFlag(node, Native))
         format(ctx->state, "extern ", NULL);
 
-    if ((node->flags & flgConst) && !(node->type->flags & flgConst))
+    if (hasFlag(node, Const) && !hasFlag(node->type, Const))
         format(ctx->state, "const ", NULL);
 
     generateTypeUsage(ctx, node->type);
 
     format(ctx->state, " ", NULL);
-    if (node->flags & flgTopLevelDecl)
+    if (hasFlag(node, TopLevelDecl))
         writeNamespace(ctx, "__");
     astConstVisit(visitor, node->varDecl.names);
 
@@ -82,9 +84,6 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
         }
     }
 
-    defineSymbol(ctx->env, ctx->L, names->ident.value, node);
-    exportDeclaration(ctx, node, names->ident.value);
-
     if (node->varDecl.type) {
         node->varDecl.type->flags |= node->flags;
         node->type = evalType(visitor, node->varDecl.type);
@@ -131,6 +130,18 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
             else
                 node->type = value;
         }
+    }
+
+    if (typeIs(node->type, Error))
+        return;
+
+    if (!defineDeclaration(ctx,
+                           names->ident.value,
+                           getDeclarationAlias(ctx, node),
+                           node,
+                           hasFlag(node, Public))) //
+    {
+        node->type = ERROR_TYPE(ctx);
     }
 }
 

@@ -133,7 +133,7 @@ static const Type *checkNewInitializerExpr(AstVisitor *visitor, AstNode *node)
 
         const Type *callee = evalType(visitor, init->callExpr.callee);
         if (typeIs(callee, Struct)) {
-            if (!findSymbolOnly(callee->tStruct.env, "op_new")) {
+            if (!findSymbolOnly(callee->tStruct.decl->env, "op_new")) {
                 logError(ctx->L,
                          &init->callExpr.callee->loc,
                          "cannot use `new` constructor expression on type "

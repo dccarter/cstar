@@ -11,7 +11,9 @@
 #include "lang/codegen.h"
 #include "lang/semantics.h"
 
+#include "lang/flag.h"
 #include "lang/ttable.h"
+#include "lang/visitor.h"
 
 #include "core/alloc.h"
 
@@ -119,25 +121,27 @@ static const Type **checkFunctionParams(AstVisitor *visitor,
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type **params = NULL;
-
+    bool status = true;
     AstNode *param = node->funcDecl.params;
 
     *paramsCount = countAstNodes(node->funcDecl.params);
-    if (*paramsCount == 0) {
-        return NULL;
-    }
 
     params = mallocOrDie(sizeof(Type *) * *paramsCount);
 
     for (u64 i = 0; param; param = param->next, i++) {
         param->parentScope = node;
         params[i] = evalType(visitor, param);
+        if (typeIs(params[i], Error)) {
+            status = false;
+            continue;
+        }
 
         if (*withDefaultValues && param->funcParam.def == NULL) {
             logError(ctx->L,
                      &param->loc,
                      "parameter cannot be declared without a default value",
                      NULL);
+            status = false;
             continue;
         }
         *withDefaultValues = (param->funcParam.def != NULL);
@@ -149,6 +153,11 @@ static const Type **checkFunctionParams(AstVisitor *visitor,
             param->flags |= flgFuncTypeParam;
             node->flags |= flgClosureStyle;
         }
+    }
+
+    if (!status) {
+        free(params);
+        params = NULL;
     }
 
     return params;
@@ -367,12 +376,6 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, "{<}\n}", NULL);
     }
 
-    if (hasFlag(node, Async)) {
-        format(ctx->state, "\n", NULL);
-        generateCoroutineFunctions(visitor, node);
-        format(ctx->state, "\n", NULL);
-    }
-
     if (node->funcDecl.operatorOverload == opDelete) {
         generateStructDelete(ctx, parent->type);
     }
@@ -482,13 +485,21 @@ const Type *checkMethodDeclSignature(AstVisitor *visitor, AstNode *node)
 {
     const Type *ret = NULL, **params, *type = NULL;
     SemanticsContext *ctx = getAstVisitorContext(visitor);
+    u64 paramsCount = 0;
+    bool withDefaultValues = false;
+
     if (!hasFlag(node, Variadic) && isVariadicFunction(ctx, node)) {
         transformVariadicDeclToGenericDecl(visitor, node);
         return node->type;
     }
 
-    u64 paramsCount = 0;
-    bool withDefaultValues = false;
+    ret = makeAutoType(ctx->typeTable);
+    if (node->funcDecl.ret) {
+        ret = evalType(visitor, node->funcDecl.ret);
+        if (typeIs(ret, Error)) {
+            return node->type = ERROR_TYPE(ctx);
+        }
+    }
 
     SymbolRef *ref =
         defineFunctionDecl(ctx->env, ctx->L, node->funcDecl.name, node);
@@ -505,6 +516,11 @@ const Type *checkMethodDeclSignature(AstVisitor *visitor, AstNode *node)
     pushScope(ctx->env, node);
     params =
         checkFunctionParams(visitor, node, &paramsCount, &withDefaultValues);
+    popScope(ctx->env);
+
+    if (params == NULL) {
+        return node->type = ERROR_TYPE(ctx);
+    }
 
     if (node->funcDecl.index != 0) {
         AstNode *decl = symbolRefLookupFuncDeclBySignature(
@@ -517,20 +533,17 @@ const Type *checkMethodDeclSignature(AstVisitor *visitor, AstNode *node)
                 (FormatArg[]){{.s = node->funcDecl.name}, {.t = decl->type}});
             logNote(
                 ctx->L, &decl->loc, "previous declaration found here", NULL);
+
             node->type = ERROR_TYPE(ctx);
+            goto checkMethodDeclSignatureDone;
         }
     }
-
-    ret = makeAutoType(ctx->typeTable);
-    if (node->funcDecl.ret)
-        ret = evalType(visitor, node->funcDecl.ret);
 
     node->type = makeFunctionDeclType(
         ctx, node, ret, params, paramsCount, withDefaultValues);
 
+checkMethodDeclSignatureDone:
     free((void *)params);
-    popScope(ctx->env);
-
     return node->type;
 }
 
@@ -553,29 +566,24 @@ void checkMethodDeclBody(AstVisitor *visitor, AstNode *node)
                                   node->parentScope->type,
                                   node->parentScope->type->flags);
 
-        defineSymbol(
-            ctx->env,
-            ctx->L,
-            "this",
-            makeAstNode(ctx->pool,
-                        &node->loc,
-                        &(AstNode){.tag = astIdentifier,
-                                   .flags = (parent->flags & ~flgTopLevelDecl),
-                                   .type = parent,
-                                   .ident.value = "this"}));
+        defineSymbol(ctx->env,
+                     ctx->L,
+                     "this",
+                     makePath(ctx->pool,
+                              &node->loc,
+                              makeString(ctx->strPool, "this"),
+                              flgNone,
+                              parent));
 
         if (node->parentScope->structDecl.base) {
-            defineSymbol(
-                ctx->env,
-                ctx->L,
-                "super",
-                makeAstNode(
-                    ctx->pool,
-                    &node->loc,
-                    &(AstNode){.tag = astIdentifier,
-                               .flags = parent->flags | flgAddThis,
-                               .type = node->parentScope->structDecl.base->type,
-                               .ident.value = "super"}));
+            defineSymbol(ctx->env,
+                         ctx->L,
+                         "super",
+                         makePath(ctx->pool,
+                                  &node->loc,
+                                  makeString(ctx->strPool, "super"),
+                                  flgAddThis,
+                                  parent->tStruct.base));
         }
     }
 
@@ -585,6 +593,11 @@ void checkMethodDeclBody(AstVisitor *visitor, AstNode *node)
 
     node->funcDecl.body->parentScope = node;
     ret = evalType(visitor, node->funcDecl.body);
+    if (typeIs(ret, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        popScope(ctx->env);
+        return;
+    }
 
     if (ctx->lastReturn && typeIs(ret, Void))
         ret = ctx->lastReturn->type;
@@ -607,13 +620,15 @@ void checkMethodDeclBody(AstVisitor *visitor, AstNode *node)
 void checkFuncParam(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
-    if (node->parentScope == NULL || node->parentScope->tag != astFuncType)
+    if (!nodeIs(node->parentScope, FuncType))
         defineSymbol(ctx->env, ctx->L, node->funcParam.name, node);
 
     if (node->funcParam.type)
         node->type = evalType(visitor, node->funcParam.type);
     else
         csAssert0(node->type);
+    if (typeIs(node->type, Error))
+        return;
 
     if (node->funcParam.def) {
         const Type *def = evalType(visitor, node->funcParam.def);
@@ -643,25 +658,32 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
     u64 paramsCount = 0;
     bool withDefaultValues = false;
 
-    SymbolRef *ref =
-        defineFunctionDecl(ctx->env, ctx->L, node->funcDecl.name, node);
-    defineDeclarationAliasName(ctx, node);
-
-    if (ref == NULL) {
-        node->type = ERROR_TYPE(ctx);
-        return;
-    }
-
     if (!ctx->mainOptimized) {
-        node->flags |=
-            (strcmp(node->funcDecl.name, "main") == 0) ? flgMain : flgNone;
+        node->flags |= (node->funcDecl.name == ctx->main ? flgMain : flgNone);
         ctx->mainOptimized = node->flags & flgMain;
     }
 
     pushScope(ctx->env, node);
-
     params =
         checkFunctionParams(visitor, node, &paramsCount, &withDefaultValues);
+    if (params == NULL) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    if (!defineDeclaration(ctx,
+                           node->funcDecl.name,
+                           getDeclarationAlias(ctx, node),
+                           node,
+                           false)) //
+    {
+        node->type = ERROR_TYPE(ctx);
+        goto checkFunctionDeclDone;
+    }
+
+    SymbolRef *ref =
+        findSymbolRef(ctx->env, ctx->L, node->funcDecl.name, &node->loc);
+    csAssert0(ref != NULL);
 
     if (node->funcDecl.index != 0) {
         AstNode *decl = symbolRefLookupFuncDeclBySignature(
@@ -670,15 +692,20 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
             logError(
                 ctx->L,
                 &node->loc,
-                "function '{s}' overload with signature {t} already declared",
+                "function '{s}' overload with signature {t} already "
+                "declared",
                 (FormatArg[]){{.s = node->funcDecl.name}, {.t = decl->type}});
             logNote(
                 ctx->L, &decl->loc, "previous declaration found here", NULL);
+
             node->type = ERROR_TYPE(ctx);
+            goto checkFunctionDeclDone;
         }
     }
 
-    exportFunctionDeclaration(ctx, node, node->funcDecl.name);
+    // Won't fail
+    exportDeclaration(
+        ctx, node->funcDecl.name, getDeclarationAlias(ctx, node), node);
 
     ret = makeAutoType(ctx->typeTable);
     if (node->funcDecl.ret)
@@ -693,6 +720,11 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
         node->funcDecl.body->parentScope = node;
         ret = evalType(visitor, node->funcDecl.body);
 
+        if (typeIs(ret, Error)) {
+            node->type = ret;
+            goto checkFunctionDeclDone;
+        }
+
         if (ctx->lastReturn && typeIs(ret, Void)) {
             ret = ctx->lastReturn->type;
         }
@@ -706,6 +738,7 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
 
     ctx->lastReturn = lastReturn;
 
+checkFunctionDeclDone:
     free((void *)params);
     popScope(ctx->env);
 }
@@ -715,6 +748,11 @@ void checkFuncType(AstVisitor *visitor, AstNode *node)
     SemanticsContext *ctx = getAstVisitorContext(visitor);
 
     const Type *ret = evalType(visitor, node->funcType.ret);
+    if (typeIs(ret, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
     u64 count = countAstNodes(node->funcType.params);
     const Type **params = mallocOrDie(sizeof(Type *) * count);
 
@@ -726,7 +764,7 @@ void checkFuncType(AstVisitor *visitor, AstNode *node)
             node->type = ERROR_TYPE(ctx);
     }
 
-    if (node->type == NULL)
+    if (node->type == NULL) {
         node->type = makeFuncType(ctx->typeTable,
                                   &(Type){.tag = typFunc,
                                           .name = NULL,
@@ -735,6 +773,7 @@ void checkFuncType(AstVisitor *visitor, AstNode *node)
                                                    .params = params,
                                                    .paramsCount = count,
                                                    .decl = node}});
+    }
 
     free(params);
 }

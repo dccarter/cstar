@@ -12,7 +12,9 @@
 #include "lang/eval.h"
 #include "lang/semantics.h"
 
+#include "lang/flag.h"
 #include "lang/ttable.h"
+#include "lang/visitor.h"
 
 void generateIfStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
@@ -79,26 +81,20 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    AstNode *next = node->next;
-    AstNode *parent = node->parentScope;
     u64 visited = node->flags & flgVisited;
 
     if (cond->boolLiteral.value) {
         // select then branch & reclaim else branch if any
-        *node = *node->ifStmt.body;
-        node->next = next;
-        node->parentScope = parent;
+        replaceAstNode(node, node->ifStmt.body);
     }
     else if (node->ifStmt.otherwise) {
         // select otherwise, reclaim if branch
-        *node = *node->ifStmt.otherwise;
-        getLastAstNode(node)->next = next;
-        node->parentScope = parent;
+        replaceAstNode(node, node->ifStmt.otherwise);
     }
     else {
         // select next statement, reclaim if branch
-        if (next)
-            *node = *next;
+        if (node->next)
+            *node = *(node->next);
         else {
             clearAstBody(node);
             node->tag = astNop;

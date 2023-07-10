@@ -8,50 +8,14 @@
  * @date 2023-04-20
  */
 
-#include "lang/codegen.h"
 #include "lang/semantics.h"
 
+#include "lang/flag.h"
 #include "lang/ttable.h"
+#include "lang/visitor.h"
 
 #include "core/alloc.h"
 
-#include <memory.h>
-
-static cstring genericDeclName(const AstNode *decl)
-{
-    switch (decl->tag) {
-    case astFuncDecl:
-        return decl->funcDecl.name;
-    case astStructDecl:
-        return decl->structDecl.name;
-    case astTypeDecl:
-        return decl->typeDecl.name;
-    case astUnionDecl:
-        return decl->unionDecl.name;
-    default:
-        unreachable("unsupported generics");
-    }
-}
-
-static void setDeclName(AstNode *decl, cstring name)
-{
-    switch (decl->tag) {
-    case astFuncDecl:
-        decl->funcDecl.name = name;
-        break;
-    case astStructDecl:
-        decl->structDecl.name = name;
-        break;
-    case astTypeDecl:
-        decl->typeDecl.name = name;
-        break;
-    case astUnionDecl:
-        decl->unionDecl.name = name;
-        break;
-    default:
-        unreachable("unsupported generics");
-    }
-}
 static AstNode *getGenericDeclFromPath(AstNode *node)
 {
     while (nodeIs(node->parentScope, PathElem) ||
@@ -67,11 +31,11 @@ static void variadicParamsToTuple(SemanticsContext *ctx, AstNode *node)
     u64 count = countAstNodes(node->funcDecl.params);
 
     if (count == 1) {
-        arg = copyAstNodeAsIs(ctx->pool, args);
+        arg = duplicateAstNode(ctx->pool, args);
     }
     else {
         args = getNodeAtIndex(args, count - 1);
-        arg = copyAstNodeAsIs(ctx->pool, args);
+        arg = duplicateAstNode(ctx->pool, args);
     }
 
     clearAstBody(args);
@@ -99,7 +63,7 @@ static void addVariadicParams(AstVisitor *visitor, AstNode *node)
 
     if (count == 1) {
         if (args) {
-            arg = copyAstNodeAsIs(ctx->pool, args);
+            arg = duplicateAstNode(ctx->pool, args);
         }
         else {
             args = ctx->currentCall->callExpr.args =
@@ -117,7 +81,7 @@ static void addVariadicParams(AstVisitor *visitor, AstNode *node)
                 getLastAstNode(args)->next = tmp;
         }
         else {
-            arg = copyAstNodeAsIs(ctx->pool, tmp);
+            arg = duplicateAstNode(ctx->pool, tmp);
         }
         args = tmp;
     }
@@ -279,48 +243,52 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
         node->pathElement.alt2 = node->pathElement.name;
         node->pathElement.name = node->type->name;
 
-        AstNode *sym =
-            findSymbolOnly(generic->genericDecl.env, node->type->name);
+        AstNode *sym = findSymbolOnly(generic->env, node->type->name);
         if (sym && isVariadic) {
             variadicParamsToTuple(ctx, sym);
         }
         return sym;
     }
 
+    bool popEnv = false;
     // Substitute
-    cstring name = makeAnonymousVariable(ctx->strPool,
-                                         genericDeclName(target->generic.decl));
+    cstring name =
+        makeAnonymousVariable(ctx->strPool, getGenericDeclarationName(generic));
     AstNode *substitute = cloneAstNode(ctx->pool, target->generic.decl);
     substitute->attrs = generic->attrs;
     substitute->flags |= flgGenerated;
-    setDeclName(substitute, name);
+    setDeclarationName(substitute, name);
     node->pathElement.name = name;
 
-    if (nodeIs(substitute, StructDecl))
+    if (nodeIs(substitute, StructDecl)) {
         substitute->structDecl.generatedFrom = target;
+        substitute->env = makeEnvironment(ctx->pool, substitute);
+        ctx->env = environmentPush(ctx->env, substitute->env);
+    }
+    else {
+        if (typeIs(node->parentScope->type, Struct) &&
+            node->parentScope->type->tStruct.decl->env->prev == NULL) //
+        {
+            ctx->env = environmentPush(
+                ctx->env, node->parentScope->type->tStruct.decl->env);
+            popEnv = true;
+        }
+
+        pushScope(ctx->env, substitute);
+    }
 
     cstring namespace = ctx->typeTable->currentNamespace;
     ctx->typeTable->currentNamespace = target->namespace;
 
     substitute->next = NULL;
-    Env *saveEnv = ctx->env;
-    const Env *upper = getUpperEnv(generic->genericDecl.env);
-    __typeof(ctx->stack) saveStack = ctx->stack;
-    ctx->env = generic->genericDecl.env;
-    if (upper && upper != saveEnv)
-        ((Env *)upper)->up = saveEnv;
-    bool isFunction = nodeIs(target->generic.decl, FuncDecl);
 
-    pushScope(generic->genericDecl.env, NULL);
+    bool isFunction = nodeIs(substitute, FuncDecl);
     param = node->pathElement.args;
     for (i = 0; i < paramsCount; i++, param = param->next) {
-        defineSymbol(generic->genericDecl.env,
-                     ctx->L,
-                     target->generic.params[i].name,
-                     param);
+        defineSymbol(ctx->env, ctx->L, target->generic.params[i].name, param);
     }
 
-    addTopLevelDecl(ctx, name, substitute);
+    addTopLevelDecl(ctx, NULL, substitute);
     if (isFunction) {
         substitute->parentScope = target->generic.decl->parentScope;
         if (isVariadic) {
@@ -336,35 +304,25 @@ AstNode *checkGenericDeclReference(AstVisitor *visitor,
         node->type = substitute->type;
     }
     else {
+        ctx->env = environmentPop(ctx->env);
         node->type = evalType(visitor, substitute);
     }
 
-    popScope(generic->genericDecl.env);
-    environmentFree(&(Env){.first = ctx->env->scope->next});
-    ctx->env->scope->next = NULL;
-    ctx->env = saveEnv;
-
-    if (upper)
-        ((Env *)upper)->up = NULL;
+    if (nodeIs(substitute, StructDecl)) {
+        environmentFree(&(Env){.first = substitute->env->scope->next});
+    }
+    else {
+        if (popEnv)
+            ctx->env = environmentPop(ctx->env);
+        popScope(ctx->env);
+    }
 
     ctx->typeTable->currentNamespace = namespace;
 
     ((Type *)(goi.s))->applied.generated = node->type;
-    Type *generated = (Type *)goi.s->applied.generated;
-    if (typeIs(generated, Struct)) {
-        param = node->pathElement.args;
-        for (i = 0; i < count; i++, param = param->next) {
-            defineSymbol(generated->tStruct.env,
-                         ctx->L,
-                         target->generic.params[i].name,
-                         param);
-        }
-    }
     if (env->scope->node && typeIs(env->scope->node->type, Module)) {
         defineSymbol((Env *)env, ctx->L, name, substitute);
     }
-
-    ctx->stack = saveStack;
 
     return substitute;
 }
@@ -426,29 +384,34 @@ void checkGenericDecl(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    cstring name = genericDeclName(node->genericDecl.decl);
-    if (!defineSymbol(ctx->env, ctx->L, name, node)) {
+    cstring name = getGenericDeclarationName(node);
+    bool defined;
+    if (nodeIs(node->parentScope, StructDecl)) {
+        defined = defineDeclaration(ctx, name, NULL, node, false);
+    }
+    else {
+        defined = defineDeclaration(ctx,
+                                    name,
+                                    getDeclarationAlias(ctx, node),
+                                    node,
+                                    hasFlag(node, Public));
+    }
+    if (!defined) {
         node->type = ERROR_TYPE(ctx);
         return;
     }
-    if (!nodeIs(node->parentScope, StructDecl))
-        exportDeclaration(ctx, node, name);
 
-    node->genericDecl.env = allocFromMemPool(ctx->pool, sizeof(Env));
-    environmentInit(node->genericDecl.env);
-    environmentAttachUp(node->genericDecl.env, ctx->env);
-    Env *saved = ctx->env;
-    ctx->env = node->genericDecl.env;
+    node->env = makeEnvironment(ctx->pool, node);
+    ctx->env = environmentPush(ctx->env, node->env);
 
     node->genericDecl.decl->parentScope = node->parentScope;
     u64 count = countAstNodes(param);
     GenericParam *params = mallocOrDie(sizeof(GenericParam) * count);
-    pushScope(ctx->env, node);
     for (u64 i = 0; param; param = param->next, i++) {
         const Type *type = evalType(visitor, param);
         if (typeIs(type, Error)) {
             node->type = type;
-            break;
+            continue;
         }
         params[i].name = param->genericParam.name;
         params[i].decl = param;
@@ -471,6 +434,6 @@ void checkGenericDecl(AstVisitor *visitor, AstNode *node)
                                                 .inferrable = isInferrable}});
     }
 
-    ctx->env = saved;
+    ctx->env = environmentPop(ctx->env);
     free(params);
 }

@@ -554,3 +554,5 @@ const AstNode *findAttribute(const AstNode *node, cstring name);
 const AstNode *findAttributeArgument(const AstNode *attr, cstring name);
 
 cstring getAstNodeName(const AstNode *node);
+cstring getGenericDeclarationName(const AstNode *decl);
+void setDeclarationName(AstNode *decl, cstring name);

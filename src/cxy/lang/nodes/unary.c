@@ -5,7 +5,9 @@
 #include "lang/codegen.h"
 #include "lang/semantics.h"
 
+#include "lang/flag.h"
 #include "lang/ttable.h"
+#include "lang/visitor.h"
 
 #include "core/alloc.h"
 #include "lang/eval.h"
@@ -95,7 +97,7 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
             logError(
                 ctx->L,
                 &node->unaryExpr.operand->loc,
-                "prefix spread expression '{s}' no supported on type '{t}'",
+                "prefix spread expression '{s}' is not supported on type '{t}'",
                 (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)},
                               {.t = operand}});
             operand = ERROR_TYPE(ctx);
@@ -199,15 +201,25 @@ void checkAddressOfExpr(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *operand = evalType(visitor, node->unaryExpr.operand);
-    node->flags |= node->unaryExpr.operand->flags;
-    node->type = makePointerType(
-        ctx->typeTable, operand, node->unaryExpr.operand->flags);
+    if (!typeIs(operand, Error)) {
+        node->flags |= node->unaryExpr.operand->flags;
+        node->type = makePointerType(
+            ctx->typeTable, operand, node->unaryExpr.operand->flags);
+    }
+    else {
+        node->type = ERROR_TYPE(ctx);
+    }
 }
 
 void checkUnaryExpr(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *operand = evalType(visitor, node->unaryExpr.operand);
+    if (typeIs(operand, Error)) {
+        node->type = operand;
+        return;
+    }
+
     node->flags |= node->unaryExpr.operand->flags;
 
     if (node->unaryExpr.isPrefix) {
@@ -216,7 +228,7 @@ void checkUnaryExpr(AstVisitor *visitor, AstNode *node)
     }
 
     node->type = operand;
-    if (node->flags & flgConst) {
+    if (hasFlag(node, Const)) {
         logError(ctx->L,
                  &node->loc,
                  "postfix operation '{s}' cannot be performed on a constant",

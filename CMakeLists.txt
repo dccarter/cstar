@@ -45,10 +45,11 @@ set(CXY_CORE_SOURCES
 set(CXY_LANG_SOURCES
         src/cxy/lang/ast.c
         src/cxy/lang/capture.c
+        src/cxy/lang/codegen.c
         src/cxy/lang/encode.c
         src/cxy/lang/decode.c
+        src/cxy/lang/eval.c
         src/cxy/lang/node.c
-        src/cxy/lang/operations/dump.c
         src/cxy/lang/lexer.c
         src/cxy/lang/operator.c
         src/cxy/lang/parser.c
@@ -93,10 +94,10 @@ set(CXY_LANG_NODE_SOURCES
         src/cxy/lang/nodes/attributes.c
         src/cxy/lang/nodes/return.c
         src/cxy/lang/nodes/new.c
-        src/cxy/lang/nodes/coroutine.c
         src/cxy/lang/nodes/macro.c)
 
 set(CXY_OPERATIONS_SOURCES
+        src/cxy/lang/operations/dump.c
         src/cxy/lang/operations/shake.c)
 
 set(CXY_DRIVER_SOURCES

@@ -7,8 +7,10 @@
 
 #include "lang/ast.h"
 #include "lang/eval.h"
+#include "lang/flag.h"
 #include "lang/node.h"
 #include "lang/ttable.h"
+#include "lang/visitor.h"
 
 #include "core/alloc.h"
 
@@ -56,7 +58,7 @@ static bool checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
     const Type *left = node->binaryExpr.lhs->type;
     cstring name = getBinaryOpFuncName(node->binaryExpr.op);
     const Type *target = stripPointer(left);
-    AstNode *overload = findSymbolOnly(target->tStruct.env, name);
+    AstNode *overload = findSymbolOnly(target->tStruct.decl->env, name);
 
     if (overload == NULL) {
         return false;
@@ -538,6 +540,12 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *left = evalType(visitor, node->binaryExpr.lhs);
+    if (typeIs(left, Error)) {
+        evalType(visitor, node->binaryExpr.rhs);
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
     if (typeIs(left, This))
         left = left->this.that;
 
@@ -546,8 +554,13 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
             return;
     }
 
-    Operator op = node->binaryExpr.op;
     const Type *right = evalType(visitor, node->binaryExpr.rhs);
+    if (typeIs(right, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    Operator op = node->binaryExpr.op;
     BinaryOperatorKind opKind = getBinaryOperatorKind(op);
 
     const Type *type =

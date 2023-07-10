@@ -5,7 +5,9 @@
 #include "lang/codegen.h"
 #include "lang/semantics.h"
 
+#include "lang/flag.h"
 #include "lang/ttable.h"
+#include "lang/visitor.h"
 
 #include "core/alloc.h"
 
@@ -98,7 +100,7 @@ static const Type *structCallToFunctionCall(AstVisitor *visitor,
     const Type *raw = stripPointer(type);
     AstNode *callee = node->callExpr.callee;
 
-    AstNode *symbol = findSymbolOnly(raw->tStruct.env, "op_call");
+    AstNode *symbol = findSymbolOnly(raw->tStruct.decl->env, "op_call");
     if (!symbol) {
         logError(ctx->L,
                  &callee->loc,
@@ -164,7 +166,7 @@ static const Type *evalOverloadFunctionType(AstVisitor *visitor,
     AstNode *arg = node->callExpr.args;
     u32 overload = node->callExpr.overload;
 
-    SymbolRef *symbol = findSymbolRefByNode(ctx, ctx->env, callee, false);
+    SymbolRef *symbol = findSymbolRefByNode(ctx->env, NULL, callee);
 
     evalType(visitor, callee);
 
@@ -214,7 +216,7 @@ static inline void checkCallWithStack(AstVisitor *visitor, AstNode *node)
     if (typeIs(calleeRaw, Struct)) {
         if (nodeIs(node->callExpr.callee, Path)) {
             AstNode *decl =
-                findSymbolOnlyByNode(ctx->env, node->callExpr.callee);
+                findSymbolByNode(ctx->env, NULL, node->callExpr.callee);
             if (nodeIs(decl, StructDecl)) {
                 evalConstructorCall(visitor,
                                     callee,

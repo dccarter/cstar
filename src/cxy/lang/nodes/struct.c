@@ -6,42 +6,17 @@
 #include "lang/eval.h"
 #include "lang/semantics.h"
 
+#include "lang/flag.h"
 #include "lang/ttable.h"
+#include "lang/visitor.h"
 
 #include "core/alloc.h"
 
 #include <string.h>
 
-static inline void hookStructEnvironments(SemanticsContext *ctx,
-                                          const Type *base,
-                                          Env *root)
-{
-    if (base) {
-        environmentAttachUp((Env *)base->tStruct.env, root);
-        environmentAttachUp(ctx->env, (Env *)base->tStruct.env);
-    }
-    else {
-        environmentAttachUp(ctx->env, root);
-    }
-}
-
-static inline void unHookStructEnvironments(SemanticsContext *ctx,
-                                            const Type *base)
-{
-    if (base) {
-        environmentDetachUp((Env *)base->tStruct.env);
-        environmentDetachUp(ctx->env);
-    }
-    else {
-        environmentDetachUp(ctx->env);
-    }
-}
-
 static inline AstNode *findStructField(const Type *type, cstring name)
 {
-    Env env = {.first = type->tStruct.env->scope,
-               .scope = type->tStruct.env->scope};
-    return findSymbolOnly(&env, name);
+    return findSymbolOnly(type->tStruct.decl->env, name);
 }
 
 bool isExplicitConstructibleFrom(SemanticsContext *ctx,
@@ -53,7 +28,7 @@ bool isExplicitConstructibleFrom(SemanticsContext *ctx,
 
     AstNode *constructor =
         findFunctionWithSignature(ctx,
-                                  type->tStruct.env,
+                                  type->tStruct.decl->env,
                                   makeString(ctx->strPool, "op_new"),
                                   flgNone,
                                   (const Type *[]){from},
@@ -90,7 +65,7 @@ bool evalExplicitConstruction(AstVisitor *visitor,
 
     AstNode *constructor =
         findFunctionWithSignature(ctx,
-                                  type->tStruct.env,
+                                  type->tStruct.decl->env,
                                   makeString(ctx->strPool, "op_new"),
                                   flgNone,
                                   (const Type *[]){node->type},
@@ -416,7 +391,7 @@ static const Type *getBuiltinStringBuilderType()
 static bool structHasToString(const Type *type)
 {
     SymbolRef *symbol =
-        findSymbolRef(type->tStruct.env, NULL, "toString", NULL);
+        findSymbolRef(type->tStruct.decl->env, NULL, "toString", NULL);
 
     const Type *sb = getBuiltinStringBuilderType();
     if (sb == NULL || stripAll(type) == sb)
@@ -637,7 +612,8 @@ void makeOpaqueToString(SemanticsContext *ctx, AstNode *node)
                          ctx->typeTable, sb, sb->flags)},
                      .retType = makeVoidType(ctx->typeTable),
                      .decl = it}});
-    defineSymbol(node->type->tStruct.env, NULL, "toString", it);
+
+    defineSymbol(node->env, NULL, "toString", it);
 }
 
 void checkStructDecl(AstVisitor *visitor, AstNode *node)
@@ -648,7 +624,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
     const Type *base = NULL;
     if (node->structDecl.base) {
         base = evalType(visitor, node->structDecl.base);
-        if (base->tag != typStruct) {
+        if (typeIs(base, Struct)) {
             logError(ctx->L,
                      &node->structDecl.base->loc,
                      "a struct can only extend another struct type, got "
@@ -659,19 +635,29 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
         }
     }
 
+    if (!defineDeclaration(ctx,
+                           node->structDecl.name,
+                           getDeclarationAlias(ctx, node),
+                           node,
+                           hasFlag(node, Public))) //
+    {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
     StructField *members = mallocOrDie(sizeof(StructField) * numMembers);
     AstNode *member = node->structDecl.members;
-    const Type *this = makeThisType(
-        ctx->typeTable, node->structDecl.name, flgConst & node->flags);
+    const Type *this =
+        makeThisType(ctx->typeTable, node->structDecl.name, flgNone);
 
     node->type = this;
-    defineSymbol(ctx->env, ctx->L, node->structDecl.name, node);
-    exportDeclaration(ctx, node, node->structDecl.name);
+    
+    node->env = node->env ?: makeEnvironment(ctx->pool, node);
+    if (node->structDecl.base) {
+        ctx->env = environmentPush(ctx->env, node->structDecl.base->env);
+    }
+    ctx->env = environmentPush(ctx->env, node->env);
 
-    Env *env = ctx->env;
-    ctx->env = makeEnvironment(ctx->pool, NULL);
-    pushScope(ctx->env, node);
-    hookStructEnvironments(ctx, base, env);
     defineSymbol(ctx->env, ctx->L, "This", node);
     u64 i = 0;
     for (; member; member = member->next, i++) {
@@ -720,11 +706,11 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
                             &(Type){.tag = typStruct,
                                     .flags = node->flags,
                                     .name = node->structDecl.name,
-                                    .tStruct = {.env = ctx->env,
-                                                .base = base,
+                                    .tStruct = {.base = base,
                                                 .fields = members,
                                                 .fieldsCount = i,
                                                 .decl = node}});
+
     makeOpaqueToString(ctx, node);
 
     ((Type *)this)->this.that = node->type;
@@ -732,8 +718,13 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
     member = node->structDecl.members;
     AstNode *prev = member;
     for (; member; member = member->next) {
-        if (member->tag == astFuncDecl) {
+        if (nodeIs(member, FuncDecl)) {
             checkMethodDeclBody(visitor, member);
+            if (typeIs(member, Error)) {
+                node->type = ERROR_TYPE(ctx);
+                goto checkStructDecl_cleanup;
+            }
+
             if (member == node->structDecl.members) {
                 node->structDecl.members = member->next;
                 prev = node->structDecl.members;
@@ -760,6 +751,8 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
     }
 
 checkStructDecl_cleanup:
-    ctx->env = env;
+    if (node->structDecl.base)
+        ctx->env = environmentPop(ctx->env);
+    ctx->env = environmentPop(ctx->env);
     free(members);
 }
