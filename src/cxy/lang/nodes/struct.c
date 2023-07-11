@@ -241,7 +241,7 @@ void generateStructDelete(CodegenContext *context, const Type *type)
                 format(state, "\n", NULL);
 
             format(state,
-                   "cxy_free((void *)this->{s});",
+                   "__cxy_free((void *)this->{s});",
                    (FormatArg[]){{.s = field->name}});
         }
         else if (typeIs(stripped, Struct) || typeIs(stripped, Array) ||
@@ -276,18 +276,18 @@ void buildStringOperatorForMember(CodegenContext *context,
     deref += isSliceType(type);
 
     format(state,
-           "__cxy_builtins_string_builder_append_cstr0(sb->sb, "
+           "__cxy_string_builder_append_cstr0(sb->sb, "
            "\"{s}: \", {u64});\n",
            (FormatArg[]){{.s = name}, {.u64 = strlen(name) + 2}});
     if (typeIs(unwrapped, Pointer)) {
         format(state,
                "if (this->{s} == NULL) {{{>}\n"
-               "__cxy_builtins_string_builder_append_cstr0(sb->sb, \"null\", "
+               "__cxy_string_builder_append_cstr0(sb->sb, \"null\", "
                "4);\n",
                (FormatArg[]){{.s = name}});
 
         format(state,
-               "__cxy_builtins_string_builder_append_char(sb->sb, "
+               "__cxy_string_builder_append_char(sb->sb, "
                "'&');{<}\n}\nelse{>}\n",
                NULL);
         deref = pointerLevels(unwrapped);
@@ -296,7 +296,7 @@ void buildStringOperatorForMember(CodegenContext *context,
     switch (stripped->tag) {
     case typNull:
         format(state,
-               "__cxy_builtins_string_builder_append_cstr0(sb->sb, "
+               "__cxy_string_builder_append_cstr0(sb->sb, "
                "\"null\", 4);",
                NULL);
         break;
@@ -304,20 +304,20 @@ void buildStringOperatorForMember(CodegenContext *context,
         switch (stripped->primitive.id) {
         case prtBool:
             format(state,
-                   "__cxy_builtins_string_builder_append_bool(sb->sb, "
+                   "__cxy_string_builder_append_bool(sb->sb, "
                    "{cl}this->{s});",
                    (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = name}});
             break;
         case prtChar:
             format(state,
-                   "__cxy_builtins_string_builder_append_char(sb->sb, "
+                   "__cxy_string_builder_append_char(sb->sb, "
                    "{cl}this->{s});",
                    (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = name}});
             break;
 #define f(I, ...) case prt##I:
             INTEGER_TYPE_LIST(f)
             format(state,
-                   "__cxy_builtins_string_builder_append_int(sb->sb, "
+                   "__cxy_string_builder_append_int(sb->sb, "
                    "(i64)({cl}this->{s}));",
                    (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = name}});
             break;
@@ -325,7 +325,7 @@ void buildStringOperatorForMember(CodegenContext *context,
 #define f(I, ...) case prt##I:
             FLOAT_TYPE_LIST(f)
             format(state,
-                   "__cxy_builtins_string_builder_append_float(sb->sb, "
+                   "__cxy_string_builder_append_float(sb->sb, "
                    "(f64)({cl}this->{s}));",
                    (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = name}});
             break;
@@ -337,7 +337,7 @@ void buildStringOperatorForMember(CodegenContext *context,
 
     case typString:
         format(state,
-               "__cxy_builtins_string_builder_append_cstr1(sb->sb, "
+               "__cxy_string_builder_append_cstr1(sb->sb, "
                "{cl}this->{s});",
                (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = name}});
         break;
@@ -353,15 +353,14 @@ void buildStringOperatorForMember(CodegenContext *context,
         break;
     case typOpaque:
         format(state,
-               "__cxy_builtins_string_builder_append_cstr1(sb->sb, "
+               "__cxy_string_builder_append_cstr1(sb->sb, "
                "\"<opaque:",
                NULL);
         writeTypename(context, type);
         format(state, ">\");", NULL);
         break;
     case typEnum:
-        format(
-            state, "__cxy_builtins_string_builder_append_cstr1(sb->sb, ", NULL);
+        format(state, "__cxy_string_builder_append_cstr1(sb->sb, ", NULL);
         writeEnumPrefix(context, type);
         format(state,
                "__get_name({cl}this->{s}));",
@@ -420,8 +419,7 @@ static void generateStructToString(CodegenContext *context, const Type *type)
     format(state, "__toString(", NULL);
     writeTypename(context, type);
     format(state, " *this, StringBuilder *sb) {{{>}\n", NULL);
-    format(
-        state, "__cxy_builtins_string_builder_append_cstr1(sb->sb, \"", NULL);
+    format(state, "__cxy_string_builder_append_cstr1(sb->sb, \"", NULL);
     writeTypename(context, type);
     format(state, "{{\");\n", NULL);
 
@@ -433,15 +431,14 @@ static void generateStructToString(CodegenContext *context, const Type *type)
 
         if (y++ != 0)
             format(state,
-                   "__cxy_builtins_string_builder_append_cstr0(sb->sb, "
+                   "__cxy_string_builder_append_cstr0(sb->sb, "
                    "\", \", 2);\n",
                    NULL);
 
         buildStringOperatorForMember(context, field->type, field->name, 0);
     }
 
-    format(
-        state, "__cxy_builtins_string_builder_append_char(sb->sb, '}');", NULL);
+    format(state, "__cxy_string_builder_append_char(sb->sb, '}');", NULL);
 
     format(state, "{<}\n}", NULL);
 }
@@ -651,7 +648,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
         makeThisType(ctx->typeTable, node->structDecl.name, flgNone);
 
     node->type = this;
-    
+
     node->env = node->env ?: makeEnvironment(ctx->pool, node);
     if (node->structDecl.base) {
         ctx->env = environmentPush(ctx->env, node->structDecl.base->env);

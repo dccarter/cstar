@@ -143,7 +143,7 @@ void generateSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
     bool isStringMatch = typeIs(node->switchStmt.cond->type, String);
     if (isStringMatch)
         format(ctx->state,
-               "__cxy_builtins_fnv1a_string(__cxy_builtins_fnv1a_init(), ",
+               "__cxy_hash_fnv1a_string(__cxy_hash_fnv1a_init(), ",
                NULL);
     astConstVisit(visitor, node->switchStmt.cond);
 

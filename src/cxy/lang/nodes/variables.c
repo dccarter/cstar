@@ -21,7 +21,7 @@ void generateVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
     bool isTransient = findAttribute(node, "transient");
     if (!isTransient && !hasFlag(node, ImmediatelyReturned) &&
         typeIs(node->type, Pointer))
-        format(ctx->state, "__builtin_cxy_stack_cleanup ", NULL);
+        format(ctx->state, "__cxy_stack_cleanup ", NULL);
 
     if (hasFlag(node, Native))
         format(ctx->state, "extern ", NULL);
@@ -41,7 +41,7 @@ void generateVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
         if (!isTransient && typeIs(node->varDecl.init->type, Pointer) &&
             !nodeIs(node->varDecl.init, NewExpr) &&
             !(nodeIs(node->varDecl.init, StmtExpr))) {
-            format(ctx->state, "__builtin_cxy_get_ref(", NULL);
+            format(ctx->state, "__builtin_get_ref(", NULL);
             astConstVisit(visitor, node->varDecl.init);
             format(ctx->state, ")", NULL);
         }

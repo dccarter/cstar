@@ -41,9 +41,9 @@ static void generateArrayDelete(CodegenContext *context, const Type *type)
 
         if (typeIs(element, Pointer) || typeIs(element, String)) {
             if (isSliceType(type))
-                format(state, "cxy_free((void *)this->data[i]);", NULL);
+                format(state, "__cxy_free((void *)this->data[i]);", NULL);
             else
-                format(state, "cxy_free((void *)this[i]);", NULL);
+                format(state, "__cxy_free((void *)this[i]);", NULL);
         }
         else if (typeIs(stripped, Struct) || typeIs(stripped, Array) ||
                  typeIs(stripped, Tuple)) {
@@ -73,12 +73,12 @@ static void buildStringFormatForIndex(CodegenContext *context,
     if (typeIs(unwrapped, Pointer)) {
         format(state,
                "if (this{s}[i] != NULL) {{{>}\n"
-               "__cxy_builtins_string_builder_append_cstr0(sb->sb, \"null\", "
+               "__cxy_string_builder_append_cstr0(sb->sb, \"null\", "
                "4);\nreturn;{<}\n}\n",
                (FormatArg[]){{.s = target}});
 
         format(state,
-               "__cxy_builtins_string_builder_append_char(sb->sb, "
+               "__cxy_string_builder_append_char(sb->sb, "
                "'&');\n",
                NULL);
         deref = pointerLevels(unwrapped);
@@ -87,7 +87,7 @@ static void buildStringFormatForIndex(CodegenContext *context,
     switch (stripped->tag) {
     case typNull:
         format(state,
-               "__cxy_builtins_string_builder_append_cstr0(sb->sb, "
+               "__cxy_string_builder_append_cstr0(sb->sb, "
                "\"null\", 4);\n",
                NULL);
         break;
@@ -95,21 +95,21 @@ static void buildStringFormatForIndex(CodegenContext *context,
         switch (stripped->primitive.id) {
         case prtBool:
             format(state,
-                   "__cxy_builtins_string_builder_append_bool(sb->sb, "
+                   "__cxy_string_builder_append_bool(sb->sb, "
                    "{cl}this{s}[i]);\n",
                    (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = target}});
             break;
         case prtChar:
         case prtCChar:
             format(state,
-                   "__cxy_builtins_string_builder_append_char(sb->sb, "
+                   "__cxy_string_builder_append_char(sb->sb, "
                    "{cl}this{s}[i]);\n",
                    (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = target}});
             break;
 #define f(I, ...) case prt##I:
             INTEGER_TYPE_LIST(f)
             format(state,
-                   "__cxy_builtins_string_builder_append_int(sb->sb, "
+                   "__cxy_string_builder_append_int(sb->sb, "
                    "(i64)({cl}this{s}[i]));\n",
                    (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = target}});
             break;
@@ -117,7 +117,7 @@ static void buildStringFormatForIndex(CodegenContext *context,
 #define f(I, ...) case prt##I:
             FLOAT_TYPE_LIST(f)
             format(state,
-                   "__cxy_builtins_string_builder_append_float(sb->sb, "
+                   "__cxy_string_builder_append_float(sb->sb, "
                    "(f64)({cl}this{s}[i]));\n",
                    (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = target}});
             break;
@@ -129,13 +129,12 @@ static void buildStringFormatForIndex(CodegenContext *context,
 
     case typString:
         format(state,
-               "__cxy_builtins_string_builder_append_cstr1(sb->sb, "
+               "__cxy_string_builder_append_cstr1(sb->sb, "
                "{cl}this{s}[i]);\n",
                (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = target}});
         break;
     case typEnum:
-        format(
-            state, "__cxy_builtins_string_builder_append_cstr1(sb->sb, ", NULL);
+        format(state, "__cxy_string_builder_append_cstr1(sb->sb, ", NULL);
         writeEnumPrefix(context, type);
         format(state,
                "__get_name({cl}this{s}[i]));\n",
@@ -151,7 +150,7 @@ static void buildStringFormatForIndex(CodegenContext *context,
         break;
     case typOpaque:
         format(state,
-               "__cxy_builtins_string_builder_append_cstr1(sb->sb, "
+               "__cxy_string_builder_append_cstr1(sb->sb, "
                "\"<opaque:",
                NULL);
         writeTypename(context, type);
@@ -159,13 +158,13 @@ static void buildStringFormatForIndex(CodegenContext *context,
         break;
     case typVoid:
         format(state,
-               "__cxy_builtins_string_builder_append_cstr0(sb->sb, "
+               "__cxy_string_builder_append_cstr0(sb->sb, "
                "\"void\", 4);\n",
                NULL);
         break;
     case typFunc:
         format(state,
-               "__cxy_builtins_string_builder_append_cstr0(sb->sb, "
+               "__cxy_string_builder_append_cstr0(sb->sb, "
                "\"<func>\", 4);\n",
                NULL);
         break;
@@ -183,8 +182,7 @@ static void generateArrayToString(CodegenContext *context, const Type *type)
     writeTypename(context, type);
     format(state, " this, StringBuilder* sb) {{{>}\n", NULL);
 
-    format(
-        state, "__cxy_builtins_string_builder_append_char(sb->sb, '[');", NULL);
+    format(state, "__cxy_string_builder_append_char(sb->sb, '[');", NULL);
 
     format(state, "for (u64 i = 0; i < ", NULL);
     if (isSliceType(type))
@@ -194,7 +192,7 @@ static void generateArrayToString(CodegenContext *context, const Type *type)
     format(state, "; i++) {{{>}\n", NULL);
 
     format(state,
-           "if (i) __cxy_builtins_string_builder_append_cstr0(sb->sb, \", \", "
+           "if (i) __cxy_string_builder_append_cstr0(sb->sb, \", \", "
            "2);\n",
            NULL);
     if (isSliceType(type))
@@ -205,8 +203,7 @@ static void generateArrayToString(CodegenContext *context, const Type *type)
 
     format(state, "{<}\n}\n", NULL);
 
-    format(
-        state, "__cxy_builtins_string_builder_append_char(sb->sb, ']');", NULL);
+    format(state, "__cxy_string_builder_append_char(sb->sb, ']');", NULL);
 
     format(state, "{<}\n}", NULL);
 }

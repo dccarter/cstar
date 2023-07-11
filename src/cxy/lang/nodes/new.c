@@ -188,8 +188,9 @@ void generateNewExpr(ConstAstVisitor *visitor, const AstNode *node)
 
     format(ctx->state, "({{{>}\n", NULL);
     generateTypeUsage(ctx, node->type);
-    format(
-        ctx->state, " {s} = cxy_calloc(1, sizeof(", (FormatArg[]){{.s = name}});
+    format(ctx->state,
+           " {s} = __cxy_calloc(1, sizeof(",
+           (FormatArg[]){{.s = name}});
     generateTypeUsage(ctx, type);
     format(ctx->state, "),\n", NULL);
     if (typeIs(type, Struct) || typeIs(type, Array) || typeIs(type, Tuple)) {

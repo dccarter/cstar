@@ -156,7 +156,7 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
 void generateDeleteExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    format(ctx->state, "cxy_free((void *)", NULL);
+    format(ctx->state, "__cxy_free((void *)", NULL);
     astConstVisit(visitor, node->unaryExpr.operand);
     format(ctx->state, ")", NULL);
 }
