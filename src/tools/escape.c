@@ -15,52 +15,53 @@
 #include <stdlib.h>
 #include <string.h>
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     size_t bytes;
     if (argc < 4)
         return EXIT_FAILURE;
 
-    char *data = readFile(argv[1], &bytes);
-    if (data == NULL) {
-        fprintf(stderr,
-                "reading file '%s' failed - %s\n",
-                argv[1],
-                strerror(errno));
-        return EXIT_FAILURE;
-    }
-
-    FILE *output = fopen(argv[2], "w");
+    FILE *output = fopen(argv[1], "w");
     if (output == NULL) {
         fprintf(stdout,
                 "opening output file '%s' failed - %s\n",
-                argv[2],
+                argv[1],
                 strerror(errno));
         free(data);
         return EXIT_FAILURE;
     }
-    fprintf(output, "#define %s_CODE_SIZE %zu\n", argv[3], bytes);
-    fprintf(output, "#define %s_CODE \"", argv[3]);
 
-    for (u64 i = 0; i < bytes; i++) {
-        if (data[i] == '"') {
-            fputc('\\', output);
-            fputc('"', output);
+    fprintf(output, "#define %s_CODE_SIZE %zu\n", argv[2], bytes);
+    fprintf(output, "#define %s_CODE \"", argv[2]);
+
+    for (u64 j = 3; j < argc; j++) {
+        char *data = readFile(argv[j], &bytes);
+        if (data == NULL) {
+            fprintf(stderr,
+                    "reading file '%s' failed - %s\n",
+                    argv[j],
+                    strerror(errno));
+            fclose(output);
+            return EXIT_FAILURE;
         }
-        else if (data[i] == '\n') {
-            fputc('\\', output);
-            fputc('n', output);
+
+        for (u64 i = 0; i < bytes; i++) {
+            if (data[i] == '"') {
+                fputc('\\', output);
+                fputc('"', output);
+            } else if (data[i] == '\n') {
+                fputc('\\', output);
+                fputc('n', output);
+            } else if (data[i] == '\\') {
+                fputc('\\', output);
+                fputc('\\', output);
+            } else
+                fputc(data[i], output);
         }
-        else if (data[i] == '\\') {
-            fputc('\\', output);
-            fputc('\\', output);
-        }
-        else
-            fputc(data[i], output);
+        free(data);
     }
+
     fputs("\"", output);
     fclose(output);
-    free(data);
 
     return EXIT_SUCCESS;
 }

@@ -564,7 +564,7 @@ static const u64 cxy_primes[] = {
 
 // Returns the prime that is strictly greater than the given value.
 // If there is no such prime in the list, returns MAX_PRIME.
-static u64 __cxy_builtins_next_prime(u64 i)
+static u64 __cxy_hash_next_prime(u64 i)
 {
     u64 j = 0, k = sizeof__(cxy_primes);
     while (j < k) {
@@ -579,7 +579,7 @@ static u64 __cxy_builtins_next_prime(u64 i)
 }
 
 // Returns the modulus of a number i by a prime p.
-static u64 __cxy_builtins_mod_prime(u64 i, u64 p)
+static u64 __cxy_hash_mod_prime(u64 i, u64 p)
 {
     switch (p) {
 #define f(x)                                                                   \
