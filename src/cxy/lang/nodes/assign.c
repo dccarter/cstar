@@ -91,7 +91,7 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
                  (FormatArg[]){{.t = lhs}});
         node->type = ERROR_TYPE(ctx);
     }
-    else if (!isSliceType(rhs)) {
+    else if (isArrayType(rhs) && !isSliceType(rhs)) {
         if (isLeftAuto)
             logError(ctx->L,
                      &node->loc,

@@ -24,6 +24,7 @@ set(CMAKE_MODULE_PATH
 
 option(ENABLE_TESTS "Enable CMake tests" ON)
 
+include(CxyUtils)
 include(FetchContent)
 # Fetch message-pack library
 set(MSGPACK_BUILD_TESTS OFF)
@@ -117,8 +118,7 @@ set(CXY_LANG_NODE_SOURCES
         src/cxy/lang/nodes/macro.c)
 
 set(CXY_OPERATIONS_SOURCES
-        src/cxy/lang/operations/dump.c
-        src/cxy/lang/operations/shake.c)
+        src/cxy/lang/operations/dump.c)
 
 set(CXY_DRIVER_SOURCES
         src/cxy/driver/cc.c
@@ -127,8 +127,28 @@ set(CXY_DRIVER_SOURCES
         src/cxy/driver/stages.c
         src/cxy/driver/stats.c)
 
+add_executable(amalgamate
+        src/tools/amalgamate.c
+        src/cxy/core/utils.c)
+
+CxyAmalgamate(runtime-header
+        OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/generated
+        FILES
+            src/cxy/lang/runtime/runtime.h
+            src/cxy/lang/runtime/coro/minicoro.h
+            src/cxy/lang/runtime/evloop/ae.h)
+
+CxyAmalgamate(runtime
+        OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/generated
+        FILES
+            src/cxy/lang/runtime/runtime.c
+            src/cxy/lang/runtime/coro/minicoro.c
+            src/cxy/lang/runtime/evloop/ae.c)
+
 add_executable(cxy
         src/cxy/driver/main.c
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/runtime.c
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/runtime_header.c
         ${CXY_3RD_PARTY_SOURCES}
         ${CXY_CORE_SOURCES}
         ${CXY_LANG_SOURCES}
@@ -136,14 +156,8 @@ add_executable(cxy
         ${CXY_DRIVER_SOURCES}
         ${CXY_OPERATIONS_SOURCES})
 
-target_link_libraries(cxy msgpack-c)
-
-add_executable(escape src/tools/escape.c src/cxy/core/utils.c)
-
 target_compile_definitions(cxy PRIVATE
         -DCXY_VERSION="${CXY_VERSION}"
         -DCXY_SOURCE_LANG_DIR="${CMAKE_SOURCE_DIR}/src/cxy/lang")
 
-file(ARCHIVE_CREATE OUTPUT runtime.zip
-        FORMAT zip
-        PATHS ${CMAKE_CURRENT_SOURCE_DIR}/src/cxy/lang/runtime)
+target_link_libraries(cxy msgpack-c)

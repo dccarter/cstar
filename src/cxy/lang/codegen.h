@@ -55,11 +55,7 @@ void generateArrayToSlice(ConstAstVisitor *visitor,
                           const Type *slice,
                           const AstNode *value);
 
-void generateCode(FormatState *state,
-                  TypeTable *table,
-                  StrPool *strPool,
-                  const AstNode *prog,
-                  bool isImport);
+void generateCode(CodegenContext *ctx, const AstNode *prog);
 void generateStructDelete(CodegenContext *context, const Type *type);
 
 void generateCCode(ConstAstVisitor *visitor, const AstNode *node);

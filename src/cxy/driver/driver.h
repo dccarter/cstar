@@ -18,10 +18,17 @@ typedef struct CompilerDriver {
     Env *builtins;
 } CompilerDriver;
 
+typedef struct {
+    cstring name;
+    cstring data;
+    u64 len;
+    u64 mtime;
+} EmbeddedSource;
+
 void makeDirectoryForPath(CompilerDriver *driver, cstring path);
 bool initCompilerDriver(CompilerDriver *compiler, Log *log);
 bool compileFile(const char *fileName, CompilerDriver *driver);
-bool generateBuiltinSources(CompilerDriver *driver);
+bool generateAllBuiltinSources(CompilerDriver *driver);
 
 bool compileString(CompilerDriver *driver,
                    cstring source,

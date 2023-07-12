@@ -5,9 +5,6 @@
  * https://github.com/edubart/minicoro
  */
 
-#include "../runtime.h"
-#include "minicoro.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif

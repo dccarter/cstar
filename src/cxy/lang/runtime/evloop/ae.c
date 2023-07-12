@@ -1,10 +1,7 @@
-#include "../runtime.h"
 
 #define zfree __cxy_free
 #define zrealloc(P, S) __cxy_realloc((P), (S), NULL)
 #define zmalloc(S) __cxy_alloc((S), NULL)
-
-#include "ae.h"
 
 #include <poll.h>
 #include <sys/time.h>

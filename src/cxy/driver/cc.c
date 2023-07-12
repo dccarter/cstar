@@ -11,32 +11,62 @@
 #include "cc.h"
 
 #include "lang/ast.h"
+#include "runtime.h"
+#include "runtime_header.h"
+
 #include <errno.h>
 #include <string.h>
-#include <unistd.h>
+#include <sys/stat.h>
 
-static struct {
-    cstring name;
-    cstring data;
-    u64 len;
-} sGeneratedFiles[] = {};
+static EmbeddedSource sGeneratedFiles[] = {};
+static EmbeddedSource sRuntimeSources[2];
 
-bool generateBuiltinSources(CompilerDriver *driver)
+static EmbeddedSource *getRuntimeSources()
+{
+    static bool initialized = false;
+    if (!initialized) {
+        sRuntimeSources[0] =
+            (EmbeddedSource){.name = "runtime.h",
+                             .data = CXY_RUNTIME_HEADER_SOURCE,
+                             .len = CXY_RUNTIME_HEADER_SOURCE_SIZE,
+                             .mtime = CXY_RUNTIME_HEADER_SOURCE_MTIME};
+        sRuntimeSources[1] =
+            (EmbeddedSource){.name = "runtime.c",
+                             .data = CXY_RUNTIME_SOURCE,
+                             .len = CXY_RUNTIME_SOURCE_SIZE,
+                             .mtime = CXY_RUNTIME_SOURCE_MTIME};
+        initialized = true;
+    }
+
+    return sRuntimeSources;
+}
+
+static bool generateEmbeddedSources(CompilerDriver *driver,
+                                    cstring dir,
+                                    EmbeddedSource *sources,
+                                    u64 count)
 {
     const Options *options = &driver->options;
 
-    for (u64 i = 0; i < sizeof__(sGeneratedFiles); i++) {
+    for (u64 i = 0; i < count; i++) {
         FormatState state = newFormatState("", true);
         format(&state,
-               "{s}/c/imports/{s}",
+               "{s}/c/{s}/{s}",
                (FormatArg[]){{.s = options->buildDir},
-                             {.s = sGeneratedFiles[i].name}});
-
+                             {.s = dir},
+                             {.s = sources[i].name}});
         cstring fname = formatStateToString(&state);
         freeFormatState(&state);
 
-        if (access(fname, F_OK) == 0)
-            continue;
+        struct stat st;
+        if (stat(fname, &st) == 0) {
+            u64 mtime = timespecToMicroSeconds(&st.st_mtimespec);
+            if (mtime > sources[i].mtime)
+                continue;
+        }
+        else {
+            makeDirectoryForPath(driver, fname);
+        }
 
         FILE *output = fopen(fname, "w");
         if (output == NULL) {
@@ -48,12 +78,22 @@ bool generateBuiltinSources(CompilerDriver *driver)
             return false;
         }
 
-        fwrite(sGeneratedFiles[i].data, 1, sGeneratedFiles[i].len, output);
+        fwrite(sources[i].data, 1, sources[i].len, output);
         fclose(output);
         free((char *)fname);
     }
 
     return true;
+}
+
+bool generateAllBuiltinSources(CompilerDriver *driver)
+{
+    if (!generateEmbeddedSources(
+            driver, "runtime", getRuntimeSources(), sizeof__(sRuntimeSources)))
+        return false;
+
+    return generateEmbeddedSources(
+        driver, "imports", sGeneratedFiles, sizeof__(sGeneratedFiles));
 }
 
 void compileCSourceFile(CompilerDriver *driver, const char *sourceFile)
@@ -65,9 +105,13 @@ void compileCSourceFile(CompilerDriver *driver, const char *sourceFile)
         makeDirectoryForPath(driver, options->output);
 
     format(&state,
-           "cc {s} -g -o {s} -I{s}/c/imports -Wno-c2x-extensions",
-           (FormatArg[]){{.s = sourceFile},
+           "cc {s}/c/runtime/runtime.c {s} -g -o {s} -I{s}/c/imports "
+           "-I{s}/c/runtime"
+           "-Wno-c2x-extensions",
+           (FormatArg[]){{.s = options->buildDir},
+                         {.s = sourceFile},
                          {.s = driver->options.output ?: "app"},
+                         {.s = options->buildDir},
                          {.s = options->buildDir}});
 
     if (options->rest) {

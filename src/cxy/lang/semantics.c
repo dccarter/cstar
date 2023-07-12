@@ -403,31 +403,13 @@ AstNode *symbolRefLookupFuncDeclBySignature(SemanticsContext *ctx,
     return NULL;
 }
 
-void semanticsCheck(AstNode *program,
-                    Log *L,
-                    MemPool *pool,
-                    StrPool *strPool,
-                    TypeTable *typeTable,
-                    Env *builtins)
+void semanticsCheck(SemanticsContext *context, AstNode *program)
 {
-    SemanticsContext context = {.L = L,
-                                .typeTable = typeTable,
-                                .pool = pool,
-                                .strPool = strPool,
-                                .program = program,
-                                .env = NULL,
-                                .exports = NULL,
-                                .isBuiltins = builtins == NULL};
-
-    context.env = makeEnvironment(pool, NULL);
-
-    if (context.isBuiltins || program->program.module) {
-        context.exports = makeEnvironment(pool, NULL);
-        pushScope(context.exports, program->program.module);
-    }
-
+    context->env = makeEnvironment(context->pool, program);
+    context->program = program;
+    
     // clang-format off
-    AstVisitor visitor = makeAstVisitor(&context,
+    AstVisitor visitor = makeAstVisitor(context,
     {
         [astProgram] = checkProgram,
         [astDefine] = checkDefine,
@@ -494,8 +476,8 @@ void semanticsCheck(AstNode *program,
 
     // clang-format on
     AstVisitor evalVisitor = {};
-    initEvalVisitor(&evalVisitor, &context);
-    context.eval.semanticsVisitor = &visitor;
+    initEvalVisitor(&evalVisitor, context);
+    context->eval.semanticsVisitor = &visitor;
 
     astVisit(&visitor, program);
 }

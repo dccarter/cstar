@@ -3,7 +3,9 @@
 //
 
 #include "stages.h"
+
 #include "lang/operations.h"
+#include "lang/semantics.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -144,8 +146,16 @@ static AstNode *executeShakeAst(CompilerDriver *driver, AstNode *node)
         return node;
     }
 
-    node = shakeAstNode(driver, node);
-
+    SemanticsContext context = {.L = driver->L,
+                                .typeTable = driver->typeTable,
+                                .pool = &driver->pool,
+                                .strPool = &driver->strPool,
+                                .program = NULL,
+                                .env = NULL,
+                                .exports = NULL,
+                                .isBuiltins = driver->builtins == NULL};
+    semanticsCheck(&context, node);
+    
     if (hasErrors(driver->L))
         return NULL;
 

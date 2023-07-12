@@ -247,7 +247,7 @@ static bool compileProgram(CompilerDriver *driver,
 compileProgramDone:
     if (!options->dev.cleanAst)
         compilerStatsPrint(driver);
-    return true;
+    return status;
 }
 
 static bool compileBuiltin(CompilerDriver *driver,
@@ -270,6 +270,9 @@ bool initCompilerDriver(CompilerDriver *compiler, Log *log)
     compiler->typeTable = newTypeTable(&compiler->pool, &compiler->strPool);
     compiler->moduleCache = newHashTable(sizeof(CachedModule));
     compiler->L = log;
+
+    if (compiler->options.cmd == cmdBuild)
+        return generateAllBuiltinSources(compiler);
     return true;
 }
 
@@ -282,9 +285,6 @@ AstNode *compileModule(CompilerDriver *driver,
 
 bool compileFile(const char *fileName, CompilerDriver *driver)
 {
-    if (driver->options.cmd == cmdDev && !generateBuiltinSources(driver))
-        return false;
-
     AstNode *program = parseFile(driver, fileName);
 
     return compileProgram(driver, program, fileName);

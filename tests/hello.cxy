@@ -25,10 +25,3 @@ func println(...args: auto) {
         #{i += 1}
     }
 }
-
-@[option1]
-func test() {
-    var x = Greet[i32]{};
-    println(10, "West")
-}
-

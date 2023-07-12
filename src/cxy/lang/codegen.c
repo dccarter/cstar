@@ -422,19 +422,10 @@ cstring getNativeDeclarationAliasName(const AstNode *node)
     return (nodeIs(name, StringLit)) ? name->stringLiteral.value : NULL;
 }
 
-void generateCode(FormatState *state,
-                  TypeTable *table,
-                  StrPool *strPool,
-                  const AstNode *prog,
-                  bool isImported)
+void generateCode(CodegenContext *context, const AstNode *prog)
 {
-    CodegenContext context = {.state = state,
-                              .types = table,
-                              .strPool = strPool,
-                              .importedFile = isImported};
-
     // clang-format off
-    ConstAstVisitor visitor = makeConstAstVisitor(&context,
+    ConstAstVisitor visitor = makeConstAstVisitor(context,
     {
         [astCCode] = generateCCode,
         [astImportDecl] = generateImportDecl,
@@ -487,7 +478,7 @@ void generateCode(FormatState *state,
     .fallback = generateFallback);
 
     if (prog->program.module)
-        context.namespace = prog->program.module->moduleDecl.name;
+        context->namespace = prog->program.module->moduleDecl.name;
 
     prologue(&visitor, prog);
     epilogue(&visitor, prog);

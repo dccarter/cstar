@@ -20,8 +20,9 @@ func main(args: [string]) {
     // multi variables
     {
         var x, y = (20, true);
-        var m, n: i32;
         var a, _, b = (20, ' ', true);
         var d, e = (20, ' ', true);
+        var z = (20, ' ', true);
+        var m, n = z;
     }
 }

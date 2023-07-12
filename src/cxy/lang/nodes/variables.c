@@ -15,6 +15,105 @@ static inline bool isTransientVariable(const AstNode *node)
     return findAttribute(node, "transient");
 }
 
+static void desugarVariableDeclaration(AstVisitor *visitor, AstNode *node)
+{
+    SemanticsContext *ctx = getAstVisitorContext(visitor);
+    AstNode *value = node->varDecl.init;
+    AstNode *name = node->varDecl.names;
+    u64 count = countAstNodes(name);
+
+    if (!typeIs(value->type, Tuple)) {
+        logError(ctx->L,
+                 &node->varDecl.init->loc,
+                 "multi-variable declaration initializer must be a tuple",
+                 NULL);
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    if (count > value->type->tuple.count) {
+        logError(
+            ctx->L,
+            &node->loc,
+            "variable names exceed the number of members in"
+            " initializer expression, got {u64}, expecting at most {u64}",
+            (FormatArg[]){{.u64 = count}, {.u64 = value->type->tuple.count}});
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    AstNode *initVar =
+        nodeIs(value, Path) || nodeIs(value, Identifier)
+            ? value
+            : makeAstNode(
+                  ctx->pool,
+                  &value->loc,
+                  &(AstNode){.tag = astVarDecl,
+                             .type = value->type,
+                             .flags = value->flags,
+                             .varDecl = {.names = makeGenIdent(ctx->pool,
+                                                               ctx->strPool,
+                                                               &value->loc),
+                                         .init = value}});
+
+    u64 i = 0;
+    AstNode *vars = NULL, *it = NULL;
+    const Type *type = value->type;
+    for (; name; name = name->next, i++) {
+        if (isIgnoreVar(name->ident.value)) {
+            if (value == NULL) {
+                logWarning(ctx->L,
+                           &name->loc,
+                           "ignore variable '_' does not make sense in "
+                           "multi-variable "
+                           "declaration when no initializer is provided",
+                           NULL);
+            }
+            continue;
+        }
+
+        AstNode *tmp = makeAstNode(
+            ctx->pool,
+            &name->loc,
+            &(AstNode){
+                .tag = astVarDecl,
+                .flags = node->flags,
+                .type = type->tuple.members[i],
+                .attrs = node->attrs,
+                .varDecl = {
+                    .names = copyAstNode(ctx->pool, name),
+                    .init = makeAstNode(
+                        ctx->pool,
+                        &value->loc,
+                        &(AstNode){
+                            .tag = astMemberExpr,
+                            .flags = value->flags,
+                            .type = type->tuple.members[i],
+                            .memberExpr = {
+                                .target = makePathFromIdent(
+                                    ctx->pool, initVar->varDecl.names),
+                                .member = makeAstNode(
+                                    ctx->pool,
+                                    &value->loc,
+                                    &(AstNode){
+                                        .tag = astIntegerLit,
+                                        .type = getPrimitiveType(ctx->typeTable,
+                                                                 prtU64),
+                                        .intLiteral.value = (i64)i})}})}});
+        if (vars == NULL)
+            vars = it = tmp;
+        else
+            it = it->next = tmp;
+    }
+
+    if (initVar != value) {
+        initVar->next = vars;
+        replaceAstNode(node, initVar);
+    }
+    else
+        replaceAstNode(node, vars);
+}
+
 void generateVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -56,18 +155,19 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *names = node->varDecl.names;
 
-    if (node->varDecl.names->next) {
-        logError(
-            ctx->L,
-            &node->loc,
-            "unsupported: multi-variable declaration currently not supported",
-            NULL);
-
-        node->type = ERROR_TYPE(ctx);
-        return;
-    }
-
     if (hasFlag(node->varDecl.names, Comptime)) {
+        if (node->varDecl.names->next) {
+            logError(ctx->L,
+                     &node->loc,
+                     "unsupported: comptime multi-variable declaration "
+                     "currently not "
+                     "supported",
+                     NULL);
+
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+
         if (!evaluate(visitor, node->varDecl.names)) {
             node->type = ERROR_TYPE(ctx);
             return;
@@ -86,7 +186,8 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
 
     if (node->varDecl.type) {
         node->varDecl.type->flags |= node->flags;
-        node->type = evalType(visitor, node->varDecl.type);
+        node->type =
+            node->varDecl.type->type ?: evalType(visitor, node->varDecl.type);
     }
     else {
         node->type = makeAutoType(ctx->typeTable);
@@ -94,41 +195,51 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
 
     const Type *value = NULL;
     if (node->varDecl.init) {
-        value = evalType(visitor, node->varDecl.init);
+        value =
+            node->varDecl.init->type ?: evalType(visitor, node->varDecl.init);
+
         if (typeIs(value, Error)) {
             node->type = ERROR_TYPE(ctx);
         }
-        else if (typeIs(value, Array) && !isSliceType(value) &&
-                 !nodeIs(node->varDecl.init, ArrayExpr)) {
-            logError(ctx->L,
-                     &node->varDecl.init->loc,
-                     "initializer for array declaration can only be an array "
-                     "expression",
-                     NULL);
-            node->type = ERROR_TYPE(ctx);
-        }
-        else if (!isTypeAssignableFrom(node->type, value)) {
-            logError(ctx->L,
-                     &node->varDecl.init->loc,
-                     "incompatible types, expecting type '{t}', got '{t}'",
-                     (FormatArg[]){{.t = node->type}, {.t = value}});
-            node->type = ERROR_TYPE(ctx);
-        }
-        else if ((value->tag == typPointer) &&
-                 ((value->flags & flgConst) && !(node->flags & flgConst))) {
-            logError(ctx->L,
-                     &node->varDecl.init->loc,
-                     "assigning a const pointer to a non-const variable "
-                     "discards const qualifier",
-                     NULL);
-            node->type = ERROR_TYPE(ctx);
-        }
+        else if (node->varDecl.names->next == NULL) {
+            if (typeIs(value, Array) && !isSliceType(value) &&
+                !nodeIs(node->varDecl.init, ArrayExpr)) {
+                logError(
+                    ctx->L,
+                    &node->varDecl.init->loc,
+                    "initializer for array declaration can only be an array "
+                    "expression",
+                    NULL);
+                node->type = ERROR_TYPE(ctx);
+            }
+            else if (!isTypeAssignableFrom(node->type, value)) {
+                logError(ctx->L,
+                         &node->varDecl.init->loc,
+                         "incompatible types, expecting type '{t}', got '{t}'",
+                         (FormatArg[]){{.t = node->type}, {.t = value}});
+                node->type = ERROR_TYPE(ctx);
+            }
+            else if ((value->tag == typPointer) &&
+                     ((value->flags & flgConst) && !(node->flags & flgConst))) {
+                logError(ctx->L,
+                         &node->varDecl.init->loc,
+                         "assigning a const pointer to a non-const variable "
+                         "discards const qualifier",
+                         NULL);
+                node->type = ERROR_TYPE(ctx);
+            }
 
-        if (node->type->tag == typAuto) {
-            if (hasFlag(node, Const) && !hasFlag(value, Const))
-                node->type = makeWrappedType(ctx->typeTable, value, flgConst);
-            else
-                node->type = value;
+            if (node->type->tag == typAuto) {
+                if (hasFlag(node, Const) && !hasFlag(value, Const))
+                    node->type =
+                        makeWrappedType(ctx->typeTable, value, flgConst);
+                else
+                    node->type = value;
+            }
+        }
+        else {
+            desugarVariableDeclaration(visitor, node);
+            return;
         }
     }
 

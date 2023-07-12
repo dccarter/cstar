@@ -1,19 +1,264 @@
 {
  "tag": "Program",
+ "module": {
+  "tag": "ModuleDecl"
+ },
  "decls": [{
+   "tag": "GenericDecl",
+   "flags": "(Variadic|TopLevelDecl)",
+   "decl": {
+    "tag": "FuncDecl",
+    "flags": "(TopLevelDecl)",
+    "overload": 51,
+    "index": 0,
+    "name": "varargs",
+    "params": [{
+      "tag": "FuncParam",
+      "flags": "(Variadic)",
+      "name": "args",
+      "index": 0,
+      "paramType": {
+       "tag": "AutoType",
+       "flags": "(TypeAst)"
+      }
+     }],
+    "body": {
+     "tag": "BlockStmt"
+    }
+   }
+  }, {
+   "tag": "GenericDecl",
+   "flags": "(Variadic|TopLevelDecl)",
+   "decl": {
+    "tag": "FuncDecl",
+    "flags": "(TopLevelDecl)",
+    "overload": 51,
+    "index": 0,
+    "name": "add",
+    "params": [{
+      "tag": "FuncParam",
+      "flags": "(Variadic)",
+      "name": "nums",
+      "index": 0,
+      "paramType": {
+       "tag": "PrimitiveType",
+       "flags": "(TypeAst)",
+       "prtId": 11
+      }
+     }],
+    "body": {
+     "tag": "BlockStmt",
+     "stmts": [{
+       "tag": "VarDecl",
+       "names": [{
+         "tag": "Identifier",
+         "value": "sum"
+        }],
+       "varType": {
+        "tag": "PrimitiveType",
+        "flags": "(TypeAst)",
+        "prtId": 11
+       },
+       "init": {
+        "tag": "IntegerLit",
+        "value": 0
+       }
+      }, {
+       "tag": "VarDecl",
+       "flags": "(Const|Comptime)",
+       "names": [{
+         "tag": "Identifier",
+         "value": "i"
+        }],
+       "init": {
+        "tag": "IntegerLit",
+        "value": 0
+       }
+      }, {
+       "tag": "ForStmt",
+       "flags": "(Comptime)",
+       "stmts": {
+        "tag": "VarDecl",
+        "flags": "(Const)",
+        "names": [{
+          "tag": "Identifier",
+          "value": "num"
+         }]
+       },
+       "range": {
+        "tag": "Path",
+        "flags": "(Comptime)",
+        "elements": [{
+          "tag": "PathElem",
+          "name": "nums",
+          "index": 0
+         }, {
+          "tag": "PathElem",
+          "name": "Tinfo",
+          "index": 0
+         }],
+        "isType": false
+       },
+       "body": {
+        "tag": "BlockStmt",
+        "stmts": [{
+          "tag": "ExprStmt",
+          "expr": {
+           "tag": "AssignExpr",
+           "op": 1,
+           "lhs": {
+            "tag": "Path",
+            "elements": [{
+              "tag": "PathElem",
+              "name": "sum",
+              "index": 0
+             }],
+            "isType": false
+           },
+           "rhs": {
+            "tag": "Path",
+            "elements": [{
+              "tag": "PathElem",
+              "name": "sum",
+              "index": 0
+             }],
+            "isType": false
+           }
+          }
+         }, {
+          "tag": "ExprStmt",
+          "expr": {
+           "tag": "AssignExpr",
+           "flags": "(Comptime)",
+           "op": 1,
+           "lhs": {
+            "tag": "Path",
+            "elements": [{
+              "tag": "PathElem",
+              "name": "i",
+              "index": 0
+             }],
+            "isType": false
+           },
+           "rhs": {
+            "tag": "Path",
+            "elements": [{
+              "tag": "PathElem",
+              "name": "i",
+              "index": 0
+             }],
+            "isType": false
+           }
+          }
+         }]
+       }
+      }]
+    }
+   }
+  }, {
+   "tag": "GenericDecl",
+   "flags": "(Variadic|TopLevelDecl)",
+   "decl": {
+    "tag": "FuncDecl",
+    "flags": "(TopLevelDecl)",
+    "overload": 51,
+    "index": 0,
+    "name": "many",
+    "params": [{
+      "tag": "FuncParam",
+      "name": "x",
+      "index": 0,
+      "paramType": {
+       "tag": "PrimitiveType",
+       "flags": "(TypeAst)",
+       "prtId": 9
+      }
+     }, {
+      "tag": "FuncParam",
+      "flags": "(Variadic)",
+      "name": "rest",
+      "index": 0,
+      "paramType": {
+       "tag": "PrimitiveType",
+       "flags": "(TypeAst)",
+       "prtId": 11
+      }
+     }],
+    "body": {
+     "tag": "BlockStmt",
+     "stmts": [{
+       "tag": "ExprStmt",
+       "expr": {
+        "tag": "CallExpr",
+        "callee": {
+         "tag": "Path",
+         "elements": [{
+           "tag": "PathElem",
+           "name": "add",
+           "index": 0
+          }],
+         "isType": false
+        },
+        "args": [{
+          "tag": "CastExpr",
+          "to": {
+           "tag": "PrimitiveType",
+           "flags": "(TypeAst)",
+           "prtId": 11
+          },
+          "exp": {
+           "tag": "Path",
+           "elements": [{
+             "tag": "PathElem",
+             "name": "x",
+             "index": 0
+            }],
+           "isType": false
+          }
+         }, {
+          "tag": "UnaryExpr",
+          "op": 28,
+          "isPrefix": true,
+          "lhs": {
+           "tag": "Path",
+           "elements": [{
+             "tag": "PathElem",
+             "name": "rest",
+             "index": 0
+            }],
+           "isType": false
+          }
+         }],
+        "overload": 0
+       }
+      }]
+    }
+   }
+  }, {
    "tag": "FuncDecl",
-   "flags": "(TopLevelDecl)",
+   "flags": "(Variadic|TopLevelDecl|Generated)",
    "overload": 51,
    "index": 0,
-   "name": "varargs",
+   "name": "varargs_0",
    "params": [{
      "tag": "FuncParam",
      "flags": "(Variadic)",
      "name": "args",
      "index": 0,
      "paramType": {
-      "tag": "AutoType",
-      "flags": "(TypeAst)"
+      "tag": "TupleType",
+      "members": [{
+        "tag": "PrimitiveType",
+        "prtId": 9
+       }, {
+        "tag": "StringType"
+       }, {
+        "tag": "PrimitiveType",
+        "prtId": 1
+       }, {
+        "tag": "PrimitiveType",
+        "prtId": 11
+       }]
      }
     }],
    "body": {
@@ -21,19 +266,128 @@
    }
   }, {
    "tag": "FuncDecl",
-   "flags": "(TopLevelDecl)",
+   "flags": "(Variadic|TopLevelDecl|Generated)",
    "overload": 51,
    "index": 0,
-   "name": "add",
+   "name": "many_1",
+   "params": [{
+     "tag": "FuncParam",
+     "name": "x",
+     "index": 0,
+     "paramType": {
+      "tag": "PrimitiveType",
+      "flags": "(TypeAst)",
+      "prtId": 9
+     }
+    }, {
+     "tag": "FuncParam",
+     "flags": "(Variadic)",
+     "name": "rest",
+     "index": 0,
+     "paramType": {
+      "tag": "TupleType",
+      "members": [{
+        "tag": "PrimitiveType",
+        "prtId": 11
+       }, {
+        "tag": "PrimitiveType",
+        "prtId": 11
+       }]
+     }
+    }],
+   "body": {
+    "tag": "BlockStmt",
+    "stmts": [{
+      "tag": "ExprStmt",
+      "expr": {
+       "tag": "CallExpr",
+       "callee": {
+        "tag": "Path",
+        "elements": [{
+          "tag": "PathElem",
+          "name": "add_2",
+          "index": 0
+         }],
+        "isType": false
+       },
+       "args": [{
+         "tag": "TupleExpr",
+         "flags": "(Variadic)",
+         "members": [{
+           "tag": "CastExpr",
+           "to": {
+            "tag": "PrimitiveType",
+            "flags": "(TypeAst)",
+            "prtId": 11
+           },
+           "exp": {
+            "tag": "Path",
+            "elements": [{
+              "tag": "PathElem",
+              "name": "x",
+              "index": 0
+             }],
+            "isType": false
+           }
+          }, {
+           "tag": "MemberExpr",
+           "target": {
+            "tag": "Path",
+            "elements": [{
+              "tag": "PathElem",
+              "name": "rest",
+              "index": 0
+             }],
+            "isType": false
+           },
+           "member": {
+            "tag": "IntegerLit",
+            "value": 0
+           }
+          }, {
+           "tag": "MemberExpr",
+           "target": {
+            "tag": "Path",
+            "elements": [{
+              "tag": "PathElem",
+              "name": "rest",
+              "index": 0
+             }],
+            "isType": false
+           },
+           "member": {
+            "tag": "IntegerLit",
+            "value": 1
+           }
+          }]
+        }],
+       "overload": 0
+      }
+     }]
+   }
+  }, {
+   "tag": "FuncDecl",
+   "flags": "(Variadic|TopLevelDecl|Generated)",
+   "overload": 51,
+   "index": 0,
+   "name": "add_2",
    "params": [{
      "tag": "FuncParam",
      "flags": "(Variadic)",
      "name": "nums",
      "index": 0,
      "paramType": {
-      "tag": "PrimitiveType",
-      "flags": "(TypeAst)",
-      "prtId": 11
+      "tag": "TupleType",
+      "members": [{
+        "tag": "PrimitiveType",
+        "prtId": 11
+       }, {
+        "tag": "PrimitiveType",
+        "prtId": 11
+       }, {
+        "tag": "PrimitiveType",
+        "prtId": 11
+       }]
      }
     }],
    "body": {
@@ -54,169 +408,104 @@
        "value": 0
       }
      }, {
-      "tag": "VarDecl",
-      "flags": "(Const|Comptime)",
-      "names": [{
-        "tag": "Identifier",
-        "value": "i"
-       }],
-      "init": {
-       "tag": "IntegerLit",
-       "value": 0
-      }
+      "tag": "Nop",
+      "flags": "(Visited)"
      }, {
-      "tag": "ForStmt",
-      "flags": "(Comptime)",
-      "stmts": {
-       "tag": "VarDecl",
-       "flags": "(Const)",
-       "names": [{
-         "tag": "Identifier",
-         "value": "num"
-        }]
-      },
-      "range": {
-       "tag": "Path",
-       "flags": "(Comptime)",
-       "elements": [{
-         "tag": "PathElem",
-         "name": "nums",
-         "index": 0
-        }, {
-         "tag": "PathElem",
-         "name": "Tinfo",
-         "index": 0
-        }],
-       "isType": false
-      },
-      "body": {
-       "tag": "BlockStmt",
-       "stmts": [{
-         "tag": "ExprStmt",
-         "expr": {
-          "tag": "AssignExpr",
-          "op": 1,
-          "lhs": {
-           "tag": "Path",
-           "elements": [{
-             "tag": "PathElem",
-             "name": "sum",
-             "index": 0
-            }],
-           "isType": false
-          },
-          "rhs": {
-           "tag": "Path",
-           "elements": [{
-             "tag": "PathElem",
-             "name": "sum",
-             "index": 0
-            }],
-           "isType": false
-          }
-         }
-        }, {
-         "tag": "ExprStmt",
-         "expr": {
-          "tag": "AssignExpr",
-          "flags": "(Comptime)",
-          "op": 1,
-          "lhs": {
-           "tag": "Path",
-           "elements": [{
-             "tag": "PathElem",
-             "name": "i",
-             "index": 0
-            }],
-           "isType": false
-          },
-          "rhs": {
-           "tag": "Path",
-           "elements": [{
-             "tag": "PathElem",
-             "name": "i",
-             "index": 0
-            }],
-           "isType": false
-          }
-         }
-        }]
-      }
-     }]
-   }
-  }, {
-   "tag": "FuncDecl",
-   "flags": "(TopLevelDecl)",
-   "overload": 51,
-   "index": 0,
-   "name": "many",
-   "params": [{
-     "tag": "FuncParam",
-     "name": "x",
-     "index": 0,
-     "paramType": {
-      "tag": "PrimitiveType",
-      "flags": "(TypeAst)",
-      "prtId": 9
-     }
-    }, {
-     "tag": "FuncParam",
-     "flags": "(Variadic)",
-     "name": "rest",
-     "index": 0,
-     "paramType": {
-      "tag": "PrimitiveType",
-      "flags": "(TypeAst)",
-      "prtId": 11
-     }
-    }],
-   "body": {
-    "tag": "BlockStmt",
-    "stmts": [{
-      "tag": "ExprStmt",
-      "expr": {
-       "tag": "CallExpr",
-       "callee": {
-        "tag": "Path",
-        "elements": [{
-          "tag": "PathElem",
-          "name": "add",
-          "index": 0
-         }],
-        "isType": false
-       },
-       "args": [{
-         "tag": "CastExpr",
-         "to": {
-          "tag": "PrimitiveType",
-          "flags": "(TypeAst)",
-          "prtId": 11
-         },
-         "exp": {
-          "tag": "Path",
-          "elements": [{
-            "tag": "PathElem",
-            "name": "x",
-            "index": 0
-           }],
-          "isType": false
-         }
-        }, {
-         "tag": "UnaryExpr",
-         "op": 28,
-         "isPrefix": true,
+      "tag": "BlockStmt",
+      "stmts": [{
+        "tag": "ExprStmt",
+        "expr": {
+         "tag": "AssignExpr",
+         "op": 1,
          "lhs": {
           "tag": "Path",
           "elements": [{
             "tag": "PathElem",
-            "name": "rest",
+            "name": "sum",
+            "index": 0
+           }],
+          "isType": false
+         },
+         "rhs": {
+          "tag": "Path",
+          "elements": [{
+            "tag": "PathElem",
+            "name": "sum",
             "index": 0
            }],
           "isType": false
          }
-        }],
-       "overload": 0
-      }
+        }
+       }, {
+        "tag": "ExprStmt",
+        "expr": {
+         "tag": "Nop"
+        }
+       }]
+     }, {
+      "tag": "BlockStmt",
+      "stmts": [{
+        "tag": "ExprStmt",
+        "expr": {
+         "tag": "AssignExpr",
+         "op": 1,
+         "lhs": {
+          "tag": "Path",
+          "elements": [{
+            "tag": "PathElem",
+            "name": "sum",
+            "index": 0
+           }],
+          "isType": false
+         },
+         "rhs": {
+          "tag": "Path",
+          "elements": [{
+            "tag": "PathElem",
+            "name": "sum",
+            "index": 0
+           }],
+          "isType": false
+         }
+        }
+       }, {
+        "tag": "ExprStmt",
+        "expr": {
+         "tag": "Nop"
+        }
+       }]
+     }, {
+      "tag": "BlockStmt",
+      "stmts": [{
+        "tag": "ExprStmt",
+        "expr": {
+         "tag": "AssignExpr",
+         "op": 1,
+         "lhs": {
+          "tag": "Path",
+          "elements": [{
+            "tag": "PathElem",
+            "name": "sum",
+            "index": 0
+           }],
+          "isType": false
+         },
+         "rhs": {
+          "tag": "Path",
+          "elements": [{
+            "tag": "PathElem",
+            "name": "sum",
+            "index": 0
+           }],
+          "isType": false
+         }
+        }
+       }, {
+        "tag": "ExprStmt",
+        "expr": {
+         "tag": "Nop"
+        }
+       }]
      }]
    }
   }, {
@@ -248,23 +537,27 @@
         "tag": "Path",
         "elements": [{
           "tag": "PathElem",
-          "name": "varargs",
+          "name": "varargs_0",
           "index": 0
          }],
         "isType": false
        },
        "args": [{
-         "tag": "IntegerLit",
-         "value": 10
-        }, {
-         "tag": "StringLit",
-         "value": "Hello"
-        }, {
-         "tag": "CharLit",
-         "value": 99
-        }, {
-         "tag": "FloatLit",
-         "value": 2000.600000
+         "tag": "TupleExpr",
+         "flags": "(Variadic)",
+         "members": [{
+           "tag": "IntegerLit",
+           "value": 10
+          }, {
+           "tag": "StringLit",
+           "value": "Hello"
+          }, {
+           "tag": "CharLit",
+           "value": 99
+          }, {
+           "tag": "FloatLit",
+           "value": 2000.600000
+          }]
         }],
        "overload": 0
       }
@@ -276,7 +569,7 @@
         "tag": "Path",
         "elements": [{
           "tag": "PathElem",
-          "name": "many",
+          "name": "many_1",
           "index": 0
          }],
         "isType": false
@@ -285,11 +578,15 @@
          "tag": "IntegerLit",
          "value": 10
         }, {
-         "tag": "FloatLit",
-         "value": 10
-        }, {
-         "tag": "FloatLit",
-         "value": 100.600000
+         "tag": "TupleExpr",
+         "flags": "(Variadic)",
+         "members": [{
+           "tag": "FloatLit",
+           "value": 10
+          }, {
+           "tag": "FloatLit",
+           "value": 100.600000
+          }]
         }],
        "overload": 0
       }

@@ -1,6 +1,114 @@
 {
  "tag": "Program",
+ "module": {
+  "tag": "ModuleDecl"
+ },
  "decls": [{
+   "tag": "FuncDecl",
+   "flags": "(Closure|TopLevelDecl)",
+   "overload": 0,
+   "index": 0,
+   "name": "__gen_var_0",
+   "params": [{
+     "tag": "FuncParam",
+     "flags": "(Capture)",
+     "name": "self",
+     "index": 0
+    }],
+   "body": {
+    "tag": "IntegerLit",
+    "value": 1
+   }
+  }, {
+   "tag": "FuncDecl",
+   "flags": "(Closure|TopLevelDecl)",
+   "overload": 0,
+   "index": 0,
+   "name": "__gen_var_1",
+   "params": [{
+     "tag": "FuncParam",
+     "flags": "(Capture)",
+     "name": "self",
+     "index": 0
+    }, {
+     "tag": "FuncParam",
+     "name": "name",
+     "index": 0,
+     "paramType": {
+      "tag": "StringType",
+      "flags": "(TypeAst)"
+     }
+    }],
+   "body": {
+    "tag": "BlockStmt",
+    "stmts": [{
+      "tag": "ReturnStmt",
+      "expr": {
+       "tag": "StringExpr",
+       "parts": [{
+         "tag": "StringLit",
+         "value": "Hello "
+        }, {
+         "tag": "Path",
+         "elements": [{
+           "tag": "PathElem",
+           "name": "name",
+           "index": 0
+          }],
+         "isType": false
+        }, {
+         "tag": "StringLit",
+         "value": ""
+        }]
+      }
+     }]
+   }
+  }, {
+   "tag": "FuncDecl",
+   "flags": "(Closure|TopLevelDecl)",
+   "overload": 0,
+   "index": 0,
+   "name": "__gen_var_2",
+   "params": [{
+     "tag": "FuncParam",
+     "flags": "(Capture)",
+     "name": "self",
+     "index": 0
+    }],
+   "body": {
+    "tag": "StringExpr",
+    "parts": [{
+      "tag": "StringLit",
+      "value": ""
+     }, {
+      "tag": "Path",
+      "flags": "(Capture)",
+      "elements": [{
+        "tag": "PathElem",
+        "flags": "(Capture)",
+        "name": "b",
+        "index": 0
+       }],
+      "isType": false
+     }, {
+      "tag": "StringLit",
+      "value": " -> "
+     }, {
+      "tag": "Path",
+      "flags": "(Capture)",
+      "elements": [{
+        "tag": "PathElem",
+        "flags": "(Capture)",
+        "name": "x",
+        "index": 1
+       }],
+      "isType": false
+     }, {
+      "tag": "StringLit",
+      "value": ""
+     }]
+   }
+  }, {
    "tag": "FuncDecl",
    "flags": "(TopLevelDecl)",
    "overload": 51,
@@ -29,11 +137,13 @@
         "value": "one"
        }],
       "init": {
-       "tag": "ClosureExpr",
-       "body": {
-        "tag": "IntegerLit",
-        "value": 1
-       }
+       "tag": "Path",
+       "elements": [{
+         "tag": "PathElem",
+         "name": "__gen_var_0",
+         "index": 0
+        }],
+       "isType": false
       }
      }, {
       "tag": "ExprStmt",
@@ -41,8 +151,10 @@
        "tag": "CallExpr",
        "callee": {
         "tag": "Path",
+        "flags": "(Const)",
         "elements": [{
           "tag": "PathElem",
+          "flags": "(Const)",
           "name": "one",
           "index": 0
          }],
@@ -57,40 +169,13 @@
        "callee": {
         "tag": "GroupExpr",
         "expr": {
-         "tag": "ClosureExpr",
-         "params": [{
-           "tag": "FuncParam",
-           "name": "name",
-           "index": 0,
-           "paramType": {
-            "tag": "StringType",
-            "flags": "(TypeAst)"
-           }
+         "tag": "Path",
+         "elements": [{
+           "tag": "PathElem",
+           "name": "__gen_var_1",
+           "index": 0
           }],
-         "body": {
-          "tag": "BlockStmt",
-          "stmts": [{
-            "tag": "ReturnStmt",
-            "expr": {
-             "tag": "StringExpr",
-             "parts": [{
-               "tag": "StringLit",
-               "value": "Hello "
-              }, {
-               "tag": "Path",
-               "elements": [{
-                 "tag": "PathElem",
-                 "name": "name",
-                 "index": 0
-                }],
-               "isType": false
-              }, {
-               "tag": "StringLit",
-               "value": ""
-              }]
-            }
-           }]
-         }
+         "isType": false
         }
        },
        "args": [{
@@ -126,36 +211,13 @@
        "callee": {
         "tag": "GroupExpr",
         "expr": {
-         "tag": "ClosureExpr",
-         "body": {
-          "tag": "StringExpr",
-          "parts": [{
-            "tag": "StringLit",
-            "value": ""
-           }, {
-            "tag": "Path",
-            "elements": [{
-              "tag": "PathElem",
-              "name": "b",
-              "index": 0
-             }],
-            "isType": false
-           }, {
-            "tag": "StringLit",
-            "value": " -> "
-           }, {
-            "tag": "Path",
-            "elements": [{
-              "tag": "PathElem",
-              "name": "x",
-              "index": 0
-             }],
-            "isType": false
-           }, {
-            "tag": "StringLit",
-            "value": ""
-           }]
-         }
+         "tag": "Path",
+         "elements": [{
+           "tag": "PathElem",
+           "name": "__gen_var_2",
+           "index": 0
+          }],
+         "isType": false
         }
        },
        "overload": 0

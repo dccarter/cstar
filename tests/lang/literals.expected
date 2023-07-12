@@ -1,5 +1,8 @@
 {
  "tag": "Program",
+ "module": {
+  "tag": "ModuleDecl"
+ },
  "decls": [{
    "tag": "FuncDecl",
    "flags": "(TopLevelDecl)",

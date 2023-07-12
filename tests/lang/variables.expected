@@ -1,5 +1,8 @@
 {
  "tag": "Program",
+ "module": {
+  "tag": "ModuleDecl"
+ },
  "decls": [{
    "tag": "VarDecl",
    "flags": "(TopLevelDecl)",
@@ -182,11 +185,39 @@
         "tag": "VarDecl",
         "names": [{
           "tag": "Identifier",
+          "value": "__gen_var_0"
+         }],
+        "init": {
+         "tag": "TupleExpr",
+         "members": [{
+           "tag": "IntegerLit",
+           "value": 20
+          }, {
+           "tag": "BoolLit",
+           "value": 1
+          }]
+        }
+       }, {
+        "tag": "VarDecl",
+        "names": [{
+          "tag": "Identifier",
           "value": "x"
          }],
         "init": {
-         "tag": "IntegerLit",
-         "value": 20
+         "tag": "MemberExpr",
+         "target": {
+          "tag": "Path",
+          "elements": [{
+            "tag": "PathElem",
+            "name": "__gen_var_0",
+            "index": 0
+           }],
+          "isType": false
+         },
+         "member": {
+          "tag": "IntegerLit",
+          "value": 0
+         }
         }
        }, {
         "tag": "VarDecl",
@@ -195,30 +226,39 @@
           "value": "y"
          }],
         "init": {
-         "tag": "BoolLit",
-         "value": 1
+         "tag": "MemberExpr",
+         "target": {
+          "tag": "Path",
+          "elements": [{
+            "tag": "PathElem",
+            "name": "__gen_var_0",
+            "index": 0
+           }],
+          "isType": false
+         },
+         "member": {
+          "tag": "IntegerLit",
+          "value": 1
+         }
         }
        }, {
         "tag": "VarDecl",
         "names": [{
           "tag": "Identifier",
-          "value": "m"
+          "value": "__gen_var_1"
          }],
-        "varType": {
-         "tag": "PrimitiveType",
-         "flags": "(TypeAst)",
-         "prtId": 9
-        }
-       }, {
-        "tag": "VarDecl",
-        "names": [{
-          "tag": "Identifier",
-          "value": "n"
-         }],
-        "varType": {
-         "tag": "PrimitiveType",
-         "flags": "(TypeAst)",
-         "prtId": 9
+        "init": {
+         "tag": "TupleExpr",
+         "members": [{
+           "tag": "IntegerLit",
+           "value": 20
+          }, {
+           "tag": "CharLit",
+           "value": 32
+          }, {
+           "tag": "BoolLit",
+           "value": 1
+          }]
         }
        }, {
         "tag": "VarDecl",
@@ -227,8 +267,20 @@
           "value": "a"
          }],
         "init": {
-         "tag": "IntegerLit",
-         "value": 20
+         "tag": "MemberExpr",
+         "target": {
+          "tag": "Path",
+          "elements": [{
+            "tag": "PathElem",
+            "name": "__gen_var_1",
+            "index": 0
+           }],
+          "isType": false
+         },
+         "member": {
+          "tag": "IntegerLit",
+          "value": 0
+         }
         }
        }, {
         "tag": "VarDecl",
@@ -237,8 +289,39 @@
           "value": "b"
          }],
         "init": {
-         "tag": "BoolLit",
-         "value": 1
+         "tag": "MemberExpr",
+         "target": {
+          "tag": "Path",
+          "elements": [{
+            "tag": "PathElem",
+            "name": "__gen_var_1",
+            "index": 0
+           }],
+          "isType": false
+         },
+         "member": {
+          "tag": "IntegerLit",
+          "value": 2
+         }
+        }
+       }, {
+        "tag": "VarDecl",
+        "names": [{
+          "tag": "Identifier",
+          "value": "__gen_var_2"
+         }],
+        "init": {
+         "tag": "TupleExpr",
+         "members": [{
+           "tag": "IntegerLit",
+           "value": 20
+          }, {
+           "tag": "CharLit",
+           "value": 32
+          }, {
+           "tag": "BoolLit",
+           "value": 1
+          }]
         }
        }, {
         "tag": "VarDecl",
@@ -247,8 +330,20 @@
           "value": "d"
          }],
         "init": {
-         "tag": "IntegerLit",
-         "value": 20
+         "tag": "MemberExpr",
+         "target": {
+          "tag": "Path",
+          "elements": [{
+            "tag": "PathElem",
+            "name": "__gen_var_2",
+            "index": 0
+           }],
+          "isType": false
+         },
+         "member": {
+          "tag": "IntegerLit",
+          "value": 0
+         }
         }
        }, {
         "tag": "VarDecl",
@@ -257,8 +352,83 @@
           "value": "e"
          }],
         "init": {
-         "tag": "CharLit",
-         "value": 32
+         "tag": "MemberExpr",
+         "target": {
+          "tag": "Path",
+          "elements": [{
+            "tag": "PathElem",
+            "name": "__gen_var_2",
+            "index": 0
+           }],
+          "isType": false
+         },
+         "member": {
+          "tag": "IntegerLit",
+          "value": 1
+         }
+        }
+       }, {
+        "tag": "VarDecl",
+        "names": [{
+          "tag": "Identifier",
+          "value": "z"
+         }],
+        "init": {
+         "tag": "TupleExpr",
+         "members": [{
+           "tag": "IntegerLit",
+           "value": 20
+          }, {
+           "tag": "CharLit",
+           "value": 32
+          }, {
+           "tag": "BoolLit",
+           "value": 1
+          }]
+        }
+       }, {
+        "tag": "VarDecl",
+        "names": [{
+          "tag": "Identifier",
+          "value": "m"
+         }],
+        "init": {
+         "tag": "MemberExpr",
+         "target": {
+          "tag": "Path",
+          "elements": [{
+            "tag": "PathElem",
+            "name": "z",
+            "index": 0
+           }],
+          "isType": false
+         },
+         "member": {
+          "tag": "IntegerLit",
+          "value": 0
+         }
+        }
+       }, {
+        "tag": "VarDecl",
+        "names": [{
+          "tag": "Identifier",
+          "value": "n"
+         }],
+        "init": {
+         "tag": "MemberExpr",
+         "target": {
+          "tag": "Path",
+          "elements": [{
+            "tag": "PathElem",
+            "name": "z",
+            "index": 0
+           }],
+          "isType": false
+         },
+         "member": {
+          "tag": "IntegerLit",
+          "value": 1
+         }
         }
        }]
      }]

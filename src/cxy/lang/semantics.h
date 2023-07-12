@@ -60,12 +60,7 @@ typedef AstNode *(*EvaluateMacro)(AstVisitor *, const AstNode *, AstNode *);
 
 #define ERROR_TYPE(CTX) makeErrorType((CTX)->typeTable)
 
-void semanticsCheck(AstNode *program,
-                    Log *L,
-                    MemPool *pool,
-                    StrPool *strPool,
-                    TypeTable *typeTable,
-                    Env *builtins);
+void semanticsCheck(SemanticsContext *ctx, AstNode *program);
 
 const Type *evalType(AstVisitor *visitor, AstNode *node);
 bool exportDeclaration(SemanticsContext *ctx,
