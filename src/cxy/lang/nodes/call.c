@@ -6,6 +6,7 @@
 #include "lang/semantics.h"
 
 #include "lang/flag.h"
+#include "lang/strings.h"
 #include "lang/ttable.h"
 #include "lang/visitor.h"
 
@@ -100,7 +101,7 @@ static const Type *structCallToFunctionCall(AstVisitor *visitor,
     const Type *raw = stripPointer(type);
     AstNode *callee = node->callExpr.callee;
 
-    AstNode *symbol = findSymbolOnly(raw->tStruct.decl->env, "op_call");
+    AstNode *symbol = findSymbolOnly(raw->tStruct.decl->env, S_CallOverload);
     if (!symbol) {
         logError(ctx->L,
                  &callee->loc,
@@ -114,17 +115,18 @@ static const Type *structCallToFunctionCall(AstVisitor *visitor,
     node->callExpr.callee = makeAstNode(
         ctx->pool,
         &callee->loc,
-        &(AstNode){.tag = astMemberExpr,
-                   .flags = callee->flags,
-                   .type = symbol->type,
-                   .memberExpr = {.target = callee,
-                                  .member = makeAstNode(
-                                      ctx->pool,
-                                      &callee->loc,
-                                      &(AstNode){.tag = astIdentifier,
-                                                 .flags = callee->flags,
-                                                 .type = symbol->type,
-                                                 .ident.value = "op_call"})}});
+        &(AstNode){
+            .tag = astMemberExpr,
+            .flags = callee->flags,
+            .type = symbol->type,
+            .memberExpr = {.target = callee,
+                           .member = makeAstNode(
+                               ctx->pool,
+                               &callee->loc,
+                               &(AstNode){.tag = astIdentifier,
+                                          .flags = callee->flags,
+                                          .type = symbol->type,
+                                          .ident.value = S_CallOverload})}});
 
     return symbol->type;
 }

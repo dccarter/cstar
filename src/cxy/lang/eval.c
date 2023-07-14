@@ -163,10 +163,10 @@ static void evalDispatch(Visitor func, AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
 
-    if (ctx->eval.env.prev == NULL) {
-        ctx->env = environmentPush(ctx->env, &ctx->eval.env);
+    if (ctx->eval.env->prev == NULL) {
+        environmentPush(ctx->env, ctx->eval.env);
         func(visitor, node);
-        ctx->env = environmentPop(ctx->env);
+        environmentPop(ctx->eval.env);
     }
     else
         func(visitor, node);
@@ -182,7 +182,7 @@ bool evaluate(AstVisitor *visitor, AstNode *node)
     return node->tag != astError;
 }
 
-void initEvalVisitor(AstVisitor *visitor, SemanticsContext *ctx)
+void initEvalVisitor(AstVisitor *visitor, SemanticsContext *ctx, AstNode *node)
 {
     // clang-format off
     *visitor = makeAstVisitor(ctx, {
@@ -204,7 +204,6 @@ void initEvalVisitor(AstVisitor *visitor, SemanticsContext *ctx)
     // clang-format on
 
     ctx->eval.visitor = visitor;
-    environmentInit(&ctx->eval.env, NULL);
-
+    ctx->eval.env = makeEnvironment(ctx->pool, node);
     initComptime(ctx);
 }

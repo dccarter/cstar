@@ -138,7 +138,7 @@ void checkMember(AstVisitor *visitor, AstNode *node)
 
         if (member->intLiteral.value >= target->tuple.count) {
             logError(ctx->L,
-                     &member->loc,
+                     &node->loc,
                      "literal member '{u64}' out of range, tuple '{t}' has "
                      "{u64} members",
                      (FormatArg[]){{.u64 = member->intLiteral.value},

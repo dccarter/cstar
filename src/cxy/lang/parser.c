@@ -6,6 +6,7 @@
 #include "ast.h"
 #include "flag.h"
 #include "lexer.h"
+#include "strings.h"
 
 #include "driver/driver.h"
 
@@ -1308,30 +1309,26 @@ static OperatorOverload operatorOverload(Parser *P)
     if (match(P, tokLBracket)) {
         consume0(P, tokRBracket);
         if (match(P, tokAssign)) {
-            op = (OperatorOverload){
-                .f = opIndexAssignOverload,
-                .s = makeString(P->strPool, "op_idx_assign")};
+            op = (OperatorOverload){.f = opIndexAssignOverload,
+                                    .s = S_IndexAssignOverload};
         }
         else {
-            op = (OperatorOverload){.f = opIndexOverload,
-                                    .s = makeString(P->strPool, "op_idx")};
+            op = (OperatorOverload){.f = opIndexOverload, .s = S_IndexOverload};
         }
     }
     else if (match(P, tokLParen)) {
-        op = (OperatorOverload){.f = opCallOverload,
-                                .s = makeString(P->strPool, "op_call")};
+        op = (OperatorOverload){.f = opCallOverload, .s = S_CallOverload};
         consume0(P, tokRParen);
     }
     else if (match(P, tokIdent)) {
         Token ident = *previous(P);
         cstring name = getTokenString(P, &ident, false);
-        if (strcmp(name, "str") == 0) {
+        if (S_StringOverload == name) {
             op = (OperatorOverload){.f = opStringOverload,
-                                    .s = makeString(P->strPool, "op_str")};
+                                    .s = S_StringOverload};
         }
-        else if (strcmp(name, "deref") == 0) {
-            op = (OperatorOverload){.f = opDeref,
-                                    .s = makeString(P->strPool, "op_deref")};
+        else if (S_Deref == name) {
+            op = (OperatorOverload){.f = opDeref, .s = S_Deref};
         }
         else {
             parserError(P,
@@ -1343,28 +1340,23 @@ static OperatorOverload operatorOverload(Parser *P)
     else {
         switch (current(P)->tag) {
         case tokNew:
-            op = (OperatorOverload){.f = opNew,
-                                    .s = makeString(P->strPool, "op_new")};
+            op = (OperatorOverload){.f = opNew, .s = S_New};
             break;
         case tokDelete:
-            op = (OperatorOverload){.f = opDelete,
-                                    .s = makeString(P->strPool, "op_delete")};
+            op = (OperatorOverload){.f = opDelete, .s = S_Delete};
             break;
         case tokLNot:
             if (checkPeek(P, 1, tokLNot)) {
-                op = (OperatorOverload){
-                    .f = opTruthy, .s = makeString(P->strPool, "op_truthy")};
+                op = (OperatorOverload){.f = opTruthy, .s = S_Truthy};
                 advance(P);
             }
             else
-                op = (OperatorOverload){.f = opNot,
-                                        .s = makeString(P->strPool, "op_not")};
+                op = (OperatorOverload){.f = opNot, .s = S_Not};
             break;
 
 #define f(O, PP, T, S, N)                                                      \
     case tok##T:                                                               \
-        op = (OperatorOverload){.f = op##O,                                    \
-                                .s = makeString(P->strPool, "op_" N)};         \
+        op = (OperatorOverload){.f = op##O, .s = S_##O};                       \
         break;
             AST_BINARY_EXPR_LIST(f);
 

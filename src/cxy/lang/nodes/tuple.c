@@ -19,7 +19,7 @@ static void generateTupleDelete(CodegenContext *context, const Type *type)
     writeTypename(context, type);
     format(state, "__builtin_destructor(void *ptr) {{{>}\n", NULL);
     writeTypename(context, type);
-    format(state, " *this = ptr;\n", NULL);
+    format(state, " *this = ptr;", NULL);
 
     u64 y = 0;
     for (u64 i = 0; i < type->tuple.count; i++) {
@@ -27,24 +27,26 @@ static void generateTupleDelete(CodegenContext *context, const Type *type)
         const Type *stripped = stripAll(member);
         const Type *unwrapped = unwrapType(member, NULL);
 
-        if (y++ != 0)
-            format(state, "\n", NULL);
-
         if (typeIs(unwrapped, Pointer) || typeIs(unwrapped, String)) {
+            if (y++ != 0)
+                format(state, "\n", NULL);
             format(state,
                    "__cxy_free((void *)this->_{u64});",
                    (FormatArg[]){{.u64 = i}});
         }
         else if (typeIs(stripped, Struct) || typeIs(stripped, Array) ||
                  typeIs(stripped, Tuple)) {
+            if (y++ != 0)
+                format(state, "\n", NULL);
             writeTypename(context, stripped);
             format(state,
                    "__builtin_destructor(&this->_{u64});",
                    (FormatArg[]){{.u64 = i}});
+            y++;
         }
     }
 
-    format(state, "{<}\n}", NULL);
+    format(state, "{<}\n}\n", NULL);
 }
 
 static void buildStringFormatForMember(CodegenContext *context,
@@ -168,7 +170,7 @@ static void generateTupleToString(CodegenContext *context, const Type *type)
     format(state, "__toString(", NULL);
     writeTypename(context, type);
     format(state, " *this, StringBuilder* sb) {{{>}\n", NULL);
-    format(state, "__cxy_string_builder_append_char(sb->sb, '(');", NULL);
+    format(state, "__cxy_string_builder_append_char(sb->sb, '(');\n", NULL);
 
     u64 y = 0;
     for (u64 i = 0; i < type->tuple.count; i++) {
@@ -184,14 +186,14 @@ static void generateTupleToString(CodegenContext *context, const Type *type)
 
     format(state, "__cxy_string_builder_append_char(sb->sb, ')');", NULL);
 
-    format(state, "{<}\n}", NULL);
+    format(state, "{<}\n}\n", NULL);
 }
 
 void generateTupleDefinition(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
 
-    format(state, "typedef struct {{{>}\n", NULL);
+    format(state, "\ntypedef struct {{{>}\n", NULL);
     format(state, "void *__mgmt;\n", NULL);
     for (u64 i = 0; i < type->tuple.count; i++) {
         if (i != 0)
@@ -202,7 +204,7 @@ void generateTupleDefinition(CodegenContext *context, const Type *type)
     format(state, "{<}\n} ", NULL);
     writeTypename(context, type);
 
-    format(state, ";\n", NULL);
+    format(state, ";\n\n", NULL);
     generateTupleDelete(context, type);
     format(state, "\n", NULL);
     generateTupleToString(context, type);

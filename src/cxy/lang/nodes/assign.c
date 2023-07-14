@@ -13,6 +13,7 @@
 
 #include "lang/eval.h"
 #include "lang/flag.h"
+#include "lang/strings.h"
 #include "lang/ttable.h"
 #include "lang/visitor.h"
 
@@ -26,7 +27,8 @@ static void checkIndexExprAssignment(AstVisitor *visitor, AstNode *node)
     const Type *lhs = left->indexExpr.target->type;
     const Type *target = stripPointer(lhs);
 
-    AstNode *func = findSymbolOnly(target->tStruct.decl->env, "op_idx_assign");
+    AstNode *func =
+        findSymbolOnly(target->tStruct.decl->env, S_IndexAssignOverload);
     if (func == NULL) {
         logError(ctx->L,
                  &node->assignExpr.rhs->loc,
@@ -40,8 +42,12 @@ static void checkIndexExprAssignment(AstVisitor *visitor, AstNode *node)
     AstNode *args = left->indexExpr.index;
     args->next = node->assignExpr.rhs;
 
-    transformToMemberCallExpr(
-        visitor, node, func, left->indexExpr.target, "op_idx_assign", args);
+    transformToMemberCallExpr(visitor,
+                              node,
+                              func,
+                              left->indexExpr.target,
+                              S_IndexAssignOverload,
+                              args);
     evalType(visitor, node);
 }
 
@@ -132,9 +138,9 @@ void evalAssignExpr(AstVisitor *visitor, AstNode *node)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *left = node->assignExpr.lhs, *right = node->assignExpr.rhs;
-    ctx->env = environmentPop(ctx->env);
-    SymbolRef *symbol = findSymbolRefByNode(&ctx->eval.env, ctx->L, left);
-    ctx->env = environmentPush(ctx->env, &ctx->eval.env);
+    environmentPop(ctx->eval.env);
+    SymbolRef *symbol = findSymbolRefByNode(ctx->eval.env, ctx->L, left);
+    environmentPush(ctx->env, ctx->eval.env);
 
     if (symbol == NULL) {
         node->tag = astError;

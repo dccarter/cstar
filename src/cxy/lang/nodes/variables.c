@@ -277,7 +277,7 @@ void evalVarDecl(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    updateSymbol(&ctx->eval.env, names->ident.value, node->varDecl.init);
+    updateSymbol(ctx->eval.env, names->ident.value, node->varDecl.init);
     node->flags = flgVisited;
     node->tag = astNop;
 }

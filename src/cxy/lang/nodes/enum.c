@@ -20,7 +20,7 @@ static int compareEnumOptionsByValue(const void *lhs, const void *rhs)
 void generateEnumDefinition(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
-    format(state, "enum {{{>}\n", NULL);
+    format(state, "\nenum {{{>}\n", NULL);
     for (u64 i = 0; i < type->tEnum.count; i++) {
         const EnumOption *option = &type->tEnum.options[i];
         if (i != 0)

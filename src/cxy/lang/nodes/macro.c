@@ -15,6 +15,7 @@
 #include "lang/ast.h"
 #include "lang/flag.h"
 #include "lang/node.h"
+#include "lang/strings.h"
 #include "lang/ttable.h"
 #include "lang/types.h"
 #include "lang/visitor.h"
@@ -57,7 +58,8 @@ static AstNode *makeFilenameNode(AstVisitor *visitor,
         &(AstNode){.tag = astStringLit,
                    .type = makeStringType(ctx->typeTable),
                    .stringLiteral.value =
-                       visitor->current->loc.fileName ?: "<native>"});
+                       visitor->current->loc.fileName
+                           ?: makeString(ctx->strPool, "<native>")});
 }
 
 static AstNode *makeLineNumberNode(AstVisitor *visitor,
@@ -103,7 +105,7 @@ static AstNode *makeSizeofNode(AstVisitor *visitor,
     if (args->type == NULL)
         evalType(ctx->eval.semanticsVisitor, args);
 
-    AstNode *sizeOf = findSymbolOnly(ctx->env, "__builtin_sizeof");
+    AstNode *sizeOf = findSymbolOnly(ctx->env, S___builtin_sizeof);
     csAssert0(sizeOf);
 
     return makeAstNode(
@@ -119,7 +121,7 @@ static AstNode *makeSizeofNode(AstVisitor *visitor,
                              &(AstNode){.tag = astIdentifier,
                                         .type = sizeOf->type,
                                         .flags = node->callExpr.callee->flags,
-                                        .ident.value = "__builtin_sizeof"}),
+                                        .ident.value = S___builtin_sizeof}),
                          .args = args}});
 }
 
@@ -181,57 +183,6 @@ static AstNode *makeAstIntegerNode(AstVisitor *visitor,
     return args;
 }
 
-static AstNode *makeIsTypeNode(AstVisitor *visitor,
-                               attr(unused) const AstNode *node,
-                               attr(unused) AstNode *args,
-                               cstring name,
-                               TTag tag)
-{
-    SemanticsContext *ctx = getAstVisitorContext(visitor);
-    if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
-        return NULL;
-
-    if (args->type == NULL)
-        evalType(ctx->eval.semanticsVisitor, args);
-
-    if (!typeIs(args->type, Info)) {
-        logError(ctx->L,
-                 &args->loc,
-                 "macro native '{s}!' expecting a typeinfo object",
-                 (FormatArg[]){{.s = name}});
-        return NULL;
-    }
-
-    clearAstBody(args);
-    args->flags = flgNone;
-    args->tag = astBoolLit;
-    args->boolLiteral.value = args->type->info.target->tag == tag;
-    args->type = getPrimitiveType(ctx->typeTable, prtBool);
-
-    return args;
-}
-
-static AstNode *makeIsPointerNode(AstVisitor *visitor,
-                                  attr(unused) const AstNode *node,
-                                  attr(unused) AstNode *args)
-{
-    return makeIsTypeNode(visitor, node, args, "is_pointer", typPointer);
-}
-
-static AstNode *makeIsEnumNode(AstVisitor *visitor,
-                               attr(unused) const AstNode *node,
-                               attr(unused) AstNode *args)
-{
-    return makeIsTypeNode(visitor, node, args, "is_enum", typEnum);
-}
-
-static AstNode *makeIsStructNode(AstVisitor *visitor,
-                                 attr(unused) const AstNode *node,
-                                 attr(unused) AstNode *args)
-{
-    return makeIsTypeNode(visitor, node, args, "is_struct", typStruct);
-}
-
 static AstNode *makeTypeinfoNode(AstVisitor *visitor, const Type *type)
 {
     SemanticsContext *ctx = getAstVisitorContext(visitor);
@@ -264,7 +215,8 @@ static AstNode *makeLenNode(AstVisitor *visitor,
             return args;
         }
         else {
-            AstNode *strLen = findSymbolOnly(ctx->env, "strlen");
+            AstNode *strLen = findSymbolOnly(ctx->env, S_strlen);
+            csAssert0(strLen);
             return makeAstNode(
                 ctx->pool,
                 &node->loc,
@@ -278,7 +230,7 @@ static AstNode *makeLenNode(AstVisitor *visitor,
                             &(AstNode){.tag = astIdentifier,
                                        .type = strLen->type,
                                        .flags = strLen->flags | node->flags,
-                                       .ident.value = "strlen"}),
+                                       .ident.value = S_strlen}),
                         .args = args}});
         }
     }
@@ -299,7 +251,7 @@ static AstNode *makeLenNode(AstVisitor *visitor,
                                                   .flags = flgConst,
                                                   .type = getPrimitiveType(
                                                       ctx->typeTable, prtU64),
-                                                  .ident.value = "len"})}});
+                                                  .ident.value = S_len})}});
         }
         return makeAstNode(
             ctx->pool,
@@ -324,7 +276,7 @@ static AstNode *makeLenNode(AstVisitor *visitor,
 
     case typStruct: {
         AstNode *symbol =
-            findSymbol(raw->tStruct.decl->env, ctx->L, "len", &args->loc);
+            findSymbol(raw->tStruct.decl->env, ctx->L, S_len, &args->loc);
         if (nodeIs(symbol, StructField) && isUnsignedType(symbol->type)) {
             return makeAstNode(
                 ctx->pool,
@@ -340,7 +292,7 @@ static AstNode *makeLenNode(AstVisitor *visitor,
                                        &(AstNode){.tag = astIdentifier,
                                                   .type = symbol->type,
                                                   .flags = symbol->flags,
-                                                  .ident.value = "len"})}});
+                                                  .ident.value = S_len})}});
         }
         break;
     }
@@ -384,7 +336,7 @@ static AstNode *makeDataNode(AstVisitor *visitor,
                                        &(AstNode){.tag = astIdentifier,
                                                   .flags = flgConst,
                                                   .type = retType,
-                                                  .ident.value = "data"})}});
+                                                  .ident.value = S_data})}});
         }
 
     default:
@@ -416,7 +368,8 @@ static AstNode *makeAssertNode(AstVisitor *visitor,
                  (FormatArg[]){{.t = type}});
     }
 
-    AstNode *builtinAssert = findSymbolOnly(ctx->env, "__builtin_assert");
+    AstNode *builtinAssert =
+        findSymbolOnly(getBuiltinEnv(), S___builtin_assert);
     csAssert0(builtinAssert);
     AstNode *next = args;
     next = next->next = makeFilenameNode(visitor, node, NULL);
@@ -437,7 +390,7 @@ static AstNode *makeAssertNode(AstVisitor *visitor,
                     &(AstNode){.tag = astIdentifier,
                                .flags = node->macroCallExpr.callee->flags,
                                .type = builtinAssert->type,
-                               .ident.value = "__builtin_assert"}),
+                               .ident.value = S___builtin_assert}),
                 .args = args}});
 }
 
@@ -522,7 +475,7 @@ static AstNode *makeDestructorNode(AstVisitor *visitor,
         return NULL;
     }
 
-    args->type = makeDestructorType(ctx->typeTable);
+    args->type = makeDestructorType(ctx->typeTable, ctx->strPool);
     args->tag = astDestructorRef;
     args->flags = flgVisited;
     memset(&args->_body, 0, CXY_AST_NODE_BODY_SIZE);
@@ -636,44 +589,114 @@ static AstNode *makePointerOfNode(AstVisitor *visitor,
     return args;
 }
 
-static int compareBuiltinMacros(const void *lhs, const void *rhs)
+static bool compareBuiltinMacros(const void *lhs, const void *rhs)
 {
-    return strcmp(((BuiltinMacro *)lhs)->name, ((BuiltinMacro *)rhs)->name);
+    return ((BuiltinMacro *)lhs)->name == ((BuiltinMacro *)rhs)->name;
 }
 
-static const BuiltinMacro builtinMacros[] = {
-    {.name = "assert", makeAssertNode},
-    {.name = "base_of", makeBaseOfNode},
-    {.name = "column", makeColumnNumberNode},
-    {.name = "cstr", makeCstrNode},
-    {.name = "data", makeDataNode},
-    {.name = "destructor", makeDestructorNode},
-    {.name = "file", makeFilenameNode},
-    {.name = "is_enum", makeIsEnumNode},
-    {.name = "is_pointer", makeIsPointerNode},
-    {.name = "is_struct", makeIsStructNode},
-    {.name = "len", makeLenNode},
-    {.name = "line", makeLineNumberNode},
-    {.name = "mkIdent", makeAstIdentifierNode},
-    {.name = "mkInteger", makeAstIntegerNode},
-    {.name = "ptroff", makePointerOfNode},
-    {.name = "sizeof", makeSizeofNode},
-    {.name = "typeof", makeTypeofNode},
-    {.name = "unchecked", makeUncheckedNode},
-};
+static HashTable *builtinMacros = NULL;
 
-#define CXY_BUILTIN_MACROS_COUNT sizeof__(builtinMacros)
+static HashTable *getBuiltinMacros()
+{
+    if (builtinMacros == NULL) {
+        static HashTable _builtinMacros;
+        _builtinMacros = newHashTable(sizeof(BuiltinMacro));
+        insertInHashTable(&_builtinMacros,
+                          &(BuiltinMacro){.name = S__assert, makeAssertNode},
+                          hashUint64(hashInit(), (uintptr_t)S__assert),
+                          sizeof(BuiltinMacro),
+                          compareBuiltinMacros);
+        insertInHashTable(&_builtinMacros,
+                          &(BuiltinMacro){.name = S_base_of, makeBaseOfNode},
+                          hashUint64(hashInit(), (uintptr_t)S_base_of),
+                          sizeof(BuiltinMacro),
+                          compareBuiltinMacros);
+        insertInHashTable(
+            &_builtinMacros,
+            &(BuiltinMacro){.name = S_column, makeColumnNumberNode},
+            hashUint64(hashInit(), (uintptr_t)S_column),
+            sizeof(BuiltinMacro),
+            compareBuiltinMacros);
+        insertInHashTable(&_builtinMacros,
+                          &(BuiltinMacro){.name = S_cstr, makeCstrNode},
+                          hashUint64(hashInit(), (uintptr_t)S_cstr),
+                          sizeof(BuiltinMacro),
+                          compareBuiltinMacros);
+        insertInHashTable(&_builtinMacros,
+                          &(BuiltinMacro){.name = S_data, makeDataNode},
+                          hashUint64(hashInit(), (uintptr_t)S_data),
+                          sizeof(BuiltinMacro),
+                          compareBuiltinMacros);
+        insertInHashTable(
+            &_builtinMacros,
+            &(BuiltinMacro){.name = S_destructor, makeDestructorNode},
+            hashUint64(hashInit(), (uintptr_t)S_destructor),
+            sizeof(BuiltinMacro),
+            compareBuiltinMacros);
+        insertInHashTable(&_builtinMacros,
+                          &(BuiltinMacro){.name = S_file, makeFilenameNode},
+                          hashUint64(hashInit(), (uintptr_t)S_file),
+                          sizeof(BuiltinMacro),
+                          compareBuiltinMacros);
+        insertInHashTable(&_builtinMacros,
+                          &(BuiltinMacro){.name = S_len, makeLenNode},
+                          hashUint64(hashInit(), (uintptr_t)S_len),
+                          sizeof(BuiltinMacro),
+                          compareBuiltinMacros);
+        insertInHashTable(&_builtinMacros,
+                          &(BuiltinMacro){.name = S_line, makeLineNumberNode},
+                          hashUint64(hashInit(), (uintptr_t)S_line),
+                          sizeof(BuiltinMacro),
+                          compareBuiltinMacros);
+        insertInHashTable(
+            &_builtinMacros,
+            &(BuiltinMacro){.name = S_mkIdent, makeAstIdentifierNode},
+            hashUint64(hashInit(), (uintptr_t)S_mkIdent),
+            sizeof(BuiltinMacro),
+            compareBuiltinMacros);
+        insertInHashTable(
+            &_builtinMacros,
+            &(BuiltinMacro){.name = S_mkInteger, makeAstIntegerNode},
+            hashUint64(hashInit(), (uintptr_t)S_mkInteger),
+            sizeof(BuiltinMacro),
+            compareBuiltinMacros);
+        insertInHashTable(&_builtinMacros,
+                          &(BuiltinMacro){.name = S_ptroff, makePointerOfNode},
+                          hashUint64(hashInit(), (uintptr_t)S_ptroff),
+                          sizeof(BuiltinMacro),
+                          compareBuiltinMacros);
+        insertInHashTable(&_builtinMacros,
+                          &(BuiltinMacro){.name = S_sizeof, makeSizeofNode},
+                          hashUint64(hashInit(), (uintptr_t)S_sizeof),
+                          sizeof(BuiltinMacro),
+                          compareBuiltinMacros);
+        insertInHashTable(&_builtinMacros,
+                          &(BuiltinMacro){.name = S_typeof, makeTypeofNode},
+                          hashUint64(hashInit(), (uintptr_t)S_typeof),
+                          sizeof(BuiltinMacro),
+                          compareBuiltinMacros);
+        insertInHashTable(
+            &_builtinMacros,
+            &(BuiltinMacro){.name = S_unchecked, makeUncheckedNode},
+            hashUint64(hashInit(), (uintptr_t)S_unchecked),
+            sizeof(BuiltinMacro),
+            compareBuiltinMacros);
+        builtinMacros = &_builtinMacros;
+    }
+    return builtinMacros;
+}
 
 static EvaluateMacro findBuiltinMacro(cstring name)
 {
     BuiltinMacro find = {.name = name};
-    int index = binarySearch(builtinMacros,
-                             CXY_BUILTIN_MACROS_COUNT,
-                             &find,
-                             sizeof(find),
-                             compareBuiltinMacros);
+    BuiltinMacro *found =
+        findInHashTable(builtinMacros ?: getBuiltinMacros(),
+                        &find,
+                        hashUint64(hashInit(), (uint64_t)name),
+                        sizeof(find),
+                        compareBuiltinMacros);
 
-    return index < 0 ? NULL : builtinMacros[index].eval;
+    return found ? found->eval : NULL;
 }
 
 static EvaluateMacro findBuiltinMacroByNode(AstNode *node)

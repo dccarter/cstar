@@ -88,10 +88,17 @@ void checkImportDecl(AstVisitor *visitor, AstNode *node)
                 node->type = ERROR_TYPE(ctx);
         }
 
-        if (alias)
+        if (alias) {
             ctx->env = environmentPop(ctx->env);
 
-        if (!defineSymbol(ctx->env, ctx->L, alias->ident.value, node))
+            if (!defineSymbol(ctx->env, ctx->L, alias->ident.value, exports))
+                node->type = ERROR_TYPE(ctx);
+        }
+
+        if (!defineSymbol(ctx->env,
+                          ctx->L,
+                          node->import.module->stringLiteral.value,
+                          exports))
             node->type = ERROR_TYPE(ctx);
     }
     else {

@@ -91,7 +91,7 @@ const Type *unwrapType(const Type *type, u64 *flags);
 
 GetOrInset makeAppliedType(TypeTable *table, const Type *init);
 
-const Type *makeDestructorType(TypeTable *table);
+const Type *makeDestructorType(TypeTable *table, StrPool *pool);
 
 u64 getTypesCount(TypeTable *table);
 
@@ -102,4 +102,5 @@ void enumerateTypeTable(TypeTable *table,
                         bool(with)(void *, const void *));
 
 const Type *promoteType(TypeTable *table, const Type *left, const Type *right);
-const Type *getBuiltinOptionalType(TypeTable *table);
+const Type *getBuiltinOptionalType();
+const Type *getBuiltinType(cstring name);

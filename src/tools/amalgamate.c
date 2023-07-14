@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
         modified = MAX(modified, mtime);
 
         size += bytes;
-        size += fprintf(output, "\\n#pragma region %s\\n", argv[j]) - 2;
+        size += fprintf(output, "\\n/*---------%s----------*/\\n", argv[j]) - 2;
         for (u64 i = 0; i < bytes; i++) {
             if (data[i] == '"') {
                 fputc('\\', output);
@@ -106,7 +106,7 @@ int main(int argc, char *argv[])
             else
                 fputc(data[i], output);
         }
-        size += fprintf(output, "\\n#pragma endregion\\n") - 2;
+        size += fprintf(output, "\\n\\n") - 2;
         free(data);
     }
     fputs("\";\n", output);

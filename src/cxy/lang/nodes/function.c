@@ -16,6 +16,7 @@
 #include "lang/visitor.h"
 
 #include "core/alloc.h"
+#include "lang/strings.h"
 
 #include <memory.h>
 
@@ -40,12 +41,12 @@ static inline const Type *makeFunctionDeclType(SemanticsContext *ctx,
 
 static inline bool isInlineFunction(const AstNode *node)
 {
-    return findAttribute(node, "inline") != NULL;
+    return findAttribute(node, S_inline) != NULL;
 }
 
-static inline bool isStaticFuncParam(SemanticsContext *ctx, const AstNode *node)
+static inline bool isStaticFuncParam(const AstNode *node)
 {
-    return findAttribute(node, "static") != NULL;
+    return findAttribute(node, S_static) != NULL;
 }
 
 static const Type *transformFuncTypeParam(SemanticsContext *ctx,
@@ -145,7 +146,7 @@ static const Type **checkFunctionParams(AstVisitor *visitor,
             continue;
         }
         *withDefaultValues = (param->funcParam.def != NULL);
-        if (typeIs(params[i], Func) && !isStaticFuncParam(ctx, param) &&
+        if (typeIs(params[i], Func) && !isStaticFuncParam(param) &&
             !hasFlag(node, Native)) {
             params[i] = transformFuncTypeParam(ctx, params[i]);
             param->type = params[i];
@@ -412,7 +413,7 @@ void generateFuncDeclaration(CodegenContext *context, const Type *type)
         format(state, ", ", NULL);
         generateTypeUsage(context, type->func.params[i]);
     }
-    format(state, ")", NULL);
+    format(state, ");", NULL);
 }
 
 void generateFuncGeneratedDeclaration(CodegenContext *context, const Type *type)
@@ -442,7 +443,7 @@ void generateFuncGeneratedDeclaration(CodegenContext *context, const Type *type)
             format(state, ", ", NULL);
         generateTypeUsage(context, type->func.params[i]);
     }
-    format(state, ")", NULL);
+    format(state, ");\n", NULL);
 }
 
 void generateFunctionTypedef(CodegenContext *context, const Type *type)
@@ -452,7 +453,7 @@ void generateFunctionTypedef(CodegenContext *context, const Type *type)
                   *parent = decl ? type->func.decl->parentScope : NULL;
     bool isMember = parent && parent->tag == astStructDecl;
 
-    format(state, "typedef ", NULL);
+    format(state, "\ntypedef ", NULL);
     generateTypeUsage(context, type->func.retType);
     format(state, "(*", NULL);
     if (isMember) {
@@ -474,7 +475,7 @@ void generateFunctionTypedef(CodegenContext *context, const Type *type)
             format(state, ", ", NULL);
         generateTypeUsage(context, type->func.params[i]);
     }
-    format(state, ")", NULL);
+    format(state, ");\n", NULL);
     if (isMember)
         generateFuncDeclaration(context, type);
     else if (decl && decl->flags & flgGenerated)
@@ -568,20 +569,16 @@ void checkMethodDeclBody(AstVisitor *visitor, AstNode *node)
 
         defineSymbol(ctx->env,
                      ctx->L,
-                     "this",
-                     makePath(ctx->pool,
-                              &node->loc,
-                              makeString(ctx->strPool, "this"),
-                              flgNone,
-                              parent));
+                     S_this,
+                     makePath(ctx->pool, &node->loc, S_this, flgNone, parent));
 
         if (node->parentScope->structDecl.base) {
             defineSymbol(ctx->env,
                          ctx->L,
-                         "super",
+                         S_super,
                          makePath(ctx->pool,
                                   &node->loc,
-                                  makeString(ctx->strPool, "super"),
+                                  S_super,
                                   flgAddThis,
                                   parent->tStruct.base));
         }
@@ -659,8 +656,19 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
     bool withDefaultValues = false;
 
     if (!ctx->mainOptimized) {
-        node->flags |= (node->funcDecl.name == ctx->main ? flgMain : flgNone);
+        node->flags |= (node->funcDecl.name == S_main ? flgMain : flgNone);
         ctx->mainOptimized = node->flags & flgMain;
+    }
+
+    if (!hasFlag(node, Generated) &&
+        !defineDeclaration(ctx,
+                           node->funcDecl.name,
+                           getDeclarationAlias(ctx, node),
+                           node,
+                           false)) //
+    {
+        node->type = ERROR_TYPE(ctx);
+        return;
     }
 
     pushScope(ctx->env, node);
@@ -668,17 +676,8 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
         checkFunctionParams(visitor, node, &paramsCount, &withDefaultValues);
     if (params == NULL) {
         node->type = ERROR_TYPE(ctx);
+        popScope(ctx->env);
         return;
-    }
-
-    if (!defineDeclaration(ctx,
-                           node->funcDecl.name,
-                           getDeclarationAlias(ctx, node),
-                           node,
-                           false)) //
-    {
-        node->type = ERROR_TYPE(ctx);
-        goto checkFunctionDeclDone;
     }
 
     SymbolRef *ref =

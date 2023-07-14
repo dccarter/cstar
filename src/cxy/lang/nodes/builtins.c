@@ -11,6 +11,7 @@
 #include "lang/semantics.h"
 
 #include "lang/flag.h"
+#include "lang/strings.h"
 #include "lang/ttable.h"
 #include "lang/visitor.h"
 
@@ -87,17 +88,18 @@ static void addBuiltinFunc(SemanticsContext *ctx,
                            const Type **params,
                            u64 paramsCount)
 {
-    AstNode *node = makeAstNode(
-        ctx->pool,
-        builtinLoc(),
-        &(AstNode){.tag = astFuncDecl, .flags = flgBuiltin, .type = NULL});
+    AstNode *node = makeAstNode(ctx->pool,
+                                builtinLoc(),
+                                &(AstNode){.tag = astFuncDecl,
+                                           .flags = flgBuiltin | flgPublic,
+                                           .type = NULL});
 
-    defineSymbol(ctx->env, ctx->L, name, node);
+    defineDeclaration(ctx, name, NULL, node, true);
 
     node->type = makeFuncType(ctx->typeTable,
                               &(Type){.tag = typFunc,
                                       .name = name,
-                                      .flags = flgBuiltin,
+                                      .flags = flgBuiltin | flgPublic,
                                       .func = {.retType = ret,
                                                .params = params,
                                                .paramsCount = paramsCount,
@@ -109,14 +111,22 @@ static void addBuiltinVariable(SemanticsContext *ctx,
                                const Type *type,
                                AstNode *value)
 {
-    defineSymbol(ctx->env,
-                 ctx->L,
-                 name,
-                 makeAstNode(ctx->pool,
-                             builtinLoc(),
-                             &(AstNode){.tag = astVarDecl,
-                                        .flags = flgBuiltin | flgConst,
-                                        .type = type}));
+    defineDeclaration(
+        ctx,
+        name,
+        NULL,
+        makeAstNode(ctx->pool,
+                    builtinLoc(),
+                    &(AstNode){.tag = astVarDecl,
+                               .flags = flgBuiltin | flgConst | flgPublic,
+                               .type = type,
+                               .varDecl = {.names = makeAstNode(
+                                               ctx->pool,
+                                               builtinLoc(),
+                                               &(AstNode){.tag = astIdentifier,
+                                                          .ident.value = name}),
+                                           .init = value}}),
+        true);
 }
 
 static void addBuiltinType(SemanticsContext *ctx,
@@ -124,14 +134,17 @@ static void addBuiltinType(SemanticsContext *ctx,
                            u64 flags,
                            const Type *type)
 {
-    defineSymbol(ctx->env,
-                 ctx->L,
-                 name,
-                 makeAstNode(ctx->pool,
-                             builtinLoc(),
-                             &(AstNode){.tag = astTypeDecl,
-                                        .flags = flgBuiltin | flags,
-                                        .type = type}));
+    defineDeclaration(
+        ctx,
+        name,
+        NULL,
+        makeAstNode(ctx->pool,
+                    builtinLoc(),
+                    &(AstNode){.tag = astTypeDecl,
+                               .flags = flgBuiltin | flags | flgPublic,
+                               .type = type,
+                               .typeDecl.name = name}),
+        true);
 }
 
 static inline bool typeSupportsLenProperty(const Type *type)
@@ -149,19 +162,15 @@ void initializeBuiltins(SemanticsContext *ctx)
     {
         const Type *params[] = {getPrimitiveType(ctx->typeTable, prtChar)};
         addBuiltinFunc(
-            ctx, "wputc", getPrimitiveType(ctx->typeTable, prtI32), params, 1);
+            ctx, S_wputc, getPrimitiveType(ctx->typeTable, prtI32), params, 1);
     }
     {
-        const Type *params[] = {makeVoidPointerType(ctx->typeTable, flgConst)};
-        addBuiltinFunc(
-            ctx, "ptr", getPrimitiveType(ctx->typeTable, prtU64), params, 1);
-    }
-    {
-        const Type *params[] = {makeAutoType(ctx->typeTable),
-                                getPrimitiveType(ctx->typeTable, prtU64),
-                                makeDestructorType(ctx->typeTable)};
+        const Type *params[] = {
+            makeAutoType(ctx->typeTable),
+            getPrimitiveType(ctx->typeTable, prtU64),
+            makeDestructorType(ctx->typeTable, ctx->strPool)};
         addBuiltinFunc(ctx,
-                       "__builtin_alloc",
+                       S___builtin_alloc,
                        makeVoidPointerType(ctx->typeTable, flgNone),
                        params,
                        3);
@@ -169,15 +178,16 @@ void initializeBuiltins(SemanticsContext *ctx)
     {
         const Type *params[] = {makeAutoType(ctx->typeTable)};
         addBuiltinFunc(
-            ctx, "__builtin_dealloc", makeVoidType(ctx->typeTable), params, 1);
+            ctx, S___builtin_dealloc, makeVoidType(ctx->typeTable), params, 1);
     }
     {
-        const Type *params[] = {makeAutoType(ctx->typeTable),
-                                makeVoidPointerType(ctx->typeTable, flgNone),
-                                getPrimitiveType(ctx->typeTable, prtU64),
-                                makeDestructorType(ctx->typeTable)};
+        const Type *params[] = {
+            makeAutoType(ctx->typeTable),
+            makeVoidPointerType(ctx->typeTable, flgNone),
+            getPrimitiveType(ctx->typeTable, prtU64),
+            makeDestructorType(ctx->typeTable, ctx->strPool)};
         addBuiltinFunc(ctx,
-                       "__builtin_realloc",
+                       S___builtin_realloc,
                        makeVoidPointerType(ctx->typeTable, flgNone),
                        params,
                        4);
@@ -186,10 +196,10 @@ void initializeBuiltins(SemanticsContext *ctx)
         const Type *params[] = {
             makeTypeInfo(ctx->typeTable, getAnySliceType(ctx->typeTable)),
             getPrimitiveType(ctx->typeTable, prtU64),
-            makeDestructorType(ctx->typeTable)};
+            makeDestructorType(ctx->typeTable, ctx->strPool)};
 
         addBuiltinFunc(ctx,
-                       "__builtin_alloc_slice",
+                       S___builtin_alloc_slice,
                        getAnySliceType(ctx->typeTable),
                        params,
                        3);
@@ -200,10 +210,10 @@ void initializeBuiltins(SemanticsContext *ctx)
             makeTypeInfo(ctx->typeTable, getAnySliceType(ctx->typeTable)),
             getAnySliceType(ctx->typeTable),
             getPrimitiveType(ctx->typeTable, prtU64),
-            makeDestructorType(ctx->typeTable)};
+            makeDestructorType(ctx->typeTable, ctx->strPool)};
 
         addBuiltinFunc(ctx,
-                       "__builtin_realloc_slice",
+                       S___builtin_realloc_slice,
                        getAnySliceType(ctx->typeTable),
                        params,
                        4);
@@ -216,7 +226,7 @@ void initializeBuiltins(SemanticsContext *ctx)
             getPrimitiveType(ctx->typeTable, prtI32)};
 
         addBuiltinFunc(ctx,
-                       "__builtin_memset_slice",
+                       S___builtin_memset_slice,
                        makeVoidType(ctx->typeTable),
                        params,
                        3);
@@ -226,7 +236,7 @@ void initializeBuiltins(SemanticsContext *ctx)
         const Type *params[] = {getAnySliceType(ctx->typeTable)};
 
         addBuiltinFunc(ctx,
-                       "__builtin_init_slice",
+                       S___builtin_init_slice,
                        makeVoidType(ctx->typeTable),
                        params,
                        1);
@@ -236,7 +246,7 @@ void initializeBuiltins(SemanticsContext *ctx)
         const Type *params[] = {getAnySliceType(ctx->typeTable)};
 
         addBuiltinFunc(ctx,
-                       "__builtin_free_slice",
+                       S___builtin_free_slice,
                        makeVoidType(ctx->typeTable),
                        params,
                        1);
@@ -250,13 +260,13 @@ void initializeBuiltins(SemanticsContext *ctx)
                                 getPrimitiveType(ctx->typeTable, prtU64)};
 
         addBuiltinFunc(
-            ctx, "__builtin_assert", makeVoidType(ctx->typeTable), params, 4);
+            ctx, S___builtin_assert, makeVoidType(ctx->typeTable), params, 4);
     }
     {
         const Type *params[] = {makeAutoType(ctx->typeTable)};
 
         addBuiltinFunc(ctx,
-                       "__builtin_sizeof",
+                       S___builtin_sizeof,
                        getPrimitiveType(ctx->typeTable, prtU64),
                        params,
                        1);
@@ -266,39 +276,16 @@ void initializeBuiltins(SemanticsContext *ctx)
         const Type *params[] = {makeStringType(ctx->typeTable)};
 
         addBuiltinFunc(
-            ctx, "strlen", getPrimitiveType(ctx->typeTable, prtU64), params, 1);
+            ctx, S_strlen, getPrimitiveType(ctx->typeTable, prtU64), params, 1);
     }
 
     {
         addBuiltinType(
-            ctx, "char", flgNative, getPrimitiveType(ctx->typeTable, prtI8));
+            ctx, S_char, flgNative, getPrimitiveType(ctx->typeTable, prtI8));
 
         addBuiltinType(ctx,
-                       "cxy_range_t",
+                       S_cxy_range_t,
                        flgNative,
-                       makeOpaqueType(ctx->typeTable, "cxy_range_t"));
-    }
-}
-
-const Type *checkBuiltinTypeProperty(SemanticsContext *ctx,
-                                     AstNode *target,
-                                     cstring name)
-{
-    if (strcmp(name, "len") == 0) {
-        if (typeSupportsLenProperty(target->type)) {
-            logError(
-                ctx->L,
-                &target->loc,
-                "target type '{t}' does not support native `#len` property",
-                (FormatArg[]){{.t = target->type}});
-        }
-        return getPrimitiveType(ctx->typeTable, prtU64);
-    }
-    else {
-        logError(ctx->L,
-                 &target->loc,
-                 "unknown type native property `{s}`",
-                 (FormatArg[]){{.s = name}});
-        return ERROR_TYPE(ctx);
+                       makeOpaqueType(ctx->typeTable, S_cxy_range_t));
     }
 }

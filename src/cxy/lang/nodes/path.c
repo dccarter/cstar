@@ -199,7 +199,7 @@ void checkPathElement(AstVisitor *visitor, AstNode *node)
     AstNode *parent = node->parentScope;
     const Type *scope = stripAll(parent->type);
 
-    const Env *env = NULL;
+    Env *env = NULL;
     Env thisEnv = {};
     switch (scope->tag) {
     case typContainer:
@@ -331,9 +331,11 @@ void evalPath(AstVisitor *visitor, AstNode *node)
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     AstNode *elem = node->path.elements;
     AstNode *symbol = findSymbolOnly(
-        &ctx->eval.env, elem->pathElement.alt ?: elem->pathElement.name);
+        ctx->eval.env, elem->pathElement.alt ?: elem->pathElement.name);
 
     if (symbol == NULL) {
+        environmentDump(ctx->eval.env, "Current");
+        environmentDump(ctx->eval.env->prev, "Prev");
         logError(ctx->L,
                  &elem->loc,
                  "reference to undefined compile time symbol '{s}'",

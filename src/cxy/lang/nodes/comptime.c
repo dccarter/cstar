@@ -300,7 +300,7 @@ static AstNode *isOptional(SemanticsContext *ctx,
     const Type *type = node->type ?: evalType(ctx->eval.semanticsVisitor, node);
     type = resolveType(type);
 
-    const Type *optional = getBuiltinOptionalType(ctx->typeTable);
+    const Type *optional = getBuiltinOptionalType();
     bool isOptional = false;
     if (optional != NULL && typeIs(type, Struct))
         isOptional =

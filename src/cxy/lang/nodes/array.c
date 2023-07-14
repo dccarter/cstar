@@ -205,7 +205,7 @@ static void generateArrayToString(CodegenContext *context, const Type *type)
 
     format(state, "__cxy_string_builder_append_char(sb->sb, ']');", NULL);
 
-    format(state, "{<}\n}", NULL);
+    format(state, "{<}\n}\n", NULL);
 }
 
 void generateArrayToSlice(ConstAstVisitor *visitor,
@@ -300,7 +300,7 @@ void generateArrayDeclaration(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
     if (isSliceType(type)) {
-        format(state, "typedef struct ", NULL);
+        format(state, "\ntypedef struct ", NULL);
         writeTypename(context, type);
         format(state, " {{{>}\n", NULL);
         format(state, "u64 len;\n", NULL);
@@ -320,9 +320,9 @@ void generateArrayDeclaration(CodegenContext *context, const Type *type)
         format(state, "[{u64}]", (FormatArg[]){{.u64 = type->array.len}});
     }
 
-    format(state, ";\n", NULL);
+    format(state, ";\n\n", NULL);
     generateArrayDelete(context, type);
-    format(state, "\n", NULL);
+    format(state, "\n\n", NULL);
     generateArrayToString(context, type);
 }
 

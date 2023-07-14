@@ -124,26 +124,25 @@ char *readFile(const char *fileName, size_t *file_size)
     FILE *file = fopen(fileName, "rb");
     if (!file)
         return NULL;
-    size_t chunk_size = CHUNK_SIZE;
-    char *file_data = NULL;
-    *file_size = 0;
-    while (true) {
+
+    fseek(file, 0, SEEK_END);
+    *file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    size_t total = 0;
+    char *file_data = reallocOrDie(NULL, *file_size + 1);
+    while (total < *file_size) {
         if (ferror(file)) {
             fclose(file);
             free(file_data);
             return NULL;
         }
-        file_data = reallocOrDie(file_data, *file_size + chunk_size);
-        size_t read_count = fread(file_data + *file_size, 1, chunk_size, file);
-        *file_size += read_count;
-        if (read_count < chunk_size)
-            break;
-        chunk_size *= 2;
+
+        total += fread(&file_data[total], 1, *file_size - total, file);
     }
     fclose(file);
 
     // Add terminator
-    file_data = reallocOrDie(file_data, *file_size + 1);
     file_data[*file_size] = 0;
     return file_data;
 }

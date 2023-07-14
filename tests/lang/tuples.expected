@@ -1,5 +1,8 @@
 {
  "tag": "Program",
+ "module": {
+  "tag": "ModuleDecl"
+ },
  "decls": [{
    "tag": "TypeDecl",
    "flags": "(TopLevelDecl)",
@@ -43,6 +46,7 @@
         "flags": "(TypeAst)",
         "elements": [{
           "tag": "PathElem",
+          "flags": "(TypeAst)",
           "name": "Tup1",
           "index": 0
          }],
@@ -261,6 +265,7 @@
        "flags": "(TypeAst)",
        "elements": [{
          "tag": "PathElem",
+         "flags": "(TypeAst)",
          "name": "Tup2",
          "index": 0
         }],

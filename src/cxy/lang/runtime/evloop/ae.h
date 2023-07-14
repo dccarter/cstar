@@ -1,7 +1,9 @@
 #ifndef __AE_H__
 #define __AE_H__
 
-#include <time.h>
+#ifndef __CXY_BUILD__
+#include "../epilogue.h"
+#endif
 
 #define AE_OK 0
 #define AE_ERR -1
@@ -127,5 +129,7 @@ void aeSetAfterSleepProc(aeEventLoop *eventLoop, aeBeforeSleepProc *aftersleep);
 int aeGetSetSize(aeEventLoop *eventLoop);
 
 int aeResizeSetSize(aeEventLoop *eventLoop, int setsize);
+
+void aeGetTime(long *seconds, long *milliseconds);
 
 #endif

@@ -6,6 +6,7 @@
 
 #include "lang/flag.h"
 #include "lang/semantics.h"
+#include "lang/strings.h"
 #include "lang/ttable.h"
 #include "lang/visitor.h"
 
@@ -140,16 +141,12 @@ bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node)
     if (!typeIs(type, Struct))
         return false;
 
-    AstNode *symbol = findSymbolOnly(type->tStruct.decl->env, "op_truthy");
+    AstNode *symbol = findSymbolOnly(type->tStruct.decl->env, S_Truthy);
     if (symbol == NULL)
         return false;
 
-    transformToMemberCallExpr(visitor,
-                              node,
-                              symbol,
-                              cloneAstNode(ctx->pool, node),
-                              "op_truthy",
-                              NULL);
+    transformToMemberCallExpr(
+        visitor, node, symbol, cloneAstNode(ctx->pool, node), S_Truthy, NULL);
 
     type = evalType(visitor, node);
     return typeIs(type, Primitive);
@@ -162,12 +159,12 @@ bool transformToDerefOperator(AstVisitor *visitor, AstNode *node)
     if (!typeIs(type, Struct))
         return false;
 
-    AstNode *symbol = findSymbolOnly(type->tStruct.decl->env, "op_deref");
+    AstNode *symbol = findSymbolOnly(type->tStruct.decl->env, S_Deref);
     if (symbol == NULL)
         return false;
 
     transformToMemberCallExpr(
-        visitor, node, symbol, node->unaryExpr.operand, "op_deref", NULL);
+        visitor, node, symbol, node->unaryExpr.operand, S_Deref, NULL);
 
     type = evalType(visitor, node);
     return !typeIs(type, Error);

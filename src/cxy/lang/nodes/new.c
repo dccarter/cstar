@@ -6,6 +6,7 @@
 #include "lang/semantics.h"
 
 #include "lang/flag.h"
+#include "lang/strings.h"
 #include "lang/ttable.h"
 #include "lang/visitor.h"
 
@@ -75,8 +76,8 @@ static const Type *checkNewInitializerOverload(AstVisitor *visitor,
                                       &(AstNode){
                                           .tag = astPathElem,
                                           .flags = callee->flags,
-                                          .pathElement.name = makeString(
-                                              ctx->strPool, "op_new"),
+                                          .pathElement.name =
+                                              makeString(ctx->strPool, S_New),
                                       })})});
 
     AstNode *ret =
@@ -133,7 +134,7 @@ static const Type *checkNewInitializerExpr(AstVisitor *visitor, AstNode *node)
 
         const Type *callee = evalType(visitor, init->callExpr.callee);
         if (typeIs(callee, Struct)) {
-            if (!findSymbolOnly(callee->tStruct.decl->env, "op_new")) {
+            if (!findSymbolOnly(callee->tStruct.decl->env, S_New)) {
                 logError(ctx->L,
                          &init->callExpr.callee->loc,
                          "cannot use `new` constructor expression on type "

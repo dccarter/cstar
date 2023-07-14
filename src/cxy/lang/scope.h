@@ -28,22 +28,33 @@ typedef struct Scope {
 } Scope;
 
 struct Env {
+    struct Env *prev, *list;
     Scope *scope;
     Scope *first;
-    struct Env *prev;
+    cstring debug;
 };
 
-void environmentInit(Env *env, AstNode *node);
+typedef struct {
+    Env *first;
+    Env *last;
+} EnvList;
 
+void environmentInit(Env *env, AstNode *node);
+void environmentAddToList(EnvList *list, Env *env);
 void setBuiltinEnvironment(Env *env);
 
-Env *makeEnvironment(MemPool *pool, AstNode *node);
+Env *makeEnvironment_(MemPool *pool, AstNode *node, cstring debug);
+#define makeEnvironment(pool, node)                                            \
+    makeEnvironment_(                                                          \
+        (pool), (node), __FILE_NAME__ CXY_STR(CXY_PASTE(_, __LINE__)))
 
 Env *environmentPush(Env *this, Env *env);
 Env *environmentPop(Env *env);
+Env *environmentRoot(Env *env);
+bool environmentFind(Env *env, Env **root);
 
 void environmentFree(Env *env);
-Env *environmentCopy(MemPool *pool, const Env *env);
+void environmentFreeUnusedScope(Env *env);
 void environmentDump(const Env *env, const char *name);
 
 void releaseScope(Env *env, Env *into);
@@ -90,7 +101,7 @@ AstNode *findEnclosingBlock(Env *env, Log *L, const FileLoc *loc);
 void pushScope(Env *env, AstNode *node);
 void popScope(Env *env);
 const Env *getUpperEnv(const Env *);
-const Env *getBuiltinEnv(void);
+Env *getBuiltinEnv(void);
 bool isBuiltinEnv(const Env *);
 
 static inline bool isRootScope(Scope *scope)

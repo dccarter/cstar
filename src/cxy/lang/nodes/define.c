@@ -22,26 +22,31 @@ void checkDefine(AstVisitor *visitor, AstNode *node)
 
     if (container != NULL) {
         node->env = makeEnvironment(ctx->pool, node);
-        ctx->env = environmentPush(node->env, NULL);
+        ctx->env = environmentPush(ctx->env, node->env);
         for (; option; option = option->next) {
             cstring name = option->ident.alias ?: option->ident.value;
             option->flags |= (node->flags & flgPublic) | flgDefine;
+            option->type = type;
             if (!defineSymbol(ctx->env, ctx->L, name, option)) {
                 node->type = ERROR_TYPE(ctx);
                 continue;
             }
         }
-        
+
         ctx->env = environmentPop(ctx->env);
         if (typeIs(node->type, Error))
             return;
 
-        if (!defineDeclaration(ctx,
-                               container->ident.value,
-                               NULL,
-                               node,
-                               hasFlag(node, Public))) //
+        if (defineDeclaration(ctx,
+                              container->ident.value,
+                              NULL,
+                              node,
+                              hasFlag(node, Public))) //
         {
+            node->type =
+                makeContainerType(ctx->typeTable, container->ident.value, node);
+        }
+        else {
             node->type = ERROR_TYPE(ctx);
         }
     }
@@ -49,6 +54,7 @@ void checkDefine(AstVisitor *visitor, AstNode *node)
         for (; option; option = option->next) {
             cstring name = option->ident.alias ?: option->ident.value;
             option->flags |= (node->flags & flgPublic) | flgDefine;
+            option->type = type;
 
             if (!defineDeclaration(
                     ctx, name, NULL, option, hasFlag(node, Public))) //

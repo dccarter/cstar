@@ -52,7 +52,6 @@ pub func println(...args: auto) {
     #const i = 0;
 
     #for (const argT: #{args.Tinfo}) {
-        var x: #{argT};
         print[#{argT}](args.#{i})
         #{i += 1}
     }

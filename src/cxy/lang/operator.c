@@ -4,6 +4,7 @@
 
 #include "operator.h"
 #include "flag.h"
+#include "strings.h"
 
 const char *getUnaryOpString(Operator op)
 {
@@ -47,26 +48,15 @@ const char *getAssignOpString(Operator op)
 const char *getBinaryOpFuncName(Operator op)
 {
     switch (op) {
-#define f(NAME, p, t, s, fn)                                                   \
+#define f(NAME, ...)                                                           \
     case op##NAME:                                                             \
-        return "op_" fn;
+        return S_##NAME;
         // NOLINTBEGIN
         AST_BINARY_EXPR_LIST(f)
+        AST_UNARY_EXPR_LIST(f)
+        AST_OVERLOAD_ONLY_OPS(f)
         // NOLINTEND
 #undef f
-
-#define f(NAME, t, s, fn)                                                      \
-    case op##NAME:                                                             \
-        return "op_" fn;
-        AST_UNARY_EXPR_LIST(f)
-#undef f
-
-#define f(NAME, fn)                                                            \
-    case op##NAME:                                                             \
-        return "op_" fn;
-        AST_OVERLOAD_ONLY_OPS(f)
-#undef f
-
     default:
         csAssert0(false);
     }

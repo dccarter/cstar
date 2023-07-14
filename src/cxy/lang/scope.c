@@ -11,7 +11,7 @@ static Env *__builtins = NULL;
 
 static inline bool compareSymbols(const void *lhs, const void *rhs)
 {
-    return !strcmp(((const Symbol *)lhs)->name, ((const Symbol *)rhs)->name);
+    return ((const Symbol *)lhs)->name == ((const Symbol *)rhs)->name;
 }
 
 static Scope *newScope(Scope *prev)
@@ -48,6 +48,7 @@ static void freeScopes(Scope *scope)
         enumerateHashTable(
             &scope->symbols, NULL, freeSymbolRef, sizeof(Symbol));
         freeHashTable(&scope->symbols);
+        memset(scope, 0, sizeof(*scope));
         free(scope);
         scope = next;
     }
@@ -401,24 +402,13 @@ void releaseScope(Env *env, Env *into)
     }
 }
 
-const Env *getUpperEnv(const Env *env)
-{
-    if (env->prev == NULL)
-        return env;
-
-    const Env *it = env->prev;
-    while (env && env->prev && env != it) {
-        env = env->prev;
-        if (it && it->prev)
-            it = it->prev->prev;
-    }
-    return it != env ? env : NULL;
-}
-
 void popScope(Env *env)
 {
     csAssert0(env->scope);
+    Scope *this = env->scope;
     env->scope = env->scope->prev;
+    freeScopes(this);
+    env->scope->next = NULL;
 }
 
 void environmentInit(Env *env, AstNode *node)
@@ -428,15 +418,28 @@ void environmentInit(Env *env, AstNode *node)
     pushScope(env, node);
 }
 
+void environmentAddToList(EnvList *list, Env *env)
+{
+    if (list->first) {
+        list->last->list = env;
+        list->last = env;
+    }
+    else {
+        list->first = list->last = env;
+    }
+}
+
 void setBuiltinEnvironment(Env *env)
 {
     csAssert0(__builtins == NULL);
     __builtins = env;
 }
 
-Env *makeEnvironment(MemPool *pool, AstNode *node)
+Env *makeEnvironment_(MemPool *pool, AstNode *node, cstring debug)
 {
     Env *env = allocFromMemPool(pool, sizeof(Env));
+    memset(env, 0, sizeof *env);
+    env->debug = debug;
     environmentInit(env, node);
     return env;
 }
@@ -444,6 +447,7 @@ Env *makeEnvironment(MemPool *pool, AstNode *node)
 Env *environmentPush(Env *this, Env *env)
 {
     csAssert0(env->prev == NULL);
+    csAssert0(this != env);
     env->prev = this;
     return env;
 }
@@ -456,19 +460,45 @@ Env *environmentPop(Env *env)
     return prev;
 }
 
-Env *environmentCopy(MemPool *pool, const Env *env)
+Env *environmentRoot(Env *env)
 {
-    Env *copy = allocFromMemPool(pool, sizeof(Env));
-    *copy = *env;
-    return copy;
+    while (env) {
+        if (nodeIs(env->first->node, Program))
+            return env;
+        env = env->prev;
+    }
+    return env;
+}
+
+bool environmentFind(Env *env, Env **root)
+{
+    Env *prev = env;
+    while (env) {
+        if (env == *root)
+            return true;
+        prev = env;
+        env = env->prev;
+    }
+    *root = prev;
+    return false;
 }
 
 void environmentFree(Env *env)
 {
-    if (env)
+    if (env) {
         freeScopes(env->first);
+        memset(env, 0, sizeof(*env));
+    }
+}
+
+void environmentFreeUnusedScope(Env *env)
+{
+    if (env->scope->next) {
+        freeScopes(env->scope->next);
+        env->scope->next = NULL;
+    }
 }
 
 bool isBuiltinEnv(const Env *env) { return env == __builtins; }
 
-const Env *getBuiltinEnv(void) { return __builtins; }
+Env *getBuiltinEnv(void) { return __builtins; }

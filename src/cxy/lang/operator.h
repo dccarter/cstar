@@ -77,6 +77,7 @@
     f(CallOverload,             "call")                  \
     f(IndexOverload,            "idx")                   \
     f(IndexAssignOverload,      "idx_assign")            \
+    f(Truthy,                   "truthy")                \
     f(StringOverload,           "str")
 
 
@@ -93,7 +94,6 @@ typedef enum {
 #define f(name, ...) op##name,
     AST_OVERLOAD_ONLY_OPS(f)
 #undef f
-    opTruthy,
     opInvalid
 } Operator;
 

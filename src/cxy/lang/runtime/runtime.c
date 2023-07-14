@@ -2,7 +2,7 @@
 // Created by Carter Mbotho on 2023-07-10.
 //
 
-#include "runtime.h"
+#include "epilogue.h"
 
 static int __cxy_enum_name_compare(const void *lhs, const void *rhs)
 {

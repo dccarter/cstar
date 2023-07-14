@@ -282,6 +282,7 @@ struct AstNode {
         struct {
             struct AstNode *params;
             struct AstNode *decl;
+            Env *closure;
         } genericDecl;
 
         struct {
@@ -472,6 +473,7 @@ struct AstNode {
         struct {
             AstNode *node;
             u16 stages;
+            cstring filePath;
         } metadata;
     };
 };

@@ -2,6 +2,8 @@
  * Builtin cxy functions, types and constants
  */
 
+ pub type Destructor = func(this: &const void) -> void
+
 // Unix Error Codes
  ##pub (
     errno,

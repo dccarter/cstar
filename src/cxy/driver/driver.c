@@ -16,6 +16,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "builtins.h"
+#include "lang/strings.h"
+
 typedef struct CachedModule {
     cstring path;
     AstNode *program;
@@ -124,7 +127,7 @@ static AstNode *parseString(CompilerDriver *driver,
     return program;
 }
 
-static cstring getFilenameWithoutDirs(cstring fileName)
+cstring getFilenameWithoutDirs(cstring fileName)
 {
     if (fileName[0] == '/') {
         const char *slash = strrchr(fileName, '/');
@@ -136,10 +139,10 @@ static cstring getFilenameWithoutDirs(cstring fileName)
     return fileName;
 }
 
-static char *getGeneratedPath(const Options *options,
-                              cstring dir,
-                              cstring filePath,
-                              cstring ext)
+char *getGeneratedPath(const Options *options,
+                       cstring dir,
+                       cstring filePath,
+                       cstring ext)
 {
     FormatState state = newFormatState("    ", true);
     cstring fileName = getFilenameWithoutDirs(filePath);
@@ -225,6 +228,12 @@ static bool compileProgram(CompilerDriver *driver,
     const Options *options = &driver->options;
     bool status = true;
 
+    program = makeAstNode(
+        &driver->pool,
+        builtinLoc(),
+        &(AstNode){.tag = astMetadata,
+                   .metadata = {.filePath = fileName, .node = program}});
+
     CompilerStage stage = ccs_First + 1,
                   maxStage =
                       (options->cmd == cmdDev ? options->dev.lastStage.num + 1
@@ -260,7 +269,13 @@ static bool compileBuiltin(CompilerDriver *driver,
     if (program == NULL)
         return false;
 
-    return true;
+    if (compileProgram(driver, program, fileName)) {
+        setBuiltinEnvironment(program->program.module->env);
+        driver->builtins = program->program.module->env;
+        return true;
+    }
+
+    return false;
 }
 
 bool initCompilerDriver(CompilerDriver *compiler, Log *log)
@@ -271,22 +286,89 @@ bool initCompilerDriver(CompilerDriver *compiler, Log *log)
     compiler->moduleCache = newHashTable(sizeof(CachedModule));
     compiler->L = log;
 
-    if (compiler->options.cmd == cmdBuild)
-        return generateAllBuiltinSources(compiler);
+    internCommonStrings(&compiler->strPool);
+
+    if (compiler->options.cmd == cmdBuild) {
+        if (!generateAllBuiltinSources(compiler))
+            return false;
+
+        return compileBuiltin(compiler,
+                              CXY_BUILTINS_SOURCE,
+                              CXY_BUILTINS_SOURCE_SIZE,
+                              "__builtins.cxy");
+    }
     return true;
+}
+
+void deInitCompilerDriver(CompilerDriver *compiler)
+{
+    freeMemPool(&compiler->pool);
+    freeTypeTable(compiler->typeTable);
+    freeHashTable(&compiler->moduleCache);
+    freeStrPool(&compiler->strPool);
 }
 
 AstNode *compileModule(CompilerDriver *driver,
                        const AstNode *source,
                        const AstNode *entities)
 {
-    unreachable("TODO");
+    AstNode *program = NULL;
+    cstring name = source->stringLiteral.value;
+
+    program = findCachedModule(driver, name);
+    bool cached = true;
+    if (program == NULL) {
+        cached = false;
+
+        if (access(name, F_OK) != 0) {
+            logError(driver->L,
+                     &source->loc,
+                     "module source file '{s}' does not exist",
+                     (FormatArg[]){{.s = name}});
+            return NULL;
+        }
+
+        program = parseFile(driver, name);
+        if (program->program.module == NULL) {
+            logError(driver->L,
+                     &source->loc,
+                     "module source '{s}' is not declared as a module",
+                     (FormatArg[]){{.s = name}});
+            return NULL;
+        }
+
+        if (program == NULL)
+            return NULL;
+
+        if (!compileProgram(driver, program, name))
+            return NULL;
+    }
+
+    const AstNode *entity = entities;
+    AstNode *module = program->program.module;
+
+    for (; entity; entity = entity->next) {
+        if (!findSymbolOnly(module->env, entity->importEntity.name)) {
+            logError(
+                driver->L,
+                &entity->loc,
+                "module {s} does not export declaration with name '{s}'",
+                (FormatArg[]){{.s = name}, {.s = entity->importEntity.name}});
+        }
+    }
+
+    if (hasErrors(driver->L))
+        return NULL;
+
+    if (!cached)
+        addCachedModule(driver, name, program);
+
+    return module;
 }
 
 bool compileFile(const char *fileName, CompilerDriver *driver)
 {
     AstNode *program = parseFile(driver, fileName);
-
     return compileProgram(driver, program, fileName);
 }
 

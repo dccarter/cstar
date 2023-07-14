@@ -15,6 +15,7 @@
 #include "lang/ast.h"
 #include "lang/flag.h"
 #include "lang/node.h"
+#include "lang/strings.h"
 #include "lang/ttable.h"
 #include "lang/visitor.h"
 
@@ -163,7 +164,7 @@ static void checkForStmtRangeOperator(AstVisitor *visitor, AstNode *node)
     SemanticsContext *ctx = getAstVisitorContext(visitor);
     const Type *range = stripAll(node->forStmt.range->type);
     SymbolRef *symbol =
-        findSymbolRef(range->tStruct.decl->env, NULL, "op_range", NULL);
+        findSymbolRef(range->tStruct.decl->env, NULL, S_Range, NULL);
     if (symbol == NULL) {
         logError(ctx->L,
                  &node->forStmt.range->loc,
@@ -187,7 +188,7 @@ static void checkForStmtRangeOperator(AstVisitor *visitor, AstNode *node)
                            &node->forStmt.range->loc,
                            &(AstNode){.tag = astIdentifier,
                                       .flags = node->forStmt.range->type->flags,
-                                      .ident.value = "op_range"})}});
+                                      .ident.value = S_Range})}});
 
     memset(&node->forStmt.range->_body, 0, CXY_AST_NODE_BODY_SIZE);
     node->forStmt.range->tag = astCallExpr;
@@ -331,15 +332,15 @@ void evalForStmt(AstVisitor *visitor, AstNode *node)
     while (it) {
         AstNode *body = cloneAstNode(ctx->pool, node->forStmt.body);
 
-        pushScope(&ctx->eval.env, node);
-        SymbolRef *ref = updateSymbol(&ctx->eval.env, name, it);
+        pushScope(ctx->eval.env, node);
+        SymbolRef *ref = updateSymbol(ctx->eval.env, name, it);
         if (!evaluate(ctx->eval.semanticsVisitor, body) ||
             typeIs(body, Error)) {
             node->tag = astError;
-            popScope(&ctx->eval.env);
+            popScope(ctx->eval.env);
             return;
         }
-        popScope(&ctx->eval.env);
+        popScope(ctx->eval.env);
 
         if (!nodeIs(it, Nop))
             insertAstNode(&nodes, body);

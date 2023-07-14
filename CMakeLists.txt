@@ -10,6 +10,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+
 if (NOT CMAKE_BUILD_TYPE)
     # default build key is Debug
     set(CMAKE_BUILD_TYPE Debug)
@@ -23,6 +24,9 @@ set(CMAKE_MODULE_PATH
         ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 option(ENABLE_TESTS "Enable CMake tests" ON)
+
+#add_compile_options(-fsanitize=address)
+#add_link_options(-fsanitize=address)
 
 include(CxyUtils)
 include(FetchContent)
@@ -76,6 +80,7 @@ set(CXY_LANG_SOURCES
         src/cxy/lang/parser.c
         src/cxy/lang/semantics.c
         src/cxy/lang/scope.c
+        src/cxy/lang/strings.c
         src/cxy/lang/ttable.c
         src/cxy/lang/types.c
         src/cxy/lang/visitor.c)
@@ -131,24 +136,53 @@ add_executable(amalgamate
         src/tools/amalgamate.c
         src/cxy/core/utils.c)
 
-CxyAmalgamate(runtime-header
+CxyAmalgamate(epilogue
         OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/generated
         FILES
-            src/cxy/lang/runtime/runtime.h
-            src/cxy/lang/runtime/coro/minicoro.h
-            src/cxy/lang/runtime/evloop/ae.h)
+            src/cxy/lang/runtime/c-stubs.h
+            src/cxy/lang/runtime/epilogue.h
+            src/cxy/lang/runtime/coro/tina.h
+            src/cxy/lang/runtime/evloop/ae.h
+            src/cxy/lang/runtime/async.h)
+
+CxyAmalgamate(prologue
+        OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/generated
+        FILES
+            src/cxy/lang/runtime/prologue.h)
 
 CxyAmalgamate(runtime
         OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/generated
         FILES
             src/cxy/lang/runtime/runtime.c
-            src/cxy/lang/runtime/coro/minicoro.c
-            src/cxy/lang/runtime/evloop/ae.c)
+            src/cxy/lang/runtime/coro/tina.c
+            src/cxy/lang/runtime/evloop/ae.c
+            src/cxy/lang/runtime/async.c)
+
+CxyAmalgamate(builtins
+        OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/generated
+        FILES
+            src/cxy/lang/runtime/builtins.cxy)
+
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/stdlib)
+set(CXY_STD_LIB_SOURCES
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/io.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/json.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/map.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/str.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/vector.cxy)
+
+add_custom_target(
+        cxy-stdlib ALL
+        COMMAND cp -rf ${CXY_STD_LIB_SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/stdlib/
+        DEPENDS ${CXY_STD_LIB_SOURCES}
+)
 
 add_executable(cxy
         src/cxy/driver/main.c
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/builtins.c
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/epilogue.c
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/prologue.c
         ${CMAKE_CURRENT_BINARY_DIR}/generated/runtime.c
-        ${CMAKE_CURRENT_BINARY_DIR}/generated/runtime_header.c
         ${CXY_3RD_PARTY_SOURCES}
         ${CXY_CORE_SOURCES}
         ${CXY_LANG_SOURCES}
@@ -161,3 +195,4 @@ target_compile_definitions(cxy PRIVATE
         -DCXY_SOURCE_LANG_DIR="${CMAKE_SOURCE_DIR}/src/cxy/lang")
 
 target_link_libraries(cxy msgpack-c)
+add_dependencies(cxy cxy-stdlib)

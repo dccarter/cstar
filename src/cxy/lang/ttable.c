@@ -6,6 +6,7 @@
 #include "ast.h"
 #include "flag.h"
 #include "scope.h"
+#include "strings.h"
 
 #include <core/alloc.h>
 #include <core/htable.h>
@@ -556,13 +557,13 @@ GetOrInset makeAppliedType(TypeTable *table, const Type *init)
     return ret;
 }
 
-const Type *makeDestructorType(TypeTable *table)
+const Type *makeDestructorType(TypeTable *table, StrPool *pool)
 {
     return table->destructorType
                ?: makeFuncType(
                       table,
                       &(Type){.flags = flgBuiltin | flgFunctionPtr,
-                              .name = "Destructor",
+                              .name = S_Destructor,
                               .tag = typFunc,
                               .func = {.params =
                                            (const Type *[]){makeVoidPointerType(
@@ -666,14 +667,22 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right)
     }
 }
 
-const Type *getBuiltinOptionalType(TypeTable *table)
+const Type *getBuiltinType(cstring name)
+{
+    if (getBuiltinEnv() != NULL) {
+        AstNode *node = findSymbolOnly(getBuiltinEnv(), name);
+        if (node != NULL) {
+            return node->type;
+        }
+    }
+    return NULL;
+}
+
+const Type *getBuiltinOptionalType()
 {
     static const Type *optionalType = NULL;
     if (optionalType == NULL && getBuiltinEnv() != NULL) {
-        AstNode *node = findSymbolOnly(getBuiltinEnv(), "Optional");
-        if (node != NULL) {
-            optionalType = node->type;
-        }
+        return optionalType = getBuiltinType(S_Optional);
     }
     return optionalType;
 }

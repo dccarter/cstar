@@ -26,7 +26,13 @@ typedef struct {
 } EmbeddedSource;
 
 void makeDirectoryForPath(CompilerDriver *driver, cstring path);
+cstring getFilenameWithoutDirs(cstring fileName);
+char *getGeneratedPath(const Options *options,
+                       cstring dir,
+                       cstring filePath,
+                       cstring ext);
 bool initCompilerDriver(CompilerDriver *compiler, Log *log);
+void deInitCompilerDriver(CompilerDriver *compiler);
 bool compileFile(const char *fileName, CompilerDriver *driver);
 bool generateAllBuiltinSources(CompilerDriver *driver);
 

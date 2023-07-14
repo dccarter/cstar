@@ -10,31 +10,37 @@
 
 #include "cc.h"
 
+#include "epilogue.h"
 #include "lang/ast.h"
+#include "prologue.h"
 #include "runtime.h"
-#include "runtime_header.h"
 
 #include <errno.h>
 #include <string.h>
 #include <sys/stat.h>
 
 static EmbeddedSource sGeneratedFiles[] = {};
-static EmbeddedSource sRuntimeSources[2];
+static EmbeddedSource sRuntimeSources[3];
 
 static EmbeddedSource *getRuntimeSources()
 {
     static bool initialized = false;
     if (!initialized) {
         sRuntimeSources[0] =
-            (EmbeddedSource){.name = "runtime.h",
-                             .data = CXY_RUNTIME_HEADER_SOURCE,
-                             .len = CXY_RUNTIME_HEADER_SOURCE_SIZE,
-                             .mtime = CXY_RUNTIME_HEADER_SOURCE_MTIME};
+            (EmbeddedSource){.name = "epilogue.h",
+                             .data = CXY_EPILOGUE_SOURCE,
+                             .len = CXY_EPILOGUE_SOURCE_SIZE,
+                             .mtime = CXY_EPILOGUE_SOURCE_MTIME};
         sRuntimeSources[1] =
             (EmbeddedSource){.name = "runtime.c",
                              .data = CXY_RUNTIME_SOURCE,
                              .len = CXY_RUNTIME_SOURCE_SIZE,
                              .mtime = CXY_RUNTIME_SOURCE_MTIME};
+        sRuntimeSources[2] =
+            (EmbeddedSource){.name = "prologue.h",
+                             .data = CXY_PROLOGUE_SOURCE,
+                             .len = CXY_PROLOGUE_SOURCE_SIZE,
+                             .mtime = CXY_PROLOGUE_SOURCE_MTIME};
         initialized = true;
     }
 
@@ -55,14 +61,16 @@ static bool generateEmbeddedSources(CompilerDriver *driver,
                (FormatArg[]){{.s = options->buildDir},
                              {.s = dir},
                              {.s = sources[i].name}});
-        cstring fname = formatStateToString(&state);
+        char *fname = formatStateToString(&state);
         freeFormatState(&state);
 
         struct stat st;
         if (stat(fname, &st) == 0) {
             u64 mtime = timespecToMicroSeconds(&st.st_mtimespec);
-            if (mtime > sources[i].mtime)
+            if (mtime > sources[i].mtime) {
+                free(fname);
                 continue;
+            }
         }
         else {
             makeDirectoryForPath(driver, fname);
@@ -74,13 +82,13 @@ static bool generateEmbeddedSources(CompilerDriver *driver,
                      NULL,
                      "creating builtin source file '{s}' failed: '{s}'",
                      (FormatArg[]){{.s = fname}, {.s = strerror(errno)}});
-            free((char *)fname);
+            free(fname);
             return false;
         }
 
         fwrite(sources[i].data, 1, sources[i].len, output);
         fclose(output);
-        free((char *)fname);
+        free(fname);
     }
 
     return true;
@@ -105,13 +113,11 @@ void compileCSourceFile(CompilerDriver *driver, const char *sourceFile)
         makeDirectoryForPath(driver, options->output);
 
     format(&state,
-           "cc {s}/c/runtime/runtime.c {s} -g -o {s} -I{s}/c/imports "
-           "-I{s}/c/runtime"
+           "cc {s}/c/runtime/runtime.c {s} -g -o {s} -I{s}/c -D__CXY_BUILD__ "
            "-Wno-c2x-extensions",
            (FormatArg[]){{.s = options->buildDir},
                          {.s = sourceFile},
                          {.s = driver->options.output ?: "app"},
-                         {.s = options->buildDir},
                          {.s = options->buildDir}});
 
     if (options->rest) {

@@ -233,14 +233,7 @@ void *__cxy_alloc_slice_(u64 count, u64 size, void (*destructor)(void *));
 void *__cxy_realloc_slice_(void *ptr,
                            u64 count,
                            u64 size,
-                           void (*destructor)(void *))
-{
-    __cxy_slice_t *slice =
-        __cxy_realloc(ptr, sizeof(__cxy_slice_t) + (count * size), destructor);
-    slice->len = count;
-    slice->data = slice->p;
-    return slice;
-}
+                           void (*destructor)(void *));
 
 #ifndef __builtin_alloc_slice
 #define __builtin_alloc_slice(T, n, destructor)                                \

@@ -4,6 +4,7 @@
 
 #include "stages.h"
 
+#include "lang/codegen.h"
 #include "lang/operations.h"
 #include "lang/semantics.h"
 
@@ -141,7 +142,7 @@ dumpExit:
 
 static AstNode *executeShakeAst(CompilerDriver *driver, AstNode *node)
 {
-    if (nodeIs(node, Metadata)) {
+    if (!nodeIs(node, Metadata) || node->metadata.stages & ccsShake) {
         logError(driver->L, NULL, "cannot shake an already shaken node", NULL);
         return node;
     }
@@ -155,22 +156,69 @@ static AstNode *executeShakeAst(CompilerDriver *driver, AstNode *node)
                                 .exports = NULL,
                                 .isBuiltins = driver->builtins == NULL};
     semanticsCheck(&context, node);
-    
+
     if (hasErrors(driver->L))
         return NULL;
 
-    return makeAstNode(
-        &driver->pool,
-        builtinLoc(),
-        &(AstNode){.tag = astMetadata,
-                   .metadata = {.node = node, .stages = (1 << ccsShake)}});
+    node->metadata.stages |= (1 << ccsShake);
+    return node;
+}
+
+static AstNode *executeCodegen(CompilerDriver *driver, AstNode *node)
+{
+    Options *options = &driver->options;
+    if (!nodeIs(node, Metadata)) {
+        logError(driver->L, NULL, "missing metadata", NULL);
+        return node;
+    }
+
+    FormatState state = newFormatState("  ", true);
+    CodegenContext context = {.state = &state,
+                              .types = driver->typeTable,
+                              .strPool = &driver->strPool,
+                              .importedFile =
+                                  node->metadata.node->program.module != NULL};
+
+    char *sourceFile =
+        getGeneratedPath(&driver->options,
+                         context.importedFile ? "c/imports" : "c/src",
+                         node->metadata.filePath,
+                         ".c");
+    makeDirectoryForPath(driver, sourceFile);
+
+    FILE *output = fopen(sourceFile, "w");
+    if (output == NULL) {
+        logError(driver->L,
+                 NULL,
+                 "creating output file '{s}' failed, {s}",
+                 (FormatArg[]){{.s = options->output}, {.s = strerror(errno)}});
+        freeFormatState(&state);
+        free(sourceFile);
+        return NULL;
+    }
+
+    generateCode(&context, node);
+
+    if (hasErrors(driver->L)) {
+        freeFormatState(&state);
+        free(sourceFile);
+        return NULL;
+    }
+
+    writeFormatState(&state, output);
+    freeFormatState(&state);
+    fclose(output);
+
+    node->metadata.filePath = sourceFile;
+    node->metadata.stages |= (1 << ccsCodegen);
+    return node;
 }
 
 static CompilerStageExecutor compilerStageExecutors[ccsCOUNT] = {
     [ccsInvalid] = NULL,
     [ccs_Dump] = executeDumpAst,
     [ccsShake] = executeShakeAst,
-    NULL};
+    [ccsCodegen] = executeCodegen};
 
 u64 parseCompilerStages(Log *L, cstring str)
 {

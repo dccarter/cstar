@@ -17,7 +17,10 @@ int main(int argc, char **argv)
         status = false;
         goto exit;
     }
-    initCompilerDriver(&driver, &log);
+    if (!initCompilerDriver(&driver, &log)) {
+        status = false;
+        goto exit;
+    }
 
     for (int i = 1; i < argc && status; ++i)
         status &= compileFile(argv[i], &driver);
@@ -26,5 +29,6 @@ exit:
     writeFormatState(&state, stderr);
     freeFormatState(&state);
     freeLog(&log);
+    deInitCompilerDriver(&driver);
     return status ? EXIT_SUCCESS : EXIT_FAILURE;
 }

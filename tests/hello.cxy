@@ -1,27 +1,7 @@
-module test
+import { println } from "stdlib/io.cxy"
 
-pub ##(
-    STDOUT => STDOUT_FILENO,
-    STDERR => STDERR_FILENO
-) : i32
-
-enum Ids: u8 {
-    Id1,
-    Id2 = 6,
-    Id3
-}
-
-struct Greet[T] {
-    func hello[U](id: T, name: U) {
-    }
-
-    func say(id: T, name: string) => hello(id, name)
-}
-
-func println(...args: auto) {
-    #const i = 0;
-    #for (const arg: #{args.Tinfo}) {
-        args.#{i};
-        #{i += 1}
-    }
+func main(args: [string]) {
+    println("Hello world!")
+    println("This is ", "Carter!")
+    println("This is ", "Carter!", 10, 10.6, true, ' ')
 }

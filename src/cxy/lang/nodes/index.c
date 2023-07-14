@@ -6,8 +6,7 @@
 #include "lang/eval.h"
 #include "lang/semantics.h"
 
-#include "lang/capture.h"
-#include "lang/flag.h"
+#include "lang/strings.h"
 #include "lang/ttable.h"
 #include "lang/visitor.h"
 
@@ -26,7 +25,7 @@ static void checkIndexOperator(AstVisitor *visitor, AstNode *node)
     csAssert0(!isParentAssignExpr(node));
     const Type *target = stripAll(node->indexExpr.target->type);
 
-    AstNode *func = findSymbolOnly(target->tStruct.decl->env, "op_idx");
+    AstNode *func = findSymbolOnly(target->tStruct.decl->env, S_IndexOverload);
     if (func == NULL) {
         logError(ctx->L,
                  &node->indexExpr.target->loc,
@@ -47,7 +46,7 @@ static void checkIndexOperator(AstVisitor *visitor, AstNode *node)
                               node,
                               func,
                               node->indexExpr.target,
-                              "op_idx",
+                              S_IndexOverload,
                               node->indexExpr.index);
     evalType(visitor, node);
 }

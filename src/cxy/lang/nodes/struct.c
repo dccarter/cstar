@@ -7,6 +7,7 @@
 #include "lang/semantics.h"
 
 #include "lang/flag.h"
+#include "lang/strings.h"
 #include "lang/ttable.h"
 #include "lang/visitor.h"
 
@@ -26,15 +27,14 @@ bool isExplicitConstructibleFrom(SemanticsContext *ctx,
     if (!typeIs(type, Struct))
         return isTypeAssignableFrom(type, from);
 
-    AstNode *constructor =
-        findFunctionWithSignature(ctx,
-                                  type->tStruct.decl->env,
-                                  makeString(ctx->strPool, "op_new"),
-                                  flgNone,
-                                  (const Type *[]){from},
-                                  1);
+    AstNode *constructor = findFunctionWithSignature(ctx,
+                                                     type->tStruct.decl->env,
+                                                     S_New,
+                                                     flgNone,
+                                                     (const Type *[]){from},
+                                                     1);
 
-    if (constructor == NULL || findAttribute(constructor, "explicit"))
+    if (constructor == NULL || findAttribute(constructor, S_explicit))
         return false;
 
     if (constructor->type->func.paramsCount != 1)
@@ -66,11 +66,11 @@ bool evalExplicitConstruction(AstVisitor *visitor,
     AstNode *constructor =
         findFunctionWithSignature(ctx,
                                   type->tStruct.decl->env,
-                                  makeString(ctx->strPool, "op_new"),
+                                  S_New,
                                   flgNone,
                                   (const Type *[]){node->type},
                                   1);
-    if (constructor == NULL || findAttribute(constructor, "explicit"))
+    if (constructor == NULL || findAttribute(constructor, S_explicit))
         return false;
 
     if (constructor->type->func.paramsCount != 1)
@@ -132,23 +132,22 @@ const Type *evalConstructorCall(AstVisitor *visitor,
     AstNode *newCallee = makeAstNode(
         ctx->pool,
         &callee->loc,
-        &(AstNode){.tag = astPath,
-                   .flags = callee->flags,
-                   .path.elements = makeAstNode(
-                       ctx->pool,
-                       &node->loc,
-                       &(AstNode){.tag = astPathElem,
-                                  .flags = callee->flags,
-                                  .pathElement.name = name,
-                                  .next = makeAstNode(
-                                      ctx->pool,
-                                      &node->loc,
-                                      &(AstNode){
-                                          .tag = astPathElem,
-                                          .flags = callee->flags,
-                                          .pathElement.name = makeString(
-                                              ctx->strPool, "op_new"),
-                                      })})});
+        &(AstNode){
+            .tag = astPath,
+            .flags = callee->flags,
+            .path.elements = makeAstNode(
+                ctx->pool,
+                &node->loc,
+                &(AstNode){.tag = astPathElem,
+                           .flags = callee->flags,
+                           .pathElement.name = name,
+                           .next = makeAstNode(ctx->pool,
+                                               &node->loc,
+                                               &(AstNode){
+                                                   .tag = astPathElem,
+                                                   .flags = callee->flags,
+                                                   .pathElement.name = S_New,
+                                               })})});
 
     AstNode *ret =
         makeAstNode(ctx->pool,
@@ -223,7 +222,7 @@ void generateStructDelete(CodegenContext *context, const Type *type)
 
     if (hasFlag(type, ImplementsDelete)) {
         writeTypename(context, type);
-        format(state, "__op_delete(this);\n", NULL);
+        format(state, "__delete(this);\n", NULL);
     }
 
     u64 y = 0;
@@ -379,18 +378,15 @@ static const Type *getBuiltinStringBuilderType()
 {
     static const Type *sb = NULL;
     if (sb == NULL && getBuiltinEnv() != NULL) {
-        AstNode *node = findSymbolOnly(getBuiltinEnv(), "StringBuilder");
-        if (node != NULL) {
-            sb = node->type;
-        }
+        return sb = getBuiltinType(S_StringBuilder);
     }
     return sb;
 }
 
-static bool structHasToString(const Type *type)
+static bool structHasToString(StrPool *pool, const Type *type)
 {
     SymbolRef *symbol =
-        findSymbolRef(type->tStruct.decl->env, NULL, "toString", NULL);
+        findSymbolRef(type->tStruct.decl->env, NULL, S_toString, NULL);
 
     const Type *sb = getBuiltinStringBuilderType();
     if (sb == NULL || stripAll(type) == sb)
@@ -411,7 +407,7 @@ static bool structHasToString(const Type *type)
 static void generateStructToString(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
-    if (structHasToString(type))
+    if (structHasToString(context->strPool, type))
         return;
 
     format(state, "\nstatic void ", NULL);
@@ -446,7 +442,7 @@ static void generateStructToString(CodegenContext *context, const Type *type)
 void generateStructDefinition(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
-    format(state, "struct ", NULL);
+    format(state, "\nstruct ", NULL);
     writeTypename(context, type);
     format(state, " {{{>}\n", NULL);
     if (type->tStruct.base) {
@@ -560,6 +556,8 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
         }
         node->type = target;
     }
+
+    free(initialized);
 }
 
 void checkStructField(AstVisitor *visitor, AstNode *node)
@@ -588,7 +586,7 @@ void checkStructField(AstVisitor *visitor, AstNode *node)
 
 void makeOpaqueToString(SemanticsContext *ctx, AstNode *node)
 {
-    if (structHasToString(node->type))
+    if (structHasToString(ctx->strPool, node->type))
         return;
 
     const Type *sb = getBuiltinStringBuilderType();
@@ -597,20 +595,20 @@ void makeOpaqueToString(SemanticsContext *ctx, AstNode *node)
                               &(AstNode){.tag = astFuncDecl,
                                          .flags = flgBuiltinMember,
                                          .parentScope = node,
-                                         .funcDecl.name = "toString"});
+                                         .funcDecl.name = S_toString});
 
     it->type = makeFuncType(
         ctx->typeTable,
         &(Type){
             .tag = typFunc,
-            .name = "toString",
+            .name = S_toString,
             .func = {.paramsCount = 1,
                      .params = (const Type **)(const Type *[]){makePointerType(
                          ctx->typeTable, sb, sb->flags)},
                      .retType = makeVoidType(ctx->typeTable),
                      .decl = it}});
 
-    defineSymbol(node->env, NULL, "toString", it);
+    defineSymbol(node->env, NULL, S_toString, it);
 }
 
 void checkStructDecl(AstVisitor *visitor, AstNode *node)
@@ -655,7 +653,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
     }
     ctx->env = environmentPush(ctx->env, node->env);
 
-    defineSymbol(ctx->env, ctx->L, "This", node);
+    defineSymbol(ctx->env, ctx->L, S_This, node);
     u64 i = 0;
     for (; member; member = member->next, i++) {
         member->parentScope = node;
@@ -741,15 +739,10 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
         }
     }
 
-    if (ctx->env->scope->next) {
-        Env tmp = {.first = ctx->env->scope->next};
-        environmentFree(&tmp);
-        ctx->env->scope->next = NULL;
-    }
-
 checkStructDecl_cleanup:
     if (node->structDecl.base)
         ctx->env = environmentPop(ctx->env);
+    // environmentFreeUnusedScope(ctx->env);
     ctx->env = environmentPop(ctx->env);
     free(members);
 }

@@ -63,8 +63,6 @@ static void generateType(CodegenContext *context, const Type *type)
     default:
         return;
     }
-
-    format(state, ";\n", NULL);
 }
 
 static void generateAllTypes(CodegenContext *ctx)
@@ -160,7 +158,7 @@ static void generateImportDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     format(ctx->state,
-           "#include <{s}.c>",
+           "#include <imports/{s}.c>",
            (FormatArg[]){{.s = node->import.module->stringLiteral.value}});
 }
 
@@ -174,7 +172,7 @@ static void epilogue(ConstAstVisitor *visitor, const AstNode *node)
            NULL);
 
     if (!ctx->importedFile) {
-        format(ctx->state, "#include <runtime/main.c.h>", NULL);
+        format(ctx->state, "#include <runtime/prologue.h>", NULL);
     }
 
     format(ctx->state, "\n", NULL);
@@ -191,8 +189,8 @@ static void prologue(ConstAstVisitor *visitor, const AstNode *node)
                "\n",
                NULL);
         format(ctx->state, "\n\n", NULL);
-        format(ctx->state, "#include <runtime/runtime.h>\n", NULL);
-        format(ctx->state, "#include <__builtins.cxy.c>\n", NULL);
+        format(ctx->state, "#include <runtime/epilogue.h>\n", NULL);
+        format(ctx->state, "#include <imports/__builtins.cxy.c>\n", NULL);
         format(ctx->state, "\n\n", NULL);
     }
     else
@@ -208,9 +206,15 @@ static void prologue(ConstAstVisitor *visitor, const AstNode *node)
 void generateFallback(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    format(ctx->state,
-           "/* <unsupported AST tag {u32}> */",
-           (FormatArg[]){{.u32 = node->tag}});
+    switch (node->tag) {
+    case astNop:
+        break;
+    default:
+        format(ctx->state,
+               "/* <unsupported AST tag {u32}> */",
+               (FormatArg[]){{.u32 = node->tag}});
+        break;
+    }
 }
 
 void generateDestructorRef(ConstAstVisitor *visitor, const AstNode *node)
@@ -476,7 +480,7 @@ void generateCode(CodegenContext *context, const AstNode *prog)
     },
 
     .fallback = generateFallback);
-
+    prog = prog->metadata.node;
     if (prog->program.module)
         context->namespace = prog->program.module->moduleDecl.name;
 

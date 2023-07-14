@@ -22,22 +22,19 @@ typedef struct SemanticsContext {
     TypeTable *typeTable;
     AstNode *previousTopLevelDecl;
     AstNode *currentTopLevelDecl;
-    AstNode *previousStatement;
     AstNode *program;
-    HashTable builtinMacros;
     Env *env;
     Env *exports;
+    EnvList envGc;
     bool isBuiltins;
 
     struct {
-        Env env;
+        Env *env;
         struct AstVisitor *visitor;
         struct AstVisitor *semanticsVisitor;
     } eval;
 
-    u64 anonymousDeclsIndex;
     bool mainOptimized : 1;
-    cstring main;
     union {
         struct {
             Scope *closure;
@@ -134,7 +131,7 @@ AstNode *symbolRefLookupFuncDeclBySignature(SemanticsContext *ctx,
 AstNode *checkGenericDeclReference(AstVisitor *visitor,
                                    AstNode *node,
                                    AstNode *path,
-                                   const Env *env);
+                                   Env *env);
 void checkDefine(AstVisitor *visitor, AstNode *node);
 void checkGenericParam(AstVisitor *visitor, AstNode *node);
 void checkGenericDecl(AstVisitor *visitor, AstNode *node);

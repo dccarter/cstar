@@ -21,11 +21,10 @@ static void checkProgram(AstVisitor *visitor, AstNode *node)
     SemanticsContext *ctx = getAstVisitorContext(visitor);
 
     cstring namespace = ctx->typeTable->currentNamespace;
-    pushScope(ctx->env, node);
-
-    initializeBuiltins(ctx);
-
     initializeModule(visitor, node);
+    if (ctx->isBuiltins) {
+        initializeBuiltins(ctx);
+    }
 
     if (node->program.top)
         checkMany(visitor, node->program.top);
@@ -137,10 +136,11 @@ static SymbolRef *findSymbolRefByPath(const Env *env,
             env = ref->node->env;
             break;
         default:
-            logError(L,
-                     &elem->loc,
-                     "type '{t}' does not support member syntax",
-                     (FormatArg[]){{.t = type}});
+            if (L)
+                logError(L,
+                         &elem->loc,
+                         "type '{t}' does not support member syntax",
+                         (FormatArg[]){{.t = type}});
             return NULL;
         }
     } while (true);
@@ -208,8 +208,8 @@ u64 checkMany(AstVisitor *visitor, AstNode *node)
 void addTopLevelDecl(SemanticsContext *ctx, cstring name, AstNode *node)
 {
     if (name) {
-        Env env = {.first = ctx->env->first, .scope = ctx->env->first};
-        if (!defineSymbol(&env, ctx->L, name, node))
+        Env *env = environmentRoot(ctx->env);
+        if (!defineSymbol(env, ctx->L, name, node))
             return;
     }
 
@@ -405,9 +405,11 @@ AstNode *symbolRefLookupFuncDeclBySignature(SemanticsContext *ctx,
 
 void semanticsCheck(SemanticsContext *context, AstNode *program)
 {
+    program = program->metadata.node;
     context->env = makeEnvironment(context->pool, program);
     context->program = program;
-    
+    program->env = context->env;
+
     // clang-format off
     AstVisitor visitor = makeAstVisitor(context,
     {
@@ -476,8 +478,11 @@ void semanticsCheck(SemanticsContext *context, AstNode *program)
 
     // clang-format on
     AstVisitor evalVisitor = {};
-    initEvalVisitor(&evalVisitor, context);
+    initEvalVisitor(&evalVisitor, context, program);
     context->eval.semanticsVisitor = &visitor;
 
     astVisit(&visitor, program);
+
+    // environmentFree(context->eval.env);
+    // environmentFreeUnusedScope(context->env);
 }

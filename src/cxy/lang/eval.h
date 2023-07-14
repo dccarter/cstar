@@ -7,7 +7,7 @@
 #include <core/sb.h>
 #include <lang/semantics.h>
 
-void initEvalVisitor(AstVisitor *visitor, SemanticsContext *ctx);
+void initEvalVisitor(AstVisitor *visitor, SemanticsContext *ctx, AstNode *node);
 
 bool evaluate(AstVisitor *visitor, AstNode *node);
 void initComptime(SemanticsContext *ctx);
