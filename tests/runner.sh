@@ -172,7 +172,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 run_test () {
-  expected="${1%.cxy}.expected"
+  expected="${1%.cxy}.expected.yml"
   test_case="${2}"
 
   echo -e "Running test case ${test_case}"

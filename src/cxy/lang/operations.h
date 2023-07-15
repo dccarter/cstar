@@ -7,5 +7,8 @@
 #include <driver/driver.h>
 #include <lang/ast.h>
 
+typedef struct cJSON cJSON;
 AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node);
-AstNode *dumpAst(CompilerDriver *driver, AstNode *node);
+AstNode *dumpAstJson(CompilerDriver *driver, AstNode *node, FILE *file);
+AstNode *dumpAstToYaml(CompilerDriver *driver, AstNode *node, FILE *file);
+AstNode *bindAst(CompilerDriver *driver, AstNode *node);

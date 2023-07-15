@@ -125,8 +125,6 @@ static void unpackNodeBody(AstNodeUnpackContext *ctx, AstNode *node)
     case astImportEntity:
         node->importEntity.name = unpackString(ctx);
         node->importEntity.alias = unpackString(ctx);
-        node->importEntity.module = unpackString(ctx);
-        node->importEntity.path = unpackString(ctx);
         break;
     case astModuleDecl:
         node->moduleDecl.name = unpackString(ctx);

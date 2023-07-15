@@ -35,32 +35,6 @@ static void registerStages(HashTable *stages)
 #undef f
 }
 
-const char *getCompilerStageName(CompilerStage stage)
-{
-    switch (stage) {
-#define f(NAME, ...)                                                           \
-    case ccs##NAME:                                                            \
-        return #NAME;
-        CXY_COMPILER_STAGES(f)
-#undef f
-    default:
-        return "<nothing>";
-    }
-}
-
-const char *getCompilerStageDescription(CompilerStage stage)
-{
-    switch (stage) {
-#define f(NAME, DESC)                                                          \
-    case ccs##NAME:                                                            \
-        return DESC;
-        CXY_COMPILER_STAGES(f)
-#undef f
-    default:
-        return "<nothing>";
-    }
-}
-
 static CompilerStage parseNextCompilerStage(Log *L, char *start, char *end)
 {
     static bool initialized = false;
@@ -104,63 +78,77 @@ typedef AstNode *(*CompilerStageExecutor)(CompilerDriver *, AstNode *);
 
 static AstNode *executeDumpAst(CompilerDriver *driver, AstNode *node)
 {
-    if (!nodeIs(node, Metadata)) {
-        logError(
-            driver->L, NULL, "dump only supported on metadata nodes", NULL);
-        return NULL;
-    }
-    node->metadata.stages |= (1 << ccs_Dump);
+    csAssert0(nodeIs(node, Metadata));
+    node->metadata.stages |= BIT(ccs_Dump);
 
-    node = dumpAst(driver, node);
-
+    FILE *file = stdout;
     if (driver->options.output) {
-        FILE *fp = fopen(driver->options.output, "w+");
-        if (fp == NULL) {
+        file = fopen(driver->options.output, "w+");
+        if (file == NULL) {
             logError(driver->L,
                      NULL,
                      "opening output file '{s}' failed: {s}",
                      (FormatArg[]){{.s = driver->options.output},
                                    {.s = strerror(errno)}});
-            goto dumpExit;
+            return NULL;
         }
-        fputs(node->metadata.node->stringLiteral.value, fp);
-        putc('\n', stdout);
-    }
-    else {
-        fputs(node->metadata.node->stringLiteral.value, stdout);
-        putc('\n', stdout);
     }
 
-dumpExit:
-    free((void *)node->metadata.node->stringLiteral.value);
-    node->tag = astNop;
-    return node;
+    if (driver->options.dev.dumpJson)
+        return dumpAstJson(driver, node->metadata.node, file);
+    else
+        return dumpAstToYaml(driver, node, file);
 }
 
 static AstNode *executeShakeAst(CompilerDriver *driver, AstNode *node)
 {
-    if (nodeIs(node, Metadata)) {
-        logError(driver->L, NULL, "cannot shake an already shaken node", NULL);
-        return node;
-    }
-
-    node = shakeAstNode(driver, node);
+    csAssert0(nodeIs(node, Metadata));
+    node->metadata.node = shakeAstNode(driver, node->metadata.node);
 
     if (hasErrors(driver->L))
         return NULL;
-
-    return makeAstNode(
-        &driver->pool,
-        builtinLoc(),
-        &(AstNode){.tag = astMetadata,
-                   .metadata = {.node = node, .stages = (1 << ccsShake)}});
+    node->metadata.stages |= BIT(ccsShake);
+    return node;
 }
 
-static CompilerStageExecutor compilerStageExecutors[ccsCOUNT] = {
-    [ccsInvalid] = NULL,
-    [ccs_Dump] = executeDumpAst,
-    [ccsShake] = executeShakeAst,
-    NULL};
+static AstNode *executeBindAst(CompilerDriver *driver, AstNode *node)
+{
+    csAssert0(nodeIs(node, Metadata));
+    node->metadata.node = bindAst(driver, node->metadata.node);
+
+    if (hasErrors(driver->L))
+        return NULL;
+    ;
+
+    node->metadata.stages |= BIT(ccsBind);
+    return node;
+}
+
+const char *getCompilerStageName(CompilerStage stage)
+{
+    switch (stage) {
+#define f(NAME, ...)                                                           \
+    case ccs##NAME:                                                            \
+        return #NAME;
+        CXY_COMPILER_STAGES(f)
+#undef f
+    default:
+        return "<nothing>";
+    }
+}
+
+const char *getCompilerStageDescription(CompilerStage stage)
+{
+    switch (stage) {
+#define f(NAME, DESC)                                                          \
+    case ccs##NAME:                                                            \
+        return DESC;
+        CXY_COMPILER_STAGES(f)
+#undef f
+    default:
+        return "<nothing>";
+    }
+}
 
 u64 parseCompilerStages(Log *L, cstring str)
 {
@@ -200,6 +188,12 @@ u64 parseCompilerStages(Log *L, cstring str)
     return stages;
 }
 
+static CompilerStageExecutor compilerStageExecutors[ccsCOUNT] = {
+    [ccsInvalid] = NULL,
+    [ccs_Dump] = executeDumpAst,
+    [ccsBind] = executeBindAst,
+    [ccsShake] = executeShakeAst};
+
 AstNode *executeCompilerStage(CompilerDriver *driver,
                               CompilerStage stage,
                               AstNode *node)
@@ -221,7 +215,7 @@ AstNode *executeCompilerStage(CompilerDriver *driver,
                 "executing '{s}' id",
                 (FormatArg[]){{.s = stageName}});
     }
-    
+
     compilerStatsSnapshot(driver);
     node = executor(driver, node);
     compilerStatsRecord(driver, stage);

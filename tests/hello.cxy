@@ -1,11 +1,30 @@
-@[option1]
+func hello(a: string) {
+}
+
+func hello(a: u64) {
+}
+
+macro is_const(T: auto) {
+}
+
+struct Generic[T: is_const] {
+    - priv: T
+    func say(data: T) {
+        priv = data
+    }
+
+    func hi[U](u: U, t: T) {
+        priv = u + t
+    }
+}
+
 func test() {
     var a, _, b = ("Jake", 20, "Paul");
     if (const a = hello(a, b))
         if (const z = true)
-            println(a, z)
+            hello(a, z)
 
     while (const x = hello(a, b))
-        println(a, b)
+        hello(a);
 }
 

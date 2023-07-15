@@ -1,0 +1,110 @@
+Program:
+decls:
+- FuncDecl:
+  flags: (TopLevelDecl)
+  name: main
+  params:
+  - FuncParam:
+    name: args
+    index: 0
+    paramType:
+      ArrayType:
+      flags: (TypeAst)
+      element:
+        StringType:
+        flags: (TypeAst)
+  body:
+    BlockStmt:
+    stmts:
+    - VarDecl:
+      flags: (Const)
+      names:
+      - Identifier:
+        value: one
+      init:
+        ClosureExpr:
+        body:
+          IntegerLit:
+          value: 1
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          Path:
+          elements:
+          - PathElem:
+            name: one
+          isType: false
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          GroupExpr:
+          expr:
+            ClosureExpr:
+            params:
+            - FuncParam:
+              name: name
+              index: 0
+              paramType:
+                StringType:
+                flags: (TypeAst)
+            body:
+              BlockStmt:
+              stmts:
+              - ReturnStmt:
+                expr:
+                  StringExpr:
+                  parts:
+                  - StringLit:
+                    value: "Hello "
+                  - Path:
+                    elements:
+                    - PathElem:
+                      name: name
+                    isType: false
+                  - StringLit:
+                    value: ""
+        args:
+        - StringLit:
+          value: "User"
+    - VarDecl:
+      names:
+      - Identifier:
+        value: x
+      init:
+        IntegerLit:
+        value: 100
+    - VarDecl:
+      names:
+      - Identifier:
+        value: b
+      init:
+        StringLit:
+        value: "Hello"
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          GroupExpr:
+          expr:
+            ClosureExpr:
+            body:
+              StringExpr:
+              parts:
+              - StringLit:
+                value: ""
+              - Path:
+                elements:
+                - PathElem:
+                  name: b
+                isType: false
+              - StringLit:
+                value: " -> "
+              - Path:
+                elements:
+                - PathElem:
+                  name: x
+                isType: false
+              - StringLit:
+                value: ""

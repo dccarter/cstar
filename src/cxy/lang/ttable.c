@@ -668,11 +668,12 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right)
     }
 }
 
-const Type *getBuiltinOptionalType(TypeTable *table)
+const Type *getBuiltinOptionalType(Log *L)
 {
     static const Type *optionalType = NULL;
     if (optionalType == NULL && getBuiltinEnv() != NULL) {
-        AstNode *node = findSymbolOnly(getBuiltinEnv(), "Optional");
+        AstNode *node =
+            findSymbol(getBuiltinEnv(), L, "Optional", builtinLoc());
         if (node != NULL) {
             optionalType = node->type;
         }

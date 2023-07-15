@@ -44,7 +44,7 @@ const char *getAssignOpString(Operator op)
     }
 }
 
-const char *getBinaryOpFuncName(Operator op)
+const char *getOpOverloadName(Operator op)
 {
     switch (op) {
 #define f(NAME, p, t, s, fn)                                                   \

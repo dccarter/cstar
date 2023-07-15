@@ -19,6 +19,7 @@ typedef struct Options {
         bool withLocation;
         bool withoutAttrs;
         bool withNamedEnums;
+        bool dumpJson;
         struct {
             cstring str;
             u64 num;

@@ -125,6 +125,7 @@ typedef struct CaptureSet {
     const Type *type;                                                          \
     struct AstNode *parentScope;                                               \
     struct AstNode *next;                                                      \
+    struct AstNode *link;                                                      \
     struct AstNode *attrs;
 
 typedef enum { iptModule, iptPath } ImportKind;
@@ -159,6 +160,7 @@ struct AstNode {
             AstNode *names;
             AstNode *type;
             AstNode *container;
+            Env *env;
         } define;
 
         struct {
@@ -172,8 +174,7 @@ struct AstNode {
         struct {
             cstring alias;
             cstring name;
-            cstring module;
-            cstring path;
+            AstNode *target;
         } importEntity;
 
         struct {
@@ -188,6 +189,7 @@ struct AstNode {
         struct {
             cstring value;
             cstring alias;
+            AstNode *resolvesTo;
         } ident;
 
         struct {
@@ -352,6 +354,8 @@ struct AstNode {
             const char *name;
             struct AstNode *base;
             struct AstNode *options;
+
+            Env *env;
         } enumDecl;
 
         struct {
@@ -426,7 +430,12 @@ struct AstNode {
 
         struct {
             struct AstNode *expr;
-        } exprStmt, deferStmt, groupExpr;
+        } exprStmt, groupExpr;
+
+        struct {
+            struct AstNode *expr;
+            struct AstNode *block;
+        } deferStmt;
 
         struct {
             struct AstNode *loop;
@@ -473,6 +482,7 @@ struct AstNode {
         struct {
             AstNode *node;
             u16 stages;
+            cstring filePath;
         } metadata;
     };
 };

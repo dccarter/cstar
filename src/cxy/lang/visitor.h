@@ -8,17 +8,17 @@
 
 typedef struct AstVisitor AstVisitor;
 
-typedef AstNode *(*Visitor)(struct AstVisitor *, AstNode *);
+typedef void (*Visitor)(struct AstVisitor *, AstNode *);
 
 typedef struct AstVisitor {
     void *context;
     AstNode *current;
 
-    AstNode *(*visitors[astCOUNT])(struct AstVisitor *, AstNode *node);
+    void (*visitors[astCOUNT])(struct AstVisitor *, AstNode *node);
 
-    AstNode *(*fallback)(struct AstVisitor *, AstNode *);
+    void (*fallback)(struct AstVisitor *, AstNode *);
 
-    AstNode *(*dispatch)(Visitor, struct AstVisitor *, AstNode *);
+    void (*dispatch)(Visitor, struct AstVisitor *, AstNode *);
 } AstVisitor;
 
 typedef struct ConstAstVisitor ConstAstVisitor;
@@ -28,6 +28,7 @@ typedef void (*ConstVisitor)(struct ConstAstVisitor *, const AstNode *);
 typedef struct ConstAstVisitor {
     void *context;
     const AstNode *current;
+    AstNode *next;
 
     void (*visitors[astCOUNT])(struct ConstAstVisitor *, const AstNode *node);
 
@@ -43,7 +44,7 @@ typedef struct ConstAstVisitor {
 #define makeConstAstVisitor(C, ...) (ConstAstVisitor){.context = (C), .visitors = __VA_ARGS__}
 // clang-format on
 
-AstNode *astVisitFallbackVisitAll(AstVisitor *visitor, AstNode *node);
+void astVisitFallbackVisitAll(AstVisitor *visitor, AstNode *node);
 void astConstVisitFallbackVisitAll(ConstAstVisitor *visitor,
                                    const AstNode *node);
 

@@ -147,8 +147,6 @@ static void visitImportEntity(ConstAstVisitor *visitor, const AstNode *node)
 
     packString(&ctx->packer, node->importEntity.name);
     packString(&ctx->packer, node->importEntity.alias);
-    packString(&ctx->packer, node->importEntity.module);
-    packString(&ctx->packer, node->importEntity.path);
 }
 
 static void visitModuleDecl(ConstAstVisitor *visitor, const AstNode *node)

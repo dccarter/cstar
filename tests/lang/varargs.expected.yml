@@ -1,0 +1,204 @@
+Program:
+decls:
+- FuncDecl:
+  flags: (TopLevelDecl)
+  name: varargs
+  params:
+  - FuncParam:
+    flags: (Variadic)
+    name: args
+    index: 0
+    paramType:
+      AutoType:
+      flags: (TypeAst)
+  body:
+    BlockStmt:
+- FuncDecl:
+  flags: (TopLevelDecl)
+  name: add
+  params:
+  - FuncParam:
+    flags: (Variadic)
+    name: nums
+    index: 0
+    paramType:
+      PrimitiveType:
+      flags: (TypeAst)
+      prtId: 11
+  body:
+    BlockStmt:
+    stmts:
+    - VarDecl:
+      names:
+      - Identifier:
+        value: sum
+      varType:
+        PrimitiveType:
+        flags: (TypeAst)
+        prtId: 11
+      init:
+        IntegerLit:
+        value: 0
+    - VarDecl:
+      flags: (Const|Comptime)
+      names:
+      - Identifier:
+        value: i
+      init:
+        IntegerLit:
+        value: 0
+    - ForStmt:
+      flags: (Comptime)
+      stmts:
+        VarDecl:
+        flags: (Const)
+        names:
+        - Identifier:
+          value: num
+      range:
+        Path:
+        flags: (Comptime)
+        elements:
+        - PathElem:
+          name: nums
+        - PathElem:
+          name: Tinfo
+        isType: false
+      body:
+        BlockStmt:
+        stmts:
+        - ExprStmt:
+          expr:
+            AssignExpr:
+            op: 1
+            lhs:
+              Path:
+              elements:
+              - PathElem:
+                name: sum
+              isType: false
+            rhs:
+              Path:
+              elements:
+              - PathElem:
+                name: sum
+              isType: false
+        - ExprStmt:
+          expr:
+            AssignExpr:
+            flags: (Comptime)
+            op: 1
+            lhs:
+              Path:
+              elements:
+              - PathElem:
+                name: i
+              isType: false
+            rhs:
+              Path:
+              elements:
+              - PathElem:
+                name: i
+              isType: false
+- FuncDecl:
+  flags: (TopLevelDecl)
+  name: many
+  params:
+  - FuncParam:
+    name: x
+    index: 0
+    paramType:
+      PrimitiveType:
+      flags: (TypeAst)
+      prtId: 9
+  - FuncParam:
+    flags: (Variadic)
+    name: rest
+    index: 0
+    paramType:
+      PrimitiveType:
+      flags: (TypeAst)
+      prtId: 11
+  body:
+    BlockStmt:
+    stmts:
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          Path:
+          elements:
+          - PathElem:
+            name: add
+          isType: false
+        args:
+        - CastExpr:
+          to:
+            PrimitiveType:
+            flags: (TypeAst)
+            prtId: 11
+          exp:
+            Path:
+            elements:
+            - PathElem:
+              name: x
+            isType: false
+        - UnaryExpr:
+          op: 28
+          isPrefix: true
+          lhs:
+            Path:
+            elements:
+            - PathElem:
+              name: rest
+            isType: false
+- FuncDecl:
+  flags: (TopLevelDecl)
+  name: main
+  params:
+  - FuncParam:
+    name: args
+    index: 0
+    paramType:
+      ArrayType:
+      flags: (TypeAst)
+      element:
+        StringType:
+        flags: (TypeAst)
+  body:
+    BlockStmt:
+    stmts:
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          Path:
+          elements:
+          - PathElem:
+            name: varargs
+          isType: false
+        args:
+        - IntegerLit:
+          value: 10
+        - StringLit:
+          value: "Hello"
+        - CharLit:
+          value: 'c'
+        - FloatLit:
+          value: 2000.600000
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          Path:
+          elements:
+          - PathElem:
+            name: many
+          isType: false
+        args:
+        - IntegerLit:
+          value: 10
+        - FloatLit:
+          value: 10.000000
+        - FloatLit:
+          value: 100.600000

@@ -1,0 +1,186 @@
+Program:
+decls:
+- VarDecl:
+  flags: (TopLevelDecl)
+  names:
+  - Identifier:
+    value: X
+  init:
+    IntegerLit:
+    value: 10
+- VarDecl:
+  flags: (Const|TopLevelDecl)
+  names:
+  - Identifier:
+    value: Y
+  init:
+    TupleExpr:
+    members:
+    - StringLit:
+      value: "Hello"
+    - StringLit:
+      value: "World"
+- FuncDecl:
+  flags: (TopLevelDecl)
+  name: main
+  params:
+  - FuncParam:
+    name: args
+    index: 0
+    paramType:
+      ArrayType:
+      flags: (TypeAst)
+      element:
+        StringType:
+        flags: (TypeAst)
+  body:
+    BlockStmt:
+    stmts:
+    - VarDecl:
+      names:
+      - Identifier:
+        value: x
+    - VarDecl:
+      names:
+      - Identifier:
+        value: y
+      init:
+        IntegerLit:
+        value: 10
+    - VarDecl:
+      flags: (Const)
+      names:
+      - Identifier:
+        value: k
+      init:
+        Path:
+        elements:
+        - PathElem:
+          name: y
+        isType: false
+    - ExprStmt:
+      expr:
+        AssignExpr:
+        op: 34
+        lhs:
+          Path:
+          elements:
+          - PathElem:
+            name: x
+          isType: false
+        rhs:
+          Path:
+          elements:
+          - PathElem:
+            name: x
+          isType: false
+    - BlockStmt:
+      stmts:
+      - VarDecl:
+        names:
+        - Identifier:
+          value: k
+        init:
+          IntegerLit:
+          value: 10
+      - VarDecl:
+        names:
+        - Identifier:
+          value: y
+        init:
+          Path:
+          elements:
+          - PathElem:
+            name: x
+          isType: false
+    - BlockStmt:
+      stmts:
+      - VarDecl:
+        names:
+        - Identifier:
+          value: x
+        varType:
+          PrimitiveType:
+          flags: (TypeAst)
+          prtId: 9
+      - VarDecl:
+        names:
+        - Identifier:
+          value: y
+        varType:
+          TupleType:
+          flags: (TypeAst)
+          members:
+          - PrimitiveType:
+            flags: (TypeAst)
+            prtId: 0
+          - PrimitiveType:
+            flags: (TypeAst)
+            prtId: 9
+        init:
+          TupleExpr:
+          members:
+          - BoolLit:
+            value: true
+          - IntegerLit:
+            value: 20
+    - BlockStmt:
+      stmts:
+      - VarDecl:
+        names:
+        - Identifier:
+          value: x
+        init:
+          IntegerLit:
+          value: 20
+      - VarDecl:
+        names:
+        - Identifier:
+          value: y
+        init:
+          BoolLit:
+          value: true
+      - VarDecl:
+        names:
+        - Identifier:
+          value: m
+        varType:
+          PrimitiveType:
+          flags: (TypeAst)
+          prtId: 9
+      - VarDecl:
+        names:
+        - Identifier:
+          value: n
+        varType:
+          PrimitiveType:
+          flags: (TypeAst)
+          prtId: 9
+      - VarDecl:
+        names:
+        - Identifier:
+          value: a
+        init:
+          IntegerLit:
+          value: 20
+      - VarDecl:
+        names:
+        - Identifier:
+          value: b
+        init:
+          CharLit:
+          value: ' '
+      - VarDecl:
+        names:
+        - Identifier:
+          value: d
+        init:
+          IntegerLit:
+          value: 20
+      - VarDecl:
+        names:
+        - Identifier:
+          value: e
+        init:
+          CharLit:
+          value: ' '

@@ -3,6 +3,7 @@
 //
 
 #include "visitor.h"
+#include "flag.h"
 
 #define AST_VISIT_ALL_NODES(MODE)                                              \
     switch (node->tag) {                                                       \
@@ -148,6 +149,7 @@
         MODE##Visit(visitor, node->binaryExpr.lhs);                            \
         break;                                                                 \
     case astUnaryExpr:                                                         \
+    case astAddressOf:                                                         \
         MODE##Visit(visitor, node->unaryExpr.operand);                         \
         break;                                                                 \
     case astTernaryExpr:                                                       \
@@ -228,6 +230,11 @@ void astVisit(AstVisitor *visitor, AstNode *node)
     if (node == NULL)
         return;
 
+    // Skip all the nodes marked as visited
+    if (hasFlag(node, Visited)) {
+        node->flags &= ~flgVisited;
+    }
+
     Visitor func = visitor->visitors[node->tag] ?: visitor->fallback;
 
     if (func == NULL)
@@ -236,18 +243,11 @@ void astVisit(AstVisitor *visitor, AstNode *node)
     AstNode *stack = visitor->current;
     visitor->current = node;
 
-    AstNode *ret = NULL, *next = node->next;
     if (visitor->dispatch) {
-        ret = visitor->dispatch(func, visitor, node);
+        visitor->dispatch(func, visitor, node);
     }
     else {
-        ret = func(visitor, node);
-    }
-
-    if (ret && ret != node) {
-        // replace node
-        getLastAstNode(ret)->next = next;
-        *node = *ret;
+        func(visitor, node);
     }
 
     visitor->current = stack;
@@ -274,10 +274,9 @@ void astConstVisit(ConstAstVisitor *visitor, const AstNode *node)
     visitor->current = stack;
 }
 
-AstNode *astVisitFallbackVisitAll(AstVisitor *visitor, AstNode *node)
+void astVisitFallbackVisitAll(AstVisitor *visitor, AstNode *node)
 {
     AST_VISIT_ALL_NODES(ast)
-    return node;
 }
 
 void astConstVisitFallbackVisitAll(ConstAstVisitor *visitor,

@@ -49,10 +49,10 @@ set(CXY_LANG_SOURCES
         src/cxy/lang/ast.c
         src/cxy/lang/encode.c
         src/cxy/lang/decode.c
-        src/cxy/lang/operations/dump.c
         src/cxy/lang/lexer.c
         src/cxy/lang/operator.c
         src/cxy/lang/parser.c
+        src/cxy/lang/strings.c
         src/cxy/lang/scope.c
         src/cxy/lang/ttable.c
         src/cxy/lang/types.c
@@ -60,7 +60,10 @@ set(CXY_LANG_SOURCES
 
 
 set(CXY_OPERATIONS_SOURCES
-        src/cxy/lang/operations/shake.c)
+        src/cxy/lang/operations/bind.c
+        src/cxy/lang/operations/json.c
+        src/cxy/lang/operations/shake.c
+        src/cxy/lang/operations/yaml.c)
 
 set(CXY_DRIVER_SOURCES
         src/cxy/driver/cc.c
@@ -94,11 +97,19 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/msgpack/msgpack-c
     GIT_TAG c-6.0.0
 )
-
 FetchContent_MakeAvailable(msgpack-c)
+
+set(BUILD_TESTING OFF)
+FetchContent_Declare(
+    libyaml
+    GIT_REPOSITORY https://github.com/yaml/libyaml.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(libyaml)
+
 cmake_policy(POP)
 
-target_link_libraries(cxy msgpack-c)
+target_link_libraries(cxy msgpack-c yaml)
 
 
 add_executable(escape src/tools/escape.c src/cxy/core/utils.c)

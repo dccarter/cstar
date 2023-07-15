@@ -124,7 +124,7 @@ static AstNode *parseString(CompilerDriver *driver,
     return program;
 }
 
-static cstring getFilenameWithoutDirs(cstring fileName)
+cstring getFilenameWithoutDirs(cstring fileName)
 {
     if (fileName[0] == '/') {
         const char *slash = strrchr(fileName, '/');
@@ -136,10 +136,10 @@ static cstring getFilenameWithoutDirs(cstring fileName)
     return fileName;
 }
 
-static char *getGeneratedPath(const Options *options,
-                              cstring dir,
-                              cstring filePath,
-                              cstring ext)
+char *getGeneratedPath(const Options *options,
+                       cstring dir,
+                       cstring filePath,
+                       cstring ext)
 {
     FormatState state = newFormatState("    ", true);
     cstring fileName = getFilenameWithoutDirs(filePath);
@@ -225,29 +225,35 @@ static bool compileProgram(CompilerDriver *driver,
     const Options *options = &driver->options;
     bool status = true;
 
+    AstNode *metadata = makeAstNode(
+        &driver->pool,
+        builtinLoc(),
+        &(AstNode){.tag = astMetadata,
+                   .metadata = {.filePath = fileName, .node = program}});
+
     CompilerStage stage = ccs_First + 1,
                   maxStage =
                       (options->cmd == cmdDev ? options->dev.lastStage.num + 1
                                               : ccsCOUNT);
 
     for (; stage < maxStage; stage++) {
-        program = executeCompilerStage(driver, stage, program);
-        if (program == NULL) {
+        metadata = executeCompilerStage(driver, stage, metadata);
+        if (metadata == NULL) {
             status = false;
             goto compileProgramDone;
         }
     }
 
     if (hasDumpEnable(options)) {
-        program = executeCompilerStage(driver, ccs_Dump, program);
-        if (program == NULL)
+        metadata = executeCompilerStage(driver, ccs_Dump, metadata);
+        if (metadata == NULL)
             status = false;
     }
 
 compileProgramDone:
     if (!options->dev.cleanAst)
         compilerStatsPrint(driver);
-    return true;
+    return status;
 }
 
 static bool compileBuiltin(CompilerDriver *driver,
@@ -282,11 +288,7 @@ AstNode *compileModule(CompilerDriver *driver,
 
 bool compileFile(const char *fileName, CompilerDriver *driver)
 {
-    if (driver->options.cmd == cmdDev && !generateBuiltinSources(driver))
-        return false;
-
     AstNode *program = parseFile(driver, fileName);
-
     return compileProgram(driver, program, fileName);
 }
 

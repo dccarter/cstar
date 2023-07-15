@@ -68,7 +68,7 @@ AstNode *duplicateAstNode(MemPool *pool, const AstNode *node)
 {
     if (node == NULL)
         return NULL;
-    
+
     AstNode *copy = allocFromMemPool(pool, sizeof(AstNode));
     memcpy(copy, node, sizeof(AstNode));
     return copy;
@@ -513,6 +513,29 @@ void unlinkAstNode(AstNode **head, AstNode *prev, AstNode *node)
         prev->next = node->next;
 }
 
+const AstNode *findAttribute(const AstNode *node, cstring name)
+{
+    const AstNode *attr = node->attrs;
+    while (attr) {
+        if (name == attr->attr.name)
+            break;
+        attr = attr->next;
+    }
+
+    return attr;
+}
+
+const AstNode *findAttributeArgument(const AstNode *attr, cstring name)
+{
+    const AstNode *arg = attr->attr.args;
+    while (arg) {
+        if (name == arg->fieldExpr.name)
+            break;
+        arg = arg->next;
+    }
+    return arg ? arg->fieldExpr.value : NULL;
+}
+
 const char *getDeclKeyword(AstTag tag)
 {
     switch (tag) {
@@ -532,9 +555,13 @@ const char *getDeclKeyword(AstTag tag)
 
 const char *getDeclName(const AstNode *node)
 {
+    node = nodeIs(node, GenericDecl) ? node->genericDecl.decl : node;
+
     switch (node->tag) {
     case astFuncDecl:
         return node->funcDecl.name;
+    case astMacroDecl:
+        return node->macroDecl.name;
     case astTypeDecl:
         return node->typeDecl.name;
     case astEnumDecl:

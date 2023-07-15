@@ -2,6 +2,8 @@
 // Created by Carter Mbotho on 2023-07-06.
 //
 
+#include "lang/ast.h"
+#include "lang/flag.h"
 #include "lang/operations.h"
 #include "lang/visitor.h"
 
@@ -11,99 +13,117 @@ typedef struct {
     StrPool *strPool;
 } ShakeAstContext;
 
-AstNode *visitVariableDecl(AstVisitor *visitor, AstNode *node)
+static AstNode *makeTupleMemberExpr(ShakeAstContext *ctx, AstNode *tuple, u64 i)
+{
+    if (tuple == NULL)
+        return NULL;
+
+    if (nodeIs(tuple, TupleExpr)) {
+        AstNode *arg = tuple->tupleExpr.args;
+        tuple->tupleExpr.args = arg->next;
+        arg->next = NULL;
+        return arg;
+    }
+
+    AstNode *target = NULL;
+    if (nodeIs(tuple, VarDecl)) {
+        target = makePathFromIdent(ctx->pool, tuple->varDecl.names);
+    }
+    else {
+        csAssert0(nodeIs(tuple, Path) || nodeIs(tuple, Identifier));
+        target = copyAstNode(ctx->pool, tuple);
+    }
+
+    return makeAstNode(
+        ctx->pool,
+        &tuple->loc,
+        &(AstNode){
+            .tag = astMemberExpr,
+            .flags = tuple->flags,
+            .memberExpr = {.target = target,
+                           .member = makeAstNode(
+                               ctx->pool,
+                               &tuple->loc,
+                               &(AstNode){.tag = astIntegerLit,
+                                          .intLiteral.value = (i64)i})}});
+}
+
+static AstNode *shakeVariableInitializer(ShakeAstContext *ctx, AstNode *init)
+{
+    if (init == NULL || nodeIs(init, TupleExpr) || nodeIs(init, Identifier) ||
+        (nodeIs(init, Path) && init->path.elements->next == NULL))
+        return init;
+
+    // Create variable for this
+    return makeAstNode(
+        ctx->pool,
+        &init->loc,
+        &(AstNode){.tag = astVarDecl,
+                   .varDecl = {.names = makeGenIdent(
+                                   ctx->pool, ctx->strPool, &init->loc),
+                               .init = init}});
+}
+
+void visitVariableDecl(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
-    bool isMultipleVariable = node->varDecl.names->next != NULL;
-    if (!isMultipleVariable)
-        return node;
-
     AstNode *names = node->varDecl.names, *init = node->varDecl.init,
-            *type = node->varDecl.type;
-    if (init != NULL) {
-        if (!nodeIs(init, TupleExpr)) {
-            logError(ctx->L,
-                     &init->loc,
-                     "unexpected multiple variable initializer expression, "
-                     "expecting a tuple expression",
-                     NULL);
-            return node;
-        }
+            *type = node->varDecl.type, *name = names;
 
-        u64 namesCount = countAstNodes(names),
-            initCount = countAstNodes(init->tupleExpr.args);
-        if (namesCount > initCount) {
-            logError(ctx->L,
-                     locExtend(&(FileLoc){},
-                               &names->loc,
-                               &getLastAstNode(names)->loc),
-                     "number of variables exceed number of initializer "
-                     "elements in tuple, expecting {u64} or less, got {u64}",
-                     (FormatArg[]){{.u64 = initCount}, {.u64 = namesCount}});
-            return node;
-        }
-    }
-    else if (node->varDecl.type == NULL) {
-        logError(ctx->L,
-                 locAfter(&(FileLoc){}, &getLastAstNode(names)->loc),
-                 "multiple variables types required when initializer is not "
-                 "provided",
-                 NULL);
-        return node;
-    }
+    if (names->next == NULL)
+        return;
 
-    AstNode *name = names, *value = init ? init->tupleExpr.args : NULL;
-    AstNode *vars = NULL, *next = NULL;
-    for (; name; name = name->next, value = value ? value->next : NULL) {
-        if (isIgnoreVar(name->ident.value)) {
-            if (init == NULL) {
-                logError(
-                    ctx->L,
-                    &name->loc,
-                    "ignore variable '_' usage in multi-variable declaration "
-                    "allowed only when an initializer is specified",
-                    NULL);
-                return node;
+    AstNode *tuple = shakeVariableInitializer(ctx, init);
+
+    AstNode *vars = NULL, *it = NULL;
+    u64 i = 0;
+    for (; name; i++) {
+        AstNode *name_ = name;
+        name = name->next;
+        name_->next = NULL;
+
+        if (isIgnoreVar(name_->ident.value)) {
+            if (tuple == NULL) {
+                logError(ctx->L,
+                         &name_->loc,
+                         "cannot use the builtin ignore `_` variable when "
+                         "multi-variable declaration has no expression",
+                         NULL);
+                return;
             }
             continue;
         }
 
         AstNode *var = makeAstNode(
             ctx->pool,
-            &node->loc,
-            &(AstNode){.tag = astVarDecl,
-                       .flags = node->flags,
-                       .varDecl = {.names = copyAstNode(ctx->pool, name),
-                                   .init = copyAstNode(ctx->pool, value),
-                                   .type = type ? cloneAstNode(ctx->pool, type)
-                                                : NULL}});
+            &name_->loc,
+            &(AstNode){
+                .tag = astVarDecl,
+                .flags = node->flags | flgVisited,
+                .varDecl = {.names = name_,
+                            .type = copyAstNode(ctx->pool, type),
+                            .init = makeTupleMemberExpr(ctx, tuple, i)}});
         if (vars == NULL) {
-            vars = next = var;
+            vars = var;
+            it = var;
         }
         else {
-            next = next->next = var;
+            it->next = var;
+            it = var;
         }
     }
 
-    if (vars == NULL) {
-        logWarning(ctx->L,
-                   &node->loc,
-                   "pointless multi-variable declaration can be replaced with "
-                   "expression",
-                   NULL);
-
-        init->next = node->next;
-        *node = *init;
-    }
-    else {
-        next->next = node->next;
+    it->next = node->next;
+    if (tuple == init) {
         *node = *vars;
     }
-
-    return node;
+    else {
+        tuple->next = vars;
+        *node = *tuple;
+    }
 }
 
-AstNode *visitIfStmt(AstVisitor *visitor, AstNode *node)
+void visitIfStmt(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
     AstNode *cond = node->ifStmt.cond, *ifNode = node;
@@ -148,11 +168,9 @@ AstNode *visitIfStmt(AstVisitor *visitor, AstNode *node)
     astVisit(visitor, ifNode->ifStmt.body);
     if (ifNode->ifStmt.otherwise)
         astVisit(visitor, ifNode->ifStmt.otherwise);
-
-    return node;
 }
 
-AstNode *visitWhileStmt(AstVisitor *visitor, AstNode *node)
+void visitWhileStmt(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
     AstNode *cond = node->whileStmt.cond, *whileNode = node;
@@ -208,7 +226,6 @@ AstNode *visitWhileStmt(AstVisitor *visitor, AstNode *node)
     }
 
     astVisit(visitor, whileNode->whileStmt.body);
-    return node;
 }
 
 AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)

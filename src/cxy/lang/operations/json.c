@@ -228,8 +228,6 @@ static void visitImportEntity(ConstAstVisitor *visitor, const AstNode *node)
 
     cJSON_AddStringToObject(jsonNode, "name", node->importEntity.name);
     cJSON_AddStringToObject(jsonNode, "alias", node->importEntity.alias);
-    cJSON_AddStringToObject(jsonNode, "module", node->importEntity.module);
-    cJSON_AddStringToObject(jsonNode, "path", node->importEntity.path);
 
     Return(ctx, jsonNode);
 }
@@ -856,15 +854,13 @@ static void visitFallback(ConstAstVisitor *visitor, const AstNode *node)
     Return(ctx, jsonNode);
 }
 
-AstNode *dumpAst(CompilerDriver *driver, AstNode *node)
+AstNode *dumpAstJson(CompilerDriver *driver, AstNode *node, FILE *file)
 {
     JsonConverterContext ctx = {
         .pool = &driver->pool,
         .config = {.withNamedEnums = driver->options.dev.withNamedEnums,
                    .withoutAttrs = driver->options.dev.withoutAttrs,
                    .withLocation = driver->options.dev.withLocation}};
-
-    csAssert0(nodeIs(node, Metadata));
 
     // clang-format off
     ConstAstVisitor visitor = makeConstAstVisitor(&ctx, {
@@ -939,14 +935,13 @@ AstNode *dumpAst(CompilerDriver *driver, AstNode *node)
     }, .fallback = visitFallback );
 
     // clang-format on
-    astConstVisit(&visitor, node->metadata.node);
+    astConstVisit(&visitor, node);
 
-    node->metadata.node =
-        makeAstNode(ctx.pool,
-                    builtinLoc(),
-                    &(AstNode){.tag = astStringLit,
-                               .stringLiteral.value = cJSON_Print(ctx.value)});
+    char *str = cJSON_Print(ctx.value);
     cJSON_Delete(ctx.value);
+    fputs(str, file);
+    fputc('\n', file);
+    free(str);
 
     return node;
 }

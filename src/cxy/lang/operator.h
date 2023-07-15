@@ -102,8 +102,8 @@ typedef enum {
 const char *getUnaryOpString(Operator op);
 const char *getBinaryOpString(Operator op);
 const char *getAssignOpString(Operator op);
-const char *getBinaryOpFuncName(Operator op);
-
+const char *getOpOverloadName(Operator op);
+const char *getOperatorString(Operator op);
 Operator tokenToUnaryOperator(TokenTag tag);
 
 Operator tokenToBinaryOperator(TokenTag tag);

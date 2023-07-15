@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "core/log.h"
 #include <core/mempool.h>
 #include <core/strpool.h>
 #include <lang/types.h>
@@ -102,4 +103,5 @@ void enumerateTypeTable(TypeTable *table,
                         bool(with)(void *, const void *));
 
 const Type *promoteType(TypeTable *table, const Type *left, const Type *right);
-const Type *getBuiltinOptionalType(TypeTable *table);
+
+const Type *getBuiltinOptionalType(Log *L);

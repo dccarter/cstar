@@ -18,6 +18,11 @@ typedef struct CompilerDriver {
     Env *builtins;
 } CompilerDriver;
 
+cstring getFilenameWithoutDirs(cstring fileName);
+char *getGeneratedPath(const Options *options,
+                       cstring dir,
+                       cstring filePath,
+                       cstring ext);
 void makeDirectoryForPath(CompilerDriver *driver, cstring path);
 bool initCompilerDriver(CompilerDriver *compiler, Log *log);
 bool compileFile(const char *fileName, CompilerDriver *driver);

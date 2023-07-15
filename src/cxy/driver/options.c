@@ -135,7 +135,7 @@ bool parseCommandLineOptions(int *argc, char **argv, Options *options, Log *log)
         options->dev.lastStage.num = (u64)log2((f64)options->dev.lastStage.num);
     }
     else if (cmd->id == CMD_build) {
-        options->cmd = cmdDev;
+        options->cmd = cmdBuild;
         UnloadCmd(cmd, options, BUILD_CMD_LAYOUT);
     }
 
