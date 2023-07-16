@@ -105,3 +105,9 @@ void enumerateTypeTable(TypeTable *table,
 const Type *promoteType(TypeTable *table, const Type *left, const Type *right);
 
 const Type *getBuiltinOptionalType(Log *L);
+
+const AstNode *expectSymbolInType(const Type *type,
+                                  Log *L,
+                                  cstring name,
+                                  const FileLoc *loc);
+const AstNode *findSymbolInType(const Type *type, cstring name);

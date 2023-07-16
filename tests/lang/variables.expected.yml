@@ -184,3 +184,50 @@ decls:
         init:
           CharLit:
           value: ' '
+      - VarDecl:
+        names:
+        - Identifier:
+          value: __gen_var_0
+        init:
+          CallExpr:
+          callee:
+            GroupExpr:
+            expr:
+              ClosureExpr:
+              body:
+                TupleExpr:
+                members:
+                - IntegerLit:
+                  value: 20
+                - IntegerLit:
+                  value: 20
+      - VarDecl:
+        names:
+        - Identifier:
+          value: f
+        init:
+          MemberExpr:
+          target:
+            Path:
+            elements:
+            - PathElem:
+              name: __gen_var_0
+            isType: false
+          member:
+            IntegerLit:
+            value: 0
+      - VarDecl:
+        names:
+        - Identifier:
+          value: g
+        init:
+          MemberExpr:
+          target:
+            Path:
+            elements:
+            - PathElem:
+              name: __gen_var_0
+            isType: false
+          member:
+            IntegerLit:
+            value: 1

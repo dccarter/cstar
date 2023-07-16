@@ -2,6 +2,7 @@
 var X = 10;
 const Y = ("Hello", "World");
 
+
 func main(args: [string]) {
     var x;
     var y = 10;
@@ -23,5 +24,6 @@ func main(args: [string]) {
         var m, n: i32;
         var a, _, b = (20, ' ', true);
         var d, e = (20, ' ', true);
+        var f, g = (() => (20, 20))();
     }
 }

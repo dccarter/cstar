@@ -87,7 +87,6 @@ typedef struct AstNode AstNode;
 typedef struct StructField {
     const char *name;
     const Type *type;
-    const AstNode *decl;
 } StructField;
 
 typedef struct GenericParam {
@@ -171,12 +170,11 @@ typedef struct Type {
             const Type **params;
             const char **captureNames;
             AstNode *decl;
-            Env *env;
         } func;
 
         struct {
             const Type *base;
-            Env *env;
+            AstNode *decl;
         } container;
 
         struct {
@@ -184,7 +182,6 @@ typedef struct Type {
             EnumOption *options;
             u64 count;
             AstNode *decl;
-            Env *env;
         } tEnum;
 
         struct {
@@ -192,7 +189,6 @@ typedef struct Type {
             StructField *fields;
             u64 fieldsCount;
             AstNode *decl;
-            Env *env;
         } tStruct;
 
         struct {
