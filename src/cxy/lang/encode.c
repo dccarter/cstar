@@ -170,7 +170,7 @@ static void visitTuple(ConstAstVisitor *visitor, const AstNode *node)
 {
     nodePackHeader(visitor, node);
 
-    manyNodesToBinary(visitor, node->tupleType.args);
+    manyNodesToBinary(visitor, node->tupleType.elements);
 }
 
 static void visitArrayType(ConstAstVisitor *visitor, const AstNode *node)
@@ -290,7 +290,6 @@ static void visitPathElement(ConstAstVisitor *visitor, const AstNode *node)
 
     packString(&ctx->packer, node->pathElement.name);
     packString(&ctx->packer, node->pathElement.alt);
-    packString(&ctx->packer, node->pathElement.alt2);
     msgpack_pack_uint64(&ctx->packer, node->pathElement.index);
 }
 
@@ -309,10 +308,10 @@ static void visitFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
     nodePackHeader(visitor, node);
 
     msgpack_pack_uint32(&ctx->packer, node->funcDecl.operatorOverload);
-    msgpack_pack_uint32(&ctx->packer, node->funcDecl.index);
+    msgpack_pack_uint16(&ctx->packer, node->funcDecl.index);
     packString(&ctx->packer, node->funcDecl.name);
-    manyNodesToBinary(visitor, node->funcDecl.params);
-    nodeToBinary(visitor, node->funcDecl.ret);
+    manyNodesToBinary(visitor, node->funcDecl.signature->params);
+    nodeToBinary(visitor, node->funcDecl.signature->ret);
     nodeToBinary(visitor, node->funcDecl.body);
 }
 

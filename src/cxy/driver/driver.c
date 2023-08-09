@@ -9,6 +9,7 @@
 #include "lang/ast.h"
 #include "lang/lexer.h"
 #include "lang/parser.h"
+#include "lang/strings.h"
 #include "lang/ttable.h"
 
 #include <errno.h>
@@ -276,6 +277,7 @@ bool initCompilerDriver(CompilerDriver *compiler, Log *log)
     compiler->typeTable = newTypeTable(&compiler->pool, &compiler->strPool);
     compiler->moduleCache = newHashTable(sizeof(CachedModule));
     compiler->L = log;
+    internCommonStrings(&compiler->strPool);
     return true;
 }
 

@@ -20,6 +20,41 @@ struct HashMapNode[K, V] {
     value: V
 }
 
+interface Iterator[T] {
+    abstract  func next() : T?
+    abstract  func `!!`() : bool
+}
+
+struct MapIterator[K, T] : Iterator[(K, &T)] {
+    - nodes: [HashMapNode[K, V]]
+    - hashes: [i32]
+    - index: 0
+
+    func `new`(=nodes:  [HashMapNode[K, V]], =hashes: [i32]) =>
+        advance()
+
+    override func next() : (K, &T?) {
+        if (index < len!(arr)) {
+            const prev = index++;
+            advance()
+            return (data.[prev].key, &data.[prev].value)
+        }
+        else
+            raise("")
+    }
+
+    override func `!!`() : bool => index < len!(nodes)
+
+    - func advance() {
+        while (index < len!(nodes)) {
+            if (isOccupiedHash(hashes.[index]))
+                break
+
+            index++
+        }
+    }
+}
+
 pub struct HashMap[K, V] {
     - data: [HashMapNode[K, V]]
     - hashes: [u32]
@@ -151,25 +186,9 @@ pub struct HashMap[K, V] {
     @inline
     func `[]=`(key: K, value: V) => insert(key, value)
 
-    func `..`(body: func (key: K, value: &const V) -> void) {
-        var i = 0;
-        while (i < len!(data)) {
-            if (isOccupiedHash(hashes.[i]))
-                body(data.[i].key, &data.[i].value)
+    func `..`() => MapIterator[K, V](data, hashes)
 
-            i++
-        }
-    }
-
-    const func `..`(body: func (key: K, value: &const V) -> void) {
-        var i = 0;
-        while (i < len!(data)) {
-            if (isOccupiedHash(hashes.[i]))
-                body(data.[i].key, &data.[i].value)
-
-            i++
-        }
-    }
+    const func `..`() => MapIterator[K, const V](data, hashes)
 
     func toString(sb: &StringBuilder) {
         sb << "{"

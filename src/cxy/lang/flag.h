@@ -45,15 +45,16 @@
     f(BuiltinMember,        33)                 \
     f(ComptimeIterable,     34)                 \
     f(Define,               35)                 \
-    f(CPointerCast,         36)
+    f(CPointerCast,         36)                 \
+    f(DeclarationOnly,      37)                 \
+    f(Inherited,            38)
 
 // clang-format on
-
-typedef enum {
-    flgNone = 0,
-#define f(name, bit) flg##name = BIT(bit),
-    CXY_LANG_FLAGS(f)
+static const u64 flgNone = 0;
+#define f(name, bit) static const u64 flg##name = BIT(bit);
+CXY_LANG_FLAGS(f)
 #undef f
-} Flags;
+
+typedef u64 Flags;
 
 char *flagsToString(u64 flags);

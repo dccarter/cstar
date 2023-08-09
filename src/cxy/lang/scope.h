@@ -7,9 +7,10 @@
 #include "lang/ast.h"
 
 typedef struct Symbol {
-    u64 index;
+    u16 index;
     const char *name;
     AstNode *node;
+    AstNode *last;
 } Symbol;
 
 typedef struct Scope {
@@ -39,6 +40,8 @@ AstNode *findSymbol(const Env *env,
                     const char *name,
                     const FileLoc *loc);
 
+void suggestSimilarSymbol(const Env *env, Log *L, const char *name);
+
 AstNode *findEnclosingLoop(Env *env,
                            Log *L,
                            const char *keyword,
@@ -49,7 +52,16 @@ AstNode *findEnclosingLoopOrSwitch(Env *env,
                                    const char *keyword,
                                    const FileLoc *loc);
 
-AstNode *findEnclosingFunc(Env *env, Log *L, const FileLoc *loc);
+AstNode *findEnclosingFunctionOrClosure(Env *env, Log *L, const FileLoc *loc);
+AstNode *findEnclosingFunction(Env *env,
+                               Log *L,
+                               cstring keyword,
+                               const FileLoc *loc);
+
+AstNode *findEnclosingStruct(Env *env,
+                             Log *L,
+                             cstring keyword,
+                             const FileLoc *loc);
 
 AstNode *findEnclosingBlock(Env *env, Log *L, const FileLoc *loc);
 

@@ -105,7 +105,7 @@ extern "C" {
 #if __has_attribute(cleanup)
 #define cxy_cleanup(func) __attribute__((cleanup(func)))
 #elif __has_attribute(__cleanup__)
-#define cxy_cleanup(func) __attribute__((__cleanup__(func)))
+#define cxy_cleanup(enclosure) __attribute__((__cleanup__(enclosure)))
 #else
 #warning                                                                       \
     "Cleanup attribute not available, attempt to use cxy_cleanup will cause an error"
@@ -251,6 +251,18 @@ int binarySearch(const void *arr,
                  const void *x,
                  u64 size,
                  int (*compare)(const void *, const void *));
+
+static inline int binarySearchWithRef(const void *arr,
+                                      u64 len,
+                                      const void *x,
+                                      u64 size,
+                                      int (*compare)(const void *,
+                                                     const void *))
+{
+    return binarySearch(arr, len, &x, size, compare);
+}
+
+int compareStrings(const void *lhs, const void *rhs);
 
 static inline bool isIgnoreVar(cstring s)
 {

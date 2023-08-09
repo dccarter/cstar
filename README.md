@@ -15,7 +15,7 @@ func main(args: [string]) {
 ### Language features
 
 `cxy` supports most features that would be supported on most
-object oriented programming languages (see the `tests/lang` directory
+object-oriented programming languages (see the `tests/lang` directory
 for some of the supported features)
 
 #### Tuples
@@ -33,7 +33,7 @@ const user : User = ("name", 25, (100, "street", "city", "country"))
 
 #### Structs
 
-- [ ] Static fields
+- [ ] Static members
 - [x] Operator overloading
 - [ ] Base classes (partially supported)
 - [ ] Visibility (Supported by the parser, `-` used to mark members as private)
@@ -54,12 +54,17 @@ struct Printer {
    
    // `new` operator used as the constructor
    func `new`(=tab: u32 = 0) {
-       buffer = allocSlice[char](capacity)
+       buffer = StringBuilder()
    }
    
    @inline
-   const func print(x: string) : void {
-       sb << x
+   func print(x: string) : void {
+       buffer << x
+   }
+   
+   @inline
+   func print(x: u32|i32) : void {
+       buffer << x
    }
 }
 ```

@@ -52,7 +52,11 @@ const Type *makePointerType(TypeTable *table, const Type *pointed, u64 flags);
 const Type *makeOptionalType(TypeTable *table, const Type *target, u64 flags);
 const Type *makeTypeInfo(TypeTable *table, const Type *target);
 const Type *makeArrayType(TypeTable *table, const Type *elementType, u64 size);
-const Type *makeContainerType(TypeTable *table, cstring name, Env *env);
+const Type *makeContainerType(TypeTable *table,
+                              cstring name,
+                              const Type *base,
+                              cstring *names,
+                              u64 count);
 
 static inline const Type *makeVoidPointerType(TypeTable *table, u64 flags)
 {
@@ -79,13 +83,23 @@ const Type *makeThisType(TypeTable *table, cstring name, u64 flags);
 
 const Type *makeFuncType(TypeTable *table, const Type *init);
 
+const Type *changeFunctionRetType(TypeTable *table,
+                                  const Type *func,
+                                  const Type *ret);
+
 const Type *makeStruct(TypeTable *table, const Type *init);
+
+const Type *replaceStructType(TypeTable *table,
+                              const Type *og,
+                              const Type *with);
+
+const Type *makeInterfaceType(TypeTable *table, const Type *init);
 
 const Type *makeModuleType(TypeTable *table, cstring name);
 
 const Type *makeEnum(TypeTable *table, const Type *init);
 
-const Type *makeGenericType(TypeTable *table, const Type *init);
+const Type *makeGenericType(TypeTable *table, AstNode *decl, bool inferrable);
 
 const Type *makeWrappedType(TypeTable *table, const Type *target, u64 flags);
 const Type *unwrapType(const Type *type, u64 *flags);
@@ -106,8 +120,11 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right);
 
 const Type *getBuiltinOptionalType(Log *L);
 
-const AstNode *expectSymbolInType(const Type *type,
-                                  Log *L,
-                                  cstring name,
-                                  const FileLoc *loc);
-const AstNode *findSymbolInType(const Type *type, cstring name);
+const Type *expectSymbolInType(TypeTable *table,
+                               const Type *type,
+                               Log *L,
+                               cstring name,
+                               const FileLoc *loc);
+
+const Type *getIntegerTypeForLiteral(TypeTable *table, i64 literal);
+int findTypeInArray(const Type **types, u64 count, const Type *type);

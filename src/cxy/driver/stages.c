@@ -124,6 +124,25 @@ static AstNode *executeBindAst(CompilerDriver *driver, AstNode *node)
     return node;
 }
 
+static AstNode *executeTypeCheckAst(CompilerDriver *driver, AstNode *node)
+{
+    csAssert0(nodeIs(node, Metadata));
+    if (!(node->metadata.stages & BIT(ccsBind))) {
+        logError(
+            driver->L, builtinLoc(), "cannot type check an unbound ast", NULL);
+        return NULL;
+    }
+
+    node->metadata.node = checkAst(driver, node->metadata.node);
+
+    if (hasErrors(driver->L))
+        return NULL;
+    ;
+
+    node->metadata.stages |= BIT(ccsTypeCheck);
+    return node;
+}
+
 const char *getCompilerStageName(CompilerStage stage)
 {
     switch (stage) {
@@ -191,8 +210,9 @@ u64 parseCompilerStages(Log *L, cstring str)
 static CompilerStageExecutor compilerStageExecutors[ccsCOUNT] = {
     [ccsInvalid] = NULL,
     [ccs_Dump] = executeDumpAst,
+    [ccsShake] = executeShakeAst,
     [ccsBind] = executeBindAst,
-    [ccsShake] = executeShakeAst};
+    [ccsTypeCheck] = executeTypeCheckAst};
 
 AstNode *executeCompilerStage(CompilerDriver *driver,
                               CompilerStage stage,

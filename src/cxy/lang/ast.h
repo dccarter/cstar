@@ -28,7 +28,7 @@ struct StrPool;
     f(Identifier)           \
     f(ImportEntity)         \
     f(DestructorRef)        \
-    f(Types)                \
+    f(TypeRef)              \
     f(VoidType)             \
     f(AutoType)             \
     f(StringType)           \
@@ -56,6 +56,7 @@ struct StrPool;
     f(EnumDecl)             \
     f(StructField)          \
     f(StructDecl)           \
+    f(InterfaceDecl)        \
     f(ModuleDecl)           \
     f(ImportDecl)           \
     f(Expressions)          \
@@ -80,6 +81,7 @@ struct StrPool;
     f(MemberExpr)           \
     f(RangeExpr)            \
     f(NewExpr)              \
+    f(SpreadExpr)           \
     f(Statements)           \
     f(ExprStmt)             \
     f(BreakStmt)            \
@@ -118,6 +120,12 @@ typedef struct CaptureSet {
     u64 index;
 } ClosureCapture;
 
+typedef struct {
+    bool createMapping;
+    MemPool *pool;
+    HashTable mapping;
+} CloneAstConfig;
+
 #define CXY_AST_NODE_HEAD                                                      \
     AstTag tag;                                                                \
     FileLoc loc;                                                               \
@@ -125,11 +133,26 @@ typedef struct CaptureSet {
     const Type *type;                                                          \
     struct AstNode *parentScope;                                               \
     struct AstNode *next;                                                      \
-    struct AstNode *link;                                                      \
+    struct {                                                                   \
+        struct AstNode *first;                                                 \
+        struct AstNode *link;                                                  \
+    } list;                                                                    \
     struct AstNode *attrs;
 
 typedef enum { iptModule, iptPath } ImportKind;
 typedef enum { cInclude, cDefine } CCodeKind;
+
+typedef struct FunctionSignature {
+    struct AstNode *params;
+    struct AstNode *ret;
+    struct AstNode *typeParams;
+} FunctionSignature;
+
+typedef struct SortedNodes {
+    u64 count;
+    int (*compare)(const void *lhs, const void *rhs);
+    struct AstNode *nodes[0];
+} SortedNodes;
 
 struct AstNode {
     union {
@@ -144,6 +167,10 @@ struct AstNode {
     union {
         struct {
         } _body;
+
+        struct {
+            cstring name;
+        } _namedNode;
 
         struct {
             struct AstNode *module;
@@ -172,8 +199,8 @@ struct AstNode {
         } import;
 
         struct {
-            cstring alias;
             cstring name;
+            cstring alias;
             AstNode *target;
         } importEntity;
 
@@ -214,13 +241,13 @@ struct AstNode {
         } stringLiteral;
 
         struct {
-            const char *name;
+            cstring name;
             struct AstNode *args;
         } attr;
 
         struct {
             u64 len;
-            struct AstNode *args;
+            struct AstNode *elements;
         } tupleType, tupleExpr;
 
         struct {
@@ -279,10 +306,13 @@ struct AstNode {
         struct {
             const char *name;
             struct AstNode *constraints;
+            u16 inferIndex;
         } genericParam;
 
         struct {
-            Env *env;
+            cstring name;
+            u16 paramsCount;
+            i16 inferrable;
             struct AstNode *params;
             struct AstNode *decl;
         } genericDecl;
@@ -290,26 +320,29 @@ struct AstNode {
         struct {
             const char *name;
             const char *alt;
-            union {
-                const char *alt2;
-                struct Scope *scope;
-            };
             struct AstNode *args;
-            struct AstNode *resolvesTo;
-            u64 index;
+            union {
+                struct AstNode *enclosure;
+                struct AstNode *resolvesTo;
+            };
+            u32 index;
+            bool isKeyword;
         } pathElement;
 
         struct {
             struct AstNode *elements;
             bool isType;
+            u16 inheritanceDepth;
         } path;
 
         struct {
-            Operator operatorOverload;
-            u32 index;
             const char *name;
-            struct AstNode *params;
-            struct AstNode *ret;
+            Operator operatorOverload;
+            u16 index;
+            u16 requiredParamsCount;
+            u16 paramsCount;
+            FunctionSignature *signature;
+            struct AstNode *opaqueParams;
             struct AstNode *body;
         } funcDecl;
 
@@ -328,49 +361,62 @@ struct AstNode {
         } funcParam;
 
         struct {
+            cstring name;
             struct AstNode *names;
             struct AstNode *type;
             struct AstNode *init;
         } varDecl;
 
         struct {
-            const char *name;
+            cstring name;
             struct AstNode *aliased;
+            struct AstNode *typeParams;
         } typeDecl;
 
         struct {
-            const char *name;
+            cstring name;
             struct AstNode *members;
+            struct AstNode *typeParams;
+            SortedNodes *sortedMembers;
         } unionDecl;
 
         struct {
-            const char *name;
+            cstring name;
             struct AstNode *value;
             u64 index;
         } enumOption;
 
         struct {
+            cstring name;
             u64 len;
-            const char *name;
             struct AstNode *base;
             struct AstNode *options;
-
-            Env *env;
+            SortedNodes *sortedOptions;
         } enumDecl;
 
         struct {
-            const char *name;
+            cstring name;
             u64 index;
             struct AstNode *type;
             struct AstNode *value;
         } structField;
 
         struct {
-            const char *name;
+            cstring name;
             struct AstNode *base;
+            struct AstNode *implements;
             struct AstNode *members;
-            const Type *generatedFrom;
+            struct AstNode *typeParams;
+            const struct Type *thisType;
+            SortedNodes *sortedMembers;
         } structDecl;
+
+        struct {
+            cstring name;
+            struct AstNode *members;
+            struct AstNode *typeParams;
+            SortedNodes *sortedMembers;
+        } interfaceDecl;
 
         struct {
             Operator op;
@@ -430,7 +476,7 @@ struct AstNode {
 
         struct {
             struct AstNode *expr;
-        } exprStmt, groupExpr;
+        } exprStmt, groupExpr, spreadExpr;
 
         struct {
             struct AstNode *expr;
@@ -502,13 +548,25 @@ AstNode *makePathFromIdent(MemPool *pool, const AstNode *ident);
 
 AstNode *makeGenIdent(MemPool *pool,
                       struct StrPool *strPool,
-                      const FileLoc *loc);
+                      const FileLoc *loc,
+                      const Type *type);
 
 AstNode *copyAstNode(MemPool *pool, const AstNode *node);
 
 AstNode *duplicateAstNode(MemPool *pool, const AstNode *node);
 
-AstNode *cloneAstNode(MemPool *pool, const AstNode *node);
+void initCloneAstNodeMapping(CloneAstConfig *config);
+void deinitCloneAstNodeConfig(CloneAstConfig *config);
+
+AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node);
+
+static inline AstNode *shallowCloneAstNode(MemPool *pool, const AstNode *node)
+{
+    return cloneAstNode(&(CloneAstConfig){.pool = pool, .createMapping = false},
+                        node);
+}
+
+AstNode *cloneGenericDeclaration(MemPool *pool, const AstNode *node);
 
 AstNode *replaceAstNode(AstNode *node, const AstNode *with);
 
@@ -558,10 +616,59 @@ void unlinkAstNode(AstNode **head, AstNode *prev, AstNode *node);
 
 const char *getDeclKeyword(AstTag tag);
 
-const char *getDeclName(const AstNode *node);
+const char *getDeclarationName(const AstNode *node);
+void setDeclarationName(AstNode *node, cstring name);
+AstNode *getGenericDeclarationParams(AstNode *node);
+void setGenericDeclarationParams(AstNode *node, AstNode *params);
 
 const AstNode *findAttribute(const AstNode *node, cstring name);
 
+FileLoc *getDeclarationLoc(FileLoc *dst, const AstNode *node);
+
 const AstNode *findAttributeArgument(const AstNode *attr, cstring name);
 
+bool mapAstNode(HashTable *mapping, const AstNode *from, AstNode *to);
+
 cstring getAstNodeName(const AstNode *node);
+
+FunctionSignature *makeFunctionSignature(MemPool *pool,
+                                         const FunctionSignature *from);
+
+AstNode *getParentScope(AstNode *node);
+
+AstNode *makeTypeReferenceNode(MemPool *pool,
+                               const Type *type,
+                               const FileLoc *loc);
+
+AstNode *findInAstNode(AstNode *node, cstring name);
+AstNode *resolvePath(const AstNode *path);
+
+int isInInheritanceChain(const AstNode *node, const AstNode *parent);
+AstNode *getBaseClassAtLevel(AstNode *node, u64 level);
+AstNode *getBaseClassByName(AstNode *node, cstring name);
+
+attr(always_inline) static i64 integerLiteralValue(const AstNode *node)
+{
+    csAssert0(nodeIs(node, IntegerLit));
+    return node->intLiteral.hasMinus ? -node->intLiteral.value
+                                     : node->intLiteral.value;
+}
+
+int compareNamedAstNodes(const void *lhs, const void *rhs);
+SortedNodes *makeSortedNodes(MemPool *pool,
+                             AstNode *nodes,
+                             int (*compare)(const void *, const void *));
+
+AstNode *findInSortedNodes(SortedNodes *sorted, cstring name);
+
+static inline AstNode *underlyingDeclaration(AstNode *decl)
+{
+    return nodeIs(decl, GenericDecl) ? decl->genericDecl.decl : decl;
+}
+
+attr(always_inline) static bool isStructDeclaration(AstNode *node)
+{
+    return nodeIs(node, StructDecl) ||
+           nodeIs(node, GenericDecl) &&
+               isStructDeclaration(node->genericDecl.decl);
+}

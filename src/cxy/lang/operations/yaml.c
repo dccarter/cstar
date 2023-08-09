@@ -290,7 +290,7 @@ static void nodeToYaml(ConstAstVisitor *visitor,
     emitEndMap(ctx, node);
 }
 
-static void manyNodesToJson(ConstAstVisitor *visitor,
+static void manyNodesToYaml(ConstAstVisitor *visitor,
                             cstring name,
                             const AstNode *node)
 {
@@ -357,7 +357,7 @@ static void nodeAddHeader(ConstAstVisitor *visitor, const AstNode *node)
     }
 
     if (!ctx->config.withoutAttrs) {
-        manyNodesToJson(visitor, "loc", node->attrs);
+        manyNodesToYaml(visitor, "loc", node->attrs);
     }
 }
 
@@ -367,8 +367,8 @@ static void visitProgram(ConstAstVisitor *visitor, const AstNode *node)
     nodeAddHeader(visitor, node);
 
     nodeToYaml(visitor, "module", node->program.module);
-    manyNodesToJson(visitor, "top", node->program.top);
-    manyNodesToJson(visitor, "decls", node->program.decls);
+    manyNodesToYaml(visitor, "top", node->program.top);
+    manyNodesToYaml(visitor, "decls", node->program.decls);
 }
 
 static void visitError(ConstAstVisitor *visitor, const AstNode *node)
@@ -421,7 +421,7 @@ static void visitAttr(ConstAstVisitor *visitor, const AstNode *node)
 
     emitMapKey(ctx, node, "name");
     emitMapKey(ctx, node, node->attr.name);
-    manyNodesToJson(visitor, "args", node->attr.args);
+    manyNodesToYaml(visitor, "args", node->attr.args);
 }
 
 static void visitStrExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -429,7 +429,7 @@ static void visitStrExpr(ConstAstVisitor *visitor, const AstNode *node)
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
-    manyNodesToJson(visitor, "parts", node->stringExpr.parts);
+    manyNodesToYaml(visitor, "parts", node->stringExpr.parts);
 }
 
 static void visitDefine(ConstAstVisitor *visitor, const AstNode *node)
@@ -437,7 +437,7 @@ static void visitDefine(ConstAstVisitor *visitor, const AstNode *node)
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
-    manyNodesToJson(visitor, "names", node->define.names);
+    manyNodesToYaml(visitor, "names", node->define.names);
 
     nodeToYaml(visitor, "defineType", node->define.type);
 
@@ -452,7 +452,7 @@ static void visitImport(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "alias", node->import.alias);
 
     nodeToYaml(visitor, "module", node->import.module);
-    manyNodesToJson(visitor, "entities", node->import.entities);
+    manyNodesToYaml(visitor, "entities", node->import.entities);
 }
 
 static void visitImportEntity(ConstAstVisitor *visitor, const AstNode *node)
@@ -495,7 +495,7 @@ static void visitTuple(ConstAstVisitor *visitor, const AstNode *node)
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
-    manyNodesToJson(visitor, "members", node->tupleType.args);
+    manyNodesToYaml(visitor, "members", node->tupleType.elements);
 }
 
 static void visitArrayType(ConstAstVisitor *visitor, const AstNode *node)
@@ -514,7 +514,7 @@ static void visitFuncType(ConstAstVisitor *visitor, const AstNode *node)
     nodeAddHeader(visitor, node);
 
     nodeToYaml(visitor, "ret", node->funcType.ret);
-    manyNodesToJson(visitor, "params", node->funcType.params);
+    manyNodesToYaml(visitor, "params", node->funcType.params);
 }
 
 static void visitOptionalType(ConstAstVisitor *visitor, const AstNode *node)
@@ -530,8 +530,8 @@ static void visitPrimitiveType(ConstAstVisitor *visitor, const AstNode *node)
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
-    emitMapKey(ctx, node, "prtId");
-    emitUInteger(ctx, node, node->primitiveType.id);
+    emitMapKey(ctx, node, "name");
+    emitMapKey(ctx, node, getPrimitiveTypeName(node->primitiveType.id));
 }
 
 static void visitHeaderOnly(ConstAstVisitor *visitor, const AstNode *node)
@@ -553,7 +553,7 @@ static void visitArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
-    manyNodesToJson(visitor, "elements", node->arrayExpr.elements);
+    manyNodesToYaml(visitor, "elements", node->arrayExpr.elements);
 }
 
 static void visitMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -614,7 +614,7 @@ static void visitGenericParam(ConstAstVisitor *visitor, const AstNode *node)
 
     emitMapKey(ctx, node, "name");
     emitMapKey(ctx, node, node->genericParam.name);
-    manyNodesToJson(visitor, "constraints", node->genericParam.constraints);
+    manyNodesToYaml(visitor, "constraints", node->genericParam.constraints);
 }
 
 static void visitGenericDecl(ConstAstVisitor *visitor, const AstNode *node)
@@ -623,7 +623,7 @@ static void visitGenericDecl(ConstAstVisitor *visitor, const AstNode *node)
     nodeAddHeader(visitor, node);
 
     nodeToYaml(visitor, "decl", node->genericDecl.decl);
-    manyNodesToJson(visitor, "params", node->genericDecl.params);
+    manyNodesToYaml(visitor, "params", node->genericDecl.params);
 }
 
 static void visitPathElement(ConstAstVisitor *visitor, const AstNode *node)
@@ -631,7 +631,7 @@ static void visitPathElement(ConstAstVisitor *visitor, const AstNode *node)
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
-    manyNodesToJson(visitor, "args", node->pathElement.args);
+    manyNodesToYaml(visitor, "args", node->pathElement.args);
 
     emitMapKey(ctx, node, "name");
     emitMapKey(ctx, node, node->pathElement.name);
@@ -640,11 +640,6 @@ static void visitPathElement(ConstAstVisitor *visitor, const AstNode *node)
         emitMapKey(ctx, node, "alt");
         emitMapKey(ctx, node, node->pathElement.alt);
     }
-
-    if (node->pathElement.alt2) {
-        emitMapKey(ctx, node, "alt2");
-        emitMapKey(ctx, node, node->pathElement.alt2);
-    }
 }
 
 static void visitPath(ConstAstVisitor *visitor, const AstNode *node)
@@ -652,7 +647,7 @@ static void visitPath(ConstAstVisitor *visitor, const AstNode *node)
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
-    manyNodesToJson(visitor, "elements", node->path.elements);
+    manyNodesToYaml(visitor, "elements", node->path.elements);
     emitMapKey(ctx, node, "isType");
     emitBool(ctx, node, node->path.isType);
 }
@@ -675,9 +670,9 @@ static void visitFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
 
     emitMapKey(ctx, node, "name");
     emitMapKey(ctx, node, node->funcDecl.name);
-    manyNodesToJson(visitor, "params", node->funcDecl.params);
+    manyNodesToYaml(visitor, "params", node->funcDecl.signature->params);
 
-    nodeToYaml(visitor, "ret", node->funcDecl.ret);
+    nodeToYaml(visitor, "ret", node->funcDecl.signature->ret);
     nodeToYaml(visitor, "body", node->funcDecl.body);
 }
 
@@ -688,7 +683,7 @@ static void visitMacroDecl(ConstAstVisitor *visitor, const AstNode *node)
 
     emitMapKey(ctx, node, "name");
     emitMapKey(ctx, node, node->macroDecl.name);
-    manyNodesToJson(visitor, "params", node->macroDecl.params);
+    manyNodesToYaml(visitor, "params", node->macroDecl.params);
 
     nodeToYaml(visitor, "ret", node->macroDecl.ret);
 
@@ -715,7 +710,7 @@ static void visitVarDecl(ConstAstVisitor *visitor, const AstNode *node)
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
-    manyNodesToJson(visitor, "names", node->varDecl.names);
+    manyNodesToYaml(visitor, "names", node->varDecl.names);
 
     nodeToYaml(visitor, "varType", node->varDecl.type);
 
@@ -740,7 +735,7 @@ static void visitUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
 
     emitMapKey(ctx, node, "name");
     emitMapKey(ctx, node, node->unionDecl.name);
-    manyNodesToJson(visitor, "members", node->unionDecl.members);
+    manyNodesToYaml(visitor, "members", node->unionDecl.members);
 }
 
 static void visitEnumOption(ConstAstVisitor *visitor, const AstNode *node)
@@ -765,7 +760,7 @@ static void visitEnumDecl(ConstAstVisitor *visitor, const AstNode *node)
     emitMapKey(ctx, node, node->enumDecl.name);
 
     nodeToYaml(visitor, "base", node->enumDecl.base);
-    manyNodesToJson(visitor, "options", node->enumDecl.options);
+    manyNodesToYaml(visitor, "options", node->enumDecl.options);
 }
 
 static void visitStructField(ConstAstVisitor *visitor, const AstNode *node)
@@ -792,7 +787,18 @@ static void visitStructDecl(ConstAstVisitor *visitor, const AstNode *node)
     emitMapKey(ctx, node, node->structDecl.name);
 
     nodeToYaml(visitor, "base", node->structDecl.base);
-    manyNodesToJson(visitor, "members", node->structDecl.members);
+    manyNodesToYaml(visitor, "implements", node->structDecl.implements);
+    manyNodesToYaml(visitor, "members", node->structDecl.members);
+}
+
+static void visitInterfaceDecl(ConstAstVisitor *visitor, const AstNode *node)
+{
+    YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
+    nodeAddHeader(visitor, node);
+
+    emitMapKey(ctx, node, "name");
+    emitMapKey(ctx, node, node->interfaceDecl.name);
+    manyNodesToYaml(visitor, "members", node->interfaceDecl.members);
 }
 
 static void visitBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -800,7 +806,7 @@ static void visitBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
-    if (ctx->config.withNamedEnums) {
+    if (!ctx->config.withNamedEnums) {
         emitMapKey(ctx, node, "op");
         emitUInteger(ctx, node, node->binaryExpr.op);
     }
@@ -815,7 +821,7 @@ static void visitBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
 
     nodeToYaml(visitor, "lhs", node->binaryExpr.lhs);
 
-    nodeToYaml(visitor, "rhs", node->binaryExpr.lhs);
+    nodeToYaml(visitor, "rhs", node->binaryExpr.rhs);
 }
 
 static void visitUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -873,7 +879,7 @@ static void visitCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     nodeAddHeader(visitor, node);
 
     nodeToYaml(visitor, "callee", node->callExpr.callee);
-    manyNodesToJson(visitor, "args", node->callExpr.args);
+    manyNodesToYaml(visitor, "args", node->callExpr.args);
     if (node->callExpr.overload != 0) {
         emitMapKey(ctx, node, "overload");
         emitUInteger(ctx, node, node->callExpr.overload);
@@ -886,7 +892,7 @@ static void visitClosureExpr(ConstAstVisitor *visitor, const AstNode *node)
     nodeAddHeader(visitor, node);
 
     nodeToYaml(visitor, "ret", node->closureExpr.ret);
-    manyNodesToJson(visitor, "params", node->closureExpr.params);
+    manyNodesToYaml(visitor, "params", node->closureExpr.params);
     nodeToYaml(visitor, "body", node->closureExpr.body);
 }
 
@@ -907,7 +913,7 @@ static void visitStructExpr(ConstAstVisitor *visitor, const AstNode *node)
     nodeAddHeader(visitor, node);
 
     nodeToYaml(visitor, "left", node->structExpr.left);
-    manyNodesToJson(visitor, "fields", node->structExpr.fields);
+    manyNodesToYaml(visitor, "members", node->structExpr.fields);
 }
 
 static void visitExpressionStmt(ConstAstVisitor *visitor, const AstNode *node)
@@ -936,7 +942,7 @@ static void visitBlockStmt(ConstAstVisitor *visitor, const AstNode *node)
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
-    manyNodesToJson(visitor, "stmts", node->blockStmt.stmts);
+    manyNodesToYaml(visitor, "stmts", node->blockStmt.stmts);
 }
 
 static void visitForStmt(ConstAstVisitor *visitor, const AstNode *node)
@@ -967,7 +973,7 @@ static void visitSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
     nodeAddHeader(visitor, node);
 
     nodeToYaml(visitor, "cond", node->switchStmt.cond);
-    manyNodesToJson(visitor, "cases", node->switchStmt.cases);
+    manyNodesToYaml(visitor, "cases", node->switchStmt.cases);
 }
 
 static void visitCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
@@ -976,7 +982,7 @@ static void visitCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
     nodeAddHeader(visitor, node);
 
     nodeToYaml(visitor, "match", node->caseStmt.match);
-    manyNodesToJson(visitor, "body", node->caseStmt.body);
+    manyNodesToYaml(visitor, "body", node->caseStmt.body);
 }
 
 static void visitFallback(ConstAstVisitor *visitor, const AstNode *node)
@@ -1060,6 +1066,7 @@ AstNode *dumpAstToYaml(CompilerDriver *driver, AstNode *node, FILE *file)
         [astEnumDecl] = visitEnumDecl,
         [astStructField] = visitStructField,
         [astStructDecl] = visitStructDecl,
+        [astInterfaceDecl] = visitInterfaceDecl,
         [astAssignExpr] = visitBinaryExpr,
         [astBinaryExpr] = visitBinaryExpr,
         [astUnaryExpr] = visitUnaryExpr,
@@ -1075,6 +1082,7 @@ AstNode *dumpAstToYaml(CompilerDriver *driver, AstNode *node, FILE *file)
         [astExprStmt] = visitExpressionStmt,
         [astDeferStmt] = visitExpressionStmt,
         [astGroupExpr] = visitExpressionStmt,
+        [astSpreadExpr] = visitExpressionStmt,
         [astBreakStmt] = visitContinueStmt,
         [astContinueStmt] = visitContinueStmt,
         [astReturnStmt] = visitReturnStmt,

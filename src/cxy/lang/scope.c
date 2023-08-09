@@ -11,7 +11,7 @@ static Env *__builtins = NULL;
 
 static inline bool compareSymbols(const void *lhs, const void *rhs)
 {
-    return !strcmp(((const Symbol *)lhs)->name, ((const Symbol *)rhs)->name);
+    return ((const Symbol *)lhs)->name == ((const Symbol *)rhs)->name;
 }
 
 static Scope *newScope(Scope *prev)
@@ -60,7 +60,7 @@ static u64 levenshteinDistance(const char *lhs, const char *rhs, u64 minDist)
     return 1 + MIN(c, min);
 }
 
-static void suggestSimilarSymbol(const Env *env, Log *L, const char *name)
+void suggestSimilarSymbol(const Env *env, Log *L, const char *name)
 {
     u64 minDist = 2;
 
@@ -93,7 +93,7 @@ bool defineSymbol(Env *env, Log *L, const char *name, AstNode *node)
         return false;
 
     Symbol symbol = {.name = name, .node = node, .index = 0};
-    u32 hash = hashUint64(hashInit(), (uintptr_t)name);
+    u32 hash = hashPtr(hashInit(), name);
     bool wasInserted = insertInHashTable(
         &env->scope->symbols, &symbol, hash, sizeof(Symbol), compareSymbols);
     if (!wasInserted && L) {
@@ -120,7 +120,7 @@ void updateSymbol(Env *env, const char *name, AstNode *node)
         return;
 
     Symbol symbol = {.name = name, .node = node};
-    u32 hash = hashUint64(hashInit(), (uintptr_t)name);
+    u32 hash = hashPtr(hashInit(), name);
     bool wasInserted = insertInHashTable(
         &env->scope->symbols, &symbol, hash, sizeof(Symbol), compareSymbols);
     if (!wasInserted) {
@@ -140,7 +140,7 @@ void defineFunctionDecl(Env *env, Log *L, const char *name, AstNode *node)
         return;
 
     Symbol symbol = {.name = name, .node = node};
-    u32 hash = hashUint64(hashInit(), (uintptr_t)name);
+    u32 hash = hashPtr(hashInit(), name);
     bool wasInserted = insertInHashTable(
         &env->scope->symbols, &symbol, hash, sizeof(Symbol), compareSymbols);
 
@@ -158,9 +158,13 @@ void defineFunctionDecl(Env *env, Log *L, const char *name, AstNode *node)
     }
     else if (!wasInserted) {
         node->funcDecl.index = sym->index;
-        node->link = sym->node;
-        sym->node = node;
+        sym->last->list.link = node;
+        sym->last = node;
     }
+    else {
+        sym->last = node;
+    }
+    node->list.first = sym->node;
 
     sym->index++;
 }
@@ -170,7 +174,7 @@ AstNode *findSymbol(const Env *env,
                     const char *name,
                     const FileLoc *loc)
 {
-    u32 hash = hashUint64(hashInit(), (uintptr_t)name);
+    u32 hash = hashPtr(hashInit(), name);
     for (Scope *scope = env->scope; scope; scope = scope->prev) {
         Symbol *symbol = findInHashTable(&scope->symbols,
                                          &(Symbol){.name = name},
@@ -181,8 +185,10 @@ AstNode *findSymbol(const Env *env,
             return symbol->node;
     }
 
-    logError(L, loc, "undefined symbol '{s}'", (FormatArg[]){{.s = name}});
-    suggestSimilarSymbol(env, L, name);
+    if (L) {
+        logError(L, loc, "undefined symbol '{s}'", (FormatArg[]){{.s = name}});
+        suggestSimilarSymbol(env, L, name);
+    }
 
     return NULL;
 }
@@ -258,7 +264,7 @@ AstNode *findEnclosingLoopOrSwitch(Env *env,
                               loc);
 }
 
-AstNode *findEnclosingFunc(Env *env, Log *L, const FileLoc *loc)
+AstNode *findEnclosingFunctionOrClosure(Env *env, Log *L, const FileLoc *loc)
 {
     return findEnclosingScope(env,
                               L,
@@ -268,6 +274,24 @@ AstNode *findEnclosingFunc(Env *env, Log *L, const FileLoc *loc)
                               astFuncDecl,
                               astError,
                               loc);
+}
+
+AstNode *findEnclosingFunction(Env *env,
+                               Log *L,
+                               cstring keyword,
+                               const FileLoc *loc)
+{
+    return findEnclosingScope(
+        env, L, keyword, "function", astFuncDecl, astFuncDecl, astError, loc);
+}
+
+AstNode *findEnclosingStruct(Env *env,
+                             Log *L,
+                             cstring keyword,
+                             const FileLoc *loc)
+{
+    return findEnclosingScope(
+        env, L, keyword, "struct", astStructDecl, astStructDecl, astError, loc);
 }
 
 AstNode *findEnclosingBlock(Env *env, Log *L, const FileLoc *loc)

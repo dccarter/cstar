@@ -12,3 +12,4 @@ AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node);
 AstNode *dumpAstJson(CompilerDriver *driver, AstNode *node, FILE *file);
 AstNode *dumpAstToYaml(CompilerDriver *driver, AstNode *node, FILE *file);
 AstNode *bindAst(CompilerDriver *driver, AstNode *node);
+AstNode *checkAst(CompilerDriver *driver, AstNode *node);

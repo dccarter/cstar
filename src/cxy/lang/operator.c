@@ -4,6 +4,7 @@
 
 #include "operator.h"
 #include "flag.h"
+#include "strings.h"
 
 const char *getUnaryOpString(Operator op)
 {
@@ -47,26 +48,16 @@ const char *getAssignOpString(Operator op)
 const char *getOpOverloadName(Operator op)
 {
     switch (op) {
-#define f(NAME, p, t, s, fn)                                                   \
+#define f(NAME, ...)                                                           \
     case op##NAME:                                                             \
-        return "op_" fn;
-        // NOLINTBEGIN
+        return S_##NAME;
         AST_BINARY_EXPR_LIST(f)
-        // NOLINTEND
-#undef f
-
-#define f(NAME, t, s, fn)                                                      \
-    case op##NAME:                                                             \
-        return "op_" fn;
         AST_UNARY_EXPR_LIST(f)
-#undef f
-
-#define f(NAME, fn)                                                            \
-    case op##NAME:                                                             \
-        return "op_" fn;
         AST_OVERLOAD_ONLY_OPS(f)
 #undef f
 
+    case opTruthy:
+        return S_Truthy;
     default:
         csAssert0(false);
     }
@@ -172,8 +163,8 @@ bool isPrefixOpKeyword(Operator op)
 static void appendFlagName(FormatState *state, u64 index)
 {
     switch (index) {
-#define f(name, index)                                                         \
-    case index:                                                                \
+#define f(name, IDX)                                                           \
+    case IDX:                                                                  \
         format(state, #name, NULL);                                            \
         break;
         CXY_LANG_FLAGS(f)
@@ -191,7 +182,7 @@ char *flagsToString(u64 flags)
     bool first = true;
     format(&state, "(", NULL);
     while (flags >> index) {
-        if (flags & (1 << index)) {
+        if (flags & (1ull << index)) {
             if (!first)
                 format(&state, "|", NULL);
             appendFlagName(&state, index);

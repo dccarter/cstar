@@ -55,17 +55,107 @@ static bool isCallableDecl(AstNode *node)
             nodeIs(node->genericDecl.decl, FuncDecl));
 }
 
+static AstNode *resolvePathBaseUpChain(BindContext *ctx, AstNode *path)
+{
+    AstNode *root = path->path.elements;
+    AstNode *parent = findEnclosingStruct(ctx->env, NULL, NULL, NULL);
+    if (parent == NULL || parent->structDecl.base == NULL ||
+        !nodeIs(parent->structDecl.base, Path)) //
+    {
+        return findSymbol(ctx->env,
+                          ctx->L,
+                          root->pathElement.alt ?: root->pathElement.name,
+                          &root->loc);
+    }
+
+    AstNode *resolved = findSymbol(
+        ctx->env, NULL, root->pathElement.alt ?: root->pathElement.name, NULL);
+
+    if (resolved)
+        return resolved;
+
+    AstNode *base = resolvePath(parent->structDecl.base);
+
+    // lookup symbol upstream
+    for (u64 i = 1; isStructDeclaration(base);
+         base = resolvePath(underlyingDeclaration(base)->structDecl.base),
+             i++) {
+        resolved = findInAstNode(
+            base, root->pathElement.alt ?: root->pathElement.name);
+        if (resolved) {
+            path->path.inheritanceDepth = i;
+
+            path->path.elements = makeAstNode(
+                ctx->pool,
+                &root->loc,
+                &(AstNode){.tag = astPathElem,
+                           .next = root,
+                           .pathElement = {.name = base->structDecl.name,
+                                           .resolvesTo =
+                                               nodeIs(base, GenericDecl)
+                                                   ? underlyingDeclaration(base)
+                                                   : NULL}});
+            if (nodeIs(base, GenericDecl))
+                path->flags |= flgInherited;
+
+            return resolved;
+        }
+    }
+
+    logError(
+        ctx->L,
+        &root->loc,
+        "undefined symbol '{s}'",
+        (FormatArg[]){{.s = root->pathElement.alt ?: root->pathElement.name}});
+    suggestSimilarSymbol(ctx->env, ctx->L, root->pathElement.name);
+    
+    return NULL;
+}
+
 void bindPath(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
     AstNode *base = node->path.elements;
-    base->pathElement.resolvesTo =
-        findSymbol(ctx->env,
-                   ctx->L,
-                   base->pathElement.alt ?: base->pathElement.name,
-                   &base->loc);
+    if (!base->pathElement.isKeyword) {
+        base->pathElement.resolvesTo = resolvePathBaseUpChain(ctx, node);
+    }
+    else {
+        cstring keyword = base->pathElement.name;
+        if (keyword == S_This) {
+            base->pathElement.enclosure =
+                findEnclosingStruct(ctx->env, ctx->L, keyword, &base->loc);
+            if (base->pathElement.enclosure == NULL)
+                return;
+        }
+        else {
+            base->pathElement.enclosure =
+                findEnclosingFunction(ctx->env, ctx->L, keyword, &base->loc);
+            if (base->pathElement.enclosure == NULL)
+                return;
 
-    for (AstNode *elem = base->next; elem; elem = elem->next)
+            AstNode *parent = getParentScope(base->pathElement.enclosure);
+
+            if (!nodeIs(parent, StructDecl)) {
+                logError(
+                    ctx->L,
+                    &base->loc,
+                    "keyword '{s}' can only be used inside a member function",
+                    (FormatArg[]){{.s = keyword}});
+                return;
+            }
+
+            if (keyword == S_super && parent->structDecl.base == NULL) {
+                logError(ctx->L,
+                         &base->loc,
+                         "keyword 'super' can only be used within a struct "
+                         "which extends a base struct",
+                         NULL);
+                return;
+            }
+        }
+    }
+
+    for (AstNode *elem = base; elem; elem = elem->next)
         astVisitManyNodes(visitor, elem->pathElement.args);
 }
 
@@ -91,6 +181,8 @@ void bindGenericDecl(AstVisitor *visitor, AstNode *node)
     astVisitManyNodes(visitor, node->genericDecl.params);
     astVisit(visitor, node->genericDecl.decl);
     popScope(ctx->env);
+    if (!nodeIs(node->parentScope, StructDecl))
+        defineDeclaration(ctx, getDeclarationName(node), node);
 }
 
 void bindDefine(AstVisitor *visitor, AstNode *node)
@@ -151,8 +243,8 @@ void bindFunctionDecl(AstVisitor *visitor, AstNode *node)
 
     pushScope(ctx->env, node);
 
-    astVisit(visitor, node->funcDecl.ret);
-    astVisitManyNodes(visitor, node->funcDecl.params);
+    astVisit(visitor, node->funcDecl.signature->ret);
+    astVisitManyNodes(visitor, node->funcDecl.signature->params);
     astVisit(visitor, node->funcDecl.body);
 
     popScope(ctx->env);
@@ -235,13 +327,23 @@ void bindStructDecl(AstVisitor *visitor, AstNode *node)
     AstNode *member = node->structDecl.members;
 
     astVisit(visitor, node->structDecl.base);
+    astVisitManyNodes(visitor, node->structDecl.implements);
 
     pushScope(ctx->env, node);
+    defineSymbol(ctx->env, ctx->L, S_This, node);
 
     for (; member; member = member->next) {
         // functions will be visited later
-        if (isCallableDecl(member))
-            defineSymbol(ctx->env, ctx->L, getDeclName(member), node);
+        if (isCallableDecl(member)) {
+            if (nodeIs(member, FuncDecl)) {
+                defineFunctionDecl(
+                    ctx->env, ctx->L, getDeclarationName(member), member);
+            }
+            else {
+                defineSymbol(
+                    ctx->env, ctx->L, getDeclarationName(member), member);
+            }
+        }
         else
             astVisit(visitor, member);
     }
@@ -256,6 +358,23 @@ void bindStructDecl(AstVisitor *visitor, AstNode *node)
     popScope(ctx->env);
 
     defineDeclaration(ctx, node->structDecl.name, node);
+}
+
+void bindInterfaceDecl(AstVisitor *visitor, AstNode *node)
+{
+    BindContext *ctx = getAstVisitorContext(visitor);
+    AstNode *member = node->interfaceDecl.members;
+
+    pushScope(ctx->env, node);
+
+    for (; member; member = member->next) {
+        // functions will be visited later
+        astVisit(visitor, member);
+    }
+
+    popScope(ctx->env);
+
+    defineDeclaration(ctx, node->interfaceDecl.name, node);
 }
 
 void bindIfStmt(AstVisitor *visitor, AstNode *node)
@@ -304,7 +423,8 @@ void bindReturnStmt(AstVisitor *visitor, AstNode *node)
     BindContext *ctx = getAstVisitorContext(visitor);
 
     astVisit(visitor, node->returnStmt.expr);
-    node->returnStmt.func = findEnclosingFunc(ctx->env, ctx->L, &node->loc);
+    node->returnStmt.func =
+        findEnclosingFunctionOrClosure(ctx->env, ctx->L, &node->loc);
 }
 
 void bindBlockStmt(AstVisitor *visitor, AstNode *node)
@@ -369,7 +489,7 @@ void bindProgram(AstVisitor *visitor, AstNode *node)
 
     for (; decl; decl = decl->next) {
         if (isCallableDecl(decl)) {
-            defineDeclaration(ctx, getDeclName(decl), decl);
+            defineDeclaration(ctx, getDeclarationName(decl), decl);
         }
         astVisit(visitor, decl);
     }
@@ -409,6 +529,7 @@ AstNode *bindAst(CompilerDriver *driver, AstNode *node)
         [astEnumDecl] = bindEnumDecl,
         [astStructField] = bindStructField,
         [astStructDecl] = bindStructDecl,
+        [astInterfaceDecl] = bindInterfaceDecl,
         [astIfStmt] = bindIfStmt,
         [astClosureExpr] = bindClosureExpr,
         [astDeferStmt] = bindDeferStmt,

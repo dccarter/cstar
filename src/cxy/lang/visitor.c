@@ -10,6 +10,7 @@
     case astNop:                                                               \
     case astStringType:                                                        \
     case astAutoType:                                                          \
+    case astVoidType:                                                          \
     case astContinueStmt:                                                      \
     case astBreakStmt:                                                         \
     case astNullLit:                                                           \
@@ -46,7 +47,7 @@
         break;                                                                 \
     case astTupleType:                                                         \
     case astTupleExpr:                                                         \
-        MODE##VisitManyNodes(visitor, node->tupleType.args);                   \
+        MODE##VisitManyNodes(visitor, node->tupleType.elements);               \
         break;                                                                 \
     case astArrayType:                                                         \
         MODE##Visit(visitor, node->arrayType.elementType);                     \
@@ -104,9 +105,9 @@
         MODE##VisitManyNodes(visitor, node->path.elements);                    \
         break;                                                                 \
     case astFuncDecl:                                                          \
-        MODE##VisitManyNodes(visitor, node->funcDecl.params);                  \
-        MODE##Visit(visitor, node->funcDecl.ret);                              \
-        MODE##Visit(visitor, node->funcDecl.body);                             \
+        MODE##VisitManyNodes(visitor, node->funcDecl.signature->params);       \
+        MODE##Visit(visitor, node->funcDecl.signature->ret);                   \
+        MODE##Visit(visitor, node->funcDecl.opaqueParams);                     \
         break;                                                                 \
     case astMacroDecl:                                                         \
         MODE##VisitManyNodes(visitor, node->macroDecl.params);                 \
@@ -141,12 +142,16 @@
         break;                                                                 \
     case astStructDecl:                                                        \
         MODE##Visit(visitor, node->structDecl.base);                           \
+        MODE##VisitManyNodes(visitor, node->structDecl.implements);            \
         MODE##VisitManyNodes(visitor, node->structDecl.members);               \
+        break;                                                                 \
+    case astInterfaceDecl:                                                     \
+        MODE##VisitManyNodes(visitor, node->interfaceDecl.members);            \
         break;                                                                 \
     case astBinaryExpr:                                                        \
     case astAssignExpr:                                                        \
         MODE##Visit(visitor, node->binaryExpr.lhs);                            \
-        MODE##Visit(visitor, node->binaryExpr.lhs);                            \
+        MODE##Visit(visitor, node->binaryExpr.rhs);                            \
         break;                                                                 \
     case astUnaryExpr:                                                         \
     case astAddressOf:                                                         \
@@ -184,6 +189,7 @@
     case astExprStmt:                                                          \
     case astGroupExpr:                                                         \
     case astDeferStmt:                                                         \
+    case astSpreadExpr:                                                        \
         MODE##Visit(visitor, node->exprStmt.expr);                             \
         break;                                                                 \
     case astReturnStmt:                                                        \

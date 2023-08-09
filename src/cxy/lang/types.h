@@ -74,6 +74,7 @@ typedef enum {
     typEnum,
     typModule,
     typStruct,
+    typInterface,
     typGeneric,
     typApplied,
     typWrapped
@@ -84,14 +85,14 @@ typedef struct TypeTable TypeTable;
 typedef struct Env Env;
 typedef struct AstNode AstNode;
 
-typedef struct StructField {
+typedef struct StructMember {
     const char *name;
     const Type *type;
-} StructField;
+    const AstNode *decl;
+} StructMember;
 
 typedef struct GenericParam {
     const char *name;
-    const AstNode *decl;
     u32 inferIndex;
 } GenericParam;
 
@@ -163,9 +164,10 @@ typedef struct Type {
         } tuple;
 
         struct {
-            u32 paramsCount;
-            u32 capturedNamesCount;
-            u32 defaultValuesCount;
+            u16 paramsCount;
+            u16 capturedNamesCount;
+            u16 defaultValuesCount;
+            cstring name;
             const Type *retType;
             const Type **params;
             const char **captureNames;
@@ -174,7 +176,8 @@ typedef struct Type {
 
         struct {
             const Type *base;
-            AstNode *decl;
+            cstring *names;
+            u64 namesCount;
         } container;
 
         struct {
@@ -186,10 +189,20 @@ typedef struct Type {
 
         struct {
             const Type *base;
-            StructField *fields;
-            u64 fieldsCount;
+            const Type **interfaces;
+            StructMember *members;
+            StructMember **sortedMembers;
+            u32 interfacesCount;
+            u32 membersCount;
             AstNode *decl;
         } tStruct;
+
+        struct {
+            StructMember *members;
+            StructMember **sortedMembers;
+            u64 membersCount;
+            AstNode *decl;
+        } tInterface;
 
         struct {
             GenericParam *params;
@@ -202,8 +215,8 @@ typedef struct Type {
             const Type **args;
             u32 argsCount;
             u64 totalArgsCount;
-            const Type *generated;
             const Type *from;
+            AstNode *decl;
         } applied;
     };
 } Type;
@@ -235,7 +248,26 @@ static inline bool isSliceType(const Type *type)
     return typeIs(type, Array) && type->array.len == UINT64_MAX;
 }
 
-static inline bool isTruthyType(TypeTable *table, const Type *type)
+static inline bool isTruthyType(const Type *type)
 {
     return isIntegralType(type) || isFloatType(type) || typeIs(type, Pointer);
+}
+
+const StructMember *findStructMember(const Type *type, cstring member);
+
+static inline const Type *findStructMemberType(const Type *type, cstring member)
+{
+    const StructMember *found = findStructMember(type, member);
+    return found ? found->type : NULL;
+}
+
+bool implementsInterface(const Type *type, const Type *inf);
+
+const StructMember *findInterfaceMember(const Type *type, cstring member);
+
+static inline const Type *findInterfaceMemberType(const Type *type,
+                                                  cstring member)
+{
+    const StructMember *found = findInterfaceMember(type, member);
+    return found ? found->type : NULL;
 }

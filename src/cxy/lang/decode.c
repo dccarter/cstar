@@ -135,7 +135,7 @@ static void unpackNodeBody(AstNodeUnpackContext *ctx, AstNode *node)
         break;
     case astTupleType:
     case astTupleExpr:
-        node->tupleType.args = unpackManyNodes(ctx, &len);
+        node->tupleType.elements = unpackManyNodes(ctx, &len);
         node->tupleType.len = len;
         break;
     case astArrayType:
@@ -191,7 +191,6 @@ static void unpackNodeBody(AstNodeUnpackContext *ctx, AstNode *node)
         node->pathElement.args = unpackManyNodes(ctx, NULL);
         node->pathElement.name = unpackString(ctx);
         node->pathElement.alt = unpackString(ctx);
-        node->pathElement.alt2 = unpackString(ctx);
         node->pathElement.index = unpackU64(ctx);
         break;
     case astPath:
@@ -202,8 +201,10 @@ static void unpackNodeBody(AstNodeUnpackContext *ctx, AstNode *node)
         node->funcDecl.operatorOverload = unpackU64(ctx);
         node->funcDecl.index = unpackU64(ctx);
         node->funcDecl.name = unpackString(ctx);
-        node->funcDecl.params = unpackManyNodes(ctx, NULL);
-        node->funcDecl.ret = unpackNode(ctx);
+        node->funcDecl.signature = makeFunctionSignature(
+            ctx->pool,
+            &(FunctionSignature){.params = unpackManyNodes(ctx, NULL),
+                                 .ret = unpackNode(ctx)});
         node->funcDecl.body = unpackNode(ctx);
         break;
     case astMacroDecl:

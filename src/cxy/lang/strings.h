@@ -35,6 +35,7 @@
     f(cxy_range_t)              \
     f(StringBuilder)            \
     f(Optional)                 \
+    f(Iterator)                 \
     ff(_assert, "assert")       \
     f(base_of)                  \
     f(column)                   \
@@ -52,7 +53,8 @@
     f(typeof)                   \
     f(alias)                    \
     f(name)                     \
-    f(unchecked)
+    f(unchecked)                \
+    f(_Variadic)
 
 // clang-format on
 
@@ -61,6 +63,7 @@ CXY_BUILTIN_NAMES(f, f)
 AST_UNARY_EXPR_LIST(f)
 AST_BINARY_EXPR_LIST(f)
 AST_OVERLOAD_ONLY_OPS(f)
+f(Truthy);
 #undef f
 #define f(name, ...) extern cstring S_##name##_eq;
 AST_ASSIGN_EXPR_LIST(f)

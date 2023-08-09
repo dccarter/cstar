@@ -6,8 +6,15 @@
 #include "ast.h"
 #include "flag.h"
 #include "ttable.h"
+#include <string.h>
 
 #include "token.h"
+
+static int searchCompareStructMember(const void *lhs, const void *rhs)
+{
+    const StructMember *right = *((const StructMember **)rhs), *left = lhs;
+    return left->name == right->name ? 0 : strcmp(left->name, right->name);
+}
 
 static void printManyTypes(FormatState *state,
                            const Type **types,
@@ -36,7 +43,7 @@ static void printGenericType(FormatState *state, const Type *type)
                (FormatArg[]){{.s = type->generic.decl->typeDecl.name}});
     }
     else {
-        printKeyword(state, "func ");
+        printKeyword(state, "enclosure ");
         format(state,
                " {s}[",
                (FormatArg[]){{.s = type->generic.decl->funcDecl.name}});
@@ -207,6 +214,8 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
     case typInfo:
         return typeIs(from, Info) &&
                isTypeAssignableFrom(to->info.target, from->info.target);
+    case typInterface:
+        return typeIs(from, Struct) && implementsInterface(from, to);
     default:
         return false;
     }
@@ -245,7 +254,6 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
         default:
             return unwrappedTo->primitive.id == unwrappedFrom->primitive.id;
         }
-
     default:
         return isTypeAssignableFrom(to, from);
     }
@@ -522,7 +530,7 @@ void printType(FormatState *state, const Type *type)
         format(state, ")", NULL);
         break;
     case typFunc:
-        printKeyword(state, "func");
+        printKeyword(state, "enclosure");
         format(state, "(", NULL);
         printManyTypes(state, type->func.params, type->func.paramsCount, ", ");
         format(state, ") -> ", NULL);
@@ -543,11 +551,18 @@ void printType(FormatState *state, const Type *type)
             format(state, " {s}", (FormatArg[]){{.s = type->name}});
         }
         break;
+    case typInterface:
+        printKeyword(state, "interface");
+        if (type->name) {
+            format(state, " {s}", (FormatArg[]){{.s = type->name}});
+        }
+        break;
     case typGeneric:
         printGenericType(state, type);
         break;
     case typApplied:
-        printType(state, type->applied.generated);
+        if (type->applied.decl)
+            printType(state, type->applied.decl->type);
         format(state, " aka ", NULL);
         printType(state, type->applied.from);
         format(state, "where (", NULL);
@@ -606,4 +621,36 @@ u64 getPrimitiveTypeSize(PrtId tag)
     default:
         csAssert0(false);
     }
+}
+
+const StructMember *findStructMember(const Type *type, cstring member)
+{
+    int index = binarySearch(type->tStruct.sortedMembers,
+                             type->tStruct.membersCount,
+                             &(StructMember){.name = member},
+                             sizeof(StructMember *),
+                             searchCompareStructMember);
+
+    return index == -1 ? NULL : type->tStruct.sortedMembers[index];
+}
+
+const StructMember *findInterfaceMember(const Type *type, cstring member)
+{
+    int index = binarySearch(type->tInterface.sortedMembers,
+                             type->tInterface.membersCount,
+                             &(StructMember){.name = member},
+                             sizeof(StructMember *),
+                             searchCompareStructMember);
+
+    return index == -1 ? NULL : type->tInterface.sortedMembers[index];
+}
+
+bool implementsInterface(const Type *type, const Type *inf)
+{
+    for (u64 i = 0; i < type->tStruct.interfacesCount; i++) {
+        if (type->tStruct.interfaces[i] == inf)
+            return true;
+    }
+
+    return false;
 }

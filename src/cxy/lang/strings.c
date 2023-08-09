@@ -10,6 +10,7 @@ CXY_BUILTIN_NAMES(f, f)
 AST_UNARY_EXPR_LIST(f)
 AST_BINARY_EXPR_LIST(f)
 AST_OVERLOAD_ONLY_OPS(f)
+f(Truthy);
 #undef f
 #define f(name, ...) cstring S_##name##_eq = NULL;
 AST_ASSIGN_EXPR_LIST(f)
@@ -18,15 +19,15 @@ AST_ASSIGN_EXPR_LIST(f)
 void internCommonStrings(StrPool *pool)
 {
 #define f(name) S_##name = makeString(pool, #name);
-#define ff(name, str) S_##name = makeString(pool, str);
+#define ff(name, str) S_##name = makeString(pool, "op__" str);
     CXY_BUILTIN_NAMES(f, ff);
 #undef f
 
-#define f(name, _0, _1, str) S_##name = makeString(pool, str);
+#define f(name, _0, _1, str) S_##name = makeString(pool, "op__" str);
     AST_PREFIX_EXPR_LIST(f)
 #undef f
 
-#define f(name, _0, _1, _2, str) S_##name = makeString(pool, str);
+#define f(name, _0, _1, _2, str) S_##name = makeString(pool, "op__" str);
     AST_BINARY_EXPR_LIST(f)
 #undef f
 
@@ -34,7 +35,8 @@ void internCommonStrings(StrPool *pool)
     AST_ASSIGN_EXPR_LIST(f)
 #undef f
 
-#define f(name, str) S_##name = makeString(pool, str);
+#define f(name, str, ...) S_##name = makeString(pool, "op__" str);
     AST_OVERLOAD_ONLY_OPS(f)
 #undef f
+    S_Truthy = makeString(pool, "op__truthy");
 }

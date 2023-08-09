@@ -61,9 +61,13 @@ set(CXY_LANG_SOURCES
 
 set(CXY_OPERATIONS_SOURCES
         src/cxy/lang/operations/bind.c
+        src/cxy/lang/operations/check.c
         src/cxy/lang/operations/json.c
         src/cxy/lang/operations/shake.c
-        src/cxy/lang/operations/yaml.c)
+        src/cxy/lang/operations/yaml.c
+        src/cxy/lang/operations/nodes/binary.c
+        src/cxy/lang/operations/nodes/node.c
+        src/cxy/lang/operations/nodes/struct.c)
 
 set(CXY_DRIVER_SOURCES
         src/cxy/driver/cc.c

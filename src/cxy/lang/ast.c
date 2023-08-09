@@ -1,8 +1,134 @@
 
 #include "ast.h"
+#include "codec.h"
 #include "flag.h"
+#include "scope.h"
 
 #include <memory.h>
+
+typedef struct {
+    const AstNode *from;
+    AstNode *to;
+} AstNodeMapping;
+
+AstNode *cloneManyAstNodes(CloneAstConfig *config, const AstNode *nodes)
+{
+    AstNode *first = NULL, *node = NULL;
+    while (nodes) {
+        if (!first) {
+            first = cloneAstNode(config, nodes);
+            node = first;
+        }
+        else {
+            node->next = cloneAstNode(config, nodes);
+            node = node->next;
+        }
+        nodes = nodes->next;
+    }
+    return first;
+}
+
+static bool compareAstNodes(const void *lhs, const void *rhs)
+{
+    return ((AstNodeMapping *)lhs)->from == ((AstNodeMapping *)rhs)->from;
+}
+
+static AstNode *findCorrespondingNode(HashTable *mapping, const AstNode *node)
+{
+    AstNodeMapping *found = findInHashTable(mapping,
+                                            &(AstNodeMapping){.from = node},
+                                            hashPtr(hashInit(), node),
+                                            sizeof(AstNodeMapping),
+                                            compareAstNodes);
+    return found ? found->to : NULL;
+}
+
+static void replaceWithCorrespondingNode(HashTable *mapping, AstNode **node)
+{
+    if (*node) {
+        AstNode *found = findCorrespondingNode(mapping, *node);
+        if (found) {
+            *node = found;
+        }
+    }
+}
+
+static void postCloneAstNode(CloneAstConfig *config,
+                             const AstNode *from,
+                             AstNode *to)
+{
+    switch (from->tag) {
+    case astFuncDecl:
+    case astFuncParam:
+    case astStructDecl:
+    case astStructField:
+    case astInterfaceDecl:
+    case astUnionDecl:
+    case astTypeDecl:
+    case astGenericParam:
+    case astDefine:
+    case astVarDecl:
+    case astGenericDecl:
+    case astEnumDecl:
+    case astEnumOption:
+        mapAstNode(&config->mapping, from, to);
+        break;
+    case astIdentifier:
+        if (nodeIs(from->parentScope, Define))
+            mapAstNode(&config->mapping, from, to);
+        else {
+            replaceWithCorrespondingNode(&config->mapping,
+                                         &to->ident.resolvesTo);
+        }
+        break;
+    case astPathElem:
+        replaceWithCorrespondingNode(&config->mapping,
+                                     &to->pathElement.resolvesTo);
+        break;
+    case astReturnStmt:
+        replaceWithCorrespondingNode(&config->mapping, &to->returnStmt.func);
+        break;
+    default:
+        break;
+    }
+
+    if (from->parentScope) {
+        to->parentScope = from->parentScope;
+        replaceWithCorrespondingNode(&config->mapping, &to->parentScope);
+    }
+    if (nodeIs(to, FuncDecl))
+        replaceWithCorrespondingNode(&config->mapping, &to->list.first);
+}
+
+static void unmapAstNode(HashTable *mapping, const AstNode *node)
+{
+    AstNodeMapping *found = findInHashTable(mapping,
+                                            &(AstNodeMapping){.from = node},
+                                            hashPtr(hashInit(), node),
+                                            sizeof(AstNodeMapping),
+                                            compareAstNodes);
+    if (found)
+        removeFromHashTable(mapping, found, sizeof(AstNodeMapping));
+}
+
+static SortedNodes *copySortedNodes(CloneAstConfig *config,
+                                    const SortedNodes *src)
+{
+    if (src == NULL)
+        return NULL;
+
+    SortedNodes *sortedNodes = allocFromMemPool(
+        config->pool, sizeof(SortedNodes) + (sizeof(AstNode *) * src->count));
+    csAssert0(sortedNodes);
+
+    memcpy(sortedNodes, src, sizeof(SortedNodes));
+
+    for (u64 i = 0; i < src->count; i++) {
+        replaceWithCorrespondingNode(&config->mapping, &sortedNodes->nodes[i]);
+    }
+
+    return sortedNodes;
+}
 
 AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *init)
 {
@@ -38,7 +164,10 @@ AstNode *makePathFromIdent(MemPool *pool, const AstNode *ident)
         pool, &ident->loc, ident->ident.value, ident->flags, ident->type);
 }
 
-AstNode *makeGenIdent(MemPool *pool, StrPool *strPool, const FileLoc *loc)
+AstNode *makeGenIdent(MemPool *pool,
+                      StrPool *strPool,
+                      const FileLoc *loc,
+                      const Type *type)
 {
     return makeAstNode(
         pool,
@@ -78,7 +207,7 @@ bool isTuple(const AstNode *node)
 {
     if (node->tag != astTupleExpr)
         return false;
-    if (node->tupleExpr.args->next == NULL)
+    if (node->tupleExpr.elements->next == NULL)
         return false;
     return true;
 }
@@ -250,23 +379,6 @@ const AstNode *getParentScopeWithTagConst(const AstNode *node, AstTag tag)
     return parentScope;
 }
 
-AstNode *cloneManyAstNodes(MemPool *pool, const AstNode *nodes)
-{
-    AstNode *first = NULL, *node = NULL;
-    while (nodes) {
-        if (!first) {
-            first = cloneAstNode(pool, nodes);
-            node = first;
-        }
-        else {
-            node->next = cloneAstNode(pool, nodes);
-            node = node->next;
-        }
-        nodes = nodes->next;
-    }
-    return first;
-}
-
 AstNode *replaceAstNode(AstNode *node, const AstNode *with)
 {
     AstNode *next = node->next, *parent = node->parentScope;
@@ -277,17 +389,46 @@ AstNode *replaceAstNode(AstNode *node, const AstNode *with)
     return node;
 }
 
-AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
+bool mapAstNode(HashTable *mapping, const AstNode *from, AstNode *to)
+{
+    return insertInHashTable(mapping,
+                             &(AstNodeMapping){.from = from, .to = to},
+                             hashPtr(hashInit(), from),
+                             sizeof(AstNodeMapping),
+                             compareAstNodes);
+}
+
+void initCloneAstNodeMapping(CloneAstConfig *config)
+{
+    if (config->createMapping) {
+        config->mapping = newHashTable(sizeof(AstNodeMapping));
+    }
+}
+
+void deinitCloneAstNodeConfig(CloneAstConfig *config)
+{
+    if (config->createMapping) {
+        freeHashTable(&config->mapping);
+    }
+}
+
+AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
 {
     if (node == NULL)
         return NULL;
 
-    AstNode *clone = copyAstNode(pool, node);
+    AstNode *clone = copyAstNode(config->pool, node);
+    if (config->createMapping)
+        postCloneAstNode(config, node, clone);
 
 #define CLONE_MANY(AST, MEMBER)                                                \
-    clone->AST.MEMBER = cloneManyAstNodes(pool, node->AST.MEMBER);
+    clone->AST.MEMBER = cloneManyAstNodes(config, node->AST.MEMBER);
 #define CLONE_ONE(AST, MEMBER)                                                 \
-    clone->AST.MEMBER = cloneAstNode(pool, node->AST.MEMBER);
+    clone->AST.MEMBER = cloneAstNode(config, node->AST.MEMBER);
+
+#define COPY_SORTED(AST, MEMBER)                                               \
+    if (config->createMapping)                                                 \
+    clone->AST.MEMBER = copySortedNodes(config, node->AST.MEMBER)
 
     switch (clone->tag) {
     case astProgram:
@@ -311,7 +452,7 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         CLONE_ONE(genericDecl, decl);
         break;
     case astTupleType:
-        CLONE_MANY(tupleType, args);
+        CLONE_MANY(tupleType, elements);
         break;
     case astArrayType:
         CLONE_ONE(arrayType, elementType);
@@ -329,9 +470,15 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         CLONE_ONE(funcParam, def);
         break;
     case astFuncDecl:
-        CLONE_MANY(funcDecl, params);
-        CLONE_ONE(funcDecl, ret);
+        clone->funcDecl.signature = makeFunctionSignature(
+            config->pool,
+            &(FunctionSignature){
+                .ret = cloneAstNode(config, node->funcDecl.signature->ret),
+                .params =
+                    cloneManyAstNodes(config, node->funcDecl.signature->params),
+                .typeParams = node->funcDecl.signature->typeParams});
         CLONE_ONE(funcDecl, body);
+        CLONE_MANY(funcDecl, opaqueParams)
         break;
     case astMacroDecl:
         CLONE_MANY(macroDecl, params);
@@ -348,11 +495,18 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         break;
     case astUnionDecl:
         CLONE_MANY(unionDecl, members);
-        break;
+        COPY_SORTED(unionDecl, sortedMembers);
 
     case astStructDecl:
         CLONE_MANY(structDecl, members);
         CLONE_ONE(structDecl, base);
+        CLONE_MANY(structDecl, implements);
+        COPY_SORTED(structDecl, sortedMembers);
+        break;
+
+    case astInterfaceDecl:
+        CLONE_MANY(interfaceDecl, members);
+        COPY_SORTED(interfaceDecl, sortedMembers);
         break;
 
     case astEnumOption:
@@ -362,6 +516,7 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
     case astEnumDecl:
         CLONE_MANY(enumDecl, options);
         CLONE_ONE(enumDecl, base);
+        COPY_SORTED(enumDecl, sortedOptions);
         break;
 
     case astStructField:
@@ -370,6 +525,9 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         break;
 
     case astGroupExpr:
+    case astSpreadExpr:
+    case astExprStmt:
+    case astDeferStmt:
         CLONE_ONE(groupExpr, expr);
         break;
     case astUnaryExpr:
@@ -417,7 +575,7 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         CLONE_MANY(indexExpr, index);
         break;
     case astTupleExpr:
-        CLONE_MANY(tupleExpr, args);
+        CLONE_MANY(tupleExpr, elements);
         break;
 
     case astFieldExpr:
@@ -431,12 +589,6 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
     case astMemberExpr:
         CLONE_ONE(memberExpr, target);
         CLONE_ONE(memberExpr, member);
-        break;
-    case astExprStmt:
-        CLONE_ONE(exprStmt, expr);
-        break;
-    case astDeferStmt:
-        CLONE_ONE(deferStmt, expr);
         break;
     case astReturnStmt:
         CLONE_ONE(returnStmt, expr);
@@ -467,8 +619,8 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         CLONE_ONE(caseStmt, match);
         break;
 
-    case astError:
     case astIdentifier:
+    case astError:
     case astVoidType:
     case astAutoType:
     case astStringType:
@@ -486,6 +638,30 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
     }
 
     return clone;
+}
+
+AstNode *cloneGenericDeclaration(MemPool *pool, const AstNode *node)
+{
+    AstNode *param = node->genericDecl.params;
+    AstNode *decl = node->genericDecl.decl;
+    AstNode *params = NULL, *it = NULL;
+    CloneAstConfig config = {.pool = pool, .createMapping = true};
+
+    initCloneAstNodeMapping(&config);
+
+    for (; param; param = param->next) {
+        AstNode *clone = cloneAstNode(&config, param);
+        if (params == NULL)
+            params = it = clone;
+        else
+            it = it->next = clone;
+    }
+
+    decl = cloneAstNode(&config, decl);
+    setGenericDeclarationParams(decl, params);
+
+    deinitCloneAstNodeConfig(&config);
+    return decl;
 }
 
 void insertAstNodeAfter(AstNode *before, AstNode *after)
@@ -540,7 +716,7 @@ const char *getDeclKeyword(AstTag tag)
 {
     switch (tag) {
     case astFuncDecl:
-        return "func";
+        return "enclosure";
     case astTypeDecl:
     case astUnionDecl:
         return "type";
@@ -553,7 +729,7 @@ const char *getDeclKeyword(AstTag tag)
     }
 }
 
-const char *getDeclName(const AstNode *node)
+const char *getDeclarationName(const AstNode *node)
 {
     node = nodeIs(node, GenericDecl) ? node->genericDecl.decl : node;
 
@@ -570,8 +746,80 @@ const char *getDeclName(const AstNode *node)
         return node->unionDecl.name;
     case astStructDecl:
         return node->structDecl.name;
+    case astInterfaceDecl:
+        return node->interfaceDecl.name;
     default:
-        return false;
+        csAssert(false, "%s is not a declaration", getAstNodeName(node));
+    }
+}
+
+void setDeclarationName(AstNode *node, cstring name)
+{
+    switch (node->tag) {
+    case astFuncDecl:
+        node->funcDecl.name = name;
+        break;
+    case astMacroDecl:
+        node->macroDecl.name = name;
+        break;
+    case astTypeDecl:
+        node->typeDecl.name = name;
+        break;
+    case astEnumDecl:
+        node->enumDecl.name = name;
+        break;
+    case astUnionDecl:
+        node->unionDecl.name = name;
+        break;
+    case astStructDecl:
+        node->structDecl.name = name;
+        break;
+    case astInterfaceDecl:
+        node->interfaceDecl.name = name;
+        break;
+    default:
+        csAssert(false, "%s is not a declaration", getAstNodeName(node));
+    }
+}
+
+AstNode *getGenericDeclarationParams(AstNode *node)
+{
+    switch (node->tag) {
+    case astFuncDecl:
+        return node->funcDecl.signature->typeParams;
+    case astTypeDecl:
+        return node->typeDecl.typeParams;
+    case astUnionDecl:
+        return node->unionDecl.typeParams;
+    case astStructDecl:
+        return node->structDecl.typeParams;
+    case astInterfaceDecl:
+        return node->interfaceDecl.typeParams;
+    default:
+        csAssert(false, "%s is not a declaration", getAstNodeName(node));
+    }
+}
+
+void setGenericDeclarationParams(AstNode *node, AstNode *params)
+{
+    switch (node->tag) {
+    case astFuncDecl:
+        node->funcDecl.signature->typeParams = params;
+        break;
+    case astTypeDecl:
+        node->typeDecl.typeParams = params;
+        break;
+    case astUnionDecl:
+        node->unionDecl.typeParams = params;
+        break;
+    case astStructDecl:
+        node->structDecl.typeParams = params;
+        break;
+    case astInterfaceDecl:
+        node->interfaceDecl.typeParams = params;
+        break;
+    default:
+        csAssert(false, "%s is not a declaration", getAstNodeName(node));
     }
 }
 
@@ -586,4 +834,158 @@ cstring getAstNodeName(const AstNode *node)
     default:
         return "<max>";
     }
+}
+
+FunctionSignature *makeFunctionSignature(MemPool *pool,
+                                         const FunctionSignature *from)
+{
+    FunctionSignature *signature = allocFromMemPool(pool, sizeof *from);
+    *signature = *from;
+    return signature;
+}
+
+AstNode *getParentScope(AstNode *node)
+{
+    if (nodeIs(node->parentScope, GenericDecl)) {
+        return node->parentScope->parentScope;
+    }
+    return node->parentScope;
+}
+
+AstNode *makeTypeReferenceNode(MemPool *pool,
+                               const Type *type,
+                               const FileLoc *loc)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astTypeRef, .flags = type->flags, .type = type});
+}
+
+AstNode *findInAstNode(AstNode *node, cstring name)
+{
+    node = underlyingDeclaration(node);
+    switch (node->tag) {
+    case astStructDecl:
+        return findInSortedNodes(node->structDecl.sortedMembers, name);
+    case astInterfaceDecl:
+        return findInSortedNodes(node->interfaceDecl.sortedMembers, name);
+    case astUnionDecl:
+        return findInSortedNodes(node->unionDecl.sortedMembers, name);
+    case astEnumDecl:
+        return findInSortedNodes(node->enumDecl.sortedOptions, name);
+    default:
+        unreachable("NOT SUPPORTED");
+    }
+}
+
+AstNode *resolvePath(const AstNode *path)
+{
+    if (path == NULL)
+        return NULL;
+
+    AstNode *base = path->path.elements;
+    if (base->pathElement.resolvesTo == NULL)
+        return NULL;
+
+    AstNode *resolved = base->pathElement.resolvesTo;
+
+    AstNode *elem = base->next;
+    for (; elem && resolved; elem = elem->next) {
+        if (elem->pathElement.resolvesTo == NULL) {
+            elem->pathElement.resolvesTo = findInAstNode(
+                resolved, elem->pathElement.alt ?: elem->pathElement.name);
+        }
+        resolved = elem->pathElement.resolvesTo;
+    }
+    return resolved;
+}
+
+static int isInInheritanceChain_(const AstNode *node,
+                                 const AstNode *parent,
+                                 int depth)
+{
+    if (!nodeIs(node, StructDecl) || node->structDecl.base == NULL)
+        return 0;
+    const AstNode *base = resolvePath(node->structDecl.base);
+    if (base == NULL)
+        return 0;
+    if (base == parent)
+        return depth;
+    return isInInheritanceChain_(base, parent, depth + 1);
+}
+
+int isInInheritanceChain(const AstNode *node, const AstNode *parent)
+{
+    return isInInheritanceChain_(node, parent, 1);
+}
+
+AstNode *getBaseClassAtLevel(AstNode *node, u64 level)
+{
+    csAssert0(level > 0);
+    int i = 0;
+    do {
+        if (i == level)
+            return node;
+
+        node = underlyingDeclaration(resolvePath(node->structDecl.base));
+        i++;
+    } while (node);
+    return node;
+}
+
+AstNode *getBaseClassByName(AstNode *node, cstring name)
+{
+    for (;;) {
+        node = underlyingDeclaration(resolvePath(node->structDecl.base));
+        if (node == NULL)
+            return NULL;
+
+        if (strncmp(node->structDecl.name, name, strlen(name)) == 0)
+            return node;
+    }
+}
+
+int compareNamedAstNodes(const void *lhs, const void *rhs)
+{
+    cstring left = (*((const AstNode **)lhs))->_namedNode.name,
+            right = (*((const AstNode **)rhs))->_namedNode.name;
+    return left == right ? 0 : strcmp(left, right);
+}
+
+SortedNodes *makeSortedNodes(MemPool *pool,
+                             AstNode *nodes,
+                             int (*compare)(const void *, const void *))
+{
+    u64 count = countAstNodes(nodes);
+    if (count == 0)
+        return NULL;
+    SortedNodes *sortedNodes = allocFromMemPool(
+        pool, sizeof(SortedNodes) + (sizeof(AstNode *) * count));
+    csAssert0(sortedNodes);
+    sortedNodes->count = count;
+    sortedNodes->compare = compare ?: compareNamedAstNodes;
+
+    AstNode *node = nodes;
+    for (u64 i = 0; node; node = node->next, i++)
+        sortedNodes->nodes[i] = node;
+
+    qsort(sortedNodes->nodes, count, sizeof(AstNode *), sortedNodes->compare);
+    return sortedNodes;
+}
+
+AstNode *findInSortedNodes(SortedNodes *sorted, cstring name)
+{
+    if (sorted == NULL)
+        return NULL;
+
+    int found = binarySearchWithRef(sorted->nodes,
+                                    sorted->count,
+                                    &(AstNode){._namedNode.name = name},
+                                    sizeof(struct AstNode *),
+                                    sorted->compare);
+    if (found < 0)
+        return NULL;
+
+    return sorted->nodes[found];
 }

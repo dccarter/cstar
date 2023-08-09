@@ -73,11 +73,11 @@
     AST_PREFIX_EXPR_LIST(f)                                                    \
     AST_POSTFIX_EXPR_LIST(f)
 
-#define AST_OVERLOAD_ONLY_OPS(f)                         \
-    f(CallOverload,             "call")                  \
-    f(IndexOverload,            "idx")                   \
-    f(IndexAssignOverload,      "idx_assign")            \
-    f(StringOverload,           "str")
+#define AST_OVERLOAD_ONLY_OPS(f)                               \
+    f(CallOverload,             "call", "()")                  \
+    f(IndexOverload,            "idx", "[]")                   \
+    f(IndexAssignOverload,      "idx_assign", "=[]")           \
+    f(StringOverload,           "str", "str")
 
 
 typedef enum {

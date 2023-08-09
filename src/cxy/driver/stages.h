@@ -15,7 +15,6 @@ struct CompilerDriver;
     f(_First,           "First Marker")                \
     f(Shake,            "Shake")                       \
     f(Bind,             "Bind")                        \
-    f(NameRes,          "Name Resolution")             \
     f(ConstCheck,       "Const Check")                 \
     f(TypeCheck,        "Type Check")                  \
     f(Desugar,          "De-sugar")                    \

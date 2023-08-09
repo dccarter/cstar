@@ -258,8 +258,9 @@ static void visitTuple(ConstAstVisitor *visitor, const AstNode *node)
     JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
     cJSON *jsonNode = nodeCreateJSON(visitor, node);
 
-    cJSON_AddItemToObject(
-        jsonNode, "members", manyNodesToJson(visitor, node->tupleType.args));
+    cJSON_AddItemToObject(jsonNode,
+                          "members",
+                          manyNodesToJson(visitor, node->tupleType.elements));
 
     if (node->tupleType.len)
         cJSON_AddNumberToObject(jsonNode, "len", node->tupleType.len);
@@ -448,7 +449,6 @@ static void visitPathElement(ConstAstVisitor *visitor, const AstNode *node)
 
     cJSON_AddStringToObject(jsonNode, "name", node->pathElement.name);
     cJSON_AddStringToObject(jsonNode, "alt", node->pathElement.alt);
-    cJSON_AddStringToObject(jsonNode, "alt2", node->pathElement.alt2);
     cJSON_AddNumberToObject(jsonNode, "index", node->pathElement.index);
 
     Return(ctx, jsonNode);
@@ -476,9 +476,11 @@ static void visitFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
     cJSON_AddNumberToObject(jsonNode, "index", node->funcDecl.index);
     cJSON_AddStringToObject(jsonNode, "name", node->funcDecl.name);
     cJSON_AddItemToObject(
-        jsonNode, "params", manyNodesToJson(visitor, node->funcDecl.params));
+        jsonNode,
+        "params",
+        manyNodesToJson(visitor, node->funcDecl.signature->params));
     cJSON_AddItemToObject(
-        jsonNode, "ret", nodeToJson(visitor, node->funcDecl.ret));
+        jsonNode, "ret", nodeToJson(visitor, node->funcDecl.signature->ret));
     cJSON_AddItemToObject(
         jsonNode, "body", nodeToJson(visitor, node->funcDecl.body));
 
@@ -605,9 +607,27 @@ static void visitStructDecl(ConstAstVisitor *visitor, const AstNode *node)
     cJSON_AddStringToObject(jsonNode, "name", node->structDecl.name);
     cJSON_AddItemToObject(
         jsonNode, "base", nodeToJson(visitor, node->structDecl.base));
+    cJSON_AddItemToObject(
+        jsonNode,
+        "implements",
+        manyNodesToJson(visitor, node->structDecl.implements));
     cJSON_AddItemToObject(jsonNode,
                           "members",
                           manyNodesToJson(visitor, node->structDecl.members));
+
+    Return(ctx, jsonNode);
+}
+
+static void visitInterfaceDecl(ConstAstVisitor *visitor, const AstNode *node)
+{
+    JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
+    cJSON *jsonNode = nodeCreateJSON(visitor, node);
+
+    cJSON_AddStringToObject(jsonNode, "name", node->interfaceDecl.name);
+    cJSON_AddItemToObject(
+        jsonNode,
+        "members",
+        manyNodesToJson(visitor, node->interfaceDecl.members));
 
     Return(ctx, jsonNode);
 }
@@ -745,7 +765,7 @@ static void visitStructExpr(ConstAstVisitor *visitor, const AstNode *node)
     cJSON_AddItemToObject(
         jsonNode, "left", nodeToJson(visitor, node->structExpr.left));
     cJSON_AddItemToObject(
-        jsonNode, "fields", manyNodesToJson(visitor, node->structExpr.fields));
+        jsonNode, "members", manyNodesToJson(visitor, node->structExpr.fields));
 
     Return(ctx, jsonNode);
 }
@@ -909,6 +929,7 @@ AstNode *dumpAstJson(CompilerDriver *driver, AstNode *node, FILE *file)
         [astEnumDecl] = visitEnumDecl,
         [astStructField] = visitStructField,
         [astStructDecl] = visitStructDecl,
+        [astInterfaceDecl] = visitInterfaceDecl,
         [astAssignExpr] = visitBinaryExpr,
         [astBinaryExpr] = visitBinaryExpr,
         [astUnaryExpr] = visitUnaryExpr,
@@ -924,6 +945,7 @@ AstNode *dumpAstJson(CompilerDriver *driver, AstNode *node, FILE *file)
         [astExprStmt] = visitExpressionStmt,
         [astDeferStmt] = visitExpressionStmt,
         [astGroupExpr] = visitExpressionStmt,
+        [astSpreadExpr] = visitExpressionStmt,
         [astBreakStmt] = visitContinueStmt,
         [astContinueStmt] = visitContinueStmt,
         [astReturnStmt] = visitReturnStmt,
