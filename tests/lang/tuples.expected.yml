@@ -9,10 +9,10 @@ decls:
     members:
     - PrimitiveType:
       flags: (TypeAst)
-      prtId: 0
+      name: bool
     - PrimitiveType:
       flags: (TypeAst)
-      prtId: 1
+      name: wchar
 - TypeDecl:
   flags: (TopLevelDecl)
   name: Tup2
@@ -22,17 +22,17 @@ decls:
     members:
     - PrimitiveType:
       flags: (TypeAst)
-      prtId: 1
+      name: wchar
     - TupleType:
       flags: (TypeAst)
       members:
       - PrimitiveType:
         flags: (TypeAst)
-        prtId: 11
+        name: f32
       - StringType:
         flags: (TypeAst)
       - Path:
-        flags: (TypeAst)
+        flags: (TopLevelDecl)
         elements:
         - PathElem:
           name: Tup1
@@ -52,39 +52,43 @@ decls:
         flags: (TypeAst)
       - PrimitiveType:
         flags: (TypeAst)
-        prtId: 9
+        name: i32
   ret:
     TupleType:
     flags: (TypeAst)
     members:
     - PrimitiveType:
       flags: (TypeAst)
-      prtId: 9
+      name: i32
     - StringType:
       flags: (TypeAst)
   body:
-    TupleExpr:
-    members:
-    - MemberExpr:
-      target:
-        Path:
-        elements:
-        - PathElem:
-          name: tup
-        isType: false
-      member:
-        IntegerLit:
-        value: 1
-    - MemberExpr:
-      target:
-        Path:
-        elements:
-        - PathElem:
-          name: tup
-        isType: false
-      member:
-        IntegerLit:
-        value: 0
+    BlockStmt:
+    stmts:
+    - ReturnStmt:
+      expr:
+        TupleExpr:
+        members:
+        - MemberExpr:
+          target:
+            Path:
+            elements:
+            - PathElem:
+              name: tup
+            isType: false
+          member:
+            IntegerLit:
+            value: 1
+        - MemberExpr:
+          target:
+            Path:
+            elements:
+            - PathElem:
+              name: tup
+            isType: false
+          member:
+            IntegerLit:
+            value: 0
 - FuncDecl:
   flags: (TopLevelDecl)
   name: main
@@ -149,10 +153,10 @@ decls:
         members:
         - PrimitiveType:
           flags: (TypeAst)
-          prtId: 0
+          name: bool
         - PrimitiveType:
           flags: (TypeAst)
-          prtId: 9
+          name: i32
       init:
         TupleExpr:
         members:
@@ -163,7 +167,7 @@ decls:
     - ExprStmt:
       expr:
         AssignExpr:
-        op: 34
+        op: =
         lhs:
           Path:
           elements:
@@ -171,18 +175,19 @@ decls:
             name: x
           isType: false
         rhs:
-          Path:
-          elements:
-          - PathElem:
-            name: x
-          isType: false
+          TupleExpr:
+          members:
+          - BoolLit:
+            value: false
+          - IntegerLit:
+            value: 20
     - VarDecl:
       names:
       - Identifier:
         value: y
       varType:
         Path:
-        flags: (TypeAst)
+        flags: (TopLevelDecl)
         elements:
         - PathElem:
           name: Tup2
@@ -207,7 +212,7 @@ decls:
     - ExprStmt:
       expr:
         AssignExpr:
-        op: 34
+        op: =
         lhs:
           MemberExpr:
           target:
@@ -220,20 +225,12 @@ decls:
             IntegerLit:
             value: 0
         rhs:
-          MemberExpr:
-          target:
-            Path:
-            elements:
-            - PathElem:
-              name: x
-            isType: false
-          member:
-            IntegerLit:
-            value: 0
+          BoolLit:
+          value: false
     - ExprStmt:
       expr:
         AssignExpr:
-        op: 34
+        op: =
         lhs:
           MemberExpr:
           target:
@@ -246,20 +243,12 @@ decls:
             IntegerLit:
             value: 1
         rhs:
-          MemberExpr:
-          target:
-            Path:
-            elements:
-            - PathElem:
-              name: x
-            isType: false
-          member:
-            IntegerLit:
-            value: 1
+          IntegerLit:
+          value: 5
     - ExprStmt:
       expr:
         AssignExpr:
-        op: 34
+        op: =
         lhs:
           MemberExpr:
           target:
@@ -282,30 +271,12 @@ decls:
             IntegerLit:
             value: 1
         rhs:
-          MemberExpr:
-          target:
-            MemberExpr:
-            target:
-              MemberExpr:
-              target:
-                Path:
-                elements:
-                - PathElem:
-                  name: y
-                isType: false
-              member:
-                IntegerLit:
-                value: 1
-            member:
-              IntegerLit:
-              value: 2
-          member:
-            IntegerLit:
-            value: 1
+          CharLit:
+          value: 'B'
     - ExprStmt:
       expr:
         AssignExpr:
-        op: 34
+        op: =
         lhs:
           MemberExpr:
           target:
@@ -323,21 +294,8 @@ decls:
             IntegerLit:
             value: 0
         rhs:
-          MemberExpr:
-          target:
-            MemberExpr:
-            target:
-              Path:
-              elements:
-              - PathElem:
-                name: y
-              isType: false
-            member:
-              IntegerLit:
-              value: 1
-          member:
-            IntegerLit:
-            value: 0
+          FloatLit:
+          value: 0.006000
     - VarDecl:
       names:
       - Identifier:
@@ -348,13 +306,14 @@ decls:
         members:
         - PrimitiveType:
           flags: (TypeAst)
-          prtId: 9
+          name: i32
         - StringType:
           flags: (TypeAst)
       init:
         CallExpr:
         callee:
           Path:
+          flags: (TopLevelDecl)
           elements:
           - PathElem:
             name: swap
@@ -379,11 +338,19 @@ decls:
           members:
           - PrimitiveType:
             flags: (TypeAst)
-            prtId: 9
+            name: i32
           - StringType:
             flags: (TypeAst)
       init:
         AddressOf:
+        op: 0
+        isPrefix: false
+        lhs:
+          Path:
+          elements:
+          - PathElem:
+            name: z
+          isType: false
     - VarDecl:
       names:
       - Identifier:
@@ -396,7 +363,7 @@ decls:
           flags: (TypeAst)
         - PrimitiveType:
           flags: (TypeAst)
-          prtId: 9
+          name: i32
       init:
         TupleExpr:
         members:

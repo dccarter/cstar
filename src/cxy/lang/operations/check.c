@@ -3,6 +3,7 @@
 //
 
 #include "check.h"
+#include <string.h>
 
 #include "lang/ast.h"
 #include "lang/codec.h"
@@ -15,17 +16,9 @@
 
 #include "core/alloc.h"
 
-const Type *checkType(AstVisitor *visitor, AstNode *node)
+static int compareEnumOptionsByValue(const void *lhs, const void *rhs)
 {
-    TypingContext *ctx = getAstVisitorContext(visitor);
-    if (node == NULL)
-        return NULL;
-
-    if (node->type)
-        return node->type;
-
-    astVisit(visitor, node);
-    return resolveType(node->type);
+    return (int)(((EnumOption *)lhs)->value - ((EnumOption *)rhs)->value);
 }
 
 static const FileLoc *manyNodesLoc(FileLoc *dst, AstNode *nodes)
@@ -49,28 +42,15 @@ static const FileLoc *lastNodeLoc(FileLoc *dst, AstNode *nodes)
     return dst;
 }
 
-static void addTopLevelDeclaration(TypingContext *ctx, AstNode *node)
+static inline u64 getCalleeContextFlags(const AstNode *node)
 {
-    csAssert0(ctx->root.current);
-
-    node->next = ctx->root.current;
-    if (ctx->root.previous)
-        ctx->root.previous->next = node;
-    else
-        ctx->root.program->program.decls = node;
-    ctx->root.previous = node;
-}
-
-static void addBlockLevelDeclaration(TypingContext *ctx, AstNode *node)
-{
-    csAssert0(ctx->block.current);
-
-    node->next = ctx->block.current;
-    if (ctx->block.previous)
-        ctx->block.previous->next = node;
-    else
-        ctx->block.self->program.decls = node;
-    ctx->block.previous = node;
+    if (nodeIs(node, Path) && node->path.elements->next) {
+        return node->path.elements->flags & flgConst;
+    }
+    else if (nodeIs(node, MemberExpr)) {
+        return node->memberExpr.target->flags & flgConst;
+    }
+    return flgNone;
 }
 
 static bool inferGenericFunctionTypes(AstVisitor *visitor,
@@ -328,6 +308,30 @@ resolveGenericDeclError:
     return node->type = ERROR_TYPE(ctx);
 }
 
+void addTopLevelDeclaration(TypingContext *ctx, AstNode *node)
+{
+    csAssert0(ctx->root.current);
+
+    node->next = ctx->root.current;
+    if (ctx->root.previous)
+        ctx->root.previous->next = node;
+    else
+        ctx->root.program->program.decls = node;
+    ctx->root.previous = node;
+}
+
+void addBlockLevelDeclaration(TypingContext *ctx, AstNode *node)
+{
+    csAssert0(ctx->block.current);
+
+    node->next = ctx->block.current;
+    if (ctx->block.previous)
+        ctx->block.previous->next = node;
+    else
+        ctx->block.self->program.decls = node;
+    ctx->block.previous = node;
+}
+
 const Type *matchOverloadedFunction(TypingContext *ctx,
                                     const Type *callee,
                                     const Type **argTypes,
@@ -413,7 +417,10 @@ const Type *matchOverloadedFunction(TypingContext *ctx,
     return NULL;
 }
 
-static void checkFunctionCallEpilogue(AstVisitor *visitor, AstNode *node)
+static void checkFunctionCallEpilogue(AstVisitor *visitor,
+                                      const Type *func,
+                                      AstNode *node,
+                                      u64 flags)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *callee = node->callExpr.callee, *args = node->callExpr.args;
@@ -424,8 +431,22 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor, AstNode *node)
     AstNode *arg = args;
     for (u64 i = 0; arg; arg = arg->next, i++) {
         argTypes[i] = arg->type ?: checkType(visitor, arg);
-        if (typeIs(argTypes[i], Error))
+        if (typeIs(argTypes[i], Error)) {
             node->type = ERROR_TYPE(ctx);
+            continue;
+        }
+
+        if (hasFlag(argTypes[i], Closure)) {
+            argTypes[i] = findStructMemberType(argTypes[i], S_CallOverload);
+            if (argTypes[i] == NULL) {
+                node->type = ERROR_TYPE(ctx);
+                logError(ctx->L,
+                         &arg->loc,
+                         "call argument is marked as closure but it is not a "
+                         "closure",
+                         NULL);
+            }
+        }
     }
 
     if (typeIs(node->type, Error)) {
@@ -434,7 +455,7 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor, AstNode *node)
     }
 
     callee_ = matchOverloadedFunction(
-        ctx, callee->type, argTypes, argsCount, &node->loc, flgNone);
+        ctx, func, argTypes, argsCount, &node->loc, flags);
     free(argTypes);
 
     if (callee_ == NULL || typeIs(callee_, Error)) {
@@ -469,7 +490,7 @@ static void checkLiteral(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     switch (node->tag) {
     case astNullLit:
-        node->type = makeVoidPointerType(ctx->types, flgNone);
+        node->type = makeNullType(ctx->types);
         break;
     case astBoolLit:
         node->type = getPrimitiveType(ctx->types, prtBool);
@@ -537,6 +558,36 @@ static void checkTupleType(AstVisitor *visitor, AstNode *node)
     free(elems_);
 }
 
+static void checkFunctionType(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+
+    const Type *ret = checkType(visitor, node->funcType.ret);
+    u64 count = countAstNodes(node->funcType.params);
+    const Type **params = mallocOrDie(sizeof(Type *) * count);
+
+    AstNode *param = node->funcType.params;
+    for (u64 i = 0; param; param = param->next, i++) {
+        param->parentScope = node;
+        params[i] = checkType(visitor, param);
+        if (params[i] == ERROR_TYPE(ctx))
+            node->type = ERROR_TYPE(ctx);
+    }
+
+    if (node->type == NULL) {
+        node->type = makeFuncType(ctx->types,
+                                  &(Type){.tag = typFunc,
+                                          .name = NULL,
+                                          .flags = node->flags,
+                                          .func = {.retType = ret,
+                                                   .params = params,
+                                                   .paramsCount = count,
+                                                   .decl = node}});
+    }
+
+    free(params);
+}
+
 static void checkPointerType(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
@@ -547,6 +598,18 @@ static void checkPointerType(AstVisitor *visitor, AstNode *node)
     }
 
     node->type = makePointerType(ctx->types, pointed, node->flags & flgConst);
+}
+
+static void checkOptionalType(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    const Type *target = checkType(visitor, node->optionalType.type);
+    if (target == NULL || typeIs(target, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    node->type = makeOptionalType(ctx->types, target, node->flags & flgConst);
 }
 
 static void checkDefine(AstVisitor *visitor, AstNode *node)
@@ -582,6 +645,19 @@ static void checkIdentifier(AstVisitor *visitor, AstNode *node)
 {
     csAssert0(node->ident.resolvesTo);
     node->type = node->ident.resolvesTo->type;
+}
+
+const Type *checkType(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    if (node == NULL)
+        return NULL;
+
+    if (node->type)
+        return node->type;
+
+    astVisit(visitor, node);
+    return resolveType(node->type);
 }
 
 const Type *checkPathElement(AstVisitor *visitor,
@@ -707,6 +783,9 @@ static void checkVarDecl(AstVisitor *visitor, AstNode *node)
     }
 
     node->type = typeIs(type_, Auto) ? init_ : type_;
+    if (hasFlag(node, Const) && !hasFlag(node->type, Const)) {
+        node->type = makeWrappedType(ctx->types, node->type, flgConst);
+    }
 }
 
 static void checkFunctionParam(AstVisitor *visitor, AstNode *node)
@@ -883,6 +962,48 @@ static void checkUnionDecl(AstVisitor *visitor, AstNode *node)
     free(members_);
 }
 
+static void checkEnumDecl(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+
+    u64 numOptions = node->enumDecl.len;
+    AstNode *option = node->enumDecl.options;
+    const Type *base = NULL;
+
+    if (node->enumDecl.base)
+        base = checkType(visitor, node->enumDecl.base);
+    else
+        base = getPrimitiveType(ctx->types, prtI64);
+
+    if (!isIntegerType(base)) {
+        logError(ctx->L,
+                 &node->enumDecl.base->loc,
+                 "expecting enum base to be an integral type, got '{t}'",
+                 (FormatArg[]){{.t = base}});
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    EnumOption *options = mallocOrDie(sizeof(EnumOption) * numOptions);
+    for (u64 i = 0; option; option = option->next, i++) {
+        options[i] =
+            (EnumOption){.value = option->enumOption.value->intLiteral.value,
+                         .name = option->enumOption.name};
+    }
+
+    qsort(options, numOptions, sizeof(EnumOption), compareEnumOptionsByValue);
+
+    node->type = makeEnum(ctx->types,
+                          &(Type){.tag = typEnum,
+                                  .name = node->enumDecl.name,
+                                  .flags = node->flags,
+                                  .tEnum = {.base = base,
+                                            .options = options,
+                                            .optionsCount = numOptions}});
+
+    free(options);
+}
+
 static void checkGenericDecl(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
@@ -933,6 +1054,7 @@ static void checkBlockStmt(AstVisitor *visitor, AstNode *node)
     __typeof(ctx->block) block = ctx->block;
     ctx->block.current = NULL;
     ctx->block.self = node;
+
     for (; stmt; stmt = stmt->next) {
         ctx->block.previous = ctx->block.current;
         ctx->block.current = stmt;
@@ -956,7 +1078,10 @@ static void checkBlockStmt(AstVisitor *visitor, AstNode *node)
             }
             node->type = type;
         }
+        if (hasFlag(node, BlockReturns))
+            node->type = type;
     }
+
     ctx->block = block;
 
     if (node->type == NULL)
@@ -967,7 +1092,8 @@ static void checkReturnStmt(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *expr = node->returnStmt.expr, *func = node->returnStmt.func,
-            *ret = func->funcDecl.signature->ret;
+            *ret = nodeIs(func, FuncDecl) ? func->funcDecl.signature->ret
+                                          : func->closureExpr.ret;
     const Type *expr_ =
         expr ? checkType(visitor, expr) : makeVoidType(ctx->types);
 
@@ -994,8 +1120,11 @@ static void checkReturnStmt(AstVisitor *visitor, AstNode *node)
     }
     else {
         node->type = expr_;
-        func->funcDecl.signature->ret =
-            makeTypeReferenceNode(ctx->pool, expr_, &node->loc);
+        ret = makeTypeReferenceNode(ctx->pool, expr_, &node->loc);
+        if (nodeIs(func, FuncDecl))
+            func->funcDecl.signature->ret = ret;
+        else
+            func->closureExpr.ret = ret;
     }
 }
 
@@ -1109,6 +1238,30 @@ static void checkWhileStmt(AstVisitor *visitor, AstNode *node)
     node->type = body_;
 }
 
+static void checkStringExpr(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    AstNode *part = node->stringExpr.parts;
+
+    for (; part; part = part->next) {
+        part->type = checkType(visitor, part);
+        if (typeIs(part->type, Error)) {
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+    }
+
+    part = node->stringExpr.parts;
+    if (nodeIs(part, StringLit) && part->next == NULL) {
+        node->tag = astStringLit;
+        node->type = part->type;
+        memcpy(&node->_body, &part->_body, CXY_AST_NODE_BODY_SIZE);
+    }
+    else {
+        node->type = makeStringType(ctx->types);
+    }
+}
+
 static void checkCallExpr(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
@@ -1116,7 +1269,10 @@ static void checkCallExpr(AstVisitor *visitor, AstNode *node)
     AstNode *currentCall = ctx->currentCall;
     ctx->currentCall = node;
     AstNode *callee = node->callExpr.callee;
+    u64 flags = getCalleeContextFlags(callee);
+
     const Type *callee_ = checkType(visitor, callee);
+
     ctx->currentCall = currentCall;
 
     if (typeIs(callee_, Error)) {
@@ -1124,9 +1280,29 @@ static void checkCallExpr(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    if (typeIs(callee_, Func)) {
-        checkFunctionCallEpilogue(visitor, node);
+    if (typeIs(callee_, Struct)) {
+        AstNode *symbol = callee->path.elements->pathElement.resolvesTo;
+        if (nodeIs(symbol, StructDecl)) {
+            node->type = transformToConstructCallExpr(visitor, node);
+            return;
+        }
+
+        flags = callee_->flags & flgConst;
+        const Type *overload = findStructMemberType(callee_, S_CallOverload);
+        if (overload)
+            callee_ = overload;
     }
+
+    if (!typeIs(callee_, Func)) {
+        logError(ctx->L,
+                 &callee->loc,
+                 "type '{t}' is not a callable type",
+                 (FormatArg[]){{.t = callee_}});
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    checkFunctionCallEpilogue(visitor, callee_, node, flags);
 }
 
 static void checkTupleExpr(AstVisitor *visitor, AstNode *node)
@@ -1161,9 +1337,38 @@ static void checkMemberExpr(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    csAssert0(nodeIs(member, Path));
-    node->type =
-        checkPathElement(visitor, stripAll(target_), member->path.elements);
+    if (nodeIs(member, Path)) {
+        node->type =
+            checkPathElement(visitor, stripAll(target_), member->path.elements);
+    }
+    else if (nodeIs(member, IntegerLit)) {
+        target_ = stripAll(target_);
+        if (!typeIs(target_, Tuple)) {
+            logError(ctx->L,
+                     &member->loc,
+                     "type '{t}' does not support integer literal member "
+                     "access, expecting expression of tuple type",
+                     (FormatArg[]){{.t = target_}});
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+
+        if (member->intLiteral.hasMinus ||
+            member->intLiteral.value >= target_->tuple.count) {
+            logError(ctx->L,
+                     &member->loc,
+                     "tuple {t} member access out of range, expecting "
+                     "'0-{u64}', got '{i64}",
+                     (FormatArg[]){{.t = target_},
+                                   {.u64 = target_->tuple.count - 1},
+                                   {.i64 = member->intLiteral.value}});
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+        node->type = target_->tuple.members[member->intLiteral.value];
+        node->flags =
+            (target_->flags & flgConst) | (node->type->flags & flgConst);
+    }
 }
 
 static void checkSpreadExpr(AstVisitor *visitor, AstNode *node)
@@ -1206,8 +1411,10 @@ static void checkSpreadExpr(AstVisitor *visitor, AstNode *node)
                 .flags = type->flags | type_->flags,
                 .type = type_,
                 .memberExpr = {
-                    .target =
-                        makePathFromIdent(ctx->pool, variable->varDecl.names),
+                    .target = nodeIs(variable, Path)
+                                  ? copyAstNode(ctx->pool, variable)
+                                  : makePathFromIdent(ctx->pool,
+                                                      variable->varDecl.names),
                     .member = makeAstNode(
                         ctx->pool,
                         &node->loc,
@@ -1225,10 +1432,58 @@ static void checkSpreadExpr(AstVisitor *visitor, AstNode *node)
     addBlockLevelDeclaration(ctx, variable);
 }
 
+void checkCastExpr(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    const Type *expr = checkType(visitor, node->castExpr.expr);
+    const Type *target = checkType(visitor, node->castExpr.to);
+    if (!isTypeCastAssignable(target, expr)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "type '{t}' cannot be cast to type '{t}'",
+                 (FormatArg[]){{.t = expr}, {.t = target}});
+    }
+    node->type = target;
+}
+
+void checkTypedExpr(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    const Type *expr = checkType(visitor, node->typedExpr.expr);
+    const Type *type = checkType(visitor, node->typedExpr.type);
+    if (isTypeCastAssignable(type, expr) ||
+        (isPointerType(expr) && isPointerType(type))) {
+        node->type = type;
+    }
+    else {
+        logError(ctx->L,
+                 &node->loc,
+                 "type '{t}' cannot be cast to type '{t}'",
+                 (FormatArg[]){{.t = expr}, {.t = type}});
+        node->type = ERROR_TYPE(ctx);
+    }
+}
+
+static void checkExprStmt(AstVisitor *visitor, AstNode *node)
+{
+    node->type = checkType(visitor, node->exprStmt.expr);
+}
+
+static void checkStmtExpr(AstVisitor *visitor, AstNode *node)
+{
+    node->type = checkType(visitor, node->stmtExpr.stmt);
+}
+
+static void checkGroupExpr(AstVisitor *visitor, AstNode *node)
+{
+    node->type = checkType(visitor, node->groupExpr.expr);
+}
+
 static void checkProgram(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *decl = node->program.decls;
+    ctx->root.program = node;
     astVisit(visitor, node->program.module);
     astVisitManyNodes(visitor, node->program.top);
 
@@ -1272,6 +1527,9 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astVoidType] = checkBuiltinType,
         [astPointerType] = checkPointerType,
         [astTupleType] = checkTupleType,
+        [astFuncType] = checkFunctionType,
+        [astArrayType] = checkArrayType,
+        [astOptionalType] = checkOptionalType,
         [astDefine] = checkDefine,
         [astIdentifier] = checkIdentifier,
         [astPath] = checkPath,
@@ -1280,6 +1538,7 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astVarDecl] = checkVarDecl,
         [astTypeDecl] = checkTypeDecl,
         [astUnionDecl] = checkUnionDecl,
+        [astEnumDecl] = checkEnumDecl,
         [astGenericDecl] = checkGenericDecl,
         [astStructField] = checkStructField,
         [astStructDecl] = checkStructDecl,
@@ -1291,12 +1550,25 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astContinueStmt] = checkBreakOrContinueStmt,
         [astIfStmt] = checkIfStmt,
         [astWhileStmt] = checkWhileStmt,
+        [astExprStmt] = checkExprStmt,
+        [astStringExpr] = checkStringExpr,
         [astCallExpr] = checkCallExpr,
         [astTupleExpr] = checkTupleExpr,
         [astMemberExpr] = checkMemberExpr,
         [astSpreadExpr] = checkSpreadExpr,
-        [astBinaryExpr] = checkBinaryExpr
-
+        [astBinaryExpr] = checkBinaryExpr,
+        [astUnaryExpr] = checkUnaryExpr,
+        [astAddressOf] = checkAddressOfExpr,
+        [astAssignExpr] = checkAssignExpr,
+        [astIndexExpr] = checkIndexExpr,
+        [astStructExpr] = checkStructExpr,
+        [astNewExpr] = checkNewExpr,
+        [astCastExpr] = checkCastExpr,
+        [astTypedExpr] = checkTypedExpr,
+        [astStmtExpr] = checkStmtExpr,
+        [astGroupExpr] = checkGroupExpr,
+        [astClosureExpr] = checkClosureExpr,
+        [astArrayExpr] = checkArrayExpr
     }, .fallback = astVisitFallbackVisitAll, .dispatch = withSavedStack);
     // clang-format on
 

@@ -174,6 +174,10 @@
         MODE##Visit(visitor, node->callExpr.callee);                           \
         MODE##VisitManyNodes(visitor, node->callExpr.args);                    \
         break;                                                                 \
+    case astMacroCallExpr:                                                     \
+        MODE##Visit(visitor, node->macroCallExpr.callee);                      \
+        MODE##VisitManyNodes(visitor, node->macroCallExpr.args);               \
+        break;                                                                 \
     case astClosureExpr:                                                       \
         MODE##Visit(visitor, node->closureExpr.ret);                           \
         MODE##VisitManyNodes(visitor, node->closureExpr.params);               \

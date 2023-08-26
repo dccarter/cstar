@@ -47,6 +47,7 @@ set(CXY_3RD_PARTY_SOURCES
 
 set(CXY_LANG_SOURCES
         src/cxy/lang/ast.c
+        src/cxy/lang/capture.c
         src/cxy/lang/encode.c
         src/cxy/lang/decode.c
         src/cxy/lang/lexer.c
@@ -65,9 +66,15 @@ set(CXY_OPERATIONS_SOURCES
         src/cxy/lang/operations/json.c
         src/cxy/lang/operations/shake.c
         src/cxy/lang/operations/yaml.c
+        src/cxy/lang/operations/nodes/array.c
+        src/cxy/lang/operations/nodes/assign.c
         src/cxy/lang/operations/nodes/binary.c
+        src/cxy/lang/operations/nodes/closure.c
+        src/cxy/lang/operations/nodes/index.c
+        src/cxy/lang/operations/nodes/new.c
         src/cxy/lang/operations/nodes/node.c
-        src/cxy/lang/operations/nodes/struct.c)
+        src/cxy/lang/operations/nodes/struct.c
+        src/cxy/lang/operations/nodes/unary.c)
 
 set(CXY_DRIVER_SOURCES
         src/cxy/driver/cc.c

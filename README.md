@@ -38,7 +38,7 @@ const user : User = ("name", 25, (100, "street", "city", "country"))
 - [ ] Base classes (partially supported)
 - [ ] Visibility (Supported by the parser, `-` used to mark members as private)
 - [ ] Constructor field initializers
-- [x] Const methods (like in C++, methods that can be invoked on a const object)
+- [x] Constant methods (like in C++, methods that can be invoked on a const object)
 
 ```c
 // Plain old C struct

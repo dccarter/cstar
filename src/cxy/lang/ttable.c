@@ -144,6 +144,9 @@ static bool compareTypes(const Type *left, const Type *right)
     case typFunc:
         if (left->name && right->name && left->name == right->name)
             return false;
+        if (left->func.name != right->func.name)
+            return false;
+
         if (left->func.decl && right->func.decl &&
             left->func.decl->parentScope && right->func.decl->parentScope &&
             left->func.decl->parentScope != right->func.decl->parentScope)
@@ -161,6 +164,9 @@ static bool compareTypes(const Type *left, const Type *right)
                compareManyTypes(left->applied.args,
                                 right->applied.args,
                                 right->applied.totalArgsCount);
+    case typString:
+        return typeIs(right, String) || typeIs(right, Null);
+
     case typEnum:
     case typStruct:
     case typGeneric:
@@ -221,6 +227,13 @@ static int sortCompareStructMember(const void *lhs, const void *rhs)
 {
     const StructMember *left = *((const StructMember **)lhs),
                        *right = *((const StructMember **)rhs);
+    return left->name == right->name ? 0 : strcmp(left->name, right->name);
+}
+
+static int sortCompareEnumOption(const void *lhs, const void *rhs)
+{
+    const EnumOption *left = *((const EnumOption **)lhs),
+                     *right = *((const EnumOption **)rhs);
     return left->name == right->name ? 0 : strcmp(left->name, right->name);
 }
 
@@ -526,10 +539,20 @@ const Type *makeEnum(TypeTable *table, const Type *init)
     if (!ret.f) {
         Type *tEnum = (Type *)ret.s;
         tEnum->tEnum.options = allocFromMemPool(
-            table->memPool, sizeof(EnumOption) * init->tEnum.count);
+            table->memPool, sizeof(EnumOption) * init->tEnum.optionsCount);
         memcpy(tEnum->tEnum.options,
                init->tEnum.options,
-               sizeof(EnumOption) * init->tEnum.count);
+               sizeof(EnumOption) * init->tEnum.optionsCount);
+
+        tEnum->tEnum.sortedOptions = allocFromMemPool(
+            table->memPool, sizeof(EnumOption *) * init->tEnum.optionsCount);
+        for (u64 i = 0; i < init->tEnum.optionsCount; i++)
+            tEnum->tEnum.sortedOptions[i] = &tEnum->tEnum.options[i];
+
+        qsort(tEnum->tEnum.sortedOptions,
+              tEnum->tEnum.optionsCount,
+              sizeof(EnumOption *),
+              sortCompareEnumOption);
     }
 
     return ret.s;
@@ -776,6 +799,9 @@ const Type *expectSymbolInType(TypeTable *table,
         break;
     case typInterface:
         found = findInterfaceMemberType(type, name);
+        break;
+    case typEnum:
+        found = findEnumOptionType(type, name);
         break;
     default:
         break;

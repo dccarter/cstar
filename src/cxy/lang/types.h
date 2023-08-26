@@ -183,7 +183,8 @@ typedef struct Type {
         struct {
             const Type *base;
             EnumOption *options;
-            u64 count;
+            EnumOption **sortedOptions;
+            u64 optionsCount;
             AstNode *decl;
         } tEnum;
 
@@ -270,4 +271,12 @@ static inline const Type *findInterfaceMemberType(const Type *type,
 {
     const StructMember *found = findInterfaceMember(type, member);
     return found ? found->type : NULL;
+}
+
+const EnumOption *findEnumOption(const Type *type, cstring member);
+
+static inline const Type *findEnumOptionType(const Type *type, cstring member)
+{
+    const EnumOption *found = findEnumOption(type, member);
+    return found ? type : NULL;
 }

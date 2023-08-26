@@ -4,6 +4,7 @@
 
 #include "lang/operations.h"
 
+#include "lang/capture.h"
 #include "lang/flag.h"
 #include "lang/scope.h"
 #include "lang/strings.h"
@@ -14,6 +15,14 @@ typedef struct {
     MemPool *pool;
     StrPool *strings;
     Env *env;
+    union {
+        struct {
+            AstNode *currentClosure;
+        };
+        struct {
+            AstNode *currentClosure;
+        } stack;
+    };
 } BindContext;
 
 static cstring getAliasName(const AstNode *node)
@@ -48,11 +57,49 @@ static void defineDeclaration(BindContext *ctx, cstring name, AstNode *node)
     }
 }
 
-static bool isCallableDecl(AstNode *node)
+static inline bool isCallableDecl(AstNode *node)
 {
     return nodeIs(node, FuncDecl) || nodeIs(node, MacroDecl) ||
            (nodeIs(node, GenericDecl) &&
             nodeIs(node->genericDecl.decl, FuncDecl));
+}
+
+static inline bool shouldCaptureSymbol(const AstNode *closure,
+                                       const AstNode *symbol)
+{
+    return closure && (nodeIs(symbol, VarDecl) || nodeIs(symbol, FuncParam) ||
+                       nodeIs(symbol, StructField));
+}
+
+static void captureSymbol(AstNode *closure,
+                          AstNode *node,
+                          const AstNode *symbol)
+{
+    if (!shouldCaptureSymbol(closure, symbol))
+        return;
+
+    AstNode *root = node->path.elements;
+    AstNode *parent = symbol->parentScope;
+
+    if (nodeIs(symbol, FuncParam) && parent == closure)
+        return;
+
+    ClosureCapture *set = &closure->closureExpr.captureSet;
+    parent = node->parentScope;
+    while (parent && parent != symbol->parentScope) {
+        if (nodeIs(parent, ClosureExpr)) {
+            if (nodeIs(symbol, FuncParam) && symbol->parentScope == parent)
+                return;
+
+            // capture in current set
+            addClosureCapture(
+                set, root->pathElement.alt ?: root->pathElement.name, symbol);
+
+            // Nest closure, ensure to capture in parent
+            set = &parent->closureExpr.captureSet;
+        }
+        parent = parent->parentScope;
+    }
 }
 
 static AstNode *resolvePathBaseUpChain(BindContext *ctx, AstNode *path)
@@ -108,7 +155,7 @@ static AstNode *resolvePathBaseUpChain(BindContext *ctx, AstNode *path)
         "undefined symbol '{s}'",
         (FormatArg[]){{.s = root->pathElement.alt ?: root->pathElement.name}});
     suggestSimilarSymbol(ctx->env, ctx->L, root->pathElement.name);
-    
+
     return NULL;
 }
 
@@ -118,6 +165,9 @@ void bindPath(AstVisitor *visitor, AstNode *node)
     AstNode *base = node->path.elements;
     if (!base->pathElement.isKeyword) {
         base->pathElement.resolvesTo = resolvePathBaseUpChain(ctx, node);
+
+        // capture symbol if in closure
+        captureSymbol(ctx->currentClosure, node, base->pathElement.resolvesTo);
     }
     else {
         cstring keyword = base->pathElement.name;
@@ -155,6 +205,7 @@ void bindPath(AstVisitor *visitor, AstNode *node)
         }
     }
 
+    base->flags |= base->pathElement.resolvesTo->flags;
     for (AstNode *elem = base; elem; elem = elem->next)
         astVisitManyNodes(visitor, elem->pathElement.args);
 }
@@ -177,12 +228,12 @@ void bindGenericDecl(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
 
+    if (!nodeIs(node->parentScope, StructDecl))
+        defineDeclaration(ctx, getDeclarationName(node), node);
     pushScope(ctx->env, node);
     astVisitManyNodes(visitor, node->genericDecl.params);
     astVisit(visitor, node->genericDecl.decl);
     popScope(ctx->env);
-    if (!nodeIs(node->parentScope, StructDecl))
-        defineDeclaration(ctx, getDeclarationName(node), node);
 }
 
 void bindDefine(AstVisitor *visitor, AstNode *node)
@@ -234,12 +285,16 @@ void bindFuncParam(AstVisitor *visitor, AstNode *node)
     BindContext *ctx = getAstVisitorContext(visitor);
     astVisit(visitor, node->funcParam.type);
     astVisit(visitor, node->funcParam.def);
+    node->flags |= (node->funcParam.type->flags & flgConst);
     defineSymbol(ctx->env, ctx->L, node->funcParam.name, node);
 }
 
 void bindFunctionDecl(AstVisitor *visitor, AstNode *node)
 {
+    AstNode *parent = node->parentScope;
     BindContext *ctx = getAstVisitorContext(visitor);
+    if (nodeIs(parent, Program))
+        defineDeclaration(ctx, node->funcDecl.name, node);
 
     pushScope(ctx->env, node);
 
@@ -307,7 +362,31 @@ void bindEnumDecl(AstVisitor *visitor, AstNode *node)
     astVisit(visitor, node->enumDecl.base);
 
     pushScope(ctx->env, node);
-    astVisitManyNodes(visitor, node->enumDecl.options);
+    AstNode *option = node->enumDecl.options;
+    i64 nextValue = 0, i = 0;
+    for (; option; option = option->next, i++) {
+        option->enumOption.index = i;
+        option->flags |= flgMember | flgEnumLiteral;
+        astVisit(visitor, option);
+
+        if (option->enumOption.value == NULL) {
+            option->enumOption.value =
+                makeAstNode(ctx->pool,
+                            &option->loc,
+                            &(AstNode){.tag = astIntegerLit,
+                                       .intLiteral.value = nextValue});
+            continue;
+        }
+
+        AstNode *value = option->enumOption.value;
+        if (nodeIs(value, IntegerLit)) {
+            nextValue = option->enumOption.value->intLiteral.value + 1;
+            continue;
+        }
+
+        TODO("support paths when eval is implemented");
+    }
+    node->enumDecl.len = i;
     popScope(ctx->env);
 
     defineDeclaration(ctx, node->typeDecl.name, node);
@@ -396,8 +475,20 @@ void bindClosureExpr(AstVisitor *visitor, AstNode *node)
 
     pushScope(ctx->env, node);
     astVisitManyNodes(visitor, node->closureExpr.params);
+    ctx->currentClosure = node;
     astVisit(visitor, node->closureExpr.body);
+    ctx->currentClosure = NULL;
     popScope(ctx->env);
+
+    const AstNode **capture = allocFromMemPool(
+        ctx->pool, sizeof(AstNode *) * node->closureExpr.captureSet.index);
+
+    node->closureExpr.captureCount =
+        getOrderedCapture(&node->closureExpr.captureSet,
+                          capture,
+                          node->closureExpr.captureSet.index);
+
+    node->closureExpr.capture = capture;
 }
 
 void bindDeferStmt(AstVisitor *visitor, AstNode *node)
@@ -488,9 +579,6 @@ void bindProgram(AstVisitor *visitor, AstNode *node)
     astVisit(visitor, node->program.top);
 
     for (; decl; decl = decl->next) {
-        if (isCallableDecl(decl)) {
-            defineDeclaration(ctx, getDeclarationName(decl), decl);
-        }
         astVisit(visitor, decl);
     }
 }
@@ -501,7 +589,10 @@ void withParentScope(Visitor func, AstVisitor *visitor, AstNode *node)
     if (ctx->env->scope) {
         node->parentScope = ctx->env->scope->node;
     }
+
+    __typeof(ctx->stack) stack = ctx->stack;
     func(visitor, node);
+    ctx->stack = stack;
 }
 
 AstNode *bindAst(CompilerDriver *driver, AstNode *node)

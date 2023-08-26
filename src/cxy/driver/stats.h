@@ -20,9 +20,13 @@ typedef struct CompilerStats {
         u64 duration;
         MemPoolStats pool;
     } stages[ccsCOUNT];
+    struct timespec start;
+    u64 duration;
     StatsSnapshot snapshot;
 } CompilerStats;
 
+void startCompilerStats(struct CompilerDriver *driver);
+void stopCompilerStats(struct CompilerDriver *driver);
 void compilerStatsSnapshot(struct CompilerDriver *driver);
 void compilerStatsRecord(struct CompilerDriver *driver, CompilerStage stage);
 void compilerStatsPrint(const struct CompilerDriver *driver);

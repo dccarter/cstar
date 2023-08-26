@@ -41,11 +41,22 @@ typedef struct {
     };
 } TypingContext;
 
+void addTopLevelDeclaration(TypingContext *ctx, AstNode *node);
+void addBlockLevelDeclaration(TypingContext *ctx, AstNode *node);
+
+bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node);
+bool transformToDerefOperator(AstVisitor *visitor, AstNode *node);
+bool isExplicitConstructableFrom(TypingContext *ctx,
+                                 const Type *type,
+                                 const Type *from);
+
+AstNode *makeAddressOf(TypingContext *ctx, AstNode *node);
 void transformToMemberCallExpr(AstVisitor *visitor,
                                AstNode *node,
                                AstNode *target,
                                cstring member,
                                AstNode *args);
+const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node);
 
 const Type *matchOverloadedFunction(TypingContext *ctx,
                                     const Type *callee,
@@ -65,3 +76,13 @@ const Type *checkFunctionBody(AstVisitor *visitor, AstNode *node);
 void checkStructField(AstVisitor *visitor, AstNode *node);
 void checkStructDecl(AstVisitor *visitor, AstNode *node);
 void checkBinaryExpr(AstVisitor *visitor, AstNode *node);
+void checkUnaryExpr(AstVisitor *visitor, AstNode *node);
+void checkAddressOfExpr(AstVisitor *visitor, AstNode *node);
+void checkAssignExpr(AstVisitor *visitor, AstNode *node);
+void checkIndexExpr(AstVisitor *visitor, AstNode *node);
+void checkStructExpr(AstVisitor *visitor, AstNode *node);
+void checkNewExpr(AstVisitor *visitor, AstNode *node);
+void checkClosureExpr(AstVisitor *visitor, AstNode *node);
+void checkArrayExpr(AstVisitor *visitor, AstNode *node);
+
+void checkArrayType(AstVisitor *visitor, AstNode *node);

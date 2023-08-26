@@ -2,21 +2,47 @@
     STDIN
 ) : i32
 
-struct Granny[T] {
-    value: T
+//struct Array {
+//    - b: [i32]
+//
+//    func `new`(){}
+//
+//    func `..`() {
+//        var i = 0;
+//        return () : (&const i32, i32)? => {
+//            if (i < 0)
+//                return (&b.[i++], i)
+//            return null
+//        }
+//    }
+//    const func `..`() {
+//        var i = 0;
+//        return () : (&i32, i32)? => {
+//            if (i < 0)
+//                return (&b.[i++], i)
+//            return null
+//        }
+//    }
+//}
+
+interface Disposable {
+    const func dispose() : void
+    func dispose() : void
 }
 
-struct Dad[T] : Granny[i32] {
-    func hello[U](u: U) => value + u
+struct File:: Disposable {
+    const func dispose() {
+    }
+
+    func hello() {
+    }
 }
 
-struct Child: Dad[i32] {
-    func add(a: i32) => Dad[i32].hello(a)
-}
+func dispose(it: &const Disposable) => it.dispose()
 
 func test() {
-    var a: Child;
-
-    a.add(20)
+//    const it = new auto File{};
+//    dispose(it)
+//    dispose(new auto File{})
 }
 

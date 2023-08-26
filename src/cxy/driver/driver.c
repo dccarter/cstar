@@ -252,8 +252,10 @@ static bool compileProgram(CompilerDriver *driver,
     }
 
 compileProgramDone:
-    if (!options->dev.cleanAst)
+    stopCompilerStats(driver);
+    if (!options->dev.cleanAst) {
         compilerStatsPrint(driver);
+    }
     return status;
 }
 
@@ -290,6 +292,7 @@ AstNode *compileModule(CompilerDriver *driver,
 
 bool compileFile(const char *fileName, CompilerDriver *driver)
 {
+    startCompilerStats(driver);
     AstNode *program = parseFile(driver, fileName);
     return compileProgram(driver, program, fileName);
 }

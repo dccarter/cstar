@@ -116,7 +116,7 @@ typedef struct AstNodeList {
 } AstNodeList;
 
 typedef struct CaptureSet {
-    HashTable table;
+    HashTable *table;
     u64 index;
 } ClosureCapture;
 
@@ -456,7 +456,13 @@ struct AstNode {
         } callExpr, macroCallExpr;
 
         struct {
-            ClosureCapture capture;
+            union {
+                ClosureCapture captureSet;
+                struct {
+                    const AstNode **capture;
+                    u64 captureCount;
+                };
+            };
             struct AstNode *params;
             struct AstNode *ret;
             struct AstNode *body;
@@ -544,12 +550,95 @@ AstNode *makePath(MemPool *pool,
                   u64 flags,
                   const Type *type);
 
+AstNode *makePathWithElements(MemPool *pool,
+                              const FileLoc *loc,
+                              u64 flags,
+                              AstNode *elements,
+                              AstNode *next);
+
+AstNode *makeResolvedPath(MemPool *pool,
+                          const FileLoc *loc,
+                          cstring name,
+                          u64 flags,
+                          AstNode *resolvesTo,
+                          const Type *type);
+
+AstNode *makeResolvedPathElement(MemPool *pool,
+                                 const FileLoc *loc,
+                                 cstring name,
+                                 u64 flags,
+                                 AstNode *resolvesTo,
+                                 AstNode *next,
+                                 const Type *type);
+
+attr(always_inline) static AstNode *makePathElement(MemPool *pool,
+                                                    const FileLoc *loc,
+                                                    cstring name,
+                                                    u64 flags,
+                                                    AstNode *next,
+                                                    const Type *type)
+{
+    return makeResolvedPathElement(pool, loc, name, flags, NULL, next, type);
+}
+
+AstNode *makeCallExpr(MemPool *pool,
+                      const FileLoc *loc,
+                      AstNode *callee,
+                      AstNode *args,
+                      u64 flags,
+                      AstNode *next,
+                      const Type *type);
+
 AstNode *makePathFromIdent(MemPool *pool, const AstNode *ident);
 
 AstNode *makeGenIdent(MemPool *pool,
                       struct StrPool *strPool,
                       const FileLoc *loc,
                       const Type *type);
+
+AstNode *makeExprStmt(MemPool *pool,
+                      const FileLoc *loc,
+                      AstNode *expr,
+                      u64 flags,
+                      AstNode *next,
+                      const Type *type);
+
+AstNode *makeStmtExpr(MemPool *pool,
+                      const FileLoc *loc,
+                      AstNode *stmt,
+                      u64 flags,
+                      AstNode *next,
+                      const Type *type);
+
+AstNode *makeBlockStmt(MemPool *pool,
+                       const FileLoc *loc,
+                       AstNode *stmts,
+                       AstNode *next,
+                       const Type *type);
+
+AstNode *makeNewExpr(MemPool *pool,
+                     const FileLoc *loc,
+                     u64 flags,
+                     AstNode *target,
+                     AstNode *init,
+                     AstNode *next,
+                     const Type *type);
+
+AstNode *makeStructExpr(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        AstNode *left,
+                        AstNode *fields,
+                        AstNode *next,
+                        const Type *type);
+
+AstNode *makeVarDecl(MemPool *pool,
+                     const FileLoc *loc,
+                     u64 flags,
+                     cstring name,
+                     AstNode *init,
+                     AstNode *next,
+                     const Type *type);
 
 AstNode *copyAstNode(MemPool *pool, const AstNode *node);
 

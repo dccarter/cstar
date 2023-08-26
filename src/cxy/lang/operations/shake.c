@@ -107,13 +107,19 @@ static bool validateOperatorOverloadArguments(ShakeAstContext *ctx,
     switch (op) {
 #define f(OP, _0, _1, STR, ...)                                                \
     case op##OP:                                                               \
-        reportIfUnexpectedNumberOfParameters(ctx, &node->loc, STR, count, 1);
+        return reportIfUnexpectedNumberOfParameters(                           \
+            ctx, &node->loc, STR, count, op == opRange ? 0 : 1);
         AST_BINARY_EXPR_LIST(f)
 #undef f
 
 #define f(OP, _0, _1, STR, ...)                                                \
     case op##OP:                                                               \
-        reportIfUnexpectedNumberOfParameters(ctx, &node->loc, STR, count, 0);
+        if (op != opNew)                                                       \
+            return reportIfUnexpectedNumberOfParameters(                       \
+                ctx, &node->loc, STR, count, 0);                               \
+        else                                                                   \
+            return true;
+
         AST_UNARY_EXPR_LIST(f)
 #undef f
 

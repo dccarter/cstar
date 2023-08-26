@@ -1070,6 +1070,7 @@ AstNode *dumpAstToYaml(CompilerDriver *driver, AstNode *node, FILE *file)
         [astAssignExpr] = visitBinaryExpr,
         [astBinaryExpr] = visitBinaryExpr,
         [astUnaryExpr] = visitUnaryExpr,
+        [astAddressOf] = visitUnaryExpr,
         [astTernaryExpr] = visitTernaryExpr,
         [astIfStmt] = visitTernaryExpr,
         [astStmtExpr] = visitStmtExpr,

@@ -8,7 +8,7 @@
 #include "lang/strings.h"
 #include "lang/ttable.h"
 
-#include <string.h>
+#include <strings.h>
 
 AstNode *makeAddressOf(TypingContext *ctx, AstNode *node)
 {
@@ -113,6 +113,74 @@ void transformToMemberCallExpr(AstVisitor *visitor,
     node->type = NULL;
     node->callExpr.callee = callee;
     node->callExpr.args = args;
+}
+
+const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    AstNode *callee = node->callExpr.callee;
+
+    // turn S(...) => ({ var tmp = S{}; tmp.init(...); tmp; })
+
+    cstring name = makeAnonymousVariable(ctx->strings, "_new_tmp");
+    // S{}
+    AstNode *structExpr = makeStructExpr(ctx->pool,
+                                         &callee->loc,
+                                         callee->flags,
+                                         callee,
+                                         NULL,
+                                         NULL,
+                                         callee->type);
+    // var name = S{}
+    AstNode *varDecl = makeVarDecl(ctx->pool,
+                                   &callee->loc,
+                                   callee->flags | flgImmediatelyReturned,
+                                   name,
+                                   structExpr,
+                                   NULL,
+                                   callee->type);
+    // tmp.init
+    AstNode *newCallee = makePathWithElements(
+        ctx->pool,
+        &callee->loc,
+        callee->flags,
+        makeResolvedPathElement(
+            ctx->pool,
+            &callee->loc,
+            name,
+            callee->flags,
+            varDecl,
+            makePathElement(
+                ctx->pool, &callee->loc, S_New, callee->flags, NULL, NULL),
+            NULL),
+        NULL);
+
+    // tmp;
+    AstNode *ret = makeExprStmt(
+        ctx->pool,
+        &node->loc,
+        makeResolvedPath(ctx->pool, &node->loc, name, flgNone, varDecl, NULL),
+        node->flags,
+        NULL,
+        NULL);
+
+    //     name.init(...); tmp
+    varDecl->next = makeCallExpr(ctx->pool,
+                                 &node->loc,
+                                 newCallee,
+                                 node->callExpr.args,
+                                 node->flags,
+                                 ret,
+                                 NULL);
+
+    memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);
+    clearAstBody(node);
+    node->tag = astStmtExpr;
+    node->flags |= flgBlockReturns;
+    node->stmtExpr.stmt =
+        makeBlockStmt(ctx->pool, &node->loc, varDecl, NULL, NULL);
+
+    return checkType(visitor, node);
 }
 
 bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node)

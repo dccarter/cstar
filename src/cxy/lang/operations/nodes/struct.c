@@ -12,6 +12,7 @@
 
 #include "core/alloc.h"
 #include "lang/ast.h"
+#include "lang/strings.h"
 
 static void checkImplements(AstVisitor *visitor,
                             AstNode *node,
@@ -114,6 +115,145 @@ static bool checkMemberFunctions(AstVisitor *visitor,
     }
 
     return retype;
+}
+
+bool isExplicitConstructableFrom(TypingContext *ctx,
+                                 const Type *type,
+                                 const Type *from)
+{
+    if (!typeIs(type, Struct))
+        return isTypeAssignableFrom(type, from);
+
+    const Type *constructor = findStructMemberType(type, S_New);
+    if (constructor == NULL)
+        return false;
+
+    constructor = matchOverloadedFunction(
+        ctx, constructor, (const Type *[]){from}, 1, NULL, flgNone);
+
+    if (constructor == NULL ||
+        findAttribute(constructor->func.decl, S_explicit))
+        return false;
+
+    if (constructor->func.paramsCount != 1)
+        return false;
+
+    const Type *param = constructor->func.params[0];
+    if (!typeIs(param, Struct))
+        return isTypeAssignableFrom(param, from);
+
+    if (!isExplicitConstructableFrom(ctx, param, from))
+        return false;
+
+    return true;
+}
+
+void checkStructExpr(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    const Type *target = checkType(visitor, node->structExpr.left);
+    if (typeIs(target, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    if (!typeIs(target, Struct)) {
+        logError(ctx->L,
+                 &node->structExpr.left->loc,
+                 "unsupported type used with struct initializer, '{t}' is not "
+                 "a struct",
+                 (FormatArg[]){{.t = target}});
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    if (target->tStruct.base) {
+        logError(ctx->L,
+                 &node->structExpr.left->loc,
+                 "type '{t}' cannot be initialized with an initializer "
+                 "expression, struct extends a base type",
+                 (FormatArg[]){{.t = target}});
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    AstNode *field = node->structExpr.fields, *prev = node->structExpr.fields;
+    bool *initialized =
+        callocOrDie(1, sizeof(bool) * target->tStruct.membersCount);
+
+    for (; field; field = field->next) {
+        prev = field;
+        const StructMember *member =
+            findStructMember(target, field->fieldExpr.name);
+        if (member == NULL) {
+            logError(
+                ctx->L,
+                &field->loc,
+                "field '{s}' does not exist in target struct type '{t}'",
+                ((FormatArg[]){{.s = field->fieldExpr.name}, {.t = target}}));
+            node->type = ERROR_TYPE(ctx);
+            continue;
+        }
+
+        if (!nodeIs(member->decl, StructField)) {
+            logError(
+                ctx->L,
+                &field->loc,
+                "member '{s}' is not a field, only struct can be initialized",
+                (FormatArg[]){{.s = field->fieldExpr.name}});
+            node->type = ERROR_TYPE(ctx);
+            continue;
+        }
+
+        const Type *type = checkType(visitor, field->fieldExpr.value);
+        if (!isTypeAssignableFrom(member->type, type)) {
+            logError(ctx->L,
+                     &field->fieldExpr.value->loc,
+                     "value type '{t}' is not assignable to field type '{t}'",
+                     (FormatArg[]){{.t = type}, {.t = member->type}});
+            node->type = ERROR_TYPE(ctx);
+            continue;
+        }
+
+        field->type = member->type;
+        initialized[member->decl->structField.index] = true;
+    }
+
+    if (node->type == ERROR_TYPE(ctx))
+        return;
+
+    for (u64 i = 0; i < target->tStruct.membersCount; i++) {
+        const AstNode *targetField = target->tStruct.members[i].decl;
+        if (initialized[i] || !nodeIs(targetField, StructField))
+            continue;
+
+        if (targetField->structField.value == NULL) {
+            logError(
+                ctx->L,
+                &node->loc,
+                "initializer expression missing struct required member '{s}'",
+                (FormatArg[]){{.s = targetField->structField.name}});
+            logNote(
+                ctx->L, &targetField->loc, "struct field declared here", NULL);
+            node->type = ERROR_TYPE(ctx);
+            continue;
+        }
+        AstNode *temp = makeAstNode(
+            ctx->pool,
+            &(prev ?: node)->loc,
+            &(AstNode){.tag = astFieldExpr,
+                       .type = targetField->type,
+                       .flags = targetField->flags,
+                       .fieldExpr = {.name = targetField->structField.name,
+                                     .value = targetField->structField.value}});
+        if (prev)
+            prev = prev->next = temp;
+        else
+            prev = node->structExpr.fields = temp;
+    }
+
+    if (node->type != ERROR_TYPE(ctx))
+        node->type = target;
 }
 
 void checkStructField(AstVisitor *visitor, AstNode *node)

@@ -1,108 +1,148 @@
 Program:
 decls:
+- GenericDecl:
+  flags: (Variadic|TopLevelDecl)
+  decl:
+    FuncDecl:
+    flags: (Variadic|TopLevelDecl)
+    name: varargs
+    params:
+    - FuncParam:
+      flags: (Variadic)
+      name: args
+      index: 0
+      paramType:
+        Path:
+        flags: (TypeAst)
+        elements:
+        - PathElem:
+          flags: (TypeAst)
+          name: _Variadic
+        isType: false
+    body:
+      BlockStmt:
+  params:
+  - GenericParam:
+    flags: (Variadic)
+    name: _Variadic
+    constraints:
+    - AutoType:
+      flags: (TypeAst)
+- GenericDecl:
+  flags: (Variadic|TopLevelDecl)
+  decl:
+    FuncDecl:
+    flags: (Variadic|TopLevelDecl)
+    name: add
+    params:
+    - FuncParam:
+      flags: (Variadic)
+      name: nums
+      index: 0
+      paramType:
+        Path:
+        flags: (TypeAst)
+        elements:
+        - PathElem:
+          flags: (TypeAst)
+          name: _Variadic
+        isType: false
+    body:
+      BlockStmt:
+  params:
+  - GenericParam:
+    flags: (Variadic)
+    name: _Variadic
+    constraints:
+    - PrimitiveType:
+      flags: (TypeAst)
+      name: f32
+- GenericDecl:
+  flags: (Variadic|TopLevelDecl)
+  decl:
+    FuncDecl:
+    flags: (Variadic|TopLevelDecl)
+    name: many
+    params:
+    - FuncParam:
+      name: x
+      index: 0
+      paramType:
+        PrimitiveType:
+        flags: (TypeAst)
+        name: i32
+    - FuncParam:
+      flags: (Variadic)
+      name: rest
+      index: 0
+      paramType:
+        Path:
+        flags: (TypeAst)
+        elements:
+        - PathElem:
+          flags: (TypeAst)
+          name: _Variadic
+        isType: false
+    body:
+      BlockStmt:
+      stmts:
+      - ExprStmt:
+        expr:
+          CallExpr:
+          callee:
+            Path:
+            elements:
+            - PathElem:
+              name: add
+            isType: false
+          args:
+          - CastExpr:
+            to:
+              PrimitiveType:
+              flags: (TypeAst)
+              name: f32
+            exp:
+              Path:
+              elements:
+              - PathElem:
+                name: x
+              isType: false
+          - SpreadExpr:
+            expr:
+              Path:
+              elements:
+              - PathElem:
+                name: rest
+              isType: false
+  params:
+  - GenericParam:
+    flags: (Variadic)
+    name: _Variadic
+    constraints:
+    - PrimitiveType:
+      flags: (TypeAst)
+      name: f32
 - FuncDecl:
-  flags: (TopLevelDecl)
-  name: varargs
+  flags: (Variadic|TopLevelDecl)
+  name: varargs_0
   params:
   - FuncParam:
     flags: (Variadic)
     name: args
     index: 0
     paramType:
-      AutoType:
-      flags: (TypeAst)
-  body:
-    BlockStmt:
-- FuncDecl:
-  flags: (TopLevelDecl)
-  name: add
-  params:
-  - FuncParam:
-    flags: (Variadic)
-    name: nums
-    index: 0
-    paramType:
-      PrimitiveType:
-      flags: (TypeAst)
-      prtId: 11
-  body:
-    BlockStmt:
-    stmts:
-    - VarDecl:
-      names:
-      - Identifier:
-        value: sum
-      varType:
-        PrimitiveType:
+      Path:
+      flags: (TypeAst|Variadic)
+      elements:
+      - PathElem:
         flags: (TypeAst)
-        prtId: 11
-      init:
-        IntegerLit:
-        value: 0
-    - VarDecl:
-      flags: (Const|Comptime)
-      names:
-      - Identifier:
-        value: i
-      init:
-        IntegerLit:
-        value: 0
-    - ForStmt:
-      flags: (Comptime)
-      stmts:
-        VarDecl:
-        flags: (Const)
-        names:
-        - Identifier:
-          value: num
-      range:
-        Path:
-        flags: (Comptime)
-        elements:
-        - PathElem:
-          name: nums
-        - PathElem:
-          name: Tinfo
-        isType: false
-      body:
-        BlockStmt:
-        stmts:
-        - ExprStmt:
-          expr:
-            AssignExpr:
-            op: 1
-            lhs:
-              Path:
-              elements:
-              - PathElem:
-                name: sum
-              isType: false
-            rhs:
-              Path:
-              elements:
-              - PathElem:
-                name: sum
-              isType: false
-        - ExprStmt:
-          expr:
-            AssignExpr:
-            flags: (Comptime)
-            op: 1
-            lhs:
-              Path:
-              elements:
-              - PathElem:
-                name: i
-              isType: false
-            rhs:
-              Path:
-              elements:
-              - PathElem:
-                name: i
-              isType: false
+        name: _Variadic
+      isType: false
+  body:
+    BlockStmt:
 - FuncDecl:
-  flags: (TopLevelDecl)
-  name: many
+  flags: (Variadic|TopLevelDecl)
+  name: many_1
   params:
   - FuncParam:
     name: x
@@ -110,48 +150,93 @@ decls:
     paramType:
       PrimitiveType:
       flags: (TypeAst)
-      prtId: 9
+      name: i32
   - FuncParam:
     flags: (Variadic)
     name: rest
     index: 0
     paramType:
-      PrimitiveType:
-      flags: (TypeAst)
-      prtId: 11
+      Path:
+      flags: (TypeAst|Variadic)
+      elements:
+      - PathElem:
+        flags: (TypeAst)
+        name: _Variadic
+      isType: false
   body:
     BlockStmt:
     stmts:
+    - Path:
+      flags: (Variadic)
+      elements:
+      - PathElem:
+        name: rest
+      isType: false
     - ExprStmt:
       expr:
         CallExpr:
         callee:
           Path:
+          flags: (Variadic|TopLevelDecl)
           elements:
           - PathElem:
-            name: add
+            name: add_2
           isType: false
         args:
-        - CastExpr:
-          to:
-            PrimitiveType:
-            flags: (TypeAst)
-            prtId: 11
-          exp:
-            Path:
-            elements:
-            - PathElem:
-              name: x
-            isType: false
-        - UnaryExpr:
-          op: 28
-          isPrefix: true
-          lhs:
-            Path:
-            elements:
-            - PathElem:
-              name: rest
-            isType: false
+        - TupleExpr:
+          flags: (Variadic)
+          members:
+          - CastExpr:
+            to:
+              PrimitiveType:
+              flags: (TypeAst)
+              name: f32
+            exp:
+              Path:
+              elements:
+              - PathElem:
+                name: x
+              isType: false
+          - MemberExpr:
+            target:
+              Path:
+              flags: (Variadic)
+              elements:
+              - PathElem:
+                name: rest
+              isType: false
+            member:
+              IntegerLit:
+              value: 0
+          - MemberExpr:
+            target:
+              Path:
+              flags: (Variadic)
+              elements:
+              - PathElem:
+                name: rest
+              isType: false
+            member:
+              IntegerLit:
+              value: 1
+- FuncDecl:
+  flags: (Variadic|TopLevelDecl)
+  name: add_2
+  params:
+  - FuncParam:
+    flags: (Variadic)
+    name: nums
+    index: 0
+    paramType:
+      Path:
+      flags: (TypeAst|Variadic)
+      elements:
+      - PathElem:
+        flags: (TypeAst)
+        name: _Variadic
+      isType: false
+  body:
+    BlockStmt:
 - FuncDecl:
   flags: (TopLevelDecl)
   name: main
@@ -173,32 +258,40 @@ decls:
         CallExpr:
         callee:
           Path:
+          flags: (Variadic|TopLevelDecl)
           elements:
           - PathElem:
-            name: varargs
+            name: varargs_0
           isType: false
         args:
-        - IntegerLit:
-          value: 10
-        - StringLit:
-          value: "Hello"
-        - CharLit:
-          value: 'c'
-        - FloatLit:
-          value: 2000.600000
+        - TupleExpr:
+          flags: (Variadic)
+          members:
+          - IntegerLit:
+            value: 10
+          - StringLit:
+            value: "Hello"
+          - CharLit:
+            value: 'c'
+          - FloatLit:
+            value: 2000.600000
     - ExprStmt:
       expr:
         CallExpr:
         callee:
           Path:
+          flags: (Variadic|TopLevelDecl)
           elements:
           - PathElem:
-            name: many
+            name: many_1
           isType: false
         args:
         - IntegerLit:
           value: 10
-        - FloatLit:
-          value: 10.000000
-        - FloatLit:
-          value: 100.600000
+        - TupleExpr:
+          flags: (Variadic)
+          members:
+          - FloatLit:
+            value: 10.000000
+          - FloatLit:
+            value: 100.600000

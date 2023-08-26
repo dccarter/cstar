@@ -135,6 +135,8 @@ extern "C" {
 #define unreachable(...) csAssert(false, "Unreachable code reached");
 #endif
 
+#define TODO(fmt, ...) csAssert(false, "TODO: " fmt, ##__VA_ARGS__)
+
 #define attr(A, ...) CXY_PASTE(cxy_, A)(__VA_ARGS__)
 
 #ifndef cxy_ALIGN

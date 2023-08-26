@@ -20,6 +20,20 @@ decls:
       value: "Hello"
     - StringLit:
       value: "World"
+- StructDecl:
+  flags: (Closure)
+  name: closure_1
+  members:
+  - FuncDecl:
+    overload: op__call
+    name: op__call
+    body:
+      TupleExpr:
+      members:
+      - IntegerLit:
+        value: 20
+      - IntegerLit:
+        value: 20
 - FuncDecl:
   flags: (TopLevelDecl)
   name: main
@@ -61,7 +75,7 @@ decls:
     - ExprStmt:
       expr:
         AssignExpr:
-        op: 34
+        op: =
         lhs:
           Path:
           elements:
@@ -70,9 +84,10 @@ decls:
           isType: false
         rhs:
           Path:
+          flags: (Const)
           elements:
           - PathElem:
-            name: x
+            name: k
           isType: false
     - BlockStmt:
       stmts:
@@ -102,7 +117,7 @@ decls:
         varType:
           PrimitiveType:
           flags: (TypeAst)
-          prtId: 9
+          name: i32
       - VarDecl:
         names:
         - Identifier:
@@ -113,10 +128,10 @@ decls:
           members:
           - PrimitiveType:
             flags: (TypeAst)
-            prtId: 0
+            name: bool
           - PrimitiveType:
             flags: (TypeAst)
-            prtId: 9
+            name: i32
         init:
           TupleExpr:
           members:
@@ -147,7 +162,7 @@ decls:
         varType:
           PrimitiveType:
           flags: (TypeAst)
-          prtId: 9
+          name: i32
       - VarDecl:
         names:
         - Identifier:
@@ -155,7 +170,7 @@ decls:
         varType:
           PrimitiveType:
           flags: (TypeAst)
-          prtId: 9
+          name: i32
       - VarDecl:
         names:
         - Identifier:
@@ -193,14 +208,13 @@ decls:
           callee:
             GroupExpr:
             expr:
-              ClosureExpr:
-              body:
-                TupleExpr:
-                members:
-                - IntegerLit:
-                  value: 20
-                - IntegerLit:
-                  value: 20
+              StructExpr:
+              left:
+                Path:
+                elements:
+                - PathElem:
+                  name: closure_1
+                isType: false
       - VarDecl:
         names:
         - Identifier:
