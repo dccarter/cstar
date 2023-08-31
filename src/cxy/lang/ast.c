@@ -59,6 +59,23 @@ static void postCloneAstNode(CloneAstConfig *config,
 {
     switch (from->tag) {
     case astFuncDecl:
+        if (from->list.first) {
+            if (from->list.first == from) {
+                to->list.first = to;
+            }
+            else {
+                replaceWithCorrespondingNode(&config->mapping, &to->list.first);
+                AstNode *prev = to->list.first, *node = prev->list.link;
+                while (node) {
+                    if (node == from) {
+                        prev->list.link = to;
+                        break;
+                    }
+                    prev = node;
+                    node = node->list.link;
+                }
+            }
+        }
     case astFuncParam:
     case astStructDecl:
     case astStructField:
@@ -203,7 +220,7 @@ AstNode *makePathWithElements(MemPool *pool,
                        loc,
                        &(AstNode){.tag = astPath,
                                   .flags = flags,
-                                  .type = elements->type,
+                                  .type = getLastAstNode(elements)->type,
                                   .next = next,
                                   .path.elements = elements});
 }
@@ -650,7 +667,10 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
         CLONE_MANY(arrayType, dim);
         break;
     case astPointerType:
-        CLONE_MANY(pointerType, pointed);
+        CLONE_ONE(pointerType, pointed);
+        break;
+    case astOptionalType:
+        CLONE_ONE(optionalType, type);
         break;
     case astFuncType:
         CLONE_ONE(funcType, ret);
@@ -1089,6 +1109,19 @@ AstNode *resolvePath(const AstNode *path)
         }
         resolved = elem->pathElement.resolvesTo;
     }
+    return resolved;
+}
+
+AstNode *getResolvedPath(const AstNode *path)
+{
+    if (!nodeIs(path, Path))
+        return NULL;
+    AstNode *elem = path->path.elements, *resolved = NULL;
+    do {
+        resolved = elem->pathElement.resolvesTo;
+        elem = elem->next;
+    } while (elem);
+
     return resolved;
 }
 

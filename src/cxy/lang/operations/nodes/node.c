@@ -176,9 +176,9 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
     memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);
     clearAstBody(node);
     node->tag = astStmtExpr;
-    node->flags |= flgBlockReturns;
     node->stmtExpr.stmt =
         makeBlockStmt(ctx->pool, &node->loc, varDecl, NULL, NULL);
+    node->stmtExpr.stmt->flags = flgBlockReturns;
 
     return checkType(visitor, node);
 }

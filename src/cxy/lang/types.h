@@ -167,7 +167,6 @@ typedef struct Type {
             u16 paramsCount;
             u16 capturedNamesCount;
             u16 defaultValuesCount;
-            cstring name;
             const Type *retType;
             const Type **params;
             const char **captureNames;
@@ -222,8 +221,15 @@ typedef struct Type {
     };
 } Type;
 
+typedef Pair(i64, u64) IntMinMax;
+
 #define CYX_TYPE_BODY_SIZE (sizeof(Type) - sizeof(((Type *)0)->_head))
-#define typeIs(T, TAG) ((T) && (T)->tag == typ##TAG)
+static inline bool typeIs_(const Type *type, TTag tag)
+{
+    return type && type->tag == tag;
+}
+
+#define typeIs(T, TAG) typeIs_((T), typ##TAG)
 
 bool isTypeAssignableFrom(const Type *to, const Type *from);
 bool isTypeCastAssignable(const Type *to, const Type *from);
@@ -251,8 +257,11 @@ static inline bool isSliceType(const Type *type)
 
 static inline bool isTruthyType(const Type *type)
 {
-    return isIntegralType(type) || isFloatType(type) || typeIs(type, Pointer);
+    return isIntegralType(type) || isFloatType(type) || typeIs(type, Pointer) ||
+           typeIs(type, Optional);
 }
+
+const IntMinMax getIntegerTypeMinMax(const Type *id);
 
 const StructMember *findStructMember(const Type *type, cstring member);
 

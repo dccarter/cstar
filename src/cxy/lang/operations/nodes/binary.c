@@ -3,6 +3,7 @@
 //
 
 #include "../check.h"
+#include "../codegen.h"
 
 #include "lang/flag.h"
 #include "lang/operations.h"
@@ -77,6 +78,16 @@ static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
         visitor, node, node->binaryExpr.lhs, name, node->binaryExpr.rhs);
 
     checkType(visitor, node);
+}
+
+void generateBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    astConstVisit(visitor, node->binaryExpr.lhs);
+    format(ctx->state,
+           " {s} ",
+           (FormatArg[]){{.s = getBinaryOpString(node->binaryExpr.op)}});
+    astConstVisit(visitor, node->binaryExpr.rhs);
 }
 
 void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
@@ -176,7 +187,7 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
         break;
 
     case optRange: {
-        if (!isIntegerType(left)) {
+        if (!isIntegralType(left)) {
             logError(ctx->L,
                      &node->loc,
                      "expecting an integral type for range expression "
@@ -187,7 +198,7 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
             return;
         }
 
-        if (!isIntegerType(right)) {
+        if (!isIntegralType(right)) {
             logError(ctx->L,
                      &node->loc,
                      "expecting an integral type for range expression end, got "
@@ -203,7 +214,7 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
         node->rangeExpr.start = binary.binaryExpr.lhs;
         node->rangeExpr.end = binary.binaryExpr.rhs;
         node->rangeExpr.step = NULL;
-        node->type = makeOpaqueType(ctx->types, S_cxy_range_t);
+        node->type = getPrimitiveType(ctx->types, prtI64);
         break;
     }
     default:

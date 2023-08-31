@@ -3,6 +3,7 @@
 //
 
 #include "../check.h"
+#include "../codegen.h"
 
 #include "lang/flag.h"
 #include "lang/operations.h"
@@ -47,6 +48,29 @@ static void checkIndexOperator(AstVisitor *visitor, AstNode *node)
                               S_IndexOverload,
                               node->indexExpr.index);
     checkType(visitor, node);
+}
+
+void generateIndexExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    const Type *target = node->indexExpr.target->type;
+    const Type *stripped = stripPointer(target);
+
+    if (typeIs(target, Pointer) && typeIs(stripped, Array))
+        format(ctx->state, "(*", NULL);
+
+    astConstVisit(visitor, node->indexExpr.target);
+
+    if (isSliceType(target)) {
+        format(ctx->state, "->data", NULL);
+    }
+
+    if (typeIs(target, Pointer) && typeIs(stripped, Array))
+        format(ctx->state, ")", NULL);
+
+    format(ctx->state, "[", NULL);
+    astConstVisit(visitor, node->indexExpr.index);
+    format(ctx->state, "]", NULL);
 }
 
 void checkIndexExpr(AstVisitor *visitor, AstNode *node)

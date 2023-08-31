@@ -508,6 +508,31 @@ static void shakeStructDecl(AstVisitor *visitor, AstNode *node)
         makeSortedNodes(ctx->pool, node->structDecl.members, NULL);
 }
 
+static void shakeForStmt(AstVisitor *visitor, AstNode *node)
+{
+    ShakeAstContext *ctx = getAstVisitorContext(visitor);
+    AstNode *variable = node->forStmt.var;
+    u64 flags = variable->flags;
+    AstNode *name = variable->varDecl.names;
+    if (name->next) {
+        AstNode *it = name->next;
+        variable->varDecl.name = name->ident.value;
+        variable->loc = name->loc;
+        name->next = NULL;
+        for (; it;) {
+            variable->next = makeVarDecl(
+                ctx->pool, &it->loc, flags, it->ident.value, NULL, NULL, NULL);
+            name = it;
+            it = it->next;
+            name->next = NULL;
+            variable = variable->next;
+        }
+    }
+
+    astVisit(visitor, node->forStmt.range);
+    astVisit(visitor, node->forStmt.body);
+}
+
 AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
 {
     ShakeAstContext context = {
@@ -518,6 +543,7 @@ AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
         [astVarDecl] = shakeVariableDecl,
         [astIfStmt] = shakeIfStmt,
         [astWhileStmt] = shakeWhileStmt,
+        [astForStmt] = shakeForStmt,
         [astFuncDecl] = shakeFuncDecl,
         [astGenericDecl] = shakeGenericDecl,
         [astStructDecl] = shakeStructDecl,

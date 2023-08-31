@@ -535,6 +535,9 @@ struct AstNode {
             AstNode *node;
             u16 stages;
             cstring filePath;
+            union {
+                FormatState *state;
+            };
         } metadata;
     };
 };
@@ -659,7 +662,12 @@ AstNode *cloneGenericDeclaration(MemPool *pool, const AstNode *node);
 
 AstNode *replaceAstNode(AstNode *node, const AstNode *with);
 
-#define nodeIs(NODE, TAG) ((NODE) && ((NODE)->tag == ast##TAG))
+static inline bool nodeIs_(const AstNode *node, AstTag tag)
+{
+    return node && node->tag == tag;
+}
+#define nodeIs(NODE, TAG) nodeIs_((NODE), ast##TAG)
+
 #define hasFlag(ITEM, FLG) ((ITEM) && ((ITEM)->flags & (flg##FLG)))
 #define hasFlags(ITEM, FLGS) ((ITEM) && ((ITEM)->flags & (FLGS)))
 
@@ -731,6 +739,7 @@ AstNode *makeTypeReferenceNode(MemPool *pool,
 
 AstNode *findInAstNode(AstNode *node, cstring name);
 AstNode *resolvePath(const AstNode *path);
+AstNode *getResolvedPath(const AstNode *path);
 
 int isInInheritanceChain(const AstNode *node, const AstNode *parent);
 AstNode *getBaseClassAtLevel(AstNode *node, u64 level);

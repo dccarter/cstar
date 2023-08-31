@@ -137,9 +137,35 @@ static AstNode *executeTypeCheckAst(CompilerDriver *driver, AstNode *node)
 
     if (hasErrors(driver->L))
         return NULL;
-    ;
 
     node->metadata.stages |= BIT(ccsTypeCheck);
+    return node;
+}
+
+static AstNode *executeGenerateCode(CompilerDriver *driver, AstNode *node)
+{
+    csAssert0(nodeIs(node, Metadata));
+    if (!(node->metadata.stages & BIT(ccsTypeCheck))) {
+        logError(driver->L,
+                 builtinLoc(),
+                 "cannot generated code for an untyped ast",
+                 NULL);
+        return NULL;
+    }
+
+    FormatState state = newFormatState("  ", true);
+    node->metadata.state = &state;
+    generateCode(driver, node);
+
+    if (hasErrors(driver->L))
+        return NULL;
+
+    node->metadata.stages |= BIT(ccsCodegen);
+    node->metadata.state = NULL;
+    
+    writeFormatState(&state, stdout);
+    freeFormatState(&state);
+
     return node;
 }
 
@@ -212,7 +238,8 @@ static CompilerStageExecutor compilerStageExecutors[ccsCOUNT] = {
     [ccs_Dump] = executeDumpAst,
     [ccsShake] = executeShakeAst,
     [ccsBind] = executeBindAst,
-    [ccsTypeCheck] = executeTypeCheckAst};
+    [ccsTypeCheck] = executeTypeCheckAst,
+    [ccsCodegen] = executeGenerateCode};
 
 AstNode *executeCompilerStage(CompilerDriver *driver,
                               CompilerStage stage,

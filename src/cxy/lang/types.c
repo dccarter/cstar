@@ -163,7 +163,7 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
             return isTypeAssignableFrom(to->pointer.pointed,
                                         from->array.elementType);
 
-        return typeIs(from->pointer.pointed, Void);
+        return typeIs(from, Pointer) && typeIs(from->pointer.pointed, Void);
 
     case typArray:
         if (!typeIs(from, Array) ||
@@ -308,6 +308,7 @@ bool isIntegralType(const Type *type)
         INTEGER_TYPE_LIST(f)
     case prtBool:
     case prtChar:
+    case prtCChar:
         return true;
 #undef f
     default:
@@ -631,6 +632,32 @@ u64 getPrimitiveTypeSize(PrtId tag)
     default:
         csAssert0(false);
     }
+}
+
+const IntMinMax getIntegerTypeMinMax(const Type *type)
+{
+    static IntMinMax minMaxTable[] = {
+        [prtBool] = {.f = false, .s = true},
+        [prtCChar] = {.f = 0, .s = 255},
+        [prtChar] = {.f = 0, .s = UINT32_MAX},
+        [prtI8] = {.f = INT8_MIN, .s = INT8_MAX},
+        [prtU8] = {.f = 0, .s = UINT8_MAX},
+        [prtI16] = {.f = INT16_MIN, .s = INT16_MAX},
+        [prtU16] = {.f = 0, .s = UINT16_MAX},
+        [prtI32] = {.f = INT32_MIN, .s = INT32_MAX},
+        [prtU32] = {.f = 0, .s = UINT32_MAX},
+        [prtI64] = {.f = INT64_MIN, .s = INT64_MAX},
+        [prtU64] = {.f = 0, .s = UINT64_MAX},
+    };
+
+    csAssert0(isIntegralType(type));
+    if (typeIs(type, Enum)) {
+        csAssert0(type->tEnum.optionsCount);
+        return (IntMinMax){
+            .f = type->tEnum.options[0].value,
+            type->tEnum.options[type->tEnum.optionsCount - 1].value};
+    }
+    return minMaxTable[type->primitive.id];
 }
 
 const StructMember *findStructMember(const Type *type, cstring member)

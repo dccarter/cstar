@@ -9,6 +9,7 @@
  */
 
 #include "../check.h"
+#include "../codegen.h"
 
 #include "lang/flag.h"
 #include "lang/operations.h"
@@ -40,6 +41,16 @@ static void checkIndexExprAssignment(AstVisitor *visitor, AstNode *node)
     transformToMemberCallExpr(
         visitor, node, left->indexExpr.target, S_IndexAssignOverload, args);
     checkType(visitor, node);
+}
+
+void generateAssignExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    astConstVisit(visitor, node->assignExpr.lhs);
+    format(ctx->state,
+           " {s} ",
+           (FormatArg[]){{.s = getAssignOpString(node->assignExpr.op)}});
+    astConstVisit(visitor, node->assignExpr.rhs);
 }
 
 void checkAssignExpr(AstVisitor *visitor, AstNode *node)
@@ -76,7 +87,7 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
         node->type = ERROR_TYPE(ctx);
         return;
     }
-    
+
     bool isLeftAuto = typeIs(lhs, Auto);
 
     // TODO check r-value-ness

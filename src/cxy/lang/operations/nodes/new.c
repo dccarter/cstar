@@ -3,6 +3,7 @@
 //
 
 #include "../check.h"
+#include "../codegen.h"
 
 #include "lang/operations.h"
 
@@ -164,6 +165,45 @@ static const Type *checkNewInitializerExpr(AstVisitor *visitor, AstNode *node)
     }
 
     return NULL;
+}
+
+void generateNewExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    const char *name = makeAnonymousVariable((ctx)->strPool, "CXY__new_temp");
+    const Type *type = node->type->pointer.pointed;
+
+    format(ctx->state, "({{{>}\n", NULL);
+    generateTypeUsage(ctx, node->type);
+    format(
+        ctx->state, " {s} = CXY_alloc(1, sizeof(", (FormatArg[]){{.s = name}});
+    generateTypeUsage(ctx, type);
+    format(ctx->state, "),\n", NULL);
+    if (typeIs(type, Struct) || typeIs(type, Array) || typeIs(type, Tuple)) {
+        writeTypename(ctx, type);
+        format(ctx->state, "__builtin_destructor", NULL);
+    }
+    else
+        format(ctx->state, "nullptr", NULL);
+
+    format(ctx->state, ");\n", NULL);
+    if (node->newExpr.init) {
+        if (type->tag == typArray) {
+            format(ctx->state, " memcpy(*{s}, &(", (FormatArg[]){{.s = name}});
+            generateTypeUsage(ctx, type);
+            format(ctx->state, ")", NULL);
+            astConstVisit(visitor, node->newExpr.init);
+            format(ctx->state, ", sizeof(", NULL);
+            generateTypeUsage(ctx, type);
+            format(ctx->state, "))", NULL);
+        }
+        else {
+            format(ctx->state, " *{s} = ", (FormatArg[]){{.s = name}});
+            astConstVisit(visitor, node->newExpr.init);
+        }
+        format(ctx->state, ";\n", NULL);
+    }
+    format(ctx->state, " {s};{<}\n})", (FormatArg[]){{.s = name}});
 }
 
 void checkNewExpr(AstVisitor *visitor, AstNode *node)

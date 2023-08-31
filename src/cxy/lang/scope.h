@@ -40,6 +40,11 @@ AstNode *findSymbol(const Env *env,
                     const char *name,
                     const FileLoc *loc);
 
+static inline AstNode *findSymbolOnly(const Env *env, const char *name)
+{
+    return findSymbol(env, NULL, name, NULL);
+}
+
 void suggestSimilarSymbol(const Env *env, Log *L, const char *name);
 
 AstNode *findEnclosingLoop(Env *env,

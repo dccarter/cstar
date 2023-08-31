@@ -3,6 +3,7 @@
 //
 
 #include "../check.h"
+#include "../codegen.h"
 
 #include "lang/flag.h"
 #include "lang/operations.h"
@@ -131,7 +132,7 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
         }
         else {
             node->flags |=
-                (operand->flags | node->unaryExpr.operand->flags & flgConst);
+                (operand->flags | (node->unaryExpr.operand->flags & flgConst));
             operand = operand->pointer.pointed;
         }
         break;
@@ -151,6 +152,50 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
     }
 
     return operand;
+}
+
+static void generateDeleteExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    format(ctx->state, "CXY__free((void *)", NULL);
+    astConstVisit(visitor, node->unaryExpr.operand);
+    format(ctx->state, ")", NULL);
+}
+
+void generateAddressOfExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    format(ctx->state, "&", NULL);
+    astConstVisit(visitor, node->unaryExpr.operand);
+}
+
+void generateUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    if (node->unaryExpr.isPrefix) {
+        switch (node->unaryExpr.op) {
+        case opDelete:
+            generateDeleteExpr(visitor, node);
+            break;
+        case opDeref:
+            format(ctx->state, "(*", NULL);
+            astConstVisit(visitor, node->unaryExpr.operand);
+            format(ctx->state, ")", NULL);
+            break;
+
+        default:
+            format(ctx->state,
+                   "{s}",
+                   (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)}});
+            astConstVisit(visitor, node->unaryExpr.operand);
+        }
+    }
+    else {
+        astConstVisit(visitor, node->unaryExpr.operand);
+        format(ctx->state,
+               "{s}",
+               (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)}});
+    }
 }
 
 void checkAddressOfExpr(AstVisitor *visitor, AstNode *node)
@@ -174,7 +219,7 @@ void checkUnaryExpr(AstVisitor *visitor, AstNode *node)
         node->type = ERROR_TYPE(ctx);
         return;
     }
-    
+
     node->flags |= node->unaryExpr.operand->flags;
 
     if (node->unaryExpr.isPrefix) {

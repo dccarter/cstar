@@ -25,7 +25,7 @@ static const Type *createStructForClosure(AstVisitor *visitor, AstNode *node)
             &(AstNode){
                 .tag = astStructField,
                 .type = capture->type,
-                .flags = flgPrivate | capture->flags,
+                .flags = flgPrivate | capture->flags | flgMember,
                 .structField = {.name = getCapturedNodeName(capture),
                                 .type = makeTypeReferenceNode(
                                     ctx->pool, capture->type, &capture->loc)}});
@@ -61,8 +61,12 @@ static const Type *createStructForClosure(AstVisitor *visitor, AstNode *node)
                     &(AstNode){.tag = astStructDecl,
                                .flags = flgClosure,
                                .structDecl = {.name = makeAnonymousVariable(
-                                                  ctx->strings, "closure"),
+                                                  ctx->strings, "CXY__closure"),
                                               .members = fields}});
+    it = fields;
+    for (; it; it = it->next) {
+        it->parentScope = closure;
+    }
 
     const Type *type = checkType(visitor, closure);
     if (typeIs(type, Error))

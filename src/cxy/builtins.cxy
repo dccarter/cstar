@@ -1,10 +1,12 @@
+
+
 /**
  * Builtin optional type
  *
  * Corresponds to type T?
  */
 struct Optional[T] {
-    - valid: bool = false;
+    - valid: bool = false
     - value: T
 
     /* Creates an invalid optional type */
@@ -12,17 +14,17 @@ struct Optional[T] {
 
     /* Creates a valid optional type */
     func `new`(value: T) {
-        this.value = value
+        value = value
         valid = true
     }
 
     /* Checks whether an optional is valid or not */
     @inline
-    func `!!`() => valid
+    bool `!!`() => valid
 
-//    /* Dereference an optional, i.e get the underlying value. */
-//    @inline
-//    func `deref`() => value
+    /* Dereference an optional, i.e get the underlying value. */
+    @inline
+    bool `*`() => value
 }
 
 /* Creates a valid optional value */
@@ -31,12 +33,4 @@ func Some[T](value: T) => Optional[T](value)
 
 /* Creates an invalid optional value */
 @inline
-func None[T]() => Optional[T]()
-
-func main(args:[string]) {
-    var j = Some(10);
-    const h = (a: i32) => {
-        (() => j)();
-    }
-    h(100)
-}
+func None[T]() => Optional[T](value)

@@ -472,6 +472,13 @@ static AstNode *newOperator(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 {
     bool isBand = check(P, tokBAnd);
+    if (check(P, tokMinus) && peek(P, 1)->tag == tokIntLiteral) {
+        consume0(P, tokMinus);
+        AstNode *lit = parseInteger(P);
+        lit->intLiteral.hasMinus = true;
+        return lit;
+    }
+
     switch (current(P)->tag) {
 #define f(O, T, ...) case tok##T:
         AST_PREFIX_EXPR_LIST(f)
@@ -1568,7 +1575,7 @@ static AstNode *caseStatement(Parser *P)
     u64 flags = flgNone;
     Token tok = *current(P);
     AstNode *match = NULL, *body = NULL;
-    if (match(P, tokCase)) {
+    if (match(P, tokCase) || previous(P)->tag == tokComma) {
         P->inCase = true;
         match = expression(P, false);
         P->inCase = false;
@@ -1579,9 +1586,12 @@ static AstNode *caseStatement(Parser *P)
         flags |= flgDefault;
     }
 
-    consume0(P, tokColon);
-    if (!check(P, tokCase))
-        body = statement(P);
+    if (!match(P, tokComma)) {
+        consume0(P, tokFatArrow);
+        if (!check(P, tokCase, tokRBrace)) {
+            body = statement(P);
+        }
+    }
 
     return newAstNode(P,
                       &tok.fileLoc.begin,
@@ -1804,6 +1814,8 @@ static AstNode *parseStructField(Parser *P, bool isPrivate)
         consume0(P, tokAssign);
         value = expression(P, false);
     }
+    // consume optional semicolon
+    match(P, tokSemicolon);
 
     return newAstNode(
         P,

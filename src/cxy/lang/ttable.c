@@ -106,10 +106,15 @@ static bool compareManyTypes(const Type **left, const Type **right, u64 count)
     return true;
 }
 
-static bool compareTypes(const Type *left, const Type *right)
+static bool compareTypes(const Type *lhs, const Type *rhs)
 {
-    if (left->tag != right->tag)
+    u64 lhsFlags = flgNone, rhsFlags = flgNone;
+    const Type *left = unwrapType(lhs, &lhsFlags),
+               *right = unwrapType(rhs, &rhsFlags);
+
+    if (left->tag != right->tag || (lhsFlags != rhsFlags))
         return false;
+
     switch (left->tag) {
     case typAuto:
     case typError:
@@ -119,8 +124,7 @@ static bool compareTypes(const Type *left, const Type *right)
     case typPrimitive:
         return left->primitive.id == right->primitive.id;
     case typPointer:
-        return ((left->flags & flgConst) == (right->flags & flgConst)) &&
-               compareTypes(left->pointer.pointed, right->pointer.pointed);
+        return compareTypes(left->pointer.pointed, right->pointer.pointed);
     case typArray:
         return (left->array.len == right->array.len) &&
                compareTypes(left->array.elementType, right->array.elementType);
@@ -142,9 +146,7 @@ static bool compareTypes(const Type *left, const Type *right)
                                 right->tUnion.members,
                                 left->tUnion.count);
     case typFunc:
-        if (left->name && right->name && left->name == right->name)
-            return false;
-        if (left->func.name != right->func.name)
+        if (left->name && right->name && left->name != right->name)
             return false;
 
         if (left->func.decl && right->func.decl &&
@@ -152,8 +154,7 @@ static bool compareTypes(const Type *left, const Type *right)
             left->func.decl->parentScope != right->func.decl->parentScope)
             return false;
 
-        return ((left->flags & flgVariadic) == (right->flags & flgVariadic)) &&
-               (left->func.paramsCount == right->func.paramsCount) &&
+        return (left->func.paramsCount == right->func.paramsCount) &&
                compareTypes(left->func.retType, right->func.retType) &&
                compareManyTypes(left->func.params,
                                 right->func.params,
@@ -428,16 +429,18 @@ const Type *makeTypeInfo(TypeTable *table, const Type *target)
 
 const Type *makePointerType(TypeTable *table, const Type *pointed, u64 flags)
 {
+    pointed = flattenWrappedType(pointed, &flags);
     Type type = make(Type,
                      .tag = typPointer,
                      .flags = flags,
-                     .pointer = {.pointed = unwrapType(pointed, NULL)});
+                     .pointer = {.pointed = pointed});
 
     return getOrInsertType(table, &type).s;
 }
 
 const Type *makeOptionalType(TypeTable *table, const Type *target, u64 flags)
 {
+    target = flattenWrappedType(target, &flags);
     Type type = make(Type,
                      .tag = typOptional,
                      .flags = flags,
@@ -458,6 +461,7 @@ const Type *makeAliasType(TypeTable *table,
                           cstring name,
                           u64 flags)
 {
+    aliased = flattenWrappedType(aliased, &flags);
     Type type = make(Type,
                      .tag = typAlias,
                      .name = name,
@@ -573,6 +577,8 @@ const Type *makeWrappedType(TypeTable *table, const Type *target, u64 flags)
 {
     if ((target->flags & flags) == flags)
         return target;
+
+    target = flattenWrappedType(target, &flags);
     Type type = {.tag = typWrapped, .flags = flags, .wrapped.target = target};
     return getOrInsertType(table, &type).s;
 }
@@ -589,6 +595,20 @@ const Type *unwrapType(const Type *type, u64 *flags)
     if (flags)
         *flags = tmp | type->flags;
 
+    return type;
+}
+
+const Type *flattenWrappedType(const Type *type, u64 *flags)
+{
+    u64 tmp = flgNone;
+
+    while (typeIs(type, Wrapped)) {
+        tmp |= type->flags;
+        type = type->wrapped.target;
+    }
+
+    if (flags)
+        *flags |= tmp;
     return type;
 }
 
@@ -794,6 +814,9 @@ const Type *expectSymbolInType(TypeTable *table,
 {
     const Type *found = NULL;
     switch (type->tag) {
+    case typThis:
+        found = expectSymbolInType(table, type->this.that, L, name, loc);
+        break;
     case typStruct:
         found = findStructMemberType(type, name);
         break;
@@ -826,6 +849,13 @@ const Type *getIntegerTypeForLiteral(TypeTable *table, i64 literal)
         return getPrimitiveType(table, prtI32);
     else
         return getPrimitiveType(table, prtI64);
+}
+
+bool isIntegerTypeInRange(const Type *type, i64 min, i64 max)
+{
+    csAssert0(min <= max);
+    const IntMinMax minMax = getIntegerTypeMinMax(type);
+    return min <= (i64)minMax.s && max >= minMax.f;
 }
 
 int findTypeInArray(const Type **types, u64 count, const Type *type)

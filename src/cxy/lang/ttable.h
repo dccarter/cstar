@@ -103,6 +103,7 @@ const Type *makeGenericType(TypeTable *table, AstNode *decl, bool inferrable);
 
 const Type *makeWrappedType(TypeTable *table, const Type *target, u64 flags);
 const Type *unwrapType(const Type *type, u64 *flags);
+const Type *flattenWrappedType(const Type *type, u64 *flags);
 
 GetOrInset makeAppliedType(TypeTable *table, const Type *init);
 
@@ -127,4 +128,5 @@ const Type *expectSymbolInType(TypeTable *table,
                                const FileLoc *loc);
 
 const Type *getIntegerTypeForLiteral(TypeTable *table, i64 literal);
+bool isIntegerTypeInRange(const Type *type, i64 min, i64 max);
 int findTypeInArray(const Type **types, u64 count, const Type *type);
