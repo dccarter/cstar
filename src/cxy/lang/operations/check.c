@@ -3,10 +3,9 @@
 //
 
 #include "check.h"
-#include <string.h>
+#include "eval.h"
 
 #include "lang/ast.h"
-#include "lang/codec.h"
 #include "lang/flag.h"
 #include "lang/operations.h"
 #include "lang/strings.h"
@@ -15,6 +14,8 @@
 #include "lang/visitor.h"
 
 #include "core/alloc.h"
+
+#include <string.h>
 
 const FileLoc *manyNodesLoc_(FileLoc *dst, AstNode *nodes)
 {
@@ -123,49 +124,24 @@ static void checkIdentifier(AstVisitor *visitor, AstNode *node)
 
 const Type *checkType(AstVisitor *visitor, AstNode *node)
 {
+    TypingContext *ctx = getAstVisitorContext(visitor);
     if (node == NULL)
         return NULL;
+
+    if (hasFlag(node, Comptime)) {
+        node->flags &= ~flgComptime;
+        bool status = evaluate(ctx->evaluator, node);
+
+        if (!status) {
+            return node->type = ERROR_TYPE(ctx);
+        }
+    }
 
     if (node->type)
         return node->type;
 
     astVisit(visitor, node);
     return resolveType(node->type);
-}
-
-static void checkVarDecl(AstVisitor *visitor, AstNode *node)
-{
-    TypingContext *ctx = getAstVisitorContext(visitor);
-    AstNode *type = node->varDecl.type, *init = node->varDecl.init;
-
-    const Type *type_ =
-        type ? checkType(visitor, type) : makeAutoType(ctx->types);
-    const Type *init_ = checkType(visitor, init);
-
-    if (typeIs(type_, Error) || typeIs(init_, Error)) {
-        node->type = ERROR_TYPE(ctx);
-        return;
-    }
-
-    if (init_ == NULL) {
-        node->type = type_;
-        return;
-    }
-
-    if (!isTypeAssignableFrom(type_, init_)) {
-        logError(ctx->L,
-                 &node->loc,
-                 "variable initializer of type '{t}' is not assignable to "
-                 "variable type '{t}",
-                 (FormatArg[]){{.t = init_}, {.t = type_}});
-        node->type = ERROR_TYPE(ctx);
-        return;
-    }
-
-    node->type = typeIs(type_, Auto) ? init_ : type_;
-    if (hasFlag(node, Const) && !hasFlag(node->type, Const)) {
-        node->type = makeWrappedType(ctx->types, node->type, flgConst);
-    }
 }
 
 static void checkGenericDecl(AstVisitor *visitor, AstNode *node)
@@ -443,6 +419,25 @@ void checkCastExpr(AstVisitor *visitor, AstNode *node)
                  (FormatArg[]){{.t = expr}, {.t = target}});
     }
     node->type = target;
+
+    if (!hasFlag(target, Optional) || hasFlag(expr, Optional))
+        return;
+
+    target = getOptionalTargetType(target);
+    if (nodeIs(node->castExpr.expr, NullLit)) {
+        if (!transformOptionalNone(visitor, node, target)) {
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+    }
+    else {
+        node->castExpr.expr->type = target;
+        if (!transformOptionalSome(visitor, node, node->castExpr.expr)) //
+        {
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+    }
 }
 
 void checkTypedExpr(AstVisitor *visitor, AstNode *node)
@@ -460,6 +455,21 @@ void checkTypedExpr(AstVisitor *visitor, AstNode *node)
                  "type '{t}' cannot be cast to type '{t}'",
                  (FormatArg[]){{.t = expr}, {.t = type}});
         node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    if (!hasFlag(type, Optional) || hasFlag(expr, Optional))
+        return;
+
+    type = getOptionalTargetType(type);
+    if (nodeIs(node->typedExpr.expr, NullLit)) {
+        if (!transformOptionalNone(visitor, node, type))
+            node->type = ERROR_TYPE(ctx);
+    }
+    else {
+        node->typedExpr.expr->type = type;
+        if (!transformOptionalSome(visitor, node, node->typedExpr.expr))
+            node->type = ERROR_TYPE(ctx);
     }
 }
 
@@ -478,6 +488,75 @@ static void checkGroupExpr(AstVisitor *visitor, AstNode *node)
     node->type = checkType(visitor, node->groupExpr.expr);
 }
 
+static u64 addDefineToModuleMembers(ModuleMember *members,
+                                    u64 index,
+                                    AstNode *decl,
+                                    u64 builtinFlags)
+{
+    if (decl->define.container) {
+        decl->flags |= builtinFlags;
+        members[index++] = (ModuleMember){
+            .decl = decl, .name = getDeclarationName(decl), .type = decl->type};
+    }
+    else {
+        AstNode *name = decl->define.names;
+        for (; name; name = name->next) {
+            name->flags |= builtinFlags;
+            members[index++] =
+                (ModuleMember){.decl = name,
+                               .name = name->ident.alias ?: name->ident.value,
+                               .type = name->type};
+        }
+    }
+    return index;
+}
+
+static u64 addModuleTypeMember(ModuleMember *members,
+                               u64 index,
+                               AstNode *decl,
+                               u64 builtinFlags)
+{
+    if (nodeIs(decl, Define)) {
+        return addDefineToModuleMembers(members, index, decl, builtinFlags);
+    }
+    else {
+        decl->flags |= builtinFlags;
+        members[index++] = (ModuleMember){
+            .decl = decl, .name = getDeclarationName(decl), .type = decl->type};
+        return index;
+    }
+}
+
+static void buildModuleType(TypingContext *ctx,
+                            AstNode *node,
+                            bool isBuiltinModule)
+{
+    u64 builtinsFlags = (isBuiltinModule ? flgBuiltin : flgNone);
+    u64 count = countProgramDecls(node->program.decls) +
+                countProgramDecls(node->program.top),
+        i = 0;
+
+    ModuleMember *members = mallocOrDie(sizeof(ModuleMember) * count);
+
+    AstNode *decl = node->program.top;
+    for (; decl; decl = decl->next) {
+        i = addModuleTypeMember(members, i, decl, builtinsFlags);
+    }
+
+    decl = node->program.decls;
+    for (; decl; decl = decl->next) {
+        i = addModuleTypeMember(members, i, decl, builtinsFlags);
+    }
+
+    node->type = makeModuleType(
+        ctx->types,
+        isBuiltinModule ? S___builtins : node->program.module->moduleDecl.name,
+        node->loc.fileName,
+        members,
+        i);
+    free(members);
+}
+
 static void checkProgram(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
@@ -491,6 +570,11 @@ static void checkProgram(AstVisitor *visitor, AstNode *node)
         ctx->root.current = decl;
         astVisit(visitor, decl);
     }
+
+    bool isBuiltinModule = hasFlag(node, BuiltinsModule);
+    if (isBuiltinModule || node->program.module) {
+        buildModuleType(ctx, node, isBuiltinModule);
+    }
 }
 
 static void withSavedStack(Visitor func, AstVisitor *visitor, AstNode *node)
@@ -501,6 +585,16 @@ static void withSavedStack(Visitor func, AstVisitor *visitor, AstNode *node)
     func(visitor, node);
 
     ctx->stack = stack;
+}
+
+const Type *checkMaybeComptime(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    if (hasFlag(node, Comptime) && !evaluate(ctx->evaluator, node)) {
+        node->type = ERROR_TYPE(ctx);
+    }
+
+    return checkType(visitor, node);
 }
 
 AstNode *checkAst(CompilerDriver *driver, AstNode *node)
@@ -573,6 +667,15 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astArrayExpr] = checkArrayExpr
     }, .fallback = astVisitFallbackVisitAll, .dispatch = withSavedStack);
     // clang-format on
+
+    EvalContext evalContext = {.L = driver->L,
+                               .pool = &driver->pool,
+                               .strings = &driver->strPool,
+                               .types = driver->typeTable,
+                               .typer = &visitor};
+    AstVisitor evaluator;
+    initEvalVisitor(&evaluator, &evalContext);
+    context.evaluator = &evaluator;
 
     astVisit(&visitor, node);
 

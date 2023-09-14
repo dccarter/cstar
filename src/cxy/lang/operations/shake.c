@@ -14,7 +14,25 @@ typedef struct {
     Log *L;
     MemPool *pool;
     StrPool *strPool;
+    struct {
+        AstNode *current;
+        AstNode *previous;
+        AstNode *self;
+    } block;
 } ShakeAstContext;
+
+static void addNodeInBlock(ShakeAstContext *ctx, AstNode *node)
+{
+    if (ctx->block.previous == NULL) {
+        node->next = ctx->block.self->blockStmt.stmts;
+        ctx->block.self->blockStmt.stmts = node;
+    }
+    else {
+        node->next = ctx->block.current;
+        ctx->block.previous->next = node;
+    }
+    ctx->block.previous = node;
+}
 
 static AstNode *makeTupleMemberExpr(ShakeAstContext *ctx, AstNode *tuple, u64 i)
 {
@@ -242,62 +260,42 @@ void shakeVariableDecl(AstVisitor *visitor, AstNode *node)
 void shakeIfStmt(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
-    AstNode *cond = node->ifStmt.cond, *ifNode = node;
+    AstNode *cond = node->ifStmt.cond;
     if (nodeIs(cond, VarDecl)) {
-        AstNode *var = makeAstNode(
-            ctx->pool,
-            &cond->loc,
-            &(AstNode){
-                .tag = astVarDecl,
-                .flags = cond->flags,
-                .next = duplicateAstNode(ctx->pool, node),
-                .varDecl = {
-                    .names = makeGenIdent(ctx->pool,
-                                          ctx->strPool,
-                                          &cond->varDecl.names->loc,
-                                          NULL),
-                    .init = cond->varDecl.init,
-                    .type = cloneAstNode(&(CloneAstConfig){.pool = ctx->pool},
-                                         cond->varDecl.type)}});
+        AstNode *var = duplicateAstNode(ctx->pool, cond);
+        var->varDecl.names = makeGenIdent(
+            ctx->pool, ctx->strPool, &cond->varDecl.names->loc, NULL);
+        var->varDecl.name = var->varDecl.names->ident.value;
 
-        ifNode = var->next;
-        ifNode->ifStmt.cond = makePathFromIdent(ctx->pool, var->varDecl.names);
-        if (!nodeIs(ifNode->ifStmt.body, BlockStmt)) {
-            ifNode->ifStmt.body = makeAstNode(
+        addNodeInBlock(ctx, var);
+
+        cond->tag = astPath;
+        cond->path.elements = makePathElement(
+            ctx->pool, &cond->loc, var->varDecl.name, var->flags, NULL, NULL);
+
+        if (!nodeIs(node->ifStmt.body, BlockStmt)) {
+            node->ifStmt.body = makeAstNode(
                 ctx->pool,
-                &ifNode->ifStmt.body->loc,
+                &node->ifStmt.body->loc,
                 &(AstNode){.tag = astBlockStmt,
-                           .blockStmt = {.stmts = ifNode->ifStmt.body}});
+                           .blockStmt = {.stmts = node->ifStmt.body}});
         }
-
-        cond->next = ifNode->ifStmt.body->blockStmt.stmts;
-        cond->varDecl.init = makeAstNode(
-            ctx->pool,
-            &cond->loc,
-            &(AstNode){.tag = astUnaryExpr,
-                       .unaryExpr = {.op = opAddrOf,
-                                     .isPrefix = true,
-                                     .operand = makePathFromIdent(
-                                         ctx->pool, var->varDecl.names)}});
-        ifNode->ifStmt.body->blockStmt.stmts = cond;
-        *node = *var;
-        ifNode = node->next;
     }
 
-    astVisit(visitor, ifNode->ifStmt.body);
-    if (!nodeIs(ifNode->ifStmt.body, BlockStmt)) {
-        ifNode->ifStmt.body = makeAstNode(
-            ctx->pool,
-            &ifNode->ifStmt.body->loc,
-            &(AstNode){.tag = astBlockStmt,
-                       .blockStmt = {.stmts = ifNode->ifStmt.body}});
+    astVisit(visitor, node->ifStmt.body);
+    if (!nodeIs(node->ifStmt.body, BlockStmt)) {
+        node->ifStmt.body =
+            makeAstNode(ctx->pool,
+                        &node->ifStmt.body->loc,
+                        &(AstNode){.tag = astBlockStmt,
+                                   .blockStmt = {.stmts = node->ifStmt.body}});
     }
 
-    if (ifNode->ifStmt.otherwise) {
-        AstNode *otherwise = ifNode->ifStmt.otherwise;
+    if (node->ifStmt.otherwise) {
+        AstNode *otherwise = node->ifStmt.otherwise;
         astVisit(visitor, otherwise);
         if (!nodeIs(otherwise, BlockStmt) && !nodeIs(otherwise, IfStmt)) {
-            ifNode->ifStmt.otherwise =
+            node->ifStmt.otherwise =
                 makeAstNode(ctx->pool,
                             &otherwise->loc,
                             &(AstNode){.tag = astBlockStmt,
@@ -309,71 +307,45 @@ void shakeIfStmt(AstVisitor *visitor, AstNode *node)
 void shakeWhileStmt(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
-    AstNode *cond = node->whileStmt.cond, *whileNode = node;
+    AstNode *cond = node->whileStmt.cond;
 
     if (nodeIs(cond, VarDecl)) {
-        AstNode *var = makeAstNode(
+        AstNode *var = duplicateAstNode(ctx->pool, cond);
+        var->varDecl.names = makeGenIdent(
+            ctx->pool, ctx->strPool, &cond->varDecl.names->loc, NULL);
+        var->varDecl.name = var->varDecl.names->ident.value;
+
+        addNodeInBlock(ctx, var);
+
+        cond->tag = astGroupExpr;
+        cond->groupExpr.expr = makeAstNode(
             ctx->pool,
             &cond->loc,
-            &(AstNode){
-                .tag = astVarDecl,
-                .flags = cond->flags,
-                .next = duplicateAstNode(ctx->pool, node),
-                .varDecl = {
-                    .names = makeGenIdent(ctx->pool,
-                                          ctx->strPool,
-                                          &cond->varDecl.names->loc,
-                                          NULL),
-                    .init = NULL,
-                    .type = cloneAstNode(&(CloneAstConfig){.pool = ctx->pool},
-                                         cond->varDecl.type)}});
+            &(AstNode){.tag = astAssignExpr,
+                       .assignExpr = {.op = opAssign,
+                                      .lhs = makePathFromIdent(
+                                          ctx->pool, var->varDecl.names),
+                                      .rhs = var->varDecl.init}});
+        var->varDecl.init = NULL;
 
-        whileNode = var->next;
-        whileNode->whileStmt.cond = makeAstNode(
-            ctx->pool,
-            &cond->loc,
-            &(AstNode){.tag = astGroupExpr,
-                       .groupExpr.expr = makeAstNode(
-                           ctx->pool,
-                           &cond->loc,
-                           &(AstNode){.tag = astAssignExpr,
-                                      .assignExpr = {
-                                          .op = opAssign,
-                                          .lhs = makePathFromIdent(
-                                              ctx->pool, var->varDecl.names),
-                                          .rhs = cond->varDecl.init}})});
-
-        if (!nodeIs(whileNode->whileStmt.body, BlockStmt)) {
-            whileNode->whileStmt.body = makeAstNode(
+        if (!nodeIs(node->whileStmt.body, BlockStmt)) {
+            node->whileStmt.body = makeAstNode(
                 ctx->pool,
-                &whileNode->whileStmt.body->loc,
+                &node->whileStmt.body->loc,
                 &(AstNode){.tag = astBlockStmt,
-                           .blockStmt = {.stmts = whileNode->whileStmt.body}});
+                           .blockStmt = {.stmts = node->whileStmt.body}});
         }
-
-        cond->next = whileNode->whileStmt.body->blockStmt.stmts;
-        cond->varDecl.init = makeAstNode(
-            ctx->pool,
-            &cond->loc,
-            &(AstNode){.tag = astUnaryExpr,
-                       .unaryExpr = {.op = opAddrOf,
-                                     .isPrefix = true,
-                                     .operand = makePathFromIdent(
-                                         ctx->pool, var->varDecl.names)}});
-        whileNode->whileStmt.body->blockStmt.stmts = cond;
-        *node = *var;
-        whileNode = node->next;
     }
 
-    if (!nodeIs(whileNode->whileStmt.body, BlockStmt)) {
-        whileNode->whileStmt.body = makeAstNode(
+    if (!nodeIs(node->whileStmt.body, BlockStmt)) {
+        node->whileStmt.body = makeAstNode(
             ctx->pool,
-            &whileNode->whileStmt.body->loc,
+            &node->whileStmt.body->loc,
             &(AstNode){.tag = astBlockStmt,
-                       .blockStmt = {.stmts = whileNode->whileStmt.body}});
+                       .blockStmt = {.stmts = node->whileStmt.body}});
     }
 
-    astVisit(visitor, whileNode->whileStmt.body);
+    astVisit(visitor, node->whileStmt.body);
 }
 
 void shakeFuncDecl(AstVisitor *visitor, AstNode *node)
@@ -533,6 +505,23 @@ static void shakeForStmt(AstVisitor *visitor, AstNode *node)
     astVisit(visitor, node->forStmt.body);
 }
 
+static void shakeBlockStmt(AstVisitor *visitor, AstNode *node)
+{
+    ShakeAstContext *ctx = getAstVisitorContext(visitor);
+    __typeof(ctx->block) block = ctx->block;
+    ctx->block.self = node;
+    ctx->block.previous = NULL;
+
+    AstNode *stmt = node->blockStmt.stmts;
+    for (; stmt; stmt = stmt->next) {
+        ctx->block.current = stmt;
+        astVisit(visitor, stmt);
+        ctx->block.previous = stmt;
+    }
+
+    ctx->block = block;
+}
+
 AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
 {
     ShakeAstContext context = {
@@ -547,6 +536,7 @@ AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
         [astFuncDecl] = shakeFuncDecl,
         [astGenericDecl] = shakeGenericDecl,
         [astStructDecl] = shakeStructDecl,
+        [astBlockStmt] = shakeBlockStmt
     }, .fallback = astVisitFallbackVisitAll);
     // clang-format on
 

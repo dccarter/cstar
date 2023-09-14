@@ -3,6 +3,7 @@
 //
 #include "../check.h"
 #include "../codegen.h"
+#include "../eval.h"
 
 #include "lang/capture.h"
 #include "lang/flag.h"
@@ -26,7 +27,7 @@ const Type *checkPathElement(AstVisitor *visitor,
     case typContainer:
     case typModule:
     case typEnum:
-        resolved = expectSymbolInType(
+        resolved = expectInType(
             ctx->types, parent, ctx->L, node->pathElement.name, &node->loc);
         break;
     default:
@@ -54,21 +55,27 @@ const Type *checkPathElement(AstVisitor *visitor,
     return resolved;
 }
 
-static const Type *checkBasePathElement(AstVisitor *visitor, AstNode *node)
+static const Type *checkBasePathElement(AstVisitor *visitor,
+                                        AstNode *node,
+                                        u64 flags)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     if (node->pathElement.isKeyword) {
         cstring keyword = node->pathElement.name;
         csAssert0(node->pathElement.enclosure);
-        AstNode *parent = getParentScope(node->pathElement.enclosure);
+
+        AstNode *enclosure = node->pathElement.enclosure,
+                *parent = getParentScope(enclosure);
         if (keyword == S_super) {
             return node->type = parent->type->tStruct.base;
         }
         else if (keyword == S_this) {
-            return node->type = parent->type;
+            return node->type = makePointerType(
+                       ctx->types, parent->type, enclosure->flags & flgConst);
         }
         else if (keyword == S_This) {
-            return node->pathElement.enclosure->structDecl.thisType;
+            return makePointerType(
+                ctx->types, enclosure->structDecl.thisType, flags & flgConst);
         }
         unreachable("unsupported keyword");
     }
@@ -151,7 +158,7 @@ void checkPath(AstVisitor *visitor, AstNode *node)
         base->pathElement.resolvesTo =
             getBaseClassByName(ctx->currentStruct, base->pathElement.name);
     }
-    const Type *type = checkBasePathElement(visitor, base);
+    const Type *type = checkBasePathElement(visitor, base, node->flags);
 
     if (typeIs(type, Generic)) {
         type = resolveGenericDecl(visitor, base->pathElement.resolvesTo, base);
@@ -173,4 +180,108 @@ void checkPath(AstVisitor *visitor, AstNode *node)
 
     node->type = type;
     node->flags = flags;
+}
+
+void evalPath(AstVisitor *visitor, AstNode *node)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    AstNode *elem = node->path.elements;
+    AstNode *symbol = elem->pathElement.resolvesTo;
+
+    if (symbol == NULL) {
+        logError(ctx->L,
+                 &elem->loc,
+                 "reference to undefined compile time symbol '{s}'",
+                 (FormatArg[]){
+                     {.s = elem->pathElement.alt ?: elem->pathElement.name}});
+        node->tag = astError;
+        return;
+    }
+
+    if (elem->next) {
+        elem = elem->next;
+        if (nodeIs(symbol, EnumDecl)) {
+            cstring name = elem->pathElement.alt ?: elem->pathElement.name;
+            AstNode *option = findEnumOptionByName(symbol, name);
+            if (option == NULL) {
+                logError(
+                    ctx->L,
+                    &node->loc,
+                    "enum {s} does not have an option named {s}",
+                    (FormatArg[]){{.s = symbol->enumDecl.name}, {.s = name}});
+
+                node->tag = astError;
+                return;
+            }
+            symbol = option->enumOption.value;
+        }
+        else {
+            while (elem) {
+                cstring name = elem->pathElement.alt ?: elem->pathElement.name;
+                symbol = evalAstNodeMemberAccess(ctx, &elem->loc, symbol, name);
+
+                if (symbol == NULL) {
+                    logError(ctx->L,
+                             &elem->loc,
+                             "undefined compile time member named '{s}'",
+                             (FormatArg[]){{.s = name}});
+                    node->tag = astError;
+                    return;
+                }
+                elem = elem->next;
+            }
+        }
+    }
+
+    if (hasFlag(node, Typeinfo)) {
+        if (symbol->type == NULL) {
+            node->tag = astError;
+            return;
+        }
+        const Type *type = stripAll(symbol->type);
+    retry:
+        switch (type->tag) {
+        case typPrimitive:
+            node->tag = astPrimitiveType;
+            node->primitiveType.id = type->primitive.id;
+            break;
+        case typVoid:
+            node->tag = astVoidType;
+            break;
+        case typString:
+            node->tag = astStringType;
+            break;
+        case typEnum:
+        case typStruct: {
+            AstNode *decl =
+                typeIs(type, Enum) ? type->tEnum.decl : type->tStruct.decl;
+            if (decl == NULL) {
+                logError(ctx->L,
+                         &node->loc,
+                         "should have existed since type exists",
+                         NULL);
+                node->tag = astError;
+                return;
+            }
+
+            node->tag = astRef;
+            node->reference.target = decl;
+            break;
+        }
+        case typPointer:
+        case typArray:
+            *node = *symbol;
+            break;
+        case typInfo:
+            type = symbol->type->info.target;
+            goto retry;
+        default:
+            csAssert0(false);
+        }
+    }
+    else {
+        replaceAstNodeWith(
+            node, nodeIs(symbol, VarDecl) ? symbol->varDecl.init : symbol);
+        node->flags &= ~flgComptime;
+    }
 }

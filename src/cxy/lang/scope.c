@@ -3,11 +3,11 @@
 //
 
 #include "scope.h"
+#include "builtins.h"
+
 #include "core/alloc.h"
 
 #include <string.h>
-
-static Env *__builtins = NULL;
 
 static inline bool compareSymbols(const void *lhs, const void *rhs)
 {
@@ -185,6 +185,12 @@ AstNode *findSymbol(const Env *env,
             return symbol->node;
     }
 
+    if (isBuiltinsInitialized()) {
+        AstNode *node = findBuiltinDecl(name);
+        if (node)
+            return node;
+    }
+
     if (L) {
         logError(L, loc, "undefined symbol '{s}'", (FormatArg[]){{.s = name}});
         suggestSimilarSymbol(env, L, name);
@@ -349,7 +355,3 @@ void environmentFree(Env *env)
     if (env)
         freeScopes(env->first);
 }
-
-bool isBuiltinEnv(const Env *env) { return env == __builtins; }
-
-Env *getBuiltinEnv(void) { return __builtins; }

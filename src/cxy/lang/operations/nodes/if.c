@@ -4,6 +4,7 @@
 
 #include "../check.h"
 #include "../codegen.h"
+#include "../eval.h"
 
 #include "lang/capture.h"
 #include "lang/flag.h"
@@ -41,6 +42,22 @@ void checkIfStmt(AstVisitor *visitor, AstNode *node)
     if (typeIs(cond_, Error)) {
         node->type = ERROR_TYPE(ctx);
         return;
+    }
+
+    cond_ = unwrapType(cond_, NULL);
+    if (typeIs(cond_, Struct)) {
+        if (!transformToTruthyOperator(visitor, cond)) {
+            if (!typeIs(cond->type, Error))
+                logError(ctx->L,
+                         &cond->loc,
+                         "expecting a struct that overloads the truthy `!!` in "
+                         "an if statement condition, "
+                         "got '{t}'",
+                         (FormatArg[]){{.t = cond_}});
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+        cond_ = cond->type;
     }
 
     if (!isTruthyType(cond_)) {
@@ -85,4 +102,45 @@ void checkIfStmt(AstVisitor *visitor, AstNode *node)
         return;
     }
     node->type = then_;
+}
+
+void evalIfStmt(AstVisitor *visitor, AstNode *node)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+
+    AstNode *cond = node->ifStmt.cond;
+    if (!evaluate(visitor, cond) || !evalBooleanCast(ctx, cond)) {
+        node->tag = astError;
+        return;
+    }
+
+    AstNode *next = node->next;
+    AstNode *parent = node->parentScope;
+    u64 visited = node->flags & flgVisited;
+
+    if (cond->boolLiteral.value) {
+        // select then branch & reclaim else branch if any
+        replaceAstNodeWith(node, node->ifStmt.body);
+    }
+    else if (node->ifStmt.otherwise) {
+        // select otherwise, reclaim if branch
+        replaceAstNodeWith(node, node->ifStmt.otherwise);
+        while (nodeIs(node, IfStmt) && hasFlag(node, Comptime)) {
+            if (!evaluate(visitor, node)) {
+                node->tag = astError;
+                return;
+            }
+        }
+    }
+    else {
+        // select next statement, reclaim if branch
+        if (next)
+            *node = *next;
+        else {
+            clearAstBody(node);
+            node->tag = astNop;
+            node->flags &= ~flgComptime;
+        }
+    }
+    node->flags |= visited;
 }

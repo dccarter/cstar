@@ -8,17 +8,11 @@
 
 #include <string.h>
 
-typedef struct {
-    cstring name;
-    const AstNode *node;
-    u64 id;
-} Capture;
-
 static bool compareCaptures(const void *left, const void *right)
 {
-    return (((const Capture *)left)->name == ((const Capture *)right)->name) ||
-           strcmp(((const Capture *)left)->name,
-                  ((const Capture *)right)->name) == 0;
+    cstring lhs = getCapturedNodeName(((const Capture *)left)->node),
+            rhs = getCapturedNodeName(((const Capture *)right)->node);
+    return (lhs == rhs) || strcmp(lhs, rhs) == 0;
 }
 
 static void initClosureCapture(ClosureCapture *set)
@@ -27,33 +21,33 @@ static void initClosureCapture(ClosureCapture *set)
     *set->table = newHashTable(sizeof(Capture));
 }
 
-u64 addClosureCapture(ClosureCapture *set, cstring name, const AstNode *node)
+Capture *addClosureCapture(ClosureCapture *set, const AstNode *node)
 {
-    HashCode hash = hashStr(hashInit(), name);
-    Capture cap = {.name = name, .node = node, .id = set->index};
+    HashCode hash = hashStr(hashInit(), getCapturedNodeName(node));
+    Capture cap = {.node = node, .id = set->index};
 
     if (set->table == NULL)
         initClosureCapture(set);
 
-    const Capture *found = findInHashTable(set->table, //
-                                           &cap,
-                                           hash,
-                                           sizeof(Capture),
-                                           compareCaptures);
+    if (insertInHashTable(
+            set->table, &cap, hash, sizeof(Capture), compareCaptures))
+        set->index++;
+
+    Capture *found = findInHashTable(set->table, //
+                                     &cap,
+                                     hash,
+                                     sizeof(Capture),
+                                     compareCaptures);
     if (found) {
         csAssert0(found->node == node);
-        return found->id;
+        return found;
     }
 
-    if (!insertInHashTable(
-            set->table, &cap, hash, sizeof(Capture), compareCaptures))
-        csAssert0("failing to insert in type table");
-
-    return set->index++;
+    return NULL;
 }
 
 typedef struct {
-    const AstNode **captures;
+    const Capture **captures;
     u64 count;
 } OrderedCaptureCtx;
 
@@ -62,12 +56,12 @@ static bool populateOrderedCapture(void *ctx, const void *elem)
     OrderedCaptureCtx *dst = ctx;
     const Capture *cap = elem;
     if (cap->id < dst->count) {
-        dst->captures[cap->id] = cap->node;
+        dst->captures[cap->id] = cap;
     }
     return true;
 }
 
-u64 getOrderedCapture(ClosureCapture *set, const AstNode **capture, u64 count)
+u64 getOrderedCapture(ClosureCapture *set, const Capture **capture, u64 count)
 {
     if (set->table) {
         OrderedCaptureCtx ctx = {.captures = capture,

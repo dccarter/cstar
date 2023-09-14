@@ -168,6 +168,9 @@ static bool compareTypes(const Type *lhs, const Type *rhs)
     case typString:
         return typeIs(right, String) || typeIs(right, Null);
 
+    case typModule:
+        return typeIs(right, Module) && left->module.path == right->module.path;
+
     case typEnum:
     case typStruct:
     case typGeneric:
@@ -713,10 +716,38 @@ const Type *makeInterfaceType(TypeTable *table, const Type *init)
     return ret.s;
 }
 
-const Type *makeModuleType(TypeTable *table, cstring name)
+const Type *makeModuleType(TypeTable *table,
+                           cstring name,
+                           cstring path,
+                           ModuleMember *members,
+                           u64 count)
 {
-    Type type = make(Type, .tag = typModule, .name = name, .flags = flgNone);
+    Type type = make(
+        Type,
+        .tag = typModule,
+        .name = name,
+        .flags = flgNone,
+        .module = {.members = members, .membersCount = count, .path = path});
     GetOrInset ret = getOrInsertType(table, &type);
+    if (!ret.f) {
+        Type *module = (Type *)ret.s;
+        module->module.members = allocFromMemPool(
+            table->memPool, sizeof(ModuleMember) * type.module.membersCount);
+        memcpy(module->module.members,
+               type.module.members,
+               sizeof(ModuleMember) * type.module.membersCount);
+
+        module->module.sortedMembers = allocFromMemPool(
+            table->memPool, sizeof(ModuleMember *) * type.module.membersCount);
+        for (u64 i = 0; i < type.module.membersCount; i++)
+            module->module.sortedMembers[i] = &module->module.members[i];
+
+        qsort(module->module.sortedMembers,
+              module->module.membersCount,
+              sizeof(ModuleMember *),
+              sortCompareStructMember);
+    }
+
     return ret.s;
 }
 
@@ -793,29 +824,12 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right)
     }
 }
 
-const Type *getBuiltinOptionalType(Log *L)
-{
-    static const Type *optionalType = NULL;
-    if (optionalType == NULL && getBuiltinEnv() != NULL) {
-        AstNode *node =
-            findSymbol(getBuiltinEnv(), L, S_Optional, builtinLoc());
-        if (node != NULL) {
-            optionalType = node->type;
-        }
-    }
-    return optionalType;
-}
-
-const Type *expectSymbolInType(TypeTable *table,
-                               const Type *type,
-                               Log *L,
-                               cstring name,
-                               const FileLoc *loc)
+const Type *findInType(TypeTable *table, const Type *type, cstring name)
 {
     const Type *found = NULL;
     switch (type->tag) {
     case typThis:
-        found = expectSymbolInType(table, type->this.that, L, name, loc);
+        found = findInType(table, type->this.that, name);
         break;
     case typStruct:
         found = findStructMemberType(type, name);
@@ -826,9 +840,23 @@ const Type *expectSymbolInType(TypeTable *table,
     case typEnum:
         found = findEnumOptionType(type, name);
         break;
+    case typModule:
+        found = findModuleMemberType(type, name);
+        break;
     default:
         break;
     }
+
+    return found;
+}
+
+const Type *expectInType(TypeTable *table,
+                         const Type *type,
+                         Log *L,
+                         cstring name,
+                         const FileLoc *loc)
+{
+    const Type *found = findInType(table, type, name);
     if (L && found == NULL) {
         logError(L,
                  loc,

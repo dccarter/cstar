@@ -4,7 +4,9 @@
 
 #include "../check.h"
 
+#include "lang/builtins.h"
 #include "lang/flag.h"
+#include "lang/scope.h"
 #include "lang/strings.h"
 #include "lang/ttable.h"
 
@@ -187,6 +189,7 @@ bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     const Type *type = node->type ?: checkType(visitor, node);
+    type = unwrapType(type, NULL);
     if (!typeIs(type, Struct))
         return false;
 
@@ -217,5 +220,75 @@ bool transformToDerefOperator(AstVisitor *visitor, AstNode *node)
         visitor, node, node->unaryExpr.operand, S_Deref, NULL);
 
     type = checkType(visitor, node);
+    return !typeIs(type, Error);
+}
+
+bool transformOptionalSome(AstVisitor *visitor, AstNode *node, AstNode *value)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    AstNode *some = (AstNode *)findBuiltinDecl(S_Some);
+    csAssert0(some);
+
+    const Type *type = checkType(visitor, value);
+    if (typeIs(type, Error))
+        return false;
+
+    clearAstBody(node);
+    node->tag = astCallExpr;
+    node->flags = flgNone;
+    node->type = NULL;
+    node->callExpr.callee =
+        makeResolvedPath(ctx->pool, &node->loc, S_Some, flgNone, some, NULL);
+    node->callExpr.args = value;
+
+    type = checkType(visitor, node);
+
+    return !typeIs(type, Error);
+}
+
+bool transformOptionalNone(AstVisitor *visitor, AstNode *node, const Type *type)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    AstNode *none = (AstNode *)findBuiltinDecl(S_None);
+    csAssert0(none);
+
+    clearAstBody(node);
+    node->tag = astCallExpr;
+    node->flags = flgNone;
+    node->type = NULL;
+
+    node->callExpr.callee = makeResolvedPathWithArgs(
+        ctx->pool,
+        &node->loc,
+        S_None,
+        flgNone,
+        none,
+        makeTypeReferenceNode(ctx->pool, type, &node->loc),
+        NULL);
+    type = checkType(visitor, node);
+
+    return !typeIs(type, Error);
+}
+
+bool transformOptionalType(AstVisitor *visitor, AstNode *node, const Type *type)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    AstNode *optional = (AstNode *)findBuiltinDecl(S_Optional);
+    csAssert0(optional);
+
+    clearAstBody(node);
+    node->tag = astPath;
+    node->flags = flgNone;
+    node->path.elements = makeResolvedPathElementWithArgs(
+        ctx->pool,
+        &node->loc,
+        S_None,
+        flgNone,
+        optional,
+        NULL,
+        makeTypeReferenceNode(ctx->pool, type, &node->loc),
+        NULL);
+    type = checkType(visitor, node);
+
     return !typeIs(type, Error);
 }

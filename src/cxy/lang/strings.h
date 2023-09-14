@@ -9,7 +9,8 @@
 
 // clang-format off
 #define CXY_BUILTIN_NAMES(f, ff)    \
-    f(main)                     \
+    f(main)                         \
+    f(__builtins)               \
     f(__builtin_alloc)          \
     f(__builtin_dealloc)        \
     f(__builtin_realloc)        \
@@ -53,6 +54,8 @@
     f(typeof)                   \
     f(alias)                    \
     f(name)                     \
+    f(None)                     \
+    f(Some)                     \
     f(unchecked)                \
     f(_Variadic)
 

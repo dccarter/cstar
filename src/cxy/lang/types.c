@@ -4,8 +4,11 @@
 
 #include "types.h"
 #include "ast.h"
+#include "builtins.h"
 #include "flag.h"
+#include "strings.h"
 #include "ttable.h"
+
 #include <string.h>
 
 #include "token.h"
@@ -101,6 +104,12 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
     from = resolveType(from);
     if (to == from)
         return true;
+    if (hasFlag(to, Optional) && !hasFlag(from, Optional)) {
+        if (typeIs(from, Pointer) && typeIs(from->pointer.pointed, Null))
+            return true;
+
+        to = getOptionalTargetType(to);
+    }
 
     const Type *_to = unwrapType(to, NULL), *_from = unwrapType(from, NULL);
     if (isTypeConst(from) && !isTypeConst(to)) {
@@ -235,6 +244,14 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
     const Type *unwrappedTo = unwrapType(to, &toFlags);
     const Type *unwrappedFrom = unwrapType(from, &fromFlags);
 
+    if (hasFlag(unwrappedTo, Optional) && !hasFlag(unwrappedFrom, Optional)) {
+        if (typeIs(unwrappedFrom, Pointer) &&
+            typeIs(unwrappedFrom->pointer.pointed, Null))
+            return true;
+
+        to = getOptionalTargetType(unwrappedTo);
+    }
+
     if (unwrappedTo->tag == unwrappedFrom->tag) {
         if (to->tag != typPrimitive)
             return (fromFlags & flgConst) ? (toFlags & flgConst) : true;
@@ -247,6 +264,11 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
     case typAuto:
         return false;
     case typPrimitive:
+        if (typeIs(to, Optional))
+            to = to->optional.target;
+        if (!typeIs(to, Primitive))
+            return false;
+
         switch (to->primitive.id) {
 #define f(I, ...) case prt##I:
             INTEGER_TYPE_LIST(f)
@@ -701,4 +723,36 @@ const EnumOption *findEnumOption(const Type *type, cstring option)
                              searchCompareEnumOption);
 
     return index == -1 ? NULL : type->tEnum.sortedOptions[index];
+}
+
+const ModuleMember *findModuleMember(const Type *type, cstring member)
+{
+    int index = binarySearch(type->module.sortedMembers,
+                             type->module.membersCount,
+                             &(ModuleMember){.name = member},
+                             sizeof(ModuleMember *),
+                             searchCompareStructMember);
+
+    return index == -1 ? NULL : type->module.sortedMembers[index];
+}
+
+bool isTruthyType(const Type *type)
+{
+    return isIntegralType(type) || isFloatType(type) || typeIs(type, Pointer) ||
+           typeIs(type, Optional) ||
+           (typeIs(type, Struct) &&
+            findStructMemberType(type, S_Truthy) != NULL);
+}
+
+const Type *getOptionalType()
+{
+    static const Type *optionalType = NULL;
+    if (optionalType == NULL)
+        optionalType = findBuiltinType(S_Optional);
+    return optionalType;
+}
+
+const Type *getOptionalTargetType(const Type *type)
+{
+    return hasFlag(type, Optional) ? type->tStruct.members[1].type : NULL;
 }

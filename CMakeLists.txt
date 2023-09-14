@@ -24,7 +24,46 @@ set(CMAKE_MODULE_PATH
 
 option(ENABLE_TESTS "Enable CMake tests" ON)
 
+include(CxyUtils)
+include(FetchContent)
+
+# Fetch message-pack library
+set(MSGPACK_BUILD_TESTS OFF)
+set(MSGPACK_BUILD_EXAMPLES OFF)
+set(MSGPACK_ENABLE_STATIC ON)
+set(MSGPACK_ENABLE_SHARED OFF)
+set(MSGPACK_GEN_COVERAGE OFF)
+
+cmake_policy(PUSH)
+set(CMAKE_POLICY_DEFAULT_CMP0048 "NEW")
+set(CMAKE_POLICY_DEFAULT_CMP0077 "NEW")
+FetchContent_Declare(
+        msgpack-c
+        GIT_REPOSITORY https://github.com/msgpack/msgpack-c
+        GIT_TAG c-6.0.0
+)
+FetchContent_MakeAvailable(msgpack-c)
+
+set(BUILD_TESTING OFF)
+FetchContent_Declare(
+        libyaml
+        GIT_REPOSITORY https://github.com/yaml/libyaml.git
+        GIT_TAG master
+)
+FetchContent_MakeAvailable(libyaml)
+
+cmake_policy(POP)
+
 include_directories(src/cxy)
+
+add_executable(amalgamate
+        src/tools/amalgamate.c
+        src/cxy/core/utils.c)
+
+CxyAmalgamate(builtins
+        OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/generated
+        FILES
+        src/cxy/lang/runtime/builtins.cxy)
 
 set(CXY_3RD_PARTY_SOURCES
         src/cxy/3rdparty/cJSON.c)
@@ -47,6 +86,7 @@ set(CXY_3RD_PARTY_SOURCES
 
 set(CXY_LANG_SOURCES
         src/cxy/lang/ast.c
+        src/cxy/lang/builtins.c
         src/cxy/lang/capture.c
         src/cxy/lang/encode.c
         src/cxy/lang/decode.c
@@ -64,7 +104,10 @@ set(CXY_OPERATIONS_SOURCES
         src/cxy/lang/operations/bind.c
         src/cxy/lang/operations/check.c
         src/cxy/lang/operations/codegen.c
+        src/cxy/lang/operations/comptime.c
+        src/cxy/lang/operations/eval.c
         src/cxy/lang/operations/json.c
+        src/cxy/lang/operations/macro.c
         src/cxy/lang/operations/shake.c
         src/cxy/lang/operations/yaml.c
         src/cxy/lang/operations/nodes/array.c
@@ -87,8 +130,9 @@ set(CXY_OPERATIONS_SOURCES
         src/cxy/lang/operations/nodes/string.c
         src/cxy/lang/operations/nodes/tuple.c
         src/cxy/lang/operations/nodes/type.c
+        src/cxy/lang/operations/nodes/switch.c
         src/cxy/lang/operations/nodes/unary.c
-        src/cxy/lang/operations/nodes/switch.c)
+        src/cxy/lang/operations/nodes/variables.c)
 
 set(CXY_DRIVER_SOURCES
         src/cxy/driver/cc.c
@@ -99,6 +143,7 @@ set(CXY_DRIVER_SOURCES
 
 add_executable(cxy
         src/cxy/driver/main.c
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/builtins.c
         ${CXY_3RD_PARTY_SOURCES}
         ${CXY_CORE_SOURCES}
         ${CXY_LANG_SOURCES}
@@ -106,40 +151,7 @@ add_executable(cxy
         ${CXY_DRIVER_SOURCES}
         ${CXY_OPERATIONS_SOURCES})
 
-include(FetchContent)
-# Fetch message-pack library
-set(MSGPACK_BUILD_TESTS OFF)
-set(MSGPACK_BUILD_EXAMPLES OFF)
-set(MSGPACK_ENABLE_STATIC ON)
-set(MSGPACK_ENABLE_SHARED OFF)
-set(MSGPACK_GEN_COVERAGE OFF)
-
-cmake_policy(PUSH)
-set(CMAKE_POLICY_DEFAULT_CMP0048 "NEW")
-set(CMAKE_POLICY_DEFAULT_CMP0077 "NEW")
-FetchContent_Declare(
-    msgpack-c
-    GIT_REPOSITORY https://github.com/msgpack/msgpack-c
-    GIT_TAG c-6.0.0
-)
-FetchContent_MakeAvailable(msgpack-c)
-
-set(BUILD_TESTING OFF)
-FetchContent_Declare(
-    libyaml
-    GIT_REPOSITORY https://github.com/yaml/libyaml.git
-    GIT_TAG master
-)
-FetchContent_MakeAvailable(libyaml)
-
-cmake_policy(POP)
-
 target_link_libraries(cxy msgpack-c yaml)
-
-
-add_executable(escape src/tools/escape.c src/cxy/core/utils.c)
-
-
 target_compile_definitions(cxy PRIVATE
         -DCXY_VERSION="${CXY_VERSION}"
         -DCXY_SOURCE_LANG_DIR="${CMAKE_SOURCE_DIR}/src/cxy/lang")

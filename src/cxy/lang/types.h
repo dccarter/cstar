@@ -89,7 +89,7 @@ typedef struct StructMember {
     const char *name;
     const Type *type;
     const AstNode *decl;
-} StructMember;
+} StructMember, ModuleMember;
 
 typedef struct GenericParam {
     const char *name;
@@ -180,6 +180,13 @@ typedef struct Type {
         } container;
 
         struct {
+            ModuleMember *members;
+            ModuleMember **sortedMembers;
+            cstring path;
+            u32 membersCount;
+        } module;
+
+        struct {
             const Type *base;
             EnumOption *options;
             EnumOption **sortedOptions;
@@ -195,6 +202,7 @@ typedef struct Type {
             u32 interfacesCount;
             u32 membersCount;
             AstNode *decl;
+            AstNode *generatedFrom;
         } tStruct;
 
         struct {
@@ -255,12 +263,6 @@ static inline bool isSliceType(const Type *type)
     return typeIs(type, Array) && type->array.len == UINT64_MAX;
 }
 
-static inline bool isTruthyType(const Type *type)
-{
-    return isIntegralType(type) || isFloatType(type) || typeIs(type, Pointer) ||
-           typeIs(type, Optional);
-}
-
 const IntMinMax getIntegerTypeMinMax(const Type *id);
 
 const StructMember *findStructMember(const Type *type, cstring member);
@@ -289,3 +291,15 @@ static inline const Type *findEnumOptionType(const Type *type, cstring member)
     const EnumOption *found = findEnumOption(type, member);
     return found ? type : NULL;
 }
+
+const ModuleMember *findModuleMember(const Type *type, cstring member);
+
+static inline const Type *findModuleMemberType(const Type *type, cstring member)
+{
+    const ModuleMember *found = findModuleMember(type, member);
+    return found ? type : NULL;
+}
+
+bool isTruthyType(const Type *type);
+const Type *getOptionalType();
+const Type *getOptionalTargetType(const Type *type);

@@ -4,6 +4,12 @@
 
 #include <lang/ast.h>
 
-u64 addClosureCapture(ClosureCapture *set, cstring name, const AstNode *node);
-u64 getOrderedCapture(ClosureCapture *set, const AstNode **capture, u64 count);
+struct Capture {
+    const AstNode *node;
+    u32 id;
+    u32 inParent;
+};
+
+Capture *addClosureCapture(ClosureCapture *set, const AstNode *node);
+u64 getOrderedCapture(ClosureCapture *set, const Capture **capture, u64 count);
 cstring getCapturedNodeName(const AstNode *node);

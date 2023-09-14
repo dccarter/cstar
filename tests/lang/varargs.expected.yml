@@ -16,7 +16,7 @@ decls:
         flags: (TypeAst)
         elements:
         - PathElem:
-          flags: (TypeAst)
+          flags: (TypeAst|Variadic)
           name: _Variadic
         isType: false
     body:
@@ -44,7 +44,7 @@ decls:
         flags: (TypeAst)
         elements:
         - PathElem:
-          flags: (TypeAst)
+          flags: (TypeAst|Variadic)
           name: _Variadic
         isType: false
     body:
@@ -80,7 +80,7 @@ decls:
         flags: (TypeAst)
         elements:
         - PathElem:
-          flags: (TypeAst)
+          flags: (TypeAst|Variadic)
           name: _Variadic
         isType: false
     body:
@@ -93,6 +93,7 @@ decls:
             Path:
             elements:
             - PathElem:
+              flags: (Variadic|TopLevelDecl)
               name: add
             isType: false
           args:
@@ -112,6 +113,7 @@ decls:
               Path:
               elements:
               - PathElem:
+                flags: (Variadic)
                 name: rest
               isType: false
   params:
@@ -135,7 +137,7 @@ decls:
       flags: (TypeAst|Variadic)
       elements:
       - PathElem:
-        flags: (TypeAst)
+        flags: (TypeAst|Variadic)
         name: _Variadic
       isType: false
   body:
@@ -160,7 +162,7 @@ decls:
       flags: (TypeAst|Variadic)
       elements:
       - PathElem:
-        flags: (TypeAst)
+        flags: (TypeAst|Variadic)
         name: _Variadic
       isType: false
   body:
@@ -170,6 +172,7 @@ decls:
       flags: (Variadic)
       elements:
       - PathElem:
+        flags: (Variadic)
         name: rest
       isType: false
     - ExprStmt:
@@ -180,6 +183,7 @@ decls:
           flags: (Variadic|TopLevelDecl)
           elements:
           - PathElem:
+            flags: (Variadic|TopLevelDecl)
             name: add_2
           isType: false
         args:
@@ -203,6 +207,7 @@ decls:
               flags: (Variadic)
               elements:
               - PathElem:
+                flags: (Variadic)
                 name: rest
               isType: false
             member:
@@ -214,6 +219,7 @@ decls:
               flags: (Variadic)
               elements:
               - PathElem:
+                flags: (Variadic)
                 name: rest
               isType: false
             member:
@@ -232,7 +238,7 @@ decls:
       flags: (TypeAst|Variadic)
       elements:
       - PathElem:
-        flags: (TypeAst)
+        flags: (TypeAst|Variadic)
         name: _Variadic
       isType: false
   body:
@@ -261,6 +267,7 @@ decls:
           flags: (Variadic|TopLevelDecl)
           elements:
           - PathElem:
+            flags: (Variadic|TopLevelDecl)
             name: varargs_0
           isType: false
         args:
@@ -283,6 +290,7 @@ decls:
           flags: (Variadic|TopLevelDecl)
           elements:
           - PathElem:
+            flags: (Variadic|TopLevelDecl)
             name: many_1
           isType: false
         args:

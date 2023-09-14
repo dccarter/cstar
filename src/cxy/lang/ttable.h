@@ -95,7 +95,11 @@ const Type *replaceStructType(TypeTable *table,
 
 const Type *makeInterfaceType(TypeTable *table, const Type *init);
 
-const Type *makeModuleType(TypeTable *table, cstring name);
+const Type *makeModuleType(TypeTable *table,
+                           cstring name,
+                           cstring path,
+                           ModuleMember *members,
+                           u64 count);
 
 const Type *makeEnum(TypeTable *table, const Type *init);
 
@@ -121,11 +125,13 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right);
 
 const Type *getBuiltinOptionalType(Log *L);
 
-const Type *expectSymbolInType(TypeTable *table,
-                               const Type *type,
-                               Log *L,
-                               cstring name,
-                               const FileLoc *loc);
+const Type *findInType(TypeTable *table, const Type *type, cstring name);
+
+const Type *expectInType(TypeTable *table,
+                         const Type *type,
+                         Log *L,
+                         cstring name,
+                         const FileLoc *loc);
 
 const Type *getIntegerTypeForLiteral(TypeTable *table, i64 literal);
 bool isIntegerTypeInRange(const Type *type, i64 min, i64 max);

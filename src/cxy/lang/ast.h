@@ -15,6 +15,8 @@ struct StrPool;
 #define CXY_LANG_AST_TAGS(f) \
     f(Error)                \
     f(Nop)                  \
+    f(Ref)                  \
+    f(Deleted)              \
     f(ComptimeOnly)         \
     f(Program)              \
     f(Metadata)             \
@@ -107,8 +109,12 @@ typedef enum {
 } AstTag;
 
 struct Scope;
+struct AstVisitor;
 
 typedef struct AstNode AstNode;
+typedef AstNode *(*EvaluateMacro)(struct AstVisitor *,
+                                  const AstNode *,
+                                  AstNode *);
 
 typedef struct AstNodeList {
     AstNode *first;
@@ -119,6 +125,8 @@ typedef struct CaptureSet {
     HashTable *table;
     u64 index;
 } ClosureCapture;
+
+typedef struct Capture Capture;
 
 typedef struct {
     bool createMapping;
@@ -452,6 +460,7 @@ struct AstNode {
         struct {
             struct AstNode *callee;
             struct AstNode *args;
+            EvaluateMacro evaluator;
             u32 overload;
         } callExpr, macroCallExpr;
 
@@ -459,7 +468,7 @@ struct AstNode {
             union {
                 ClosureCapture captureSet;
                 struct {
-                    const AstNode **capture;
+                    const Capture **capture;
                     u64 captureCount;
                 };
             };
@@ -539,6 +548,10 @@ struct AstNode {
                 FormatState *state;
             };
         } metadata;
+
+        struct {
+            AstNode *target;
+        } reference;
     };
 };
 
@@ -566,6 +579,14 @@ AstNode *makeResolvedPath(MemPool *pool,
                           AstNode *resolvesTo,
                           const Type *type);
 
+AstNode *makeResolvedPathWithArgs(MemPool *pool,
+                                  const FileLoc *loc,
+                                  cstring name,
+                                  u64 flags,
+                                  AstNode *resolvesTo,
+                                  AstNode *genericArgs,
+                                  const Type *type);
+
 AstNode *makeResolvedPathElement(MemPool *pool,
                                  const FileLoc *loc,
                                  cstring name,
@@ -573,6 +594,15 @@ AstNode *makeResolvedPathElement(MemPool *pool,
                                  AstNode *resolvesTo,
                                  AstNode *next,
                                  const Type *type);
+
+AstNode *makeResolvedPathElementWithArgs(MemPool *pool,
+                                         const FileLoc *loc,
+                                         cstring name,
+                                         u64 flags,
+                                         AstNode *resolvesTo,
+                                         AstNode *next,
+                                         AstNode *genericArgs,
+                                         const Type *type);
 
 attr(always_inline) static AstNode *makePathElement(MemPool *pool,
                                                     const FileLoc *loc,
@@ -662,6 +692,8 @@ AstNode *cloneGenericDeclaration(MemPool *pool, const AstNode *node);
 
 AstNode *replaceAstNode(AstNode *node, const AstNode *with);
 
+AstNode *replaceAstNodeWith(AstNode *node, const AstNode *with);
+
 static inline bool nodeIs_(const AstNode *node, AstTag tag)
 {
     return node && node->tag == tag;
@@ -688,6 +720,7 @@ bool isBuiltinTypeExpr(const AstNode *node);
 bool comptimeCompareTypes(const AstNode *lhs, const AstNode *rhs);
 
 u64 countAstNodes(const AstNode *node);
+u64 countProgramDecls(const AstNode *program);
 
 AstNode *getLastAstNode(AstNode *node);
 
@@ -756,6 +789,8 @@ int compareNamedAstNodes(const void *lhs, const void *rhs);
 SortedNodes *makeSortedNodes(MemPool *pool,
                              AstNode *nodes,
                              int (*compare)(const void *, const void *));
+
+const AstNode *getOptionalDecl();
 
 AstNode *findInSortedNodes(SortedNodes *sorted, cstring name);
 

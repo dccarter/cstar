@@ -15,7 +15,7 @@
 
 static inline bool isInlineFunction(const AstNode *node)
 {
-    return findAttribute(node, "inline") != NULL;
+    return findAttribute(node, S_inline) != NULL;
 }
 
 void generateFuncParam(ConstAstVisitor *visitor, const AstNode *node)
@@ -41,6 +41,8 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
 
     const AstNode *parent = node->parentScope;
     bool isMember = parent && parent->tag == astStructDecl;
+
+    format(ctx->state, "\n", NULL);
 
     if (hasFlag(node, Native)) {
         // Generated on prologue statement
@@ -156,7 +158,7 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
     if (node->funcDecl.operatorOverload == opDelete) {
         generateStructDelete(ctx, parent->type);
     }
-
+    format(ctx->state, "\n", NULL);
     ctx->namespace = namespace;
 }
 

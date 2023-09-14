@@ -16,6 +16,7 @@ typedef struct {
     MemPool *pool;
     StrPool *strings;
     TypeTable *types;
+    AstVisitor *evaluator;
     struct {
         AstNode *program;
         AstNode *previous;
@@ -52,6 +53,14 @@ const FileLoc *lastNodeLoc_(FileLoc *dst, AstNode *nodes);
 
 bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node);
 bool transformToDerefOperator(AstVisitor *visitor, AstNode *node);
+bool transformOptionalType(AstVisitor *visitor,
+                           AstNode *node,
+                           const Type *type);
+bool transformOptionalSome(AstVisitor *visitor, AstNode *node, AstNode *value);
+bool transformOptionalNone(AstVisitor *visitor,
+                           AstNode *node,
+                           const Type *type);
+
 bool isExplicitConstructableFrom(TypingContext *ctx,
                                  const Type *type,
                                  const Type *from);
@@ -81,11 +90,13 @@ const Type *checkPathElement(AstVisitor *visitor,
                              const Type *parent,
                              AstNode *node);
 
+const Type *checkMaybeComptime(AstVisitor *visitor, AstNode *node);
 const Type *checkType(AstVisitor *visitor, AstNode *node);
 const Type *checkFunctionSignature(AstVisitor *visitor, AstNode *node);
 const Type *checkFunctionBody(AstVisitor *visitor, AstNode *node);
 
 void checkLiteral(AstVisitor *visitor, AstNode *node);
+void checkVarDecl(AstVisitor *visitor, AstNode *node);
 void checkPath(AstVisitor *visitor, AstNode *node);
 void checkFunctionParam(AstVisitor *visitor, AstNode *node);
 void checkStructField(AstVisitor *visitor, AstNode *node);

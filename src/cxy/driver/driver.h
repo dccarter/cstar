@@ -15,7 +15,6 @@ typedef struct CompilerDriver {
     CompilerStats stats;
     Log *L;
     TypeTable *typeTable;
-    Env *builtins;
 } CompilerDriver;
 
 cstring getFilenameWithoutDirs(cstring fileName);

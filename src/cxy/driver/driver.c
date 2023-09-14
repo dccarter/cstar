@@ -1,4 +1,5 @@
 #include "driver.h"
+#include "builtins.h"
 #include "cc.h"
 #include "options.h"
 #include "stages.h"
@@ -6,7 +7,10 @@
 #include "core/log.h"
 #include "core/mempool.h"
 #include "core/utils.h"
+
 #include "lang/ast.h"
+#include "lang/builtins.h"
+#include "lang/flag.h"
 #include "lang/lexer.h"
 #include "lang/parser.h"
 #include "lang/strings.h"
@@ -230,6 +234,7 @@ static bool compileProgram(CompilerDriver *driver,
         &driver->pool,
         builtinLoc(),
         &(AstNode){.tag = astMetadata,
+                   .flags = program->flags & flgBuiltinsModule,
                    .metadata = {.filePath = fileName, .node = program}});
 
     CompilerStage stage = ccs_First + 1,
@@ -253,7 +258,7 @@ static bool compileProgram(CompilerDriver *driver,
 
 compileProgramDone:
     stopCompilerStats(driver);
-    if (!options->dev.cleanAst) {
+    if (!options->dev.cleanAst && !hasFlag(metadata, BuiltinsModule)) {
         compilerStatsPrint(driver);
     }
     return status;
@@ -269,7 +274,13 @@ static bool compileBuiltin(CompilerDriver *driver,
     if (program == NULL)
         return false;
 
-    return true;
+    program->flags |= flgBuiltinsModule;
+    if (compileProgram(driver, program, fileName)) {
+        initializeBuiltins(driver->L, &program->loc, program->type);
+        return true;
+    }
+
+    return false;
 }
 
 bool initCompilerDriver(CompilerDriver *compiler, Log *log)
@@ -280,6 +291,14 @@ bool initCompilerDriver(CompilerDriver *compiler, Log *log)
     compiler->moduleCache = newHashTable(sizeof(CachedModule));
     compiler->L = log;
     internCommonStrings(&compiler->strPool);
+
+    if (compiler->options.cmd == cmdBuild) {
+        return compileBuiltin(compiler,
+                              CXY_BUILTINS_SOURCE,
+                              CXY_BUILTINS_SOURCE_SIZE,
+                              "__builtins.cxy");
+    }
+
     return true;
 }
 

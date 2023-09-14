@@ -4,17 +4,19 @@
 
 #include "../check.h"
 #include "../codegen.h"
-#include <string.h>
 
+#include "lang/ast.h"
+#include "lang/builtins.h"
 #include "lang/flag.h"
 #include "lang/operations.h"
+#include "lang/strings.h"
 #include "lang/ttable.h"
 #include "lang/types.h"
 #include "lang/visitor.h"
 
 #include "core/alloc.h"
-#include "lang/ast.h"
-#include "lang/strings.h"
+
+#include <string.h>
 
 static inline bool isIteratorFunction(TypingContext *ctx, const Type *type)
 {
@@ -316,12 +318,9 @@ void buildStringOperatorForMember(CodegenContext *context,
 static const Type *getBuiltinStringBuilderType()
 {
     static const Type *sb = NULL;
-    if (sb == NULL && getBuiltinEnv() != NULL) {
-        AstNode *node = findSymbolOnly(getBuiltinEnv(), "StringBuilder");
-        if (node != NULL) {
-            sb = node->type;
-        }
-    }
+    if (sb == NULL)
+        sb = findBuiltinType(S_StringBuilder);
+
     return sb;
 }
 
@@ -452,9 +451,7 @@ void generateStructDecl(ConstAstVisitor *visitor, const AstNode *node)
     for (u64 i = 0; i < type->tStruct.membersCount; i++) {
         const StructMember *member = &type->tStruct.members[i];
         if (typeIs(member->type, Func)) {
-            format(ctx->state, "\n", NULL);
             astConstVisit(visitor, member->decl);
-            format(ctx->state, "\n", NULL);
         }
     }
 }

@@ -3,6 +3,7 @@
 //
 #include "../check.h"
 #include "../codegen.h"
+#include "../eval.h"
 
 #include "lang/capture.h"
 #include "lang/flag.h"
@@ -244,23 +245,23 @@ void generateForStmtArray(ConstAstVisitor *visitor, const AstNode *node)
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     const AstNode *var = node->forStmt.var;
     const AstNode *range = node->forStmt.range;
+    const Type *range_ = unwrapType(range->type, NULL);
 
     cstring name = makeAnonymousVariable(ctx->strPool, "CXY__for");
     // create an array
     format(ctx->state, "{{{>}\n", NULL);
     if (range->tag == astArrayExpr)
-        generateTypeUsage(ctx, range->type);
+        generateTypeUsage(ctx, range_);
     else
         generateTypeUsage(
             ctx,
             &(const Type){.tag = typPointer,
-                          .flags =
-                              range->type->flags | node->forStmt.range->flags,
-                          .pointer.pointed = range->type->array.elementType});
+                          .flags = range_->flags | range->flags,
+                          .pointer.pointed = range_->array.elementType});
 
     format(ctx->state, " _arr_{s} = ", (FormatArg[]){{.s = name}});
     astConstVisit(visitor, range);
-    if (isSliceType(range->type))
+    if (isSliceType(range_))
         format(ctx->state, "->data;\n", NULL);
     else
         format(ctx->state, ";\n", NULL);
@@ -269,21 +270,19 @@ void generateForStmtArray(ConstAstVisitor *visitor, const AstNode *node)
     format(ctx->state, "u64 _i_{s} = 0;\n", (FormatArg[]){{.s = name}});
 
     // Create actual loop variable
-    generateTypeUsage(ctx, range->type->array.elementType);
+    generateTypeUsage(ctx, range_->array.elementType);
     format(ctx->state, " ", NULL);
     astConstVisit(visitor, var->varDecl.names);
     format(ctx->state, " = _arr_{s}[0];\n", (FormatArg[]){{.s = name}});
 
     format(ctx->state, "for (; _i_{s} < ", (FormatArg[]){{.s = name}});
 
-    if (isSliceType(range->type)) {
+    if (isSliceType(range_)) {
         astConstVisit(visitor, range);
         format(ctx->state, "->len", NULL);
     }
     else
-        format(ctx->state,
-               "{u64}",
-               (FormatArg[]){{.u64 = range->type->array.len}});
+        format(ctx->state, "{u64}", (FormatArg[]){{.u64 = range_->array.len}});
 
     format(ctx->state, "; _i_{s}++, ", (FormatArg[]){{.s = name}});
 
@@ -375,5 +374,16 @@ void checkArrayExpr(AstVisitor *visitor, AstNode *node)
     }
     else {
         node->type = makeArrayType(ctx->types, elementType, count);
+    }
+}
+
+void evalArrayExpr(AstVisitor *visitor, AstNode *node)
+{
+    AstNode *arg = node->arrayExpr.elements;
+    for (; arg; arg = arg->next) {
+        if (!evaluate(visitor, arg)) {
+            node->tag = astError;
+            return;
+        }
     }
 }

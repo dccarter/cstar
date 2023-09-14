@@ -3,6 +3,7 @@
 //
 #include "../check.h"
 
+#include "lang/builtins.h"
 #include "lang/capture.h"
 #include "lang/flag.h"
 #include "lang/operations.h"
@@ -224,6 +225,9 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
         isEmptyTuple =
             typeIs(param->type, Tuple) && param->type->tuple.count == 0;
     }
+
+    if (hasFlag(generic, Builtin) && getDeclarationName(generic) == S_Optional)
+        substitute->flags |= flgOptional;
 
     if (nodeIs(substitute, FuncDecl)) {
         if (hasFlag(substitute, Variadic) && isEmptyTuple)

@@ -4,13 +4,63 @@
 
 #include "../check.h"
 #include "../codegen.h"
+#include "../eval.h"
 
 #include "lang/flag.h"
 #include "lang/operations.h"
 #include "lang/strings.h"
 #include "lang/ttable.h"
 
+#include "core/sb.h"
+
 #include <string.h>
+
+bool evalStringBuilderAppend(EvalContext *ctx, StringBuilder *sb, AstNode *node)
+{
+    switch (node->tag) {
+    case astStringLit:
+        stringBuilderAppendCstr1(sb, node->stringLiteral.value);
+        break;
+    case astIntegerLit:
+        if (node->intLiteral.hasMinus)
+            stringBuilderAppendChar(sb, '-');
+        stringBuilderAppendInt(sb, node->intLiteral.value);
+        break;
+    case astFloatLit:
+        stringBuilderAppendFloat(sb, node->floatLiteral.value);
+        break;
+    case astCharLit:
+        stringBuilderAppendChar(sb, node->charLiteral.value);
+        break;
+    case astBoolLit:
+        stringBuilderAppendBool(sb, node->boolLiteral.value);
+        break;
+    default:
+        logError(ctx->L,
+                 &node->loc,
+                 "expression cannot be transformed to a string",
+                 NULL);
+        return false;
+    }
+
+    return true;
+}
+
+void evalStringConcatenation(EvalContext *ctx,
+                             AstNode *node,
+                             AstNode *lhs,
+                             AstNode *rhs)
+{
+    StringBuilder sb;
+    stringBuilderInit(&sb);
+    evalStringBuilderAppend(ctx, &sb, lhs);
+    csAssert0(evalStringBuilderAppend(ctx, &sb, rhs));
+
+    char *str = stringBuilderRelease(&sb);
+    node->tag = astStringLit;
+    node->stringLiteral.value = makeString(ctx->strings, str);
+    free(str);
+}
 
 void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
 {

@@ -48,7 +48,9 @@
     f(CPointerCast,         36)                 \
     f(DeclarationOnly,      37)                 \
     f(Inherited,            38)                 \
-    f(BlockReturns,         39)
+    f(BlockReturns,         39)                 \
+    f(BuiltinsModule,       40)                 \
+    f(Optional,             41)
 
 // clang-format on
 static const u64 flgNone = 0;

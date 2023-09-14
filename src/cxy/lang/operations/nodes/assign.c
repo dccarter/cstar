@@ -10,6 +10,7 @@
 
 #include "../check.h"
 #include "../codegen.h"
+#include "../eval.h"
 
 #include "lang/flag.h"
 #include "lang/operations.h"
@@ -132,4 +133,52 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
     else {
         node->type = lhs;
     }
+
+    if (!hasFlag(lhs, Optional) || hasFlag(rhs, Optional))
+        return;
+
+    const Type *target = getOptionalTargetType(lhs);
+    if (nodeIs(right, NullLit)) {
+        if (!transformOptionalNone(visitor, right, target))
+            node->type = ERROR_TYPE(ctx);
+    }
+    else {
+        right->type = target;
+        if (!transformOptionalSome(
+                visitor, right, copyAstNode(ctx->pool, right)))
+            node->type = ERROR_TYPE(ctx);
+    }
+}
+
+void evalAssignExpr(AstVisitor *visitor, AstNode *node)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    AstNode *left = node->assignExpr.lhs, *right = node->assignExpr.rhs;
+    AstNode *resolved = getResolvedPath(left);
+
+    if (!nodeIs(resolved, VarDecl)) {
+        node->tag = astError;
+        return;
+    }
+
+    if (!evaluate(visitor, right)) {
+        node->tag = astError;
+        return;
+    }
+
+    node->tag = astNop;
+    if (node->assignExpr.op == opAssign) {
+        resolved->varDecl.init = right;
+        return;
+    }
+
+    AstNode lhs = *resolved->varDecl.init;
+    AstNode binary = (AstNode){
+        .tag = astBinaryExpr,
+        .loc = node->loc,
+        .binaryExpr = {.op = node->assignExpr.op, .lhs = &lhs, .rhs = right}};
+
+    evalBinaryExpr(visitor, &binary);
+
+    *resolved->varDecl.init = binary;
 }

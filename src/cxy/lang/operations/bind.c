@@ -9,6 +9,7 @@
 #include "lang/scope.h"
 #include "lang/strings.h"
 #include "lang/visitor.h"
+#include "macro.h"
 
 typedef struct {
     Log *L;
@@ -17,9 +18,11 @@ typedef struct {
     Env *env;
     union {
         struct {
+            bool isComptimeContext;
             AstNode *currentClosure;
         };
         struct {
+            bool isComptimeContext;
             AstNode *currentClosure;
         } stack;
     };
@@ -84,19 +87,19 @@ static void captureSymbol(AstNode *closure,
     if (nodeIs(symbol, FuncParam) && parent == closure)
         return;
 
-    ClosureCapture *set = &closure->closureExpr.captureSet;
     parent = node->parentScope;
+    Capture *prev = NULL;
     while (parent && parent != symbol->parentScope) {
         if (nodeIs(parent, ClosureExpr)) {
             if (nodeIs(symbol, FuncParam) && symbol->parentScope == parent)
                 return;
 
             // capture in current set
-            addClosureCapture(
-                set, root->pathElement.alt ?: root->pathElement.name, symbol);
+            if (prev)
+                prev->inParent = true;
 
-            // Nest closure, ensure to capture in parent
-            set = &parent->closureExpr.captureSet;
+            prev = addClosureCapture(&parent->closureExpr.captureSet, symbol);
+            root->flags |= flgMember;
         }
         parent = parent->parentScope;
     }
@@ -165,7 +168,8 @@ void bindPath(AstVisitor *visitor, AstNode *node)
     AstNode *base = node->path.elements;
     if (!base->pathElement.isKeyword) {
         base->pathElement.resolvesTo = resolvePathBaseUpChain(ctx, node);
-
+        if (base->pathElement.resolvesTo == NULL)
+            return;
         // capture symbol if in closure
         captureSymbol(ctx->currentClosure, node, base->pathElement.resolvesTo);
     }
@@ -250,8 +254,9 @@ void bindDefine(AstVisitor *visitor, AstNode *node)
     }
 
     for (; name; name = name->next) {
-        defineSymbol(
-            ctx->env, ctx->L, name->ident.alias ?: name->ident.value, name);
+        defineSymbol(ctx->env, ctx->L, name->ident.value, name);
+        if (name->ident.alias && name->ident.alias != name->ident.value)
+            defineSymbol(ctx->env, ctx->L, name->ident.alias, name);
     }
 
     if (node->define.container)
@@ -305,6 +310,15 @@ void bindFunctionDecl(AstVisitor *visitor, AstNode *node)
     popScope(ctx->env);
 }
 
+void bindFuncType(AstVisitor *visitor, AstNode *node)
+{
+    BindContext *ctx = getAstVisitorContext(visitor);
+    pushScope(ctx->env, node);
+    astVisit(visitor, node->funcType.ret);
+    astVisitManyNodes(visitor, node->funcType.params);
+    popScope(ctx->env);
+}
+
 void bindMacroDecl(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
@@ -322,7 +336,8 @@ void bindVarDecl(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
     AstNode *name = node->varDecl.names;
-
+    if (hasFlag(name, Comptime))
+        astVisit(visitor, name);
     astVisit(visitor, node->varDecl.type);
     astVisit(visitor, node->varDecl.init);
 
@@ -480,8 +495,8 @@ void bindClosureExpr(AstVisitor *visitor, AstNode *node)
     ctx->currentClosure = NULL;
     popScope(ctx->env);
 
-    const AstNode **capture = allocFromMemPool(
-        ctx->pool, sizeof(AstNode *) * node->closureExpr.captureSet.index);
+    const Capture **capture = allocFromMemPool(
+        ctx->pool, sizeof(Capture *) * node->closureExpr.captureSet.index);
 
     node->closureExpr.captureCount =
         getOrderedCapture(&node->closureExpr.captureSet,
@@ -571,6 +586,30 @@ void bindCaseStmt(AstVisitor *visitor, AstNode *node)
     popScope(ctx->env);
 }
 
+void bindMacroCallExpr(AstVisitor *visitor, AstNode *node)
+{
+    BindContext *ctx = getAstVisitorContext(visitor);
+    EvaluateMacro macro = findBuiltinMacroByNode(node->macroCallExpr.callee);
+    if (macro == NULL) {
+        logError(ctx->L,
+                 &node->macroCallExpr.callee->loc,
+                 "currently only native macros are supported",
+                 NULL);
+        return;
+    }
+
+    node->macroCallExpr.evaluator = macro;
+    astVisitManyNodes(visitor, node->macroCallExpr.args);
+}
+
+void bindMemberExpr(AstVisitor *visitor, AstNode *node)
+{
+    AstNode *member = node->memberExpr.member;
+    astVisit(visitor, node->memberExpr.target);
+    if (hasFlag(member, Comptime))
+        bindMemberExpr(visitor, member);
+}
+
 void bindProgram(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
@@ -590,7 +629,11 @@ void withParentScope(Visitor func, AstVisitor *visitor, AstNode *node)
         node->parentScope = ctx->env->scope->node;
     }
 
+    bool isComptime = hasFlag(node, Comptime);
     __typeof(ctx->stack) stack = ctx->stack;
+
+    if (!ctx->isComptimeContext && isComptime)
+        ctx->isComptimeContext = isComptime;
     func(visitor, node);
     ctx->stack = stack;
 }
@@ -610,6 +653,7 @@ AstNode *bindAst(CompilerDriver *driver, AstNode *node)
         [astGenericParam] = bindGenericParam,
         [astGenericDecl] = bindGenericDecl,
         [astPath] = bindPath,
+        [astFuncType] = bindFuncType,
         [astFuncDecl] = bindFunctionDecl,
         [astMacroDecl] = bindMacroDecl,
         [astFuncParam] = bindFuncParam,
@@ -631,7 +675,9 @@ AstNode *bindAst(CompilerDriver *driver, AstNode *node)
         [astForStmt] = bindForStmt,
         [astWhileStmt] = bindWhileStmt,
         [astSwitchStmt] = bindSwitchStmt,
-        [astCaseStmt] = bindCaseStmt
+        [astCaseStmt] = bindCaseStmt,
+        [astMacroCallExpr] = bindMacroCallExpr,
+        [astMemberExpr] = bindMemberExpr
     }, .fallback = astVisitFallbackVisitAll, .dispatch = withParentScope);
     // clang-format on
 

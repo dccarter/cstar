@@ -18,10 +18,10 @@ struct CompilerDriver;
     f(ConstCheck,       "Const Check")                 \
     f(TypeCheck,        "Type Check")                  \
     f(Desugar,          "De-sugar")                    \
-    f(Comptime,         "Compile Time Evaluation")     \
+    f(Comptime,         "Compile Time Eval")           \
     f(Optimization,     "Optimization")                \
     f(MemoryMgmt,       "Memory Management")           \
-    f(Codegen,          "Code Generation")
+    f(Codegen,          "Code Gen")
 
 typedef enum {
     ccsInvalid = 0,

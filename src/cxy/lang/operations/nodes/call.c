@@ -93,11 +93,18 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
 
     const Type *type = resolveType(node->callExpr.callee->type);
     const AstNode *parent =
-        type->func.decl ? type->func.decl->parentScope : NULL;
+        type->func.decl ? getParentScope(type->func.decl) : NULL;
     u32 index =
         nodeIs(type->func.decl, FuncDecl) ? type->func.decl->funcDecl.index : 0;
 
-    astConstVisit(visitor, node->callExpr.callee);
+    if (nodeIs(parent, StructDecl)) {
+        writeTypename(ctx, parent->type);
+        format(ctx->state, "__", NULL);
+    }
+    if (type->name)
+        format(ctx->state, "{s}", (FormatArg[]){{.s = type->name}});
+    else
+        astConstVisit(visitor, node->callExpr.callee);
 
     if (index)
         format(ctx->state, "_{u32}", (FormatArg[]){{.u32 = index}});
@@ -106,11 +113,8 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     if (isMember) {
         const AstNode *callee = node->callExpr.callee;
         bool needsThis =
-            hasFlag(callee, Member) && !hasFlag(callee, ClosureStyle);
-        //        nodeIs(callee, Identifier) ||
-        //            (!nodeIs(callee, MemberExpr) &&
-        //             (nodeIs(callee, Path) && callee->path.elements->next ==
-        //             NULL));
+            (hasFlag(callee, Member) && !hasFlag(callee, ClosureStyle)) ||
+            (nodeIs(callee, Path) && callee->path.elements->next == NULL);
 
         if (needsThis) {
             if (hasFlag(node->callExpr.callee, AddSuper))
@@ -185,7 +189,7 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
 
     ctx->currentCall = currentCall;
 
-    if (typeIs(callee_, Error)) {
+    if (callee_ == NULL || typeIs(callee_, Error)) {
         node->type = ERROR_TYPE(ctx);
         return;
     }
@@ -214,4 +218,27 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
     }
 
     checkFunctionCallEpilogue(visitor, callee_, node, flags);
+
+    callee_ = node->callExpr.callee->type;
+    AstNode *arg = node->callExpr.args;
+    for (u64 i = 0; arg; arg = arg->next, i++) {
+        const Type *type = callee_->func.params[i], *expr = arg->type;
+        if (!hasFlag(type, Optional) || hasFlag(expr, Optional))
+            continue;
+
+        type = getOptionalTargetType(type);
+        if (nodeIs(arg, NullLit)) {
+            if (!transformOptionalNone(visitor, arg, type))
+                node->type = ERROR_TYPE(ctx);
+        }
+        else {
+            arg->type = type;
+            if (!transformOptionalSome(
+                    visitor, arg, copyAstNode(ctx->pool, arg)))
+                node->type = ERROR_TYPE(ctx);
+        }
+
+        if (typeIs(node->type, Error))
+            return;
+    }
 }

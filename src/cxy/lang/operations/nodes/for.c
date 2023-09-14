@@ -4,6 +4,7 @@
 
 #include "../check.h"
 #include "../codegen.h"
+#include "../eval.h"
 
 #include "lang/capture.h"
 #include "lang/flag.h"
@@ -126,11 +127,12 @@ static void generateForStmtRange(ConstAstVisitor *visitor, const AstNode *node)
 void generateForStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
     const AstNode *range = node->forStmt.range;
+    const Type *range_ = unwrapType(range->type, NULL);
 
     if (range->tag == astRangeExpr) {
         generateForStmtRange(visitor, node);
     }
-    else if (range->type->tag == typArray) {
+    else if (typeIs(range_, Array)) {
         generateForStmtArray(visitor, node);
     }
     else {
@@ -210,4 +212,52 @@ void checkForStmt(AstVisitor *visitor, AstNode *node)
     }
 
     node->type = checkType(visitor, node->forStmt.body);
+}
+
+void evalForStmt(AstVisitor *visitor, AstNode *node)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    FileLoc rangeLoc = node->forStmt.range->loc;
+
+    if (!evaluate(visitor, node->forStmt.range)) {
+        node->tag = astError;
+        return;
+    }
+
+    AstNode *range = node->forStmt.range;
+    if (!hasFlag(range, ComptimeIterable)) {
+        logError(ctx->L,
+                 &rangeLoc,
+                 "`#for` loop range expression is not comptime iterable",
+                 NULL);
+        node->tag = astError;
+        return;
+    }
+
+    AstNode *it = nodeIs(range, ComptimeOnly) ? range->next : range;
+    // open a new scope
+    AstNodeList nodes = {NULL};
+    AstNode *variable = node->forStmt.var;
+
+    while (it) {
+        AstNode *body = shallowCloneAstNode(ctx->pool, node->forStmt.body);
+        variable->varDecl.init = it;
+        if (!evaluate(visitor, body) || nodeIs(body, Error)) {
+            node->tag = astError;
+            return;
+        }
+
+        if (!nodeIs(it, Nop))
+            insertAstNode(&nodes, body);
+
+        it = it->next;
+    }
+
+    if (nodes.first == NULL) {
+        node->tag = astNop;
+    }
+    else {
+        nodes.last->next = node->next;
+        *node = *nodes.first;
+    }
 }

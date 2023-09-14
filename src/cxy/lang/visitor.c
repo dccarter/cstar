@@ -40,6 +40,9 @@
     case astMetadata:                                                          \
         MODE##Visit(visitor, node->metadata.node);                             \
         break;                                                                 \
+    case astRef:                                                               \
+        MODE##Visit(visitor, node->reference.target);                          \
+        break;                                                                 \
     case astImportDecl:                                                        \
         MODE##Visit(visitor, node->import.alias);                              \
         MODE##Visit(visitor, node->import.module);                             \

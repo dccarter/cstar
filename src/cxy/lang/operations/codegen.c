@@ -68,15 +68,12 @@ static void generateAllTypes(CodegenContext *ctx)
     u64 sorted = sortedByInsertionOrder(ctx->types, types, typesCount);
 
     u64 empty = 0;
-    u64 *flags = mallocOrDie(sizeof(u64) * sorted);
     for (u64 i = 0; i < sorted; i++) {
         if (types[i] == NULL)
             continue;
-        flags[i] = types[i]->flags;
 
-        if (typeIs(types[i], Struct)) {
-            if (!(flags[i] & flgCodeGenerated))
-                generateStructTypedef(ctx, types[i]);
+        if (typeIs(types[i], Struct) && !hasFlag(types[i], CodeGenerated)) {
+            generateStructTypedef(ctx, types[i]);
         }
     }
 
@@ -84,15 +81,14 @@ static void generateAllTypes(CodegenContext *ctx)
         if (types[i] == NULL)
             continue;
 
-        if (!(flags[i] & flgCodeGenerated)) {
+        if (!hasFlag(types[i], CodeGenerated)) {
             generateType(ctx, types[i]);
-            flags[i] |= flgCodeGenerated;
+            ((Type *)types[i])->flags |= flgCodeGenerated;
         }
         else
             empty++;
     }
 
-    free(flags);
     free(types);
 }
 
@@ -218,30 +214,6 @@ static void generateCCode(ConstAstVisitor *visitor, const AstNode *node)
                (FormatArg[]){{.s = node->cCode.what->stringLiteral.value}});
 }
 
-void generateVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
-    CodegenContext *ctx = getConstAstVisitorContext(visitor);
-
-    if (hasFlag(node, Native))
-        format(ctx->state, "extern ", NULL);
-
-    if (hasFlag(node, Const) && !hasFlag(node->type, Const))
-        format(ctx->state, "const ", NULL);
-
-    generateTypeUsage(ctx, node->type);
-
-    format(ctx->state, " ", NULL);
-    if (hasFlag(node, TopLevelDecl))
-        writeNamespace(ctx, "__");
-    astConstVisit(visitor, node->varDecl.names);
-
-    if (node->varDecl.init) {
-        format(ctx->state, " = ", NULL);
-        astConstVisit(visitor, node->varDecl.init);
-    }
-    format(ctx->state, ";", NULL);
-}
-
 void generateTernaryExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -278,7 +250,7 @@ void generateWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
 static void epilogue(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    generateManyAsts(visitor, "\n", node->program.decls);
+    generateManyAsts(visitor, "", node->program.decls);
     format(ctx->state,
            "\n"
            "\n",
@@ -319,9 +291,15 @@ static void prologue(ConstAstVisitor *visitor, const AstNode *node)
 void generateFallback(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    format(ctx->state,
-           "/* <unsupported AST tag {s}> */",
-           (FormatArg[]){{.s = getAstNodeName(node)}});
+    switch (node->tag) {
+    case astGenericDecl:
+    case astDefine:
+        break;
+    default:
+        format(ctx->state,
+               "/* <unsupported AST tag {s}> */",
+               (FormatArg[]){{.s = getAstNodeName(node)}});
+    }
 }
 
 void writeNamespace(CodegenContext *ctx, cstring sep)

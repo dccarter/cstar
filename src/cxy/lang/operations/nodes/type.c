@@ -74,14 +74,19 @@ void generateTypeinfo(ConstAstVisitor *visitor, const AstNode *node)
 void checkTypeDecl(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    const Type *aliased = checkType(visitor, node->typeDecl.aliased);
-    if (typeIs(aliased, Error)) {
-        node->type = aliased;
-        return;
-    }
+    if (node->typeDecl.aliased) {
+        const Type *aliased = checkType(visitor, node->typeDecl.aliased);
+        if (typeIs(aliased, Error)) {
+            node->type = aliased;
+            return;
+        }
 
-    node->type = makeAliasType(
-        ctx->types, aliased, node->typeDecl.name, node->flags & flgConst);
+        node->type = makeAliasType(
+            ctx->types, aliased, node->typeDecl.name, node->flags & flgConst);
+    }
+    else {
+        node->type = makeOpaqueType(ctx->types, node->typeDecl.name);
+    }
 }
 
 void checkUnionDecl(AstVisitor *visitor, AstNode *node)
@@ -116,7 +121,7 @@ void checkOptionalType(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    node->type = makeOptionalType(ctx->types, target, node->flags & flgConst);
+    transformOptionalType(visitor, node, target);
 }
 
 void checkPointerType(AstVisitor *visitor, AstNode *node)

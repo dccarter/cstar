@@ -1,8 +1,10 @@
 
 #include "ast.h"
-#include "codec.h"
+#include "builtins.h"
+#include "capture.h"
 #include "flag.h"
 #include "scope.h"
+#include "strings.h"
 
 #include <memory.h>
 
@@ -112,9 +114,9 @@ static void postCloneAstNode(CloneAstConfig *config,
         to->closureExpr.capture = allocFromMemPool(
             config->pool, sizeof(AstNode *) * from->closureExpr.captureCount);
         for (u64 i = 0; i < from->closureExpr.captureCount; i++) {
-            AstNode *capture = (AstNode *)from->closureExpr.capture[i];
+            AstNode *capture = (AstNode *)from->closureExpr.capture[i]->node;
             replaceWithCorrespondingNode(&config->mapping, &capture);
-            to->closureExpr.capture[i] = capture;
+            ((Capture *)to->closureExpr.capture[i])->node = capture;
         }
         break;
     default:
@@ -210,6 +212,31 @@ AstNode *makeResolvedPath(MemPool *pool,
                                                   .resolvesTo = resolvesTo}})});
 }
 
+AstNode *makeResolvedPathWithArgs(MemPool *pool,
+                                  const FileLoc *loc,
+                                  cstring name,
+                                  u64 flags,
+                                  AstNode *resolvesTo,
+                                  AstNode *genericArgs,
+                                  const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astPath,
+                   .flags = flags,
+                   .type = type,
+                   .path.elements = makeAstNode(
+                       pool,
+                       loc,
+                       &(AstNode){.flags = flags,
+                                  .type = type,
+                                  .tag = astPathElem,
+                                  .pathElement = {.name = name,
+                                                  .resolvesTo = resolvesTo,
+                                                  .args = genericArgs}})});
+}
+
 AstNode *makePathWithElements(MemPool *pool,
                               const FileLoc *loc,
                               u64 flags,
@@ -241,6 +268,26 @@ AstNode *makeResolvedPathElement(MemPool *pool,
                    .tag = astPathElem,
                    .next = next,
                    .pathElement = {.name = name, .resolvesTo = resolvesTo}});
+}
+
+AstNode *makeResolvedPathElementWithArgs(MemPool *pool,
+                                         const FileLoc *loc,
+                                         cstring name,
+                                         u64 flags,
+                                         AstNode *resolvesTo,
+                                         AstNode *next,
+                                         AstNode *genericArgs,
+                                         const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.flags = flags,
+                                  .type = type,
+                                  .tag = astPathElem,
+                                  .next = next,
+                                  .pathElement = {.name = name,
+                                                  .resolvesTo = resolvesTo,
+                                                  .args = genericArgs}});
 }
 
 AstNode *makeCallExpr(MemPool *pool,
@@ -483,6 +530,8 @@ bool isTypeExpr(const AstNode *node)
     case astUnionDecl:
     case astFuncDecl:
         return true;
+    case astRef:
+        return isTypeExpr(node->reference.target);
     default:
         return false;
     }
@@ -507,6 +556,22 @@ u64 countAstNodes(const AstNode *node)
     u64 len = 0;
     for (; node; node = node->next)
         len++;
+    return len;
+}
+
+u64 countProgramDecls(const AstNode *node)
+{
+    u64 len = 0;
+    for (; node; node = node->next) {
+        if (nodeIs(node, Define)) {
+            len += (node->define.container ? 1
+                                           : countAstNodes(node->define.names));
+        }
+        else if (nodeIs(node, ImportDecl))
+            len += countAstNodes(node->import.entities);
+        else
+            len++;
+    }
     return len;
 }
 
@@ -593,6 +658,17 @@ AstNode *replaceAstNode(AstNode *node, const AstNode *with)
     *node = *with;
     node->parentScope = parent;
     getLastAstNode(node)->next = next;
+
+    return node;
+}
+
+AstNode *replaceAstNodeWith(AstNode *node, const AstNode *with)
+{
+    __typeof(node->_head) head = node->_head;
+    *node = *with;
+    node->flags |= head.flags;
+    node->next = head.next;
+    node->parentScope = head.parentScope;
 
     return node;
 }
@@ -870,7 +946,8 @@ AstNode *cloneGenericDeclaration(MemPool *pool, const AstNode *node)
 
     decl = cloneAstNode(&config, decl);
     setGenericDeclarationParams(decl, params);
-
+    decl->attrs = node->attrs;
+    decl->parentScope = node->parentScope;
     deinitCloneAstNodeConfig(&config);
     return decl;
 }
@@ -959,6 +1036,8 @@ const char *getDeclarationName(const AstNode *node)
         return node->structDecl.name;
     case astInterfaceDecl:
         return node->interfaceDecl.name;
+    case astDefine:
+        return node->define.container->ident.value;
     default:
         csAssert(false, "%s is not a declaration", getAstNodeName(node));
     }
@@ -1212,4 +1291,12 @@ AstNode *findInSortedNodes(SortedNodes *sorted, cstring name)
         return NULL;
 
     return sorted->nodes[found];
+}
+
+const AstNode *getOptionalDecl()
+{
+    static const AstNode *optionalDecl = NULL;
+    if (optionalDecl == NULL)
+        optionalDecl = findBuiltinDecl(S_Optional);
+    return optionalDecl;
 }

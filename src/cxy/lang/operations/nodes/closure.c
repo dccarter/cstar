@@ -18,17 +18,18 @@ static const Type *createStructForClosure(AstVisitor *visitor, AstNode *node)
     AstNode *fields = NULL, *it = NULL;
 
     for (u64 i = 0; i < node->closureExpr.captureCount; i++) {
-        const AstNode *capture = node->closureExpr.capture[i];
+        const Capture *capture = node->closureExpr.capture[i];
         AstNode *field = makeAstNode(
             ctx->pool,
-            &capture->loc,
+            &capture->node->loc,
             &(AstNode){
                 .tag = astStructField,
-                .type = capture->type,
-                .flags = flgPrivate | capture->flags | flgMember,
-                .structField = {.name = getCapturedNodeName(capture),
-                                .type = makeTypeReferenceNode(
-                                    ctx->pool, capture->type, &capture->loc)}});
+                .type = capture->node->type,
+                .flags = flgPrivate | capture->node->flags | flgMember,
+                .structField = {
+                    .name = getCapturedNodeName(capture->node),
+                    .type = makeTypeReferenceNode(
+                        ctx->pool, capture->node->type, &capture->node->loc)}});
         if (fields == NULL) {
             fields = it = field;
         }
@@ -84,20 +85,23 @@ static void transformClosureToStructExpr(AstVisitor *visitor,
     AstNode *fields = NULL, *it = NULL;
 
     for (u64 i = 0; i < node->closureExpr.captureCount; i++) {
-        const AstNode *capture = node->closureExpr.capture[i];
-        cstring name = getCapturedNodeName(capture);
+        const Capture *capture = node->closureExpr.capture[i];
+        cstring name = getCapturedNodeName(capture->node);
         AstNode *field = makeAstNode(
             ctx->pool,
-            &capture->loc,
-            &(AstNode){.tag = astFieldExpr,
-                       .type = capture->type,
-                       .flags = flgPrivate | capture->flags,
-                       .fieldExpr = {.name = name,
-                                     .value = makePath(ctx->pool,
-                                                       &node->loc,
-                                                       name,
-                                                       capture->flags,
-                                                       capture->type)}});
+            &capture->node->loc,
+            &(AstNode){
+                .tag = astFieldExpr,
+                .type = capture->node->type,
+                .flags = flgPrivate | capture->node->flags,
+                .fieldExpr = {.name = name,
+                              .value = makePath(
+                                  ctx->pool,
+                                  &node->loc,
+                                  name,
+                                  capture->node->flags |
+                                      (capture->inParent ? flgMember : flgNone),
+                                  capture->node->type)}});
         if (fields == NULL) {
             fields = it = field;
         }

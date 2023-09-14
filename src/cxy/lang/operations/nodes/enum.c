@@ -4,6 +4,7 @@
 
 #include "../check.h"
 #include "../codegen.h"
+#include "../eval.h"
 
 #include "lang/flag.h"
 #include "lang/ttable.h"
@@ -13,6 +14,30 @@
 static int compareEnumOptionsByValue(const void *lhs, const void *rhs)
 {
     return (int)(((EnumOption *)lhs)->value - ((EnumOption *)rhs)->value);
+}
+
+static bool evalEnumOption(AstVisitor *visitor, AstNode *node)
+{
+    AstNode *value = node->enumOption.value;
+    EvalContext *ctx = getAstVisitorContext(visitor);
+
+    if (value == NULL || isIntegralLiteral(value))
+        return true;
+
+    FileLoc loc = value->loc;
+    if (evaluate(visitor, value)) {
+        if (isIntegralLiteral(value))
+            return true;
+
+        logError(
+            ctx->L,
+            &loc,
+            "enum value should evaluate to a compile time integer constant",
+            NULL);
+    }
+
+    node->tag = astError;
+    return false;
 }
 
 void generateEnumDefinition(CodegenContext *context, const Type *type)
@@ -82,6 +107,11 @@ void checkEnumDecl(AstVisitor *visitor, AstNode *node)
         return;
     }
 
+    if (!evaluate(ctx->evaluator, node)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
     EnumOption *options = mallocOrDie(sizeof(EnumOption) * numOptions);
     for (u64 i = 0; option; option = option->next, i++) {
         options[i] =
@@ -100,4 +130,30 @@ void checkEnumDecl(AstVisitor *visitor, AstNode *node)
                                             .optionsCount = numOptions}});
 
     free(options);
+}
+
+void evalEnumDecl(AstVisitor *visitor, AstNode *node)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    i64 value = 0, len = 0;
+    AstNode *option = node->enumDecl.options;
+    for (; option; option = option->next, len++) {
+        if (!evalEnumOption(visitor, option)) {
+            node->tag = astError;
+            return;
+        }
+
+        if (option->enumOption.value == NULL) {
+            option->enumOption.value = makeAstNode(
+                ctx->pool,
+                &option->loc,
+                &(AstNode){.tag = astIntegerLit, .intLiteral.value = value++});
+        }
+        else {
+            value = (i64)getNumericLiteral(option->enumOption.value) + 1;
+        }
+    }
+
+    node->enumDecl.len = len;
+    node->flags |= flgVisited;
 }

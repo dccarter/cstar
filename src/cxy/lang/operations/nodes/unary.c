@@ -4,6 +4,7 @@
 
 #include "../check.h"
 #include "../codegen.h"
+#include "../eval.h"
 
 #include "lang/flag.h"
 #include "lang/operations.h"
@@ -119,15 +120,25 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
         break;
     case opDeref:
         if (!typeIs(operand, Pointer)) {
-            if (!transformToDerefOperator(visitor, node)) {
+            if (typeIs(operand, Struct)) {
+                if (transformToDerefOperator(visitor, node)) {
+                    operand = node->type;
+                }
+                else {
+                    logError(ctx->L,
+                             &node->unaryExpr.operand->loc,
+                             "struct '{t}' does not overload dereference "
+                             "`deref` operator",
+                             (FormatArg[]){{.t = operand}});
+                    operand = ERROR_TYPE(ctx);
+                }
+            }
+            else {
                 logError(ctx->L,
                          &node->unaryExpr.operand->loc,
                          "cannot not dereference an non-pointer type '{t}'",
                          (FormatArg[]){{.t = operand}});
                 operand = ERROR_TYPE(ctx);
-            }
-            else {
-                operand = node->type;
             }
         }
         else {
@@ -243,4 +254,15 @@ void checkUnaryExpr(AstVisitor *visitor, AstNode *node)
                                {.t = operand}});
         operand = ERROR_TYPE(ctx);
     }
+}
+
+void evalUnaryExpr(AstVisitor *visitor, AstNode *node)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    AstNode *next = node->next, *parentScope = node->parentScope;
+    if (!evaluate(visitor, node->unaryExpr.operand)) {
+        node->tag = astError;
+        return;
+    }
+    csAssert(false, "Not yet supported");
 }

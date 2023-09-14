@@ -4,6 +4,7 @@
 
 #include "../check.h"
 #include "../codegen.h"
+#include "../eval.h"
 
 #include "lang/flag.h"
 #include "lang/ttable.h"
@@ -272,4 +273,17 @@ void checkTupleType(AstVisitor *visitor, AstNode *node)
         makeTupleType(ctx->types, elems_, count, node->flags & flgConst);
 
     free(elems_);
+}
+
+void evalTupleExpr(AstVisitor *visitor, AstNode *node)
+{
+    u64 i = 0;
+    AstNode *elem = node->tupleExpr.elements;
+    for (; elem; elem = elem->next, i++) {
+        if (!evaluate(visitor, elem)) {
+            node->tag = astError;
+            return;
+        }
+    }
+    node->tupleExpr.len = i;
 }

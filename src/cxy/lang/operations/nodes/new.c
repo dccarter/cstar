@@ -92,6 +92,7 @@ static const Type *checkNewInitializerOverload(AstVisitor *visitor,
     node->tag = astStmtExpr;
     node->stmtExpr.stmt =
         makeBlockStmt(ctx->pool, &init->loc, varDecl, NULL, NULL);
+    node->stmtExpr.stmt->flags |= flgBlockReturns;
 
     return checkType(visitor, node);
 }

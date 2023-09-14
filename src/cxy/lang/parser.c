@@ -1368,11 +1368,11 @@ static OperatorOverload operatorOverload(Parser *P)
     else if (match(P, tokIdent)) {
         Token ident = *previous(P);
         cstring name = getTokenString(P, &ident, false);
-        if (name == S_StringOverload) {
+        if (strcmp(name, "str") == 0) {
             op = (OperatorOverload){.f = opStringOverload,
                                     .s = S_StringOverload};
         }
-        else if (name == S_Deref) {
+        else if (strcmp(name, "deref") == 0) {
             op = (OperatorOverload){.f = opDeref, .s = S_Deref};
         }
         else {
