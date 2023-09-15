@@ -256,9 +256,25 @@ static void checkReturnStmt(AstVisitor *visitor, AstNode *node)
                     NULL);
 
             node->type = ERROR_TYPE(ctx);
+            return;
         }
-        else
-            node->type = ret->type;
+
+        node->type = ret->type;
+
+        if (!hasFlag(ret->type, Optional) || hasFlag(expr_, Optional))
+            return;
+
+        const Type *target = getOptionalTargetType(ret->type);
+        if (nodeIs(expr, NullLit)) {
+            if (!transformOptionalNone(visitor, expr, target))
+                node->type = ERROR_TYPE(ctx);
+        }
+        else {
+            expr->type = target;
+            if (!transformOptionalSome(
+                    visitor, expr, copyAstNode(ctx->pool, expr)))
+                node->type = ERROR_TYPE(ctx);
+        }
     }
     else {
         node->type = expr_;

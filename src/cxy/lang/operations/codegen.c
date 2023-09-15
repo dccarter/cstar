@@ -253,6 +253,12 @@ void generateWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, "{<}\n}", NULL);
     }
 }
+void generateDestructorRef(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    writeTypename(ctx, node->destructorRef.target);
+    format(ctx->state, "__builtin_destructor", NULL);
+}
 
 static void epilogue(ConstAstVisitor *visitor, const AstNode *node)
 {
@@ -577,7 +583,8 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
         [astFuncDecl] = generateFunctionDefinition,
         [astVarDecl] = generateVariableDecl,
         [astTypeDecl] = generateTypeDecl,
-        [astStructDecl] = generateStructDecl
+        [astStructDecl] = generateStructDecl,
+        [astDestructorRef] = generateDestructorRef
     }, .fallback = generateFallback);
 
     // clang-format on

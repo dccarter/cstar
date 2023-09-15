@@ -536,7 +536,7 @@ static AstNode *makeDestructorNode(AstVisitor *visitor,
     args->tag = astDestructorRef;
     args->flags = flgVisited;
     memset(&args->_body, 0, CXY_AST_NODE_BODY_SIZE);
-    args->destructorRef.target = type->info.target;
+    args->destructorRef.target = type;
 
     return args;
 }
