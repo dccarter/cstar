@@ -198,7 +198,7 @@ void initEvalVisitor(AstVisitor *visitor, EvalContext *ctx)
         [astGroupExpr] = evalGroupExpr,
         [astEnumDecl] = evalEnumDecl,
         [astMacroCallExpr] = evalMacroCall,
-        [astVarDecl] = evalVarDecl
+        [astVarDecl] = evalVarDecl,
     }, .fallback = evalFallback);
 
     initComptime(ctx);

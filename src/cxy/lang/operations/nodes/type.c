@@ -68,7 +68,7 @@ void generateTypeinfo(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     csAssert0((hasFlag(node, Typeinfo)));
-    writeTypename(ctx, node->type->info.target);
+    writeTypename(ctx, node->type);
 }
 
 void checkTypeDecl(AstVisitor *visitor, AstNode *node)
@@ -138,8 +138,11 @@ void checkPointerType(AstVisitor *visitor, AstNode *node)
 
 bool comptimeCompareTypes(const AstNode *lhs, const AstNode *rhs)
 {
-    if (lhs->tag != rhs->tag)
+    if (lhs->tag != rhs->tag) {
+        if (nodeIs(lhs, TypeRef) || nodeIs(rhs, TypeRef))
+            return lhs->type == rhs->type;
         return lhs->tag == astAutoType;
+    }
 
     switch (lhs->tag) {
     case astStringType:

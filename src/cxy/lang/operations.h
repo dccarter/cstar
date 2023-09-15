@@ -13,4 +13,5 @@ AstNode *dumpAstJson(CompilerDriver *driver, AstNode *node, FILE *file);
 AstNode *dumpAstToYaml(CompilerDriver *driver, AstNode *node, FILE *file);
 AstNode *bindAst(CompilerDriver *driver, AstNode *node);
 AstNode *checkAst(CompilerDriver *driver, AstNode *node);
+AstNode *finalizeAst(CompilerDriver *driver, AstNode *node);
 AstNode *generateCode(CompilerDriver *driver, AstNode *node);

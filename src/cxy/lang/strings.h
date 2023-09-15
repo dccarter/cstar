@@ -20,8 +20,8 @@
     f(__builtin_memset_slice)   \
     f(__builtin_init_slice)     \
     f(__builtin_free_slice)     \
-    f(__builtin_assert)         \
-    f(__builtin_sizeof)         \
+    f(CXY__builtins_assert)     \
+    f(CXY__builtins_sizeof)     \
     f(this)                     \
     f(This)                     \
     f(super)                    \
@@ -57,7 +57,9 @@
     f(None)                     \
     f(Some)                     \
     f(unchecked)                \
-    f(_Variadic)
+    f(_Variadic)                \
+    f(flatten)                  \
+    f(CXY__main)
 
 // clang-format on
 

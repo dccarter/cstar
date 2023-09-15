@@ -63,7 +63,22 @@ add_executable(amalgamate
 CxyAmalgamate(builtins
         OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/generated
         FILES
-        src/cxy/lang/runtime/builtins.cxy)
+            src/cxy/lang/runtime/builtins.cxy)
+
+CxyAmalgamate(epilogue
+        OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/generated
+        FILES
+        src/cxy/lang/runtime/epilogue.c)
+
+CxyAmalgamate(prologue
+        OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/generated
+        FILES
+            src/cxy/lang/runtime/prologue.h)
+
+CxyAmalgamate(runtime
+        OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/generated
+        FILES
+        src/cxy/lang/runtime/runtime.c)
 
 set(CXY_3RD_PARTY_SOURCES
         src/cxy/3rdparty/cJSON.c)
@@ -106,6 +121,7 @@ set(CXY_OPERATIONS_SOURCES
         src/cxy/lang/operations/codegen.c
         src/cxy/lang/operations/comptime.c
         src/cxy/lang/operations/eval.c
+        src/cxy/lang/operations/finalize.c
         src/cxy/lang/operations/json.c
         src/cxy/lang/operations/macro.c
         src/cxy/lang/operations/shake.c
@@ -144,6 +160,9 @@ set(CXY_DRIVER_SOURCES
 add_executable(cxy
         src/cxy/driver/main.c
         ${CMAKE_CURRENT_BINARY_DIR}/generated/builtins.c
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/epilogue.c
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/prologue.c
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/runtime.c
         ${CXY_3RD_PARTY_SOURCES}
         ${CXY_CORE_SOURCES}
         ${CXY_LANG_SOURCES}
@@ -155,4 +174,22 @@ target_link_libraries(cxy msgpack-c yaml)
 target_compile_definitions(cxy PRIVATE
         -DCXY_VERSION="${CXY_VERSION}"
         -DCXY_SOURCE_LANG_DIR="${CMAKE_SOURCE_DIR}/src/cxy/lang")
+
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/stdlib)
+set(CXY_STD_LIB_SOURCES
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/io.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/json.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/map.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/str.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/vector.cxy)
+
+add_custom_target(
+        cxy-stdlib ALL
+        COMMAND cp -rf ${CXY_STD_LIB_SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/stdlib/
+        DEPENDS ${CXY_STD_LIB_SOURCES}
+)
+
+add_dependencies(cxy cxy-stdlib)
+
+
 

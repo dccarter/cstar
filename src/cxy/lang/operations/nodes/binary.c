@@ -415,17 +415,21 @@ CXY_DEFINE_BINARY_COMP_OPERATOR(Geq, >=)
 static void evalRangeOperation(EvalContext *ctx, AstNode *node)
 {
     AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;
-    if (nodeIs(lhs, StringLit) || nodeIs(rhs, StringLit)) {
-        logError(ctx->L,
-                 &node->loc,
-                 "unsupported comp-time operation '<=' between a string and a "
-                 "non-string literal",
-                 NULL);
-
-        node->tag = astError;
+    if (nodeIs(lhs, IntegerLit) && nodeIs(rhs, IntegerLit)) {
+        node->tag = astRangeExpr;
+        node->rangeExpr.start = lhs;
+        node->rangeExpr.end = rhs;
+        node->rangeExpr.step = NULL;
         return;
     }
-    unreachable("TODO");
+
+    logError(ctx->L,
+             &node->loc,
+             "unsupported comp-time operation '..', range start and stop must "
+             "be compile time expressions",
+             NULL);
+
+    node->tag = astError;
 }
 
 static BinaryOperatorKind getBinaryOperatorKind(Operator op)
@@ -642,6 +646,7 @@ void evalBinaryExpr(AstVisitor *visitor, AstNode *node)
     if (!verifyBinaryExprOperand(ctx, node))
         return;
 
+    evalType(ctx, node->binaryExpr.rhs);
     switch (node->binaryExpr.op) {
 #define f(O, ...)                                                              \
     case op##O:                                                                \

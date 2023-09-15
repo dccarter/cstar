@@ -31,7 +31,7 @@ static void generateTupleDelete(CodegenContext *context, const Type *type)
 
         if (typeIs(unwrapped, Pointer) || typeIs(unwrapped, String)) {
             format(state,
-                   "CXY_free((void *)this->_{u64});",
+                   "CXY__free((void *)this->_{u64});",
                    (FormatArg[]){{.u64 = i}});
         }
         else if (typeIs(stripped, Struct) || typeIs(stripped, Array) ||

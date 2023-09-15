@@ -82,9 +82,9 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         ctx->namespace = node->type->namespace;
 
     if (!isMember && hasFlag(node, Main)) {
-        format(ctx->state, "typedef CXY__", NULL);
+        format(ctx->state, "typedef struct _", NULL);
         writeTypename(ctx, node->type->func.params[0]);
-        format(ctx->state, " CXY_Main_Args_t;\n", NULL);
+        format(ctx->state, " CXY__Main_Args_t;\n", NULL);
         if (isIntegerType(node->type->func.retType)) {
             format(ctx->state, "#define CXY_MAIN_INVOKE_RETURN\n\n", NULL);
         }
@@ -200,7 +200,6 @@ void generateFuncGeneratedDeclaration(CodegenContext *context, const Type *type)
     if (hasFlag(type->func.decl, BuiltinMember))
         return;
 
-    format(state, ";\n", NULL);
     generateTypeUsage(context, type->func.retType);
     if (typeIs(type->func.retType, This))
         format(context->state, " *", NULL);
@@ -516,6 +515,11 @@ void checkFunctionType(AstVisitor *visitor, AstNode *node)
 void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
+    if (node->funcDecl.name == S_main) {
+        node->flags |= flgMain;
+        node->funcDecl.name = S_CXY__main;
+    }
+
     const Type *type = checkFunctionSignature(visitor, node);
     if (!typeIs(type, Error) && node->funcDecl.body)
         checkFunctionBody(visitor, node);

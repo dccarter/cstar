@@ -180,43 +180,6 @@ void makeDirectoryForPath(CompilerDriver *driver, cstring path)
     system(dir);
 }
 
-static bool generateSourceFiles(CompilerDriver *driver,
-                                AstNode *program,
-                                cstring filePath,
-                                bool isImport)
-{
-    const Options *options = &driver->options;
-    char *sourceFile = getGeneratedPath(
-        &driver->options, isImport ? "c/imports" : "c/src", filePath, ".c");
-
-    makeDirectoryForPath(driver, sourceFile);
-
-    FILE *output = fopen(sourceFile, "w");
-    if (output == NULL) {
-        logError(driver->L,
-                 NULL,
-                 "creating output file '{s}' failed, {s}",
-                 (FormatArg[]){{.s = options->output}, {.s = strerror(errno)}});
-        free(sourceFile);
-        return false;
-    }
-
-    FormatState state = newFormatState("  ", true);
-    //    generateCode(
-    //        &state, driver->typeTable, &driver->strPool, program, isImport);
-    writeFormatState(&state, output);
-    freeFormatState(&state);
-    fclose(output);
-
-    if (!isImport && options->cmd == cmdDev) {
-        compileCSourceFile(driver, sourceFile);
-    }
-
-    free(sourceFile);
-
-    return true;
-}
-
 static inline bool hasDumpEnable(const Options *opts)
 {
     return opts->cmd == cmdDev && opts->dev.printAst;
@@ -226,7 +189,6 @@ static bool compileProgram(CompilerDriver *driver,
                            AstNode *program,
                            const char *fileName)
 {
-    MemPoolStats stats;
     const Options *options = &driver->options;
     bool status = true;
 
@@ -258,7 +220,10 @@ static bool compileProgram(CompilerDriver *driver,
 
 compileProgramDone:
     stopCompilerStats(driver);
-    if (!options->dev.cleanAst && !hasFlag(metadata, BuiltinsModule)) {
+    bool dumpStats = !options->dev.cleanAst &&
+                     !hasFlag(metadata, BuiltinsModule) &&
+                     !(hasFlag(program, ImportedModule));
+    if (dumpStats) {
         compilerStatsPrint(driver);
     }
     return status;
@@ -269,7 +234,6 @@ static bool compileBuiltin(CompilerDriver *driver,
                            u64 size,
                            const char *fileName)
 {
-    const Options *options = &driver->options;
     AstNode *program = parseString(driver, code, size, fileName);
     if (program == NULL)
         return false;
@@ -293,6 +257,9 @@ bool initCompilerDriver(CompilerDriver *compiler, Log *log)
     internCommonStrings(&compiler->strPool);
 
     if (compiler->options.cmd == cmdBuild) {
+        if (!generateAllBuiltinSources(compiler))
+            return false;
+
         return compileBuiltin(compiler,
                               CXY_BUILTINS_SOURCE,
                               CXY_BUILTINS_SOURCE_SIZE,
@@ -302,17 +269,73 @@ bool initCompilerDriver(CompilerDriver *compiler, Log *log)
     return true;
 }
 
-AstNode *compileModule(CompilerDriver *driver,
-                       const AstNode *source,
-                       const AstNode *entities)
+const Type *compileModule(CompilerDriver *driver,
+                          const AstNode *source,
+                          AstNode *entities)
 {
-    unreachable("TODO");
+    cstring name = source->stringLiteral.value;
+    AstNode *program = findCachedModule(driver, name);
+    bool cached = true;
+    if (program == NULL) {
+        cached = false;
+
+        if (access(name, F_OK) != 0) {
+            logError(driver->L,
+                     &source->loc,
+                     "module source file '{s}' does not exist",
+                     (FormatArg[]){{.s = name}});
+            return NULL;
+        }
+
+        program = parseFile(driver, name);
+        if (program->program.module == NULL) {
+            logError(driver->L,
+                     &source->loc,
+                     "module source '{s}' is not declared as a module",
+                     (FormatArg[]){{.s = name}});
+            return NULL;
+        }
+
+        if (program == NULL)
+            return NULL;
+
+        program->flags |= flgImportedModule;
+        if (!compileProgram(driver, program, name))
+            return NULL;
+    }
+
+    AstNode *entity = entities;
+    const Type *module = program->type;
+
+    for (; entity; entity = entity->next) {
+        const ModuleMember *member =
+            findModuleMember(module, entity->importEntity.name);
+        if (member) {
+            entity->importEntity.target = (AstNode *)member->decl;
+        }
+        else {
+            logError(
+                driver->L,
+                &entity->loc,
+                "module {s} does not export declaration with name '{s}'",
+                (FormatArg[]){{.s = name}, {.s = entity->importEntity.name}});
+        }
+    }
+
+    if (hasErrors(driver->L))
+        return NULL;
+
+    if (!cached)
+        addCachedModule(driver, name, program);
+
+    return program->type;
 }
 
 bool compileFile(const char *fileName, CompilerDriver *driver)
 {
     startCompilerStats(driver);
     AstNode *program = parseFile(driver, fileName);
+    program->flags |= flgMain;
     return compileProgram(driver, program, fileName);
 }
 

@@ -140,6 +140,41 @@ pub native func memset(
     len: u64
 ) : &void;
 
+## pub(
+    strlen
+): func(str: &const char) -> u64
+
+## pub(
+    CXY__builtins_sizeof
+): func(it: auto) -> u64
+
+## pub(
+    CXY__builtins_assert
+): func(cond: bool, fmt: &const char, line: u64, col: u64) -> void
+
+pub native func CXY__builtins_alloc_slice(
+    typ: auto,
+    size: u64,
+    dctor: func(ptr: &void) -> void
+) : &void
+
+@inline
+pub func allocSlice[T](
+    count: u64
+) => CXY__builtins_alloc_slice(#[T], count, destructor!(#[T])) : [T]
+
+pub native func CXY__builtins_realloc_slice(
+    typ: auto,
+    ptr: &void,
+    size: u64,
+    dctor: func(ptr: &void) -> void
+) : &void
+
+@inline
+pub func reallocSlice[T](
+    data: [T], count: u64
+) => CXY__builtins_realloc_slice(#[T], data, count, destructor!(#[T])) : [T];
+
 type HashCode = u32
 
 ## pub(hashInit => CXY__hash_fnv1a_init):  func() -> u32

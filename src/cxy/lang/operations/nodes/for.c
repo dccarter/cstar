@@ -214,6 +214,170 @@ void checkForStmt(AstVisitor *visitor, AstNode *node)
     node->type = checkType(visitor, node->forStmt.body);
 }
 
+bool evalExprForStmtIterable(AstVisitor *visitor,
+                             AstNode *node,
+                             AstNodeList *nodes)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    AstNode *range = node->forStmt.range, *elem = range->arrayExpr.elements,
+            *variable = node->forStmt.var;
+
+    AstNode *it = nodeIs(range, ComptimeOnly) ? range->next : range;
+    while (it) {
+        AstNode *body = shallowCloneAstNode(ctx->pool, node->forStmt.body);
+        variable->varDecl.init = it;
+
+        const Type *type = evalType(ctx, body);
+        if (type == NULL || typeIs(type, Error)) {
+            node->tag = astError;
+            return false;
+        }
+
+        if (nodeIs(body, BlockStmt) && findAttribute(node, S_flatten)) {
+            insertAstNode(nodes, body->blockStmt.stmts);
+        }
+        else {
+            insertAstNode(nodes, body);
+        }
+
+        it = it->next;
+    }
+
+    return true;
+}
+
+bool evalExprForStmtArray(AstVisitor *visitor,
+                          AstNode *node,
+                          AstNodeList *nodes)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    AstNode *range = node->forStmt.range, *elem = range->arrayExpr.elements,
+            *variable = node->forStmt.var;
+
+    for (; elem; elem = elem->next) {
+        AstNode *body = shallowCloneAstNode(ctx->pool, node->forStmt.body);
+        variable->varDecl.init = elem;
+
+        const Type *type = evalType(ctx, body);
+        if (type == NULL || typeIs(type, Error)) {
+            node->tag = astError;
+            return false;
+        }
+
+        if (nodeIs(body, BlockStmt) && findAttribute(node, S_flatten)) {
+            insertAstNode(nodes, body->blockStmt.stmts);
+        }
+        else {
+            insertAstNode(nodes, body);
+        }
+    }
+
+    return true;
+}
+
+bool evalExprForStmtVariadic(AstVisitor *visitor,
+                             AstNode *node,
+                             AstNodeList *nodes)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    AstNode *range = node->forStmt.range, *variable = node->forStmt.var;
+
+    const Type *tuple = range->type;
+    u64 count = tuple->tuple.count;
+    for (u64 i = 0; i < count; i++) {
+        AstNode *body = shallowCloneAstNode(ctx->pool, node->forStmt.body);
+        variable->varDecl.init = makeTypeReferenceNode(
+            ctx->pool, tuple->tuple.members[i], &range->loc);
+
+        const Type *type = evalType(ctx, body);
+        if (type == NULL || typeIs(type, Error)) {
+            node->tag = astError;
+            return false;
+        }
+
+        if (nodeIs(body, BlockStmt) && findAttribute(node, S_flatten)) {
+            insertAstNode(nodes, body->blockStmt.stmts);
+        }
+        else {
+            insertAstNode(nodes, body);
+        }
+    }
+
+    return true;
+}
+
+bool evalForStmtWithString(AstVisitor *visitor,
+                           AstNode *node,
+                           AstNodeList *nodes)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    AstNode *range = node->forStmt.range, *variable = node->forStmt.var;
+
+    u64 count = strlen(range->stringLiteral.value);
+    for (u64 i = 0; i < count; i++) {
+        AstNode *body = shallowCloneAstNode(ctx->pool, node->forStmt.body);
+        variable->varDecl.init = makeAstNode(
+            ctx->pool,
+            &range->loc,
+            &(AstNode){.tag = astCharLit,
+                       .charLiteral.value = range->stringLiteral.value[i]});
+
+        const Type *type = evalType(ctx, body);
+        if (type == NULL || typeIs(type, Error)) {
+            node->tag = astError;
+            return false;
+        }
+
+        if (!nodeIs(body, Nop)) {
+            if (nodeIs(body, BlockStmt) && findAttribute(node, S_flatten)) {
+                insertAstNode(nodes, body->blockStmt.stmts);
+            }
+            else {
+                insertAstNode(nodes, body);
+            }
+        }
+    }
+
+    return true;
+}
+
+bool evalForStmtWithRange(AstVisitor *visitor,
+                          AstNode *node,
+                          AstNodeList *nodes)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    AstNode *range = node->forStmt.range, *variable = node->forStmt.var;
+
+    i64 i = integerLiteralValue(range->rangeExpr.start),
+        count = integerLiteralValue(range->rangeExpr.end),
+        step = range->rangeExpr.step
+                   ? integerLiteralValue(range->rangeExpr.step)
+                   : 1;
+
+    for (; i < count; i += step) {
+        AstNode *body = shallowCloneAstNode(ctx->pool, node->forStmt.body);
+        variable->varDecl.init = makeAstNode(
+            ctx->pool,
+            &range->loc,
+            &(AstNode){.tag = astIntegerLit, .intLiteral.value = i});
+
+        const Type *type = evalType(ctx, body);
+        if (type == NULL || typeIs(type, Error)) {
+            node->tag = astError;
+            return false;
+        }
+
+        if (nodeIs(body, BlockStmt) && findAttribute(node, S_flatten)) {
+            insertAstNode(nodes, body->blockStmt.stmts);
+        }
+        else {
+            insertAstNode(nodes, body);
+        }
+    }
+
+    return true;
+}
+
 void evalForStmt(AstVisitor *visitor, AstNode *node)
 {
     EvalContext *ctx = getAstVisitorContext(visitor);
@@ -224,33 +388,47 @@ void evalForStmt(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    AstNode *range = node->forStmt.range;
-    if (!hasFlag(range, ComptimeIterable)) {
-        logError(ctx->L,
-                 &rangeLoc,
-                 "`#for` loop range expression is not comptime iterable",
-                 NULL);
-        node->tag = astError;
-        return;
-    }
-
-    AstNode *it = nodeIs(range, ComptimeOnly) ? range->next : range;
-    // open a new scope
     AstNodeList nodes = {NULL};
-    AstNode *variable = node->forStmt.var;
 
-    while (it) {
-        AstNode *body = shallowCloneAstNode(ctx->pool, node->forStmt.body);
-        variable->varDecl.init = it;
-        if (!evaluate(visitor, body) || nodeIs(body, Error)) {
+    switch (node->forStmt.range->tag) {
+    case astRangeExpr:
+        if (!evalForStmtWithRange(visitor, node, &nodes))
+            return;
+        break;
+    case astStringLit:
+        if (!evalForStmtWithString(visitor, node, &nodes))
+            return;
+        break;
+    case astArrayExpr:
+        if (!evalExprForStmtArray(visitor, node, &nodes))
+            return;
+        break;
+    case astFuncParam:
+        if (!hasFlag(node->forStmt.range, Variadic)) {
+            logError(ctx->L,
+                     &rangeLoc,
+                     "`#for` loop range expression is not comptime iterable, "
+                     "parameter '{s}' is not variadic",
+                     NULL);
             node->tag = astError;
             return;
         }
-
-        if (!nodeIs(it, Nop))
-            insertAstNode(&nodes, body);
-
-        it = it->next;
+        
+        if (!evalExprForStmtVariadic(visitor, node, &nodes))
+            return;
+        break;
+    default:
+        if (!hasFlag(node->forStmt.range, ComptimeIterable)) {
+            logError(ctx->L,
+                     &rangeLoc,
+                     "`#for` loop range expression is not comptime iterable",
+                     NULL);
+            node->tag = astError;
+            return;
+        }
+        if (!evalExprForStmtIterable(visitor, node, &nodes))
+            return;
+        break;
     }
 
     if (nodes.first == NULL) {

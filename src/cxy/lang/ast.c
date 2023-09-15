@@ -112,7 +112,10 @@ static void postCloneAstNode(CloneAstConfig *config,
         if (from->closureExpr.capture == NULL)
             break;
         to->closureExpr.capture = allocFromMemPool(
-            config->pool, sizeof(AstNode *) * from->closureExpr.captureCount);
+            config->pool, sizeof(Capture *) * from->closureExpr.captureCount);
+        memcpy(to->closureExpr.capture,
+               from->closureExpr.capture,
+               sizeof(Capture *) * from->closureExpr.captureCount);
         for (u64 i = 0; i < from->closureExpr.captureCount; i++) {
             AstNode *capture = (AstNode *)from->closureExpr.capture[i]->node;
             replaceWithCorrespondingNode(&config->mapping, &capture);
@@ -529,6 +532,7 @@ bool isTypeExpr(const AstNode *node)
     case astEnumDecl:
     case astUnionDecl:
     case astFuncDecl:
+    case astTypeRef:
         return true;
     case astRef:
         return isTypeExpr(node->reference.target);
@@ -960,13 +964,16 @@ void insertAstNodeAfter(AstNode *before, AstNode *after)
 
 void insertAstNode(AstNodeList *list, AstNode *node)
 {
+    if (node == NULL)
+        return;
+
     if (list->first == NULL) {
         list->first = node;
     }
     else {
         list->last->next = node;
     }
-    list->last = node;
+    list->last = getLastAstNode(node);
 }
 
 void unlinkAstNode(AstNode **head, AstNode *prev, AstNode *node)
@@ -1038,6 +1045,8 @@ const char *getDeclarationName(const AstNode *node)
         return node->interfaceDecl.name;
     case astDefine:
         return node->define.container->ident.value;
+    case astVarDecl:
+        return node->varDecl.name;
     default:
         csAssert(false, "%s is not a declaration", getAstNodeName(node));
     }

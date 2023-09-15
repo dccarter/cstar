@@ -2331,7 +2331,8 @@ static AstNode *parseImportDecl(Parser *P)
 {
     Token tok = *consume0(P, tokImport);
     AstNode *module;
-    AstNode *entities = NULL, *alias = NULL, *exports;
+    AstNode *entities = NULL, *alias = NULL;
+    const Type *exports;
     if (check(P, tokIdent)) {
         entities = parseImportEntity(P);
     }
@@ -2362,8 +2363,8 @@ static AstNode *parseImportDecl(Parser *P)
     return makeAstNode(P->memPool,
                        &tok.fileLoc,
                        &(AstNode){.tag = astImportDecl,
+                                  .type = exports,
                                   .import = {.module = module,
-                                             .exports = exports,
                                              .alias = alias,
                                              .entities = entities}});
 }

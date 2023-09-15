@@ -101,6 +101,11 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
         writeTypename(ctx, parent->type);
         format(ctx->state, "__", NULL);
     }
+    else if (hasFlag(type->func.decl, Generated))
+        writeDeclNamespace(ctx, type->namespace, NULL);
+    else if (!hasFlag(node->callExpr.callee, Define))
+        writeNamespace(ctx, NULL);
+
     if (type->name)
         format(ctx->state, "{s}", (FormatArg[]){{.s = type->name}});
     else

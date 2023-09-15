@@ -1,9 +1,6 @@
-struct User {
-    const func add(a: const This) {
-        return this;
-    }
-}
+import { Vector } from "stdlib/vector.cxy"
+
 func main(args:[string]) {
-//    var sb = new StringBuilder();
-//    sb << "Hello" << 10
+    var nums = new Vector[i32]();
+    nums.push(10)
 }

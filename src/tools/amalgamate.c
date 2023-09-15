@@ -34,6 +34,7 @@ int main(int argc, char *argv[])
                  "%s/%s.h",
                  argv[AMALGAMATE_DIR],
                  argv[AMALGAMATE_FNAME]);
+
         FILE *output = fopen(path, "w");
         if (output == NULL) {
             fprintf(stdout,

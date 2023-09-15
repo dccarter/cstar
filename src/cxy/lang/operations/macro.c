@@ -102,14 +102,14 @@ static AstNode *makeSizeofNode(AstVisitor *visitor,
     if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
         return NULL;
 
-    AstNode *sizeOf = findBuiltinDecl(S___builtin_sizeof);
+    AstNode *sizeOf = findBuiltinDecl(S_CXY__builtins_sizeof);
     csAssert0(sizeOf);
 
     return makeCallExpr(ctx->pool,
                         &node->loc,
                         makeResolvedPath(ctx->pool,
                                          &node->loc,
-                                         S___builtin_sizeof,
+                                         S_CXY__builtins_sizeof,
                                          node->callExpr.callee->flags,
                                          sizeOf,
                                          sizeOf->type),
@@ -366,7 +366,7 @@ static AstNode *makeDataNode(AstVisitor *visitor,
     if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
         return NULL;
 
-    const Type *type = args->type;
+    const Type *type = args->type ?: evalType(ctx, args);
     csAssert0(type);
     const Type *raw = stripAll(type);
 
@@ -411,7 +411,7 @@ static AstNode *makeAssertNode(AstVisitor *visitor,
     if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
         return NULL;
 
-    const Type *type = args->type;
+    const Type *type = args->type ?: evalType(ctx, args);
     if (!isIntegralType(type) && !isFloatType(type)) {
         logError(ctx->L,
                  &args->loc,
@@ -420,7 +420,7 @@ static AstNode *makeAssertNode(AstVisitor *visitor,
                  (FormatArg[]){{.t = type}});
     }
 
-    AstNode *builtinAssert = findBuiltinDecl(S___builtin_assert);
+    AstNode *builtinAssert = findBuiltinDecl(S_CXY__builtins_assert);
     csAssert0(builtinAssert);
     AstNode *next = args;
     next = next->next = makeFilenameNode(visitor, node, NULL);
@@ -441,7 +441,7 @@ static AstNode *makeAssertNode(AstVisitor *visitor,
                     &(AstNode){.tag = astIdentifier,
                                .flags = node->macroCallExpr.callee->flags,
                                .type = builtinAssert->type,
-                               .ident.value = S___builtin_assert}),
+                               .ident.value = S_CXY__builtins_assert}),
                 .args = args}});
 }
 
@@ -456,7 +456,7 @@ static AstNode *makeUncheckedNode(AstVisitor *visitor,
     const Type *type = next->type;
     csAssert0(type);
 
-    if (!typeIs(type, Info)) {
+    if (!typeIs(type, Info) && !hasFlag(args, Typeinfo)) {
         logError(ctx->L,
                  &next->loc,
                  "invalid `unchecked!` macro parameter, expecting a "
@@ -520,10 +520,10 @@ static AstNode *makeDestructorNode(AstVisitor *visitor,
     if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
         return NULL;
 
-    const Type *type = args->type;
+    const Type *type = args->type ?: evalType(ctx, args);
     csAssert0(type);
 
-    if (!typeIs(type, Info)) {
+    if (!typeIs(type, Info) && !hasFlag(args, Typeinfo)) {
         logError(ctx->L,
                  &args->loc,
                  "invalid `destructor!` macro parameter, expecting a "
@@ -577,7 +577,7 @@ static AstNode *makeBaseOfNode(AstVisitor *visitor,
     const Type *type = args->type;
     csAssert0(type);
 
-    if (!typeIs(type, Info)) {
+    if (!typeIs(type, Info) && !hasFlag(args, Typeinfo)) {
         logError(ctx->L,
                  &node->loc,
                  "invalid `typeof!` macro argument, expecting a type info "
@@ -622,7 +622,8 @@ static AstNode *makePointerOfNode(AstVisitor *visitor,
         return NULL;
     }
 
-    const Type *lhs = args->binaryExpr.lhs->type;
+    const Type *lhs =
+        args->binaryExpr.lhs->type ?: evalType(ctx, args->binaryExpr.lhs);
     csAssert0(lhs);
 
     if (!typeIs(lhs, Pointer)) {
@@ -634,7 +635,8 @@ static AstNode *makePointerOfNode(AstVisitor *visitor,
         return NULL;
     }
 
-    const Type *rhs = args->binaryExpr.rhs->type;
+    const Type *rhs =
+        args->binaryExpr.rhs->type ?: evalType(ctx, args->binaryExpr.rhs);
     csAssert0(rhs);
 
     if (!isIntegerType(rhs)) {

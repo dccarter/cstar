@@ -17,6 +17,13 @@ typedef struct CompilerDriver {
     TypeTable *typeTable;
 } CompilerDriver;
 
+typedef struct {
+    cstring name;
+    cstring data;
+    u64 len;
+    u64 mtime;
+} EmbeddedSource;
+
 cstring getFilenameWithoutDirs(cstring fileName);
 char *getGeneratedPath(const Options *options,
                        cstring dir,
@@ -31,6 +38,6 @@ bool compileString(CompilerDriver *driver,
                    cstring source,
                    u64 size,
                    cstring filename);
-AstNode *compileModule(CompilerDriver *driver,
-                       const AstNode *source,
-                       const AstNode *entities);
+const Type *compileModule(CompilerDriver *driver,
+                          const AstNode *source,
+                          AstNode *entities);

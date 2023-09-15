@@ -28,7 +28,7 @@ static inline bool isIteratorFunction(TypingContext *ctx, const Type *type)
         return false;
 
     const Type *ret = iter->func.retType;
-    return typeIs(ret, Optional) && !typeIs(ret->optional.target, Void);
+    return typeIs(ret, Struct) && hasFlag(ret, Optional);
 }
 
 static void checkImplements(AstVisitor *visitor,

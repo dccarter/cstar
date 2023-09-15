@@ -186,6 +186,8 @@ checkInterfaceMembersError:
         free(members);
 }
 
+static void checkImportDecl(AstVisitor *visitor, AstNode *node) {}
+
 static void checkBlockStmt(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
@@ -488,6 +490,13 @@ static void checkGroupExpr(AstVisitor *visitor, AstNode *node)
     node->type = checkType(visitor, node->groupExpr.expr);
 }
 
+static void checkMacroCallExpr(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    if (!evaluate(ctx->evaluator, node))
+        node->type = ERROR_TYPE(ctx);
+}
+
 static u64 addDefineToModuleMembers(ModuleMember *members,
                                     u64 index,
                                     AstNode *decl,
@@ -519,12 +528,14 @@ static u64 addModuleTypeMember(ModuleMember *members,
     if (nodeIs(decl, Define)) {
         return addDefineToModuleMembers(members, index, decl, builtinFlags);
     }
-    else {
+    else if (!nodeIs(decl, CCode)) {
         decl->flags |= builtinFlags;
         members[index++] = (ModuleMember){
             .decl = decl, .name = getDeclarationName(decl), .type = decl->type};
         return index;
     }
+
+    return index;
 }
 
 static void buildModuleType(TypingContext *ctx,
@@ -636,6 +647,7 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astStructField] = checkStructField,
         [astStructDecl] = checkStructDecl,
         [astInterfaceDecl] = checkInterfaceDecl,
+        [astImportDecl] = checkImportDecl,
         [astReturnStmt] = checkReturnStmt,
         [astBlockStmt] = checkBlockStmt,
         [astDeferStmt] = checkDeferStmt,
@@ -664,7 +676,8 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astStmtExpr] = checkStmtExpr,
         [astGroupExpr] = checkGroupExpr,
         [astClosureExpr] = checkClosureExpr,
-        [astArrayExpr] = checkArrayExpr
+        [astArrayExpr] = checkArrayExpr,
+        [astMacroCallExpr] = checkMacroCallExpr,
     }, .fallback = astVisitFallbackVisitAll, .dispatch = withSavedStack);
     // clang-format on
 

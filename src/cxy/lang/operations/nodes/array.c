@@ -133,7 +133,7 @@ static void buildStringFormatForIndex(CodegenContext *context,
 
     case typString:
         format(state,
-               "CXY_builtins_string_builder_append_cstr1(sb->sb, "
+               "CXY__builtins_string_builder_append_cstr1(sb->sb, "
                "{cl}this{s}[i]);",
                (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = target}});
         break;

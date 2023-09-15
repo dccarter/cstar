@@ -297,7 +297,7 @@ const ModuleMember *findModuleMember(const Type *type, cstring member);
 static inline const Type *findModuleMemberType(const Type *type, cstring member)
 {
     const ModuleMember *found = findModuleMember(type, member);
-    return found ? type : NULL;
+    return found ? found->type : NULL;
 }
 
 bool isTruthyType(const Type *type);

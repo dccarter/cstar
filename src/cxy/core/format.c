@@ -390,7 +390,7 @@ void printUtf8(FormatState *state, uint32_t chr, bool escaped)
     }
 }
 
-void writeFormatState(FormatState *state, FILE *file)
+void writeFormatState(const FormatState *state, FILE *file)
 {
     for (FormatBuf *buf = state->firstBuf; buf; buf = buf->next)
         fwrite(buf->data, 1, buf->size, file);

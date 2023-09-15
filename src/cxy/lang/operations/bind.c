@@ -167,10 +167,24 @@ void bindPath(AstVisitor *visitor, AstNode *node)
     BindContext *ctx = getAstVisitorContext(visitor);
     AstNode *base = node->path.elements;
     if (!base->pathElement.isKeyword) {
-        base->pathElement.resolvesTo = resolvePathBaseUpChain(ctx, node);
-        if (base->pathElement.resolvesTo == NULL)
+        AstNode *resolved = resolvePathBaseUpChain(ctx, node);
+        if (resolved == NULL)
             return;
+        if (hasFlag(resolved, Comptime) && !ctx->isComptimeContext) {
+            logError(ctx->L,
+                     &base->loc,
+                     "comptime variable cannot be assigned outside comptime "
+                     "context, did you mean `#{{{s}}`",
+                     (FormatArg[]){{.s = base->pathElement.name}});
+            logNote(ctx->L,
+                    &resolved->loc,
+                    "comptime variable declared here",
+                    NULL);
+            return;
+        }
+
         // capture symbol if in closure
+        base->pathElement.resolvesTo = resolved;
         captureSymbol(ctx->currentClosure, node, base->pathElement.resolvesTo);
     }
     else {
@@ -254,6 +268,7 @@ void bindDefine(AstVisitor *visitor, AstNode *node)
     }
 
     for (; name; name = name->next) {
+        name->flags |= flgDefine;
         defineSymbol(ctx->env, ctx->L, name->ident.value, name);
         if (name->ident.alias && name->ident.alias != name->ident.value)
             defineSymbol(ctx->env, ctx->L, name->ident.alias, name);
@@ -266,12 +281,12 @@ void bindDefine(AstVisitor *visitor, AstNode *node)
 void bindImportDecl(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
-    AstNode *exports = node->import.exports;
+    const Type *exports = node->type;
 
     if (node->import.entities == NULL) {
         AstNode *alias = node->import.alias;
-        cstring name = alias ? alias->ident.value : exports->moduleDecl.name;
-        defineSymbol(ctx->env, ctx->L, name, exports);
+        cstring name = alias ? alias->ident.value : exports->name;
+        defineSymbol(ctx->env, ctx->L, name, node);
     }
     else {
         AstNode *entity = node->import.entities;
@@ -607,7 +622,7 @@ void bindMemberExpr(AstVisitor *visitor, AstNode *node)
     AstNode *member = node->memberExpr.member;
     astVisit(visitor, node->memberExpr.target);
     if (hasFlag(member, Comptime))
-        bindMemberExpr(visitor, member);
+        astVisit(visitor, member);
 }
 
 void bindProgram(AstVisitor *visitor, AstNode *node)

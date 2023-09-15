@@ -3,6 +3,9 @@
 //
 
 #include "stages.h"
+#include "cc.h"
+
+#include "lang/flag.h"
 #include "lang/operations.h"
 
 #include <ctype.h>
@@ -142,13 +145,31 @@ static AstNode *executeTypeCheckAst(CompilerDriver *driver, AstNode *node)
     return node;
 }
 
-static AstNode *executeGenerateCode(CompilerDriver *driver, AstNode *node)
+static AstNode *executeFinalizeAst(CompilerDriver *driver, AstNode *node)
 {
     csAssert0(nodeIs(node, Metadata));
     if (!(node->metadata.stages & BIT(ccsTypeCheck))) {
+        logError(
+            driver->L, builtinLoc(), "cannot finalize an untyped ast", NULL);
+        return NULL;
+    }
+
+    node->metadata.node = finalizeAst(driver, node->metadata.node);
+
+    if (hasErrors(driver->L))
+        return NULL;
+
+    node->metadata.stages |= BIT(ccsFinalize);
+    return node;
+}
+
+static AstNode *executeGenerateCode(CompilerDriver *driver, AstNode *node)
+{
+    csAssert0(nodeIs(node, Metadata));
+    if (!(node->metadata.stages & BIT(ccsFinalize))) {
         logError(driver->L,
                  builtinLoc(),
-                 "cannot generated code for an untyped ast",
+                 "cannot generate code for an un-finalized ast",
                  NULL);
         return NULL;
     }
@@ -160,12 +181,37 @@ static AstNode *executeGenerateCode(CompilerDriver *driver, AstNode *node)
     if (hasErrors(driver->L))
         return NULL;
 
-    node->metadata.stages |= BIT(ccsCodegen);
-    node->metadata.state = NULL;
-    
-    writeFormatState(&state, stdout);
+    bool status = createSourceFile(
+        driver, &state, &node->metadata.filePath, node->metadata.node->flags);
     freeFormatState(&state);
 
+    if (!status) {
+        return NULL;
+    }
+
+    node->metadata.stages |= BIT(ccsCodegen);
+    node->metadata.state = NULL;
+
+    return node;
+}
+
+static AstNode *executeTargetCompile(CompilerDriver *driver, AstNode *node)
+{
+    csAssert0(nodeIs(node, Metadata));
+    if (!(node->metadata.stages & BIT(ccsCodegen))) {
+        logError(driver->L,
+                 builtinLoc(),
+                 "cannot compile generated for an un-generated AST",
+                 NULL);
+        return NULL;
+    }
+
+    if (!hasFlag(node->metadata.node, Main))
+        return node;
+
+    compileCSourceFile(driver, node->metadata.filePath);
+    free((void *)node->metadata.filePath);
+    node->metadata.stages |= BIT(ccsCompile);
     return node;
 }
 
@@ -239,7 +285,9 @@ static CompilerStageExecutor compilerStageExecutors[ccsCOUNT] = {
     [ccsShake] = executeShakeAst,
     [ccsBind] = executeBindAst,
     [ccsTypeCheck] = executeTypeCheckAst,
-    [ccsCodegen] = executeGenerateCode};
+    [ccsFinalize] = executeFinalizeAst,
+    [ccsCodegen] = executeGenerateCode,
+    [ccsCompile] = executeTargetCompile};
 
 AstNode *executeCompilerStage(CompilerDriver *driver,
                               CompilerStage stage,

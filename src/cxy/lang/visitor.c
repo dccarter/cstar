@@ -7,6 +7,8 @@
 
 #define AST_VISIT_ALL_NODES(MODE)                                              \
     switch (node->tag) {                                                       \
+    case astTypeRef:                                                           \
+    case astCCode:                                                             \
     case astNop:                                                               \
     case astStringType:                                                        \
     case astAutoType:                                                          \
@@ -24,6 +26,7 @@
     case astImportEntity:                                                      \
     case astModuleDecl:                                                        \
     case astIdentifier:                                                        \
+    case astDestructorRef:                                                     \
         break;                                                                 \
     case astAttr:                                                              \
         MODE##VisitManyNodes(visitor, node->attr.args);                        \
@@ -111,6 +114,7 @@
         MODE##VisitManyNodes(visitor, node->funcDecl.signature->params);       \
         MODE##Visit(visitor, node->funcDecl.signature->ret);                   \
         MODE##Visit(visitor, node->funcDecl.opaqueParams);                     \
+        MODE##Visit(visitor, node->funcDecl.body);                             \
         break;                                                                 \
     case astMacroDecl:                                                         \
         MODE##VisitManyNodes(visitor, node->macroDecl.params);                 \

@@ -13,6 +13,18 @@
 
 #include "core/alloc.h"
 
+static cstring pushGenericDeclNamespace(TypeTable *types, const AstNode *decl)
+{
+    cstring namespace = types->currentNamespace;
+    AstNode *parent = decl->parentScope;
+    if (!nodeIs(parent, Program) || parent->program.module == NULL) {
+        types->currentNamespace = NULL;
+    }
+    else
+        types->currentNamespace = parent->program.module->moduleDecl.name;
+    return namespace;
+}
+
 static bool inferGenericFunctionTypes(AstVisitor *visitor,
                                       const AstNode *generic,
                                       const Type **paramTypes,
@@ -212,11 +224,14 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
 
     AstNode *substitute = cloneGenericDeclaration(ctx->pool, generic),
             *param = getGenericDeclarationParams(substitute);
+    substitute->flags |= flgGenerated;
+    
     cstring name =
         makeAnonymousVariable(ctx->strings, getDeclarationName(substitute));
     setDeclarationName(substitute, name);
     addTopLevelDeclaration(ctx, substitute);
 
+    cstring namespace = pushGenericDeclNamespace(ctx->types, generic);
     type = goi.s;
     ((Type *)type)->applied.decl = substitute;
     bool isEmptyTuple = false;
@@ -245,6 +260,7 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
     node->pathElement.name = getDeclarationName(substitute);
     node->pathElement.args = NULL;
 
+    ctx->types->currentNamespace = namespace;
     return substitute->type;
 
 resolveGenericDeclError:
