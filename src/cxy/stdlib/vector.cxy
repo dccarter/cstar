@@ -59,15 +59,15 @@ pub struct Vector[T] {
         data.[index] = value
     }
 
-    func `..`() {
-        var i : i64 = 0;
-        return () : (&T, i64)? => {
-            if (i < len)
-                return (&data.[i], i++)
-            else
-                return null
-        }
-    }
+//    func `..`() {
+//        var i : i64 = 0;
+//        return () : (&T, i64)? => {
+//            if (i < len)
+//                return (&data.[i], i++)
+//            else
+//                return null
+//        }
+//    }
 
     const func toString(sb: &StringBuilder) {
         var i = 0;
@@ -78,5 +78,11 @@ pub struct Vector[T] {
             sb << data.[i++]
         }
         sb << ']'
+    }
+
+    const func `str`() {
+        var sb = StringBuilder();
+        toString(&sb);
+        return sb.toString()
     }
 }

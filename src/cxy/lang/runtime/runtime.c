@@ -61,6 +61,18 @@ void *CXY__alloc_slice_(u64 count, u64 size, void (*destructor)(void *))
     return slice;
 }
 
+void *CXY__realloc_slice_(void *ptr,
+                          u64 count,
+                          u64 size,
+                          void (*destructor)(void *))
+{
+    CXY__slice_t *slice = CXY__default_realloc(
+        ptr, sizeof(CXY__slice_t) + (count * size), destructor);
+    slice->len = count;
+    slice->data = slice->p;
+    return slice;
+}
+
 attr(noreturn) attr(format, printf, 1, 2) void cxyAbort(const char *fmt, ...)
 {
     va_list args;

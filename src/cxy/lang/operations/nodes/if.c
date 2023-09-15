@@ -126,6 +126,7 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
         // select otherwise, reclaim if branch
         replaceAstNodeWith(node, node->ifStmt.otherwise);
         while (nodeIs(node, IfStmt) && hasFlag(node, Comptime)) {
+            node->flags &= ~flgComptime;
             if (!evaluate(visitor, node)) {
                 node->tag = astError;
                 return;

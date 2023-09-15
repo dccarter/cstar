@@ -66,9 +66,9 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
 
-    const Type *type = unwrapType(node->type, NULL);
+    const Type *type = unwrapType(node->type, NULL), *raw = stripAll(type);
 
-    switch (type->tag) {
+    switch (raw->tag) {
     case typString:
         if (node->tag == astStringLit) {
             u64 len = strlen(node->stringLiteral.value);
@@ -88,7 +88,7 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
         }
         break;
     case typPrimitive:
-        switch (type->primitive.id) {
+        switch (raw->primitive.id) {
         case prtBool:
             format(ctx->state,
                    "CXY__builtins_string_builder_append_bool(&sb, ",
@@ -123,7 +123,7 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state,
                "CXY__builtins_string_builder_append_cstr1(&sb, ",
                NULL);
-        writeEnumPrefix(ctx, type);
+        writeEnumPrefix(ctx, raw);
         format(ctx->state, "__get_name(", NULL);
         astConstVisit(visitor, node);
         format(ctx->state, "));\n", NULL);
@@ -132,7 +132,7 @@ void stringBuilderAppend(ConstAstVisitor *visitor, const AstNode *node)
     case typTuple:
     case typArray:
     case typStruct:
-        writeTypename(ctx, type);
+        writeTypename(ctx, raw);
         format(ctx->state,
                "__toString({s}",
                (FormatArg[]){{.s = (typeIs(type, Pointer) || isSliceType(type))

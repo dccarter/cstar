@@ -149,9 +149,6 @@ static bool checkMemberFunctions(AstVisitor *visitor,
 
 void generateStructDelete(CodegenContext *context, const Type *type)
 {
-    if (hasFlag(type, ImplementsDelete))
-        return;
-
     FormatState *state = context->state;
     format(state, "\nattr(always_inline)\nstatic void ", NULL);
     writeTypename(context, type);
@@ -161,42 +158,44 @@ void generateStructDelete(CodegenContext *context, const Type *type)
 
     if (hasFlag(type, ImplementsDelete)) {
         writeTypename(context, type);
-        format(state, "__op_delete(this);\n", NULL);
+        format(state, "__op__delete(this);", NULL);
     }
+    else {
+        format(state, "\n", NULL);
+        u64 y = 0;
+        for (u64 i = 0; i < type->tStruct.membersCount; i++) {
+            const StructMember *field = &type->tStruct.members[i];
+            if (typeIs(field->type, Func) || typeIs(field->type, Generic) ||
+                typeIs(field->type, Struct))
+                continue;
 
-    u64 y = 0;
-    for (u64 i = 0; i < type->tStruct.membersCount; i++) {
-        const StructMember *field = &type->tStruct.members[i];
-        if (typeIs(field->type, Func) || typeIs(field->type, Generic) ||
-            typeIs(field->type, Struct))
-            continue;
+            const Type *unwrapped = unwrapType(field->type, NULL);
+            const Type *stripped = stripAll(field->type);
 
-        const Type *unwrapped = unwrapType(field->type, NULL);
-        const Type *stripped = stripAll(field->type);
+            if (typeIs(unwrapped, Pointer) || typeIs(unwrapped, String) ||
+                isSliceType(unwrapped)) {
+                if (y++ != 0)
+                    format(state, "\n", NULL);
 
-        if (typeIs(unwrapped, Pointer) || typeIs(unwrapped, String) ||
-            isSliceType(unwrapped)) {
-            if (y++ != 0)
-                format(state, "\n", NULL);
-
-            format(state,
-                   "CXY__free((void *)this->{s});",
-                   (FormatArg[]){{.s = field->name}});
-        }
-        else if (typeIs(stripped, Struct) || typeIs(stripped, Array) ||
-                 typeIs(stripped, Tuple)) {
-            if (y++ != 0)
-                format(state, "\n", NULL);
-
-            writeTypename(context, stripped);
-            if (typeIs(unwrapped, Pointer))
                 format(state,
-                       "__builtin_destructor(this->{s});",
+                       "CXY__free((void *)this->{s});",
                        (FormatArg[]){{.s = field->name}});
-            else
-                format(state,
-                       "__builtin_destructor(&this->{s});",
-                       (FormatArg[]){{.s = field->name}});
+            }
+            else if (typeIs(stripped, Struct) || typeIs(stripped, Array) ||
+                     typeIs(stripped, Tuple)) {
+                if (y++ != 0)
+                    format(state, "\n", NULL);
+
+                writeTypename(context, stripped);
+                if (typeIs(unwrapped, Pointer))
+                    format(state,
+                           "__builtin_destructor(this->{s});",
+                           (FormatArg[]){{.s = field->name}});
+                else
+                    format(state,
+                           "__builtin_destructor(&this->{s});",
+                           (FormatArg[]){{.s = field->name}});
+            }
         }
     }
 

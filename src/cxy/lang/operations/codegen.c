@@ -533,7 +533,12 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
     CodegenContext context = {.state = node->metadata.state,
                               .types = driver->typeTable,
                               .strPool = &driver->strPool,
-                              .importedFile = hasFlag(program, ImportedModule)};
+                              .program = program,
+                              .importedFile = hasFlag(program, ImportedModule),
+                              .namespace =
+                                  hasFlag(program, ImportedModule)
+                                      ? program->program.module->moduleDecl.name
+                                      : NULL};
 
     // clang-format off
     ConstAstVisitor visitor = makeConstAstVisitor(&context,

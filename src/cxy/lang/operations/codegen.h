@@ -11,6 +11,7 @@ typedef struct {
     FormatState *state;
     TypeTable *types;
     StrPool *strPool;
+    AstNode *program;
     cstring namespace;
     bool importedFile;
 } CodegenContext;

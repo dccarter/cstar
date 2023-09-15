@@ -121,16 +121,12 @@ void generatePath(ConstAstVisitor *visitor, const AstNode *node)
     }
     else {
         const AstNode *elem = node->path.elements;
-        if (hasFlag(elem, AppendNS)) {
-            if (ctx->namespace == NULL && nodeIs(elem->parentScope, Program)) {
-                AstNode *module = elem->parentScope->program.module;
-                if (module) {
-                    writeDeclNamespace(ctx, module->moduleDecl.name, NULL);
-                }
-            }
-            else {
-                writeNamespace(ctx, NULL);
-            }
+        AstNode *resolved = elem->pathElement.resolvesTo;
+        parent = resolved ? resolved->parentScope : NULL;
+        if (nodeIs(parent, Program) && ctx->program != parent) {
+            AstNode *module = parent->program.module;
+            csAssert0(module);
+            writeDeclNamespace(ctx, module->moduleDecl.name, NULL);
         }
 
         for (; elem; elem = elem->next) {

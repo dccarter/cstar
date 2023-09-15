@@ -630,7 +630,7 @@ void bindProgram(AstVisitor *visitor, AstNode *node)
     BindContext *ctx = getAstVisitorContext(visitor);
     AstNode *decl = node->program.decls;
 
-    astVisit(visitor, node->program.top);
+    astVisitManyNodes(visitor, node->program.top);
 
     for (; decl; decl = decl->next) {
         astVisit(visitor, decl);

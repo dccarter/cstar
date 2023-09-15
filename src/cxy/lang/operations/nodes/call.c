@@ -84,6 +84,32 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
                 "before call site",
                 (FormatArg[]){{.s = callee_->name}});
         node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    u64 paramsCount = callee_->func.paramsCount;
+    arg = node->callExpr.args;
+    argsCount = countAstNodes(arg);
+
+    if (paramsCount > argsCount) {
+        // Add default parameters to function call
+        AstNode *param = getNodeAtIndex(
+            callee_->func.decl->funcDecl.signature->params, argsCount);
+        csAssert0(param);
+
+        if (node->callExpr.args == NULL) {
+            node->callExpr.args = copyAstNode(ctx->pool, param->funcParam.def);
+            arg = node->callExpr.args;
+            param = param->next;
+        }
+        else {
+            arg = getLastAstNode(node->callExpr.args);
+        }
+
+        for (; param; param = param->next) {
+            arg->next = copyAstNode(ctx->pool, param->funcParam.def);
+            arg = arg->next;
+        }
     }
 }
 
@@ -223,6 +249,8 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
     }
 
     checkFunctionCallEpilogue(visitor, callee_, node, flags);
+    if (typeIs(node->type, Error))
+        return;
 
     callee_ = node->callExpr.callee->type;
     AstNode *arg = node->callExpr.args;
