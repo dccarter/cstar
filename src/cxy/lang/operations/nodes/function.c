@@ -155,9 +155,9 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, "{<}\n}", NULL);
     }
 
-    if (node->funcDecl.operatorOverload == opDelete) {
-        generateStructDelete(ctx, parent->type);
-    }
+    //    if (node->funcDecl.operatorOverload == opDelete) {
+    //        generateStructDelete(ctx, parent->type);
+    //    }
     format(ctx->state, "\n", NULL);
     ctx->namespace = namespace;
 }

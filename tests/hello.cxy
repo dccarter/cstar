@@ -1,21 +1,6 @@
 import { Vector } from "stdlib/vector.cxy"
 import { println } from "stdlib/io.cxy"
 
-struct User {
-    id: i32
-    func `delete`() {
-        println(f"deleting ${id}")
-    }
-
-    func toString(sb: &StringBuilder) {
-        sb << "User{" << id << "}"
-    }
-}
-
 func main(args:[string]) {
-    var nums = new Vector[User]();
-    for (const x: 0..20) {
-        nums.push(User{id: x:i32})
-    }
-    println(nums)
+    var nums = Vector[i32]();
 }
