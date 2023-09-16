@@ -96,10 +96,12 @@ static void captureSymbol(AstNode *closure,
 
             // capture in current set
             if (prev)
-                prev->inParent = true;
+                prev->flags = flgMember;
 
             prev = addClosureCapture(&parent->closureExpr.captureSet, symbol);
             root->flags |= flgMember;
+            if (nodeIs(symbol, StructField))
+                prev->flags |= flgMember;
         }
         parent = parent->parentScope;
     }

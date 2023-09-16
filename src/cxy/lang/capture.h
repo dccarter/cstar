@@ -7,7 +7,7 @@
 struct Capture {
     const AstNode *node;
     u32 id;
-    u32 inParent;
+    u64 flags;
 };
 
 Capture *addClosureCapture(ClosureCapture *set, const AstNode *node);

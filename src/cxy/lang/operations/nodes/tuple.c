@@ -85,6 +85,7 @@ static void buildStringFormatForMember(CodegenContext *context,
                    (FormatArg[]){{.c = '*'}, {.len = deref}, {.u64 = index}});
             break;
         case prtChar:
+        case prtCChar:
             format(state,
                    "CXY__builtins_string_builder_append_char(sb->sb, "
                    "{cl}this->_{u64});\n",

@@ -90,18 +90,16 @@ static void transformClosureToStructExpr(AstVisitor *visitor,
         AstNode *field = makeAstNode(
             ctx->pool,
             &capture->node->loc,
-            &(AstNode){
-                .tag = astFieldExpr,
-                .type = capture->node->type,
-                .flags = flgPrivate | capture->node->flags,
-                .fieldExpr = {.name = name,
-                              .value = makePath(
-                                  ctx->pool,
-                                  &node->loc,
-                                  name,
-                                  capture->node->flags |
-                                      (capture->inParent ? flgMember : flgNone),
-                                  capture->node->type)}});
+            &(AstNode){.tag = astFieldExpr,
+                       .type = capture->node->type,
+                       .flags = flgPrivate | capture->node->flags,
+                       .fieldExpr = {.name = name,
+                                     .value = makePath(ctx->pool,
+                                                       &node->loc,
+                                                       name,
+                                                       capture->node->flags |
+                                                           capture->flags,
+                                                       capture->node->type)}});
         if (fields == NULL) {
             fields = it = field;
         }

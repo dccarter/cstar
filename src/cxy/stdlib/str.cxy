@@ -89,9 +89,13 @@ pub struct String {
     @inline
     const func toJson(sb: StringBuilder) => sb << '"' << s << '"'
 
-    const func `..`(cb: func(c: wchar) -> void) {
+    const func `..`() {
         var i = 0;
-        while (i < len)
-            cb(s.[i++])
+        return () : (&wchar, i32)? => {
+            if (i < len)
+                return (&s.[i], i++)
+            else
+                return null
+        }
     }
 }
