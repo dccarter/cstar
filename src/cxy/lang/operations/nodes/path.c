@@ -271,6 +271,11 @@ void evalPath(AstVisitor *visitor, AstNode *node)
         case typInfo:
             type = symbol->type->info.target;
             goto retry;
+        case typTuple:
+            node->tag = astTypeRef;
+            node->flags = type->flags;
+            node->type = type;
+            break;
         default:
             csAssert0(false);
         }

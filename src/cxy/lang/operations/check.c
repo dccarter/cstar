@@ -706,7 +706,12 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
     initEvalVisitor(&evaluator, &evalContext);
     context.evaluator = &evaluator;
 
+    context.types->currentNamespace =
+        node->program.module ? node->program.module->moduleDecl.name : NULL;
+
     astVisit(&visitor, node);
+
+    context.types->currentNamespace = NULL;
 
     return node;
 }

@@ -118,6 +118,8 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
     }
 
     to = _to, from = _from;
+    if (to == from)
+        return true;
 
     if (typeIs(to, Pointer) && typeIs(from, Pointer)) {
         if (typeIs(to->pointer.pointed, Void))
@@ -202,7 +204,7 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
         return true;
 
     case typFunc: {
-        if (hasFlag(to, FunctionPtr) && stripPointer(from)->tag == typNull)
+        if (stripPointer(from)->tag == typNull)
             return true;
 
         if (!isTypeAssignableFrom(to->func.retType, from->func.retType))

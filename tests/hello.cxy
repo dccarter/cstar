@@ -1,23 +1,9 @@
 import { String } from "stdlib/str.cxy"
 import { println } from "stdlib/io.cxy"
 
-// declare a native function. Tell cxy that there is a type calle `FILE` in C world
-pub native type FILE;
-
-// define a C function. Tell cxy that there is a function called `fgets` in
-// C would with the given signature
-## fgets: func(str: &char, n: i32, stream: &FILE) -> &char
-
-// or declare a C function
-pub native func putchar(chr: wchar) : i32;
-
-// Tell cxy that `stdin` of type `FILE *` is defined in C
-## stdin : &FILE
+func say(name: String?) => f"Hello ${name}"
 
 func main(args:[string]) {
-    println("Whats your number?");
-    putchar('😉')
-    var line = new [char, 1024];
-    fgets(line: &char, 1024, stdin);
-    println(line: string)
+    var s = say(null);
+    println(s)
 }

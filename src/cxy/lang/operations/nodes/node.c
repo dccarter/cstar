@@ -121,22 +121,18 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *callee = node->callExpr.callee;
+    u64 flags = (callee->flags & ~flgTopLevelDecl);
 
     // turn S(...) => ({ var tmp = S{}; tmp.init(...); tmp; })
 
     cstring name = makeAnonymousVariable(ctx->strings, "_new_tmp");
     // S{}
-    AstNode *structExpr = makeStructExpr(ctx->pool,
-                                         &callee->loc,
-                                         callee->flags,
-                                         callee,
-                                         NULL,
-                                         NULL,
-                                         callee->type);
+    AstNode *structExpr = makeStructExpr(
+        ctx->pool, &callee->loc, flags, callee, NULL, NULL, callee->type);
     // var name = S{}
     AstNode *varDecl = makeVarDecl(ctx->pool,
                                    &callee->loc,
-                                   callee->flags | flgImmediatelyReturned,
+                                   flags | flgImmediatelyReturned,
                                    name,
                                    structExpr,
                                    NULL,
@@ -145,15 +141,14 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
     AstNode *newCallee = makePathWithElements(
         ctx->pool,
         &callee->loc,
-        callee->flags,
+        flags,
         makeResolvedPathElement(
             ctx->pool,
             &callee->loc,
             name,
-            callee->flags,
+            flags,
             varDecl,
-            makePathElement(
-                ctx->pool, &callee->loc, S_New, callee->flags, NULL, NULL),
+            makePathElement(ctx->pool, &callee->loc, S_New, flags, NULL, NULL),
             NULL),
         NULL);
 

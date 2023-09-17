@@ -152,6 +152,20 @@ pub native func memset(
     CXY__builtins_assert
 ): func(cond: bool, fmt: &const char, line: u64, col: u64) -> void
 
+
+## pub CXY__builtins_alloc : func(
+    typ: auto,
+    size: u64,
+    dctor: func(ptr: &void) -> void
+) -> &void
+
+@inline
+pub func alloc[T](count: u64 = 1) => CXY__builtins_alloc(#T, count, destructor!(#T)) : &T
+
+## pub(
+    dealloc => CXY__builtins_dealloc
+) : func(ptr: &void) -> void
+
 pub native func CXY__builtins_alloc_slice(
     typ: auto,
     size: u64,
@@ -166,7 +180,7 @@ pub func allocSlice[T](
 pub native func CXY__builtins_realloc_slice(
     typ: auto,
     ptr: &void,
-    size: u64,
+    count: u64,
     dctor: func(ptr: &void) -> void
 ) : &void
 
@@ -329,7 +343,7 @@ pub struct StringBuilder {
              appendChar(val)
         else #if ((#U).isEnum)
             appendInt(<i64>val)
-        else
+        else #if ((#U).isStruct)
             val.toString(this)
         return this
     }
@@ -376,6 +390,14 @@ struct Optional[T] {
     /* Dereference an optional, i.e get the underlying value. */
     @inline
     const func `deref`() => value
+
+    /* Convert optional value to string */
+    const func toString(sb: &StringBuilder) {
+        if (valid)
+            sb << value
+        else
+            sb << "null"
+    }
 }
 
 /* Creates a valid optional value */

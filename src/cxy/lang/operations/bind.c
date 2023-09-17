@@ -459,6 +459,7 @@ void bindStructDecl(AstVisitor *visitor, AstNode *node)
             astVisit(visitor, member);
     }
 
+    defineDeclaration(ctx, node->structDecl.name, node);
     member = node->structDecl.members;
     for (; member; member = member->next) {
         // visit unvisited functions or macros

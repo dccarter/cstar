@@ -340,7 +340,7 @@ const Type *stripPointer(const Type *type)
 
 const Type *stripAll(const Type *type)
 {
-    while (true) {
+    while (type) {
         switch (resolveType(type)->tag) {
         case typPointer:
             type = stripAll(type->pointer.pointed);

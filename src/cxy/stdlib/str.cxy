@@ -17,11 +17,11 @@ pub struct String {
     @inline
     func `delete`() {
         if (s != null)
-            __builtin_dealloc(s)
+            dealloc(s)
         s = null
     }
 
-    func compare(other: &const String) {
+    func compare(other: const This) {
         if (len != other.len)
             return <i32>(len - other.len)
 
@@ -35,44 +35,44 @@ pub struct String {
 
     func clear() {
         if (s != null)
-            __builtin_dealloc(s)
+            dealloc(s)
         s = ""
     }
 
-    func append(other: &const String) unsafe {
+    func append(other: const This) unsafe {
         var newLen = len + other.len;
-        var str = <&i8>__builtin_alloc(#i8, newLen + 1, null);
-        memcpy(str, cstr!(s), len)
-        memcpy(ptroff!(str + len), cstr!(other.s), other.len);
+        var str = CXY__builtins_alloc(#i8, newLen + 1, null) : &i8;
+        memcpy(str, s: &const char, len)
+        memcpy(ptroff!(str + len), other.s: &const char, other.len);
         *(ptroff!(str + newLen)) = <i8>'\0';
 
         return String(s, newLen);
     }
 
     @inline
-    func `+`(other: &const String) {
+    func `+`(other: const This) {
         var tmp = String(s, len);
         tmp.append(other)
         return tmp
     }
 
     @inline
-    func `==`(other: &const String) => compare(other) == 0
+    func `==`(other: const This) => compare(other) == 0
 
     @inline
-    func `!=`(other: &const String) => compare(other) != 0
+    func `!=`(other: const This) => compare(other) != 0
 
     @inline
-    func `<`(other: &const String) => compare(other) < 0
+    func `<`(other: const This) => compare(other) < 0
 
     @inline
-    func `>`(other: &const String) => compare(other) > 0
+    func `>`(other: const This) => compare(other) > 0
 
     @inline
-    func `<=`(other: &const String) => compare(other) <= 0
+    func `<=`(other: const This) => compare(other) <= 0
 
     @inline
-    func `>=`(other: &const String) => compare(other) >= 0
+    func `>=`(other: const This) => compare(other) >= 0
 
     @inline
     func `str`() => s
@@ -91,9 +91,9 @@ pub struct String {
 
     const func `..`() {
         var i = 0;
-        return () : (&wchar, i32)? => {
+        return () : (char, i32)? => {
             if (i < len)
-                return (&s.[i], i++)
+                return (s.[i], i++)
             else
                 return null
         }
