@@ -256,6 +256,15 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
     AstNode *arg = node->callExpr.args;
     for (u64 i = 0; arg; arg = arg->next, i++) {
         const Type *type = callee_->func.params[i], *expr = arg->type;
+        if (!evalExplicitConstruction(visitor, type, arg)) {
+            logError(ctx->L,
+                     &arg->loc,
+                     "incompatible argument types, expecting '{t}' but got "
+                     "'{t}'",
+                     (FormatArg[]){{.t = type}, {.t = type}});
+            continue;
+        }
+
         if (!hasFlag(type, Optional) || hasFlag(expr, Optional))
             continue;
 

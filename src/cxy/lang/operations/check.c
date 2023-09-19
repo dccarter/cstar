@@ -694,6 +694,7 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astClosureExpr] = checkClosureExpr,
         [astArrayExpr] = checkArrayExpr,
         [astMacroCallExpr] = checkMacroCallExpr,
+        [astTernaryExpr] = checkTernaryExpr
     }, .fallback = astVisitFallbackVisitAll, .dispatch = withSavedStack);
     // clang-format on
 

@@ -221,16 +221,6 @@ static void generateCCode(ConstAstVisitor *visitor, const AstNode *node)
                (FormatArg[]){{.s = node->cCode.what->stringLiteral.value}});
 }
 
-void generateTernaryExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
-    CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    astConstVisit(visitor, node->ternaryExpr.cond);
-    format(ctx->state, "? ", NULL);
-    astConstVisit(visitor, node->ternaryExpr.body);
-    format(ctx->state, ": ", NULL);
-    astConstVisit(visitor, node->ternaryExpr.otherwise);
-}
-
 void generateWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);

@@ -64,6 +64,9 @@ bool transformOptionalNone(AstVisitor *visitor,
 bool isExplicitConstructableFrom(TypingContext *ctx,
                                  const Type *type,
                                  const Type *from);
+bool evalExplicitConstruction(AstVisitor *visitor,
+                              const Type *type,
+                              AstNode *node);
 
 AstNode *makeAddressOf(TypingContext *ctx, AstNode *node);
 
@@ -118,6 +121,7 @@ void checkArrayExpr(AstVisitor *visitor, AstNode *node);
 void checkCallExpr(AstVisitor *visitor, AstNode *node);
 void checkTupleExpr(AstVisitor *visitor, AstNode *node);
 void checkMemberExpr(AstVisitor *visitor, AstNode *node);
+void checkTernaryExpr(AstVisitor *visitor, AstNode *node);
 
 void checkForStmt(AstVisitor *visitor, AstNode *node);
 void checkCaseStmt(AstVisitor *visitor, AstNode *node);

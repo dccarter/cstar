@@ -46,7 +46,12 @@ pub struct String {
         memcpy(ptroff!(str + len), other.s: &const char, other.len);
         *(ptroff!(str + newLen)) = <i8>'\0';
 
-        return String(s, newLen);
+        return String(str:string, newLen);
+    }
+
+    func append(s: string) unsafe {
+        const str = String(s);
+        return append(&str)
     }
 
     @inline
@@ -78,10 +83,10 @@ pub struct String {
     func `str`() => s
 
     @inline
-    func toString(dst: &StringBuilder) => dst.appendString(s)
+    const func toString(dst: &StringBuilder) => dst.appendString(s)
 
     @inline
-    func hash() => hashStringSize(hashInit(), s, len)
+    const func hash() => hashStringSize(hashInit(), s, len)
 
     @inline
     const func `[]`(idx: i32) => s[idx]

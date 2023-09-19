@@ -172,6 +172,12 @@ pub native func CXY__builtins_alloc_slice(
     dctor: func(ptr: &void) -> void
 ) : &void
 
+## pub CXY__builtins_memset_slice: func(
+    typ: auto,
+    ptr: &void,
+    size: u64
+) -> void
+
 @inline
 pub func allocSlice[T](
     count: u64
@@ -255,6 +261,9 @@ pub func hash[T](val: T) {
         return val.hash()
     }
 }
+
+pub native func CXY__hash_next_prime(i: u64) : u64;
+pub native func CXY__hash_mod_prime(i: u64, p: u64) : u64;
 
 pub native type CXY__builtins_string_builder_t;
 

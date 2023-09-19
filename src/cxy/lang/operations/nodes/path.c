@@ -123,10 +123,10 @@ void generatePath(ConstAstVisitor *visitor, const AstNode *node)
         const AstNode *elem = node->path.elements;
         AstNode *resolved = elem->pathElement.resolvesTo;
         parent = resolved ? resolved->parentScope : NULL;
-        if (nodeIs(parent, Program) && ctx->program != parent) {
+        if (nodeIs(parent, Program)) {
             AstNode *module = parent->program.module;
-            csAssert0(module);
-            writeDeclNamespace(ctx, module->moduleDecl.name, NULL);
+            if (module)
+                writeDeclNamespace(ctx, module->moduleDecl.name, NULL);
         }
 
         for (; elem; elem = elem->next) {
@@ -262,6 +262,7 @@ void evalPath(AstVisitor *visitor, AstNode *node)
 
             node->tag = astRef;
             node->reference.target = decl;
+            node->type = type;
             break;
         }
         case typPointer:

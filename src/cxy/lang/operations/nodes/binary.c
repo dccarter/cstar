@@ -32,6 +32,12 @@ static inline bool isSupportedBinaryOperand(AstNode *node)
     return isLiteralExpr(node) || isTypeExpr(node);
 }
 
+static inline bool isArgumentTypeThis(const AstNode *node)
+{
+    return nodeIs(node, Path) &&
+           node->path.elements->pathElement.name == S_This;
+}
+
 bool verifyBinaryExprOperand(EvalContext *ctx, AstNode *node)
 {
     AstNode *lhs = node->binaryExpr.lhs;
@@ -479,6 +485,16 @@ static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
     if (typeIs(right, Error)) {
         node->type = ERROR_TYPE(ctx);
         return;
+    }
+
+    const AstNode *argument =
+        (nodeIs(overload->decl, GenericDecl) ? overload->decl->genericDecl.decl
+                                             : overload->decl)
+            ->funcDecl.signature->params->funcParam.type;
+
+    if (isArgumentTypeThis(argument) &&
+        !typeIs(unwrapType(right, NULL), Pointer)) {
+        node->binaryExpr.rhs = makeAddressOf(ctx, node->binaryExpr.rhs);
     }
 
     transformToMemberCallExpr(

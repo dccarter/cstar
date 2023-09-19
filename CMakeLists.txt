@@ -144,6 +144,7 @@ set(CXY_OPERATIONS_SOURCES
         src/cxy/lang/operations/nodes/path.c
         src/cxy/lang/operations/nodes/struct.c
         src/cxy/lang/operations/nodes/string.c
+        src/cxy/lang/operations/nodes/ternary.c
         src/cxy/lang/operations/nodes/tuple.c
         src/cxy/lang/operations/nodes/type.c
         src/cxy/lang/operations/nodes/switch.c

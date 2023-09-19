@@ -298,6 +298,12 @@ const Type *matchOverloadedFunction(TypingContext *ctx,
                     score--;
                     continue;
                 }
+                compatible =
+                    isExplicitConstructableFrom(ctx, paramType, argTypes[i]);
+                if (compatible) {
+                    score--;
+                    continue;
+                }
                 break;
             }
         }

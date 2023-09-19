@@ -496,6 +496,54 @@ bool isExplicitConstructableFrom(TypingContext *ctx,
     return true;
 }
 
+bool evalExplicitConstruction(AstVisitor *visitor,
+                              const Type *type,
+                              AstNode *node)
+{
+    const Type *source = node->type ?: checkType(visitor, node);
+    TypingContext *ctx = getAstVisitorContext(visitor);
+
+    if (isTypeAssignableFrom(type, source))
+        return true;
+
+    if (!typeIs(type, Struct))
+        return false;
+
+    const StructMember *member = findStructMember(type, S_New);
+    if (member == NULL)
+        return false;
+
+    const Type *constructor =
+        matchOverloadedFunction(ctx,
+                                member->type,
+                                (const Type *[]){node->type},
+                                1,
+                                &node->loc,
+                                flgNone);
+    if (constructor == NULL ||
+        findAttribute(constructor->func.decl, "explicit"))
+        return false;
+
+    if (constructor->func.paramsCount != 1)
+        return false;
+
+    const Type *param = constructor->func.params[0];
+    if (!evalExplicitConstruction(visitor, param, node))
+        return false;
+
+    AstNode *args = copyAstNode(ctx->pool, node);
+
+    node->tag = astCallExpr;
+    node->type = NULL;
+    node->flags = flgNone;
+    node->callExpr.callee =
+        makePath(ctx->pool, &node->loc, type->name, flgNone, type);
+    node->callExpr.args = args;
+
+    type = transformToConstructCallExpr(visitor, node);
+    return !typeIs(type, Error);
+}
+
 void checkStructExpr(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
