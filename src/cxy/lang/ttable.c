@@ -318,6 +318,9 @@ const Type *resolveType(const Type *type)
         case typInfo:
             type = resolveType(type->info.target);
             break;
+        case typThis:
+            type = resolveType(type->this.that);
+            break;
         default:
             return type;
         }
@@ -352,6 +355,7 @@ const Type *stripAll(const Type *type)
             return type;
         }
     }
+    return NULL;
 }
 
 u64 pointerLevels(const Type *type)
@@ -598,6 +602,7 @@ const Type *unwrapType(const Type *type, u64 *flags)
     if (flags)
         *flags = tmp | type->flags;
 
+    *flags &= flgTypeApplicable;
     return type;
 }
 

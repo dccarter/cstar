@@ -726,10 +726,10 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
     if (typeIs(node->type, Error))
         goto checkStructMembersError;
 
-    node->type =
+    ((Type *)this)->this.that =
         makeStruct(ctx->types,
                    &(Type){.tag = typStruct,
-                           .flags = node->flags,
+                           .flags = node->flags & flgTypeApplicable,
                            .name = node->structDecl.name,
                            .tStruct = {.base = base,
                                        .members = members,
@@ -737,16 +737,15 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
                                        .interfaces = implements,
                                        .interfacesCount = implementsCount,
                                        .decl = node}});
-
-    ((Type *)this)->this.that = node->type;
+    node->type = this;
 
     ctx->currentStruct = node;
     if (checkMemberFunctions(visitor, node, members)) {
         node->type = replaceStructType(
             ctx->types,
-            node->type,
+            this->this.that,
             &(Type){.tag = typStruct,
-                    .flags = node->flags,
+                    .flags = node->flags & flgTypeApplicable,
                     .name = node->structDecl.name,
                     .tStruct = {.base = base,
                                 .members = members,
@@ -756,6 +755,9 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
                                 .decl = node}});
         ((Type *)this)->this.that = node->type;
     }
+    else
+        node->type = this->this.that;
+
     ctx->currentStruct = NULL;
 
     for (u64 i = 0; i < implementsCount; i++) {
