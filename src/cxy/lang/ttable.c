@@ -599,10 +599,11 @@ const Type *unwrapType(const Type *type, u64 *flags)
         type = type->wrapped.target;
     }
 
-    if (flags)
+    if (flags) {
         *flags = tmp | type->flags;
-
-    *flags &= flgTypeApplicable;
+        *flags &= flgTypeApplicable;
+    }
+    
     return type;
 }
 
