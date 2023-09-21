@@ -110,6 +110,10 @@
     f(As,      "as")                \
     f(From,    "from")              \
     f(Unsafe,  "unsafe")            \
+    f(Interface, "interface")       \
+    f(This,      "this")            \
+    f(ThisClass,  "This")           \
+    f(Super,     "super")           \
     f(DebugBreak, "__DebugBreak")   \
     PRIM_TYPE_LIST(f)
 

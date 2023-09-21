@@ -13,3 +13,8 @@
 #include "driver.h"
 
 void compileCSourceFile(CompilerDriver *driver, const char *sourceFile);
+bool createSourceFile(CompilerDriver *driver,
+                      const FormatState *code,
+                      cstring *filePath,
+                      u64 flags);
+bool generateAllBuiltinSources(CompilerDriver *driver);

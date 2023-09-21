@@ -1,0 +1,3 @@
+module net
+
+import { FileDescriptor } from "stdlib/io.cxy"

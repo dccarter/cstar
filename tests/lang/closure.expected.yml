@@ -1,0 +1,183 @@
+Program:
+decls:
+- StructDecl:
+  flags: (Closure)
+  name: closure_0
+  members:
+  - FuncDecl:
+    overload: op__call
+    name: op__call
+    body:
+      IntegerLit:
+      value: 1
+- StructDecl:
+  flags: (Closure)
+  name: closure_1
+  members:
+  - FuncDecl:
+    overload: op__call
+    name: op__call
+    params:
+    - FuncParam:
+      name: name
+      index: 0
+      paramType:
+        StringType:
+        flags: (TypeAst)
+    ret:
+      TypeRef:
+    body:
+      BlockStmt:
+      stmts:
+      - ReturnStmt:
+        expr:
+          StringExpr:
+          parts:
+          - StringLit:
+            value: "Hello "
+          - Path:
+            elements:
+            - PathElem:
+              name: name
+            isType: false
+          - StringLit:
+            value: ""
+- StructDecl:
+  flags: (Closure)
+  name: closure_2
+  members:
+  - StructField:
+    flags: (Private)
+    name: b
+    type:
+      TypeRef:
+    index: 0
+  - StructField:
+    flags: (Private)
+    name: x
+    type:
+      TypeRef:
+    index: 1
+  - FuncDecl:
+    overload: op__call
+    name: op__call
+    body:
+      StringExpr:
+      parts:
+      - StringLit:
+        value: ""
+      - Path:
+        elements:
+        - PathElem:
+          name: b
+        isType: false
+      - StringLit:
+        value: " -> "
+      - Path:
+        elements:
+        - PathElem:
+          name: x
+        isType: false
+      - StringLit:
+        value: ""
+- FuncDecl:
+  flags: (TopLevelDecl)
+  name: main
+  params:
+  - FuncParam:
+    name: args
+    index: 0
+    paramType:
+      ArrayType:
+      flags: (TypeAst)
+      element:
+        StringType:
+        flags: (TypeAst)
+  body:
+    BlockStmt:
+    stmts:
+    - VarDecl:
+      flags: (Const)
+      names:
+      - Identifier:
+        value: one
+      init:
+        StructExpr:
+        left:
+          Path:
+          elements:
+          - PathElem:
+            name: closure_0
+          isType: false
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          Path:
+          flags: (Const)
+          elements:
+          - PathElem:
+            name: one
+          isType: false
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          GroupExpr:
+          expr:
+            StructExpr:
+            left:
+              Path:
+              elements:
+              - PathElem:
+                name: closure_1
+              isType: false
+        args:
+        - StringLit:
+          value: "User"
+    - VarDecl:
+      names:
+      - Identifier:
+        value: x
+      init:
+        IntegerLit:
+        value: 100
+    - VarDecl:
+      names:
+      - Identifier:
+        value: b
+      init:
+        StringLit:
+        value: "Hello"
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          GroupExpr:
+          expr:
+            StructExpr:
+            left:
+              Path:
+              elements:
+              - PathElem:
+                name: closure_2
+              isType: false
+            members:
+            - FieldExpr:
+              flags: (Private)
+              name: b
+              value:
+                Path:
+                elements:
+                - PathElem:
+                  name: b
+                isType: false
+            - FieldExpr:
+              flags: (Private)
+              name: x
+              value:
+                Path:
+                elements:
+                - PathElem:
+                  name: x
+                isType: false

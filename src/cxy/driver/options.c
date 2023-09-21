@@ -1,15 +1,21 @@
+//
+
 #include "driver/options.h"
+#include "driver/stages.h"
+
 #include "core/args.h"
 #include "core/log.h"
 
+#include <math.h>
 #include <stdio.h>
 
 Command(dev,
         "development mode build, useful when developing the compiler",
         Positionals(),
-        Opt(Name("no-type-check"),
-            Help("disable type checking, ignore if --print-ast is not set"),
-            Def("false")),
+        Str(Name("last-stage"),
+            Help("the last compiler stage to execute, e.g "
+                 "'Codegen'"),
+            Def("Codegen")),
         Opt(Name("print-ast"),
             Help("prints the AST to standard output or given output file after "
                  "compilation"),
@@ -17,6 +23,15 @@ Command(dev,
         Opt(Name("clean-ast"),
             Help("Prints the AST exactly as generated without any comments"),
             Def("false")),
+        Opt(Name("with-location"),
+            Help("Include the node location on the dumped AST"),
+            Def("false")),
+        Opt(Name("without-attrs"),
+            Help("Exclude node attributes when dumping AST"),
+            Def("false")),
+        Opt(Name("with-named-enums"),
+            Help("Use named enums on the when dumping AST"),
+            Def("true")),
         Str(Name("output"),
             Sf('o'),
             Help("path to file to generate code or print AST to (default is "
@@ -46,10 +61,13 @@ Command(build,
     f(build)
 
 #define DEV_CMD_LAYOUT(f, ...)                                                 \
-    f(noTypeCheck, Local, Option, 0, ##__VA_ARGS__)                            \
-    f(printAst, Local, Option, 1, ##__VA_ARGS__)                               \
-    f(cleanAst, Local, Option, 2, ##__VA_ARGS__)                               \
-    f(output, Local, String, 3, ##__VA_ARGS__)
+    f(dev.lastStage.str, Local, String, 0, ##__VA_ARGS__)                      \
+    f(dev.printAst, Local, Option, 1, ##__VA_ARGS__)                           \
+    f(dev.cleanAst, Local, Option, 2, ##__VA_ARGS__)                           \
+    f(dev.withLocation, Local, Option, 3, ##__VA_ARGS__)                       \
+    f(dev.withoutAttrs, Local, Option, 4, ##__VA_ARGS__)                       \
+    f(dev.withNamedEnums, Local, Option, 5, ##__VA_ARGS__)                     \
+    f(output, Local, String, 6, ##__VA_ARGS__)
 
 #define BUILD_CMD_LAYOUT(f, ...)                                               \
     f(output, Local, String, 0, ##__VA_ARGS__)                                 \
@@ -58,7 +76,7 @@ Command(build,
 
 // clang-format on
 
-bool parse_options(int *argc, char **argv, Options *options, Log *log)
+bool parseCommandLineOptions(int *argc, char **argv, Options *options, Log *log)
 {
     bool status = true;
     int file_count = 0;
@@ -73,6 +91,12 @@ bool parse_options(int *argc, char **argv, Options *options, Log *log)
                 "Set the maximum number of errors incurred before the compiler "
                 "aborts"),
             Def("10")),
+        Str(Name("warnings"),
+            Help("Sets a list of enabled/disabled compiler warning (eg "
+                 "'~Warning' disables a flag, 'Warn1|~Warn2' combines flag "
+                 "configurations))"),
+            Def("None")),
+        Opt(Name("warnings-all"), Help("enables all compiler warnings")),
         Opt(Name("no-color"),
             Help("disable colored output when formatting outputs")));
 
@@ -91,10 +115,24 @@ bool parse_options(int *argc, char **argv, Options *options, Log *log)
     CmdCommand *cmd = parser.cmds[selected];
 
     log->maxErrors = getGlobalInt(cmd, 0);
-    log->state->ignoreStyle = getGlobalOption(cmd, 1);
+    log->state->ignoreStyle = getGlobalOption(cmd, 3);
+
+    if (getGlobalOption(cmd, 2))
+        log->enabledWarnings.num = wrnAll;
+    log->enabledWarnings.str = getGlobalString(cmd, 1);
+    log->enabledWarnings.num |=
+        parseWarningLevels(log, log->enabledWarnings.str);
+    if (log->enabledWarnings.num & wrn_Error)
+        return false;
 
     if (cmd->id == CMD_dev) {
         UnloadCmd(cmd, options, DEV_CMD_LAYOUT);
+        options->dev.lastStage.num =
+            parseCompilerStages(log, options->dev.lastStage.str);
+        if (options->dev.lastStage.num == ccsInvalid) {
+            return false;
+        }
+        options->dev.lastStage.num = (u64)log2((f64)options->dev.lastStage.num);
     }
     else if (cmd->id == CMD_build) {
         options->cmd = cmdBuild;

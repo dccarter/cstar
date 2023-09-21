@@ -13,14 +13,14 @@ int main(int argc, char **argv)
     Log log = newLog(&state);
     bool status = true;
 
-    if (!parse_options(&argc, argv, &driver.options, &log)) {
+    if (!parseCommandLineOptions(&argc, argv, &driver.options, &log)) {
         status = false;
         goto exit;
     }
     initCompilerDriver(&driver, &log);
 
     for (int i = 1; i < argc && status; ++i)
-        status &= compileSource(argv[i], &driver);
+        status &= compileFile(argv[i], &driver);
 
 exit:
     writeFormatState(&state, stderr);

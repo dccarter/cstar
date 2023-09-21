@@ -13,4 +13,10 @@ func main(args: [string]) {
     var x = 100;
     var b = "Hello";
     (() => f"${b} -> ${x}")()
+
+    // nested capture
+    const f = () => {
+        //
+        const g = () => f"${b} -> ${x}"
+    }
 }

@@ -74,6 +74,7 @@ typedef enum {
     typEnum,
     typModule,
     typStruct,
+    typInterface,
     typGeneric,
     typApplied,
     typWrapped
@@ -84,15 +85,14 @@ typedef struct TypeTable TypeTable;
 typedef struct Env Env;
 typedef struct AstNode AstNode;
 
-typedef struct StructField {
+typedef struct StructMember {
     const char *name;
     const Type *type;
     const AstNode *decl;
-} StructField;
+} StructMember, ModuleMember;
 
 typedef struct GenericParam {
     const char *name;
-    const AstNode *decl;
     u32 inferIndex;
 } GenericParam;
 
@@ -164,36 +164,53 @@ typedef struct Type {
         } tuple;
 
         struct {
-            u32 paramsCount;
-            u32 capturedNamesCount;
-            u32 defaultValuesCount;
+            u16 paramsCount;
+            u16 capturedNamesCount;
+            u16 defaultValuesCount;
             const Type *retType;
             const Type **params;
             const char **captureNames;
             AstNode *decl;
-            Env *env;
         } func;
 
         struct {
             const Type *base;
-            Env *env;
+            cstring *names;
+            u64 namesCount;
         } container;
+
+        struct {
+            ModuleMember *members;
+            ModuleMember **sortedMembers;
+            cstring path;
+            u32 membersCount;
+        } module;
 
         struct {
             const Type *base;
             EnumOption *options;
-            u64 count;
+            EnumOption **sortedOptions;
+            u64 optionsCount;
             AstNode *decl;
-            Env *env;
         } tEnum;
 
         struct {
             const Type *base;
-            StructField *fields;
-            u64 fieldsCount;
+            const Type **interfaces;
+            StructMember *members;
+            StructMember **sortedMembers;
+            u32 interfacesCount;
+            u32 membersCount;
             AstNode *decl;
-            Env *env;
+            AstNode *generatedFrom;
         } tStruct;
+
+        struct {
+            StructMember *members;
+            StructMember **sortedMembers;
+            u64 membersCount;
+            AstNode *decl;
+        } tInterface;
 
         struct {
             GenericParam *params;
@@ -206,14 +223,21 @@ typedef struct Type {
             const Type **args;
             u32 argsCount;
             u64 totalArgsCount;
-            const Type *generated;
             const Type *from;
+            AstNode *decl;
         } applied;
     };
 } Type;
 
+typedef Pair(i64, u64) IntMinMax;
+
 #define CYX_TYPE_BODY_SIZE (sizeof(Type) - sizeof(((Type *)0)->_head))
-#define typeIs(T, TAG) ((T) && (T)->tag == typ##TAG)
+static inline bool typeIs_(const Type *type, TTag tag)
+{
+    return type && type->tag == tag;
+}
+
+#define typeIs(T, TAG) typeIs_((T), typ##TAG)
 
 bool isTypeAssignableFrom(const Type *to, const Type *from);
 bool isTypeCastAssignable(const Type *to, const Type *from);
@@ -229,6 +253,9 @@ bool isCharacterType(const Type *type);
 bool isArrayType(const Type *type);
 bool isPointerType(const Type *type);
 
+const char *getPrimitiveTypeName(PrtId tag);
+u64 getPrimitiveTypeSize(PrtId tag);
+
 void printType(FormatState *state, const Type *type);
 
 static inline bool isSliceType(const Type *type)
@@ -236,7 +263,43 @@ static inline bool isSliceType(const Type *type)
     return typeIs(type, Array) && type->array.len == UINT64_MAX;
 }
 
-static inline bool isTruthyType(TypeTable *table, const Type *type)
+const IntMinMax getIntegerTypeMinMax(const Type *id);
+
+const StructMember *findStructMember(const Type *type, cstring member);
+
+static inline const Type *findStructMemberType(const Type *type, cstring member)
 {
-    return isIntegralType(type) || isFloatType(type) || typeIs(type, Pointer);
+    const StructMember *found = findStructMember(type, member);
+    return found ? found->type : NULL;
 }
+
+bool implementsInterface(const Type *type, const Type *inf);
+
+const StructMember *findInterfaceMember(const Type *type, cstring member);
+
+static inline const Type *findInterfaceMemberType(const Type *type,
+                                                  cstring member)
+{
+    const StructMember *found = findInterfaceMember(type, member);
+    return found ? found->type : NULL;
+}
+
+const EnumOption *findEnumOption(const Type *type, cstring member);
+
+static inline const Type *findEnumOptionType(const Type *type, cstring member)
+{
+    const EnumOption *found = findEnumOption(type, member);
+    return found ? type : NULL;
+}
+
+const ModuleMember *findModuleMember(const Type *type, cstring member);
+
+static inline const Type *findModuleMemberType(const Type *type, cstring member)
+{
+    const ModuleMember *found = findModuleMember(type, member);
+    return found ? found->type : NULL;
+}
+
+bool isTruthyType(const Type *type);
+const Type *getOptionalType();
+const Type *getOptionalTargetType(const Type *type);

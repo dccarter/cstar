@@ -1,0 +1,403 @@
+Program:
+decls:
+- TypeDecl:
+  flags: (TopLevelDecl)
+  name: Tup1
+  aliased:
+    TupleType:
+    flags: (TypeAst)
+    members:
+    - PrimitiveType:
+      flags: (TypeAst)
+      name: bool
+    - PrimitiveType:
+      flags: (TypeAst)
+      name: wchar
+- TypeDecl:
+  flags: (TopLevelDecl)
+  name: Tup2
+  aliased:
+    TupleType:
+    flags: (TypeAst)
+    members:
+    - PrimitiveType:
+      flags: (TypeAst)
+      name: wchar
+    - TupleType:
+      flags: (TypeAst)
+      members:
+      - PrimitiveType:
+        flags: (TypeAst)
+        name: f32
+      - StringType:
+        flags: (TypeAst)
+      - Path:
+        flags: (TopLevelDecl)
+        elements:
+        - PathElem:
+          name: Tup1
+        isType: true
+- FuncDecl:
+  flags: (TopLevelDecl)
+  name: swap
+  params:
+  - FuncParam:
+    name: tup
+    index: 0
+    paramType:
+      TupleType:
+      flags: (TypeAst)
+      members:
+      - StringType:
+        flags: (TypeAst)
+      - PrimitiveType:
+        flags: (TypeAst)
+        name: i32
+  ret:
+    TupleType:
+    flags: (TypeAst)
+    members:
+    - PrimitiveType:
+      flags: (TypeAst)
+      name: i32
+    - StringType:
+      flags: (TypeAst)
+  body:
+    BlockStmt:
+    stmts:
+    - ReturnStmt:
+      expr:
+        TupleExpr:
+        members:
+        - MemberExpr:
+          target:
+            Path:
+            elements:
+            - PathElem:
+              name: tup
+            isType: false
+          member:
+            IntegerLit:
+            value: 1
+        - MemberExpr:
+          target:
+            Path:
+            elements:
+            - PathElem:
+              name: tup
+            isType: false
+          member:
+            IntegerLit:
+            value: 0
+- FuncDecl:
+  flags: (TopLevelDecl)
+  name: main
+  params:
+  - FuncParam:
+    name: args
+    index: 0
+    paramType:
+      ArrayType:
+      flags: (TypeAst)
+      element:
+        StringType:
+        flags: (TypeAst)
+  body:
+    BlockStmt:
+    stmts:
+    - ExprStmt:
+      expr:
+        TupleExpr:
+        members:
+        - BoolLit:
+          value: true
+        - IntegerLit:
+          value: 10
+    - ExprStmt:
+      expr:
+        TupleExpr:
+        members:
+        - CharLit:
+          value: 'a'
+        - BoolLit:
+          value: true
+        - IntegerLit:
+          value: 10
+        - StringLit:
+          value: "Hello"
+    - ExprStmt:
+      expr:
+        TupleExpr:
+        members:
+        - CharLit:
+          value: 'a'
+        - TupleExpr:
+          members:
+          - StringLit:
+            value: "World"
+          - IntegerLit:
+            value: 32
+          - TupleExpr:
+            members:
+            - BoolLit:
+              value: true
+            - FloatLit:
+              value: 5.996000
+    - VarDecl:
+      names:
+      - Identifier:
+        value: x
+      varType:
+        TupleType:
+        flags: (TypeAst)
+        members:
+        - PrimitiveType:
+          flags: (TypeAst)
+          name: bool
+        - PrimitiveType:
+          flags: (TypeAst)
+          name: i32
+      init:
+        TupleExpr:
+        members:
+        - BoolLit:
+          value: true
+        - IntegerLit:
+          value: 10
+    - ExprStmt:
+      expr:
+        AssignExpr:
+        op: =
+        lhs:
+          Path:
+          elements:
+          - PathElem:
+            name: x
+          isType: false
+        rhs:
+          TupleExpr:
+          members:
+          - BoolLit:
+            value: false
+          - IntegerLit:
+            value: 20
+    - VarDecl:
+      names:
+      - Identifier:
+        value: y
+      varType:
+        Path:
+        flags: (TopLevelDecl)
+        elements:
+        - PathElem:
+          name: Tup2
+        isType: true
+      init:
+        TupleExpr:
+        members:
+        - CharLit:
+          value: 'a'
+        - TupleExpr:
+          members:
+          - FloatLit:
+            value: 0.600000
+          - StringLit:
+            value: "Hello"
+          - TupleExpr:
+            members:
+            - BoolLit:
+              value: true
+            - CharLit:
+              value: 'A'
+    - ExprStmt:
+      expr:
+        AssignExpr:
+        op: =
+        lhs:
+          MemberExpr:
+          target:
+            Path:
+            elements:
+            - PathElem:
+              name: x
+            isType: false
+          member:
+            IntegerLit:
+            value: 0
+        rhs:
+          BoolLit:
+          value: false
+    - ExprStmt:
+      expr:
+        AssignExpr:
+        op: =
+        lhs:
+          MemberExpr:
+          target:
+            Path:
+            elements:
+            - PathElem:
+              name: x
+            isType: false
+          member:
+            IntegerLit:
+            value: 1
+        rhs:
+          IntegerLit:
+          value: 5
+    - ExprStmt:
+      expr:
+        AssignExpr:
+        op: =
+        lhs:
+          MemberExpr:
+          target:
+            MemberExpr:
+            target:
+              MemberExpr:
+              target:
+                Path:
+                elements:
+                - PathElem:
+                  name: y
+                isType: false
+              member:
+                IntegerLit:
+                value: 1
+            member:
+              IntegerLit:
+              value: 2
+          member:
+            IntegerLit:
+            value: 1
+        rhs:
+          CharLit:
+          value: 'B'
+    - ExprStmt:
+      expr:
+        AssignExpr:
+        op: =
+        lhs:
+          MemberExpr:
+          target:
+            MemberExpr:
+            target:
+              Path:
+              elements:
+              - PathElem:
+                name: y
+              isType: false
+            member:
+              IntegerLit:
+              value: 1
+          member:
+            IntegerLit:
+            value: 0
+        rhs:
+          FloatLit:
+          value: 0.006000
+    - VarDecl:
+      names:
+      - Identifier:
+        value: z
+      varType:
+        TupleType:
+        flags: (TypeAst)
+        members:
+        - PrimitiveType:
+          flags: (TypeAst)
+          name: i32
+        - StringType:
+          flags: (TypeAst)
+      init:
+        CallExpr:
+        callee:
+          Path:
+          flags: (TopLevelDecl)
+          elements:
+          - PathElem:
+            name: swap
+          isType: false
+        args:
+        - TupleExpr:
+          members:
+          - StringLit:
+            value: "Hello"
+          - IntegerLit:
+            value: 10
+    - VarDecl:
+      names:
+      - Identifier:
+        value: f
+      varType:
+        PointerType:
+        flags: (TypeAst)
+        pointed:
+          TupleType:
+          flags: (TypeAst)
+          members:
+          - PrimitiveType:
+            flags: (TypeAst)
+            name: i32
+          - StringType:
+            flags: (TypeAst)
+      init:
+        AddressOf:
+        op: 0
+        isPrefix: false
+        lhs:
+          Path:
+          elements:
+          - PathElem:
+            name: z
+          isType: false
+    - VarDecl:
+      names:
+      - Identifier:
+        value: k
+      varType:
+        TupleType:
+        flags: (TypeAst)
+        members:
+        - StringType:
+          flags: (TypeAst)
+        - PrimitiveType:
+          flags: (TypeAst)
+          name: i32
+      init:
+        TupleExpr:
+        members:
+        - MemberExpr:
+          target:
+            Path:
+            elements:
+            - PathElem:
+              name: f
+            isType: false
+          member:
+            IntegerLit:
+            value: 1
+        - MemberExpr:
+          target:
+            Path:
+            elements:
+            - PathElem:
+              name: f
+            isType: false
+          member:
+            IntegerLit:
+            value: 0
+    - VarDecl:
+      names:
+      - Identifier:
+        value: g
+      init:
+        UnaryExpr:
+        op: 23
+        isPrefix: true
+        lhs:
+          Path:
+          elements:
+          - PathElem:
+            name: f
+          isType: false

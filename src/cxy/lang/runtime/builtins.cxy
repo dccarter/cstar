@@ -1,0 +1,418 @@
+/**
+ * Builtin cxy functions, types and constants
+ */
+
+// Unix Error Codes
+ ##pub (
+    errno,
+    EPERM,
+    ENOENT,
+    ESRCH,
+    EINTR,
+    EIO,
+    ENXIO,
+    E2BIG,
+    ENOEXEC,
+    EBADF,
+    ECHILD,
+    EAGAIN,
+    ENOMEM,
+    EACCES,
+    EFAULT,
+    ENOTBLK,
+    EBUSY,
+    EEXIST,
+    EXDEV,
+    ENODEV,
+    ENOTDIR,
+    EISDIR,
+    EINVAL,
+    ENFILE,
+    EMFILE,
+    ENOTTY,
+    ETXTBSY,
+    EFBIG,
+    ENOSPC,
+    ESPIPE,
+    EROFS,
+    EMLINK,
+    EPIPE,
+    EDOM,
+    ERANGE,
+    ENOMSG,
+    EIDRM,
+    ECHRNG,
+    EL2NSYNC,
+    EL3HLT,
+    EL3RST,
+    ELNRNG,
+    EUNATCH,
+    ENOCSI,
+    EL2HLT,
+    EDEADLK,
+    ENOLCK,
+    EBADE,
+    EBADR,
+    EXFULL,
+    ENOANO,
+    EBADRQC,
+    EBADSLT,
+    EDEADLOCK,
+    EBFONT,
+    ENOSTR,
+    ENODATA,
+    ETIME,
+    ENOSR,
+    ENONET,
+    ENOPKG,
+    EREMOTE,
+    ENOLINK,
+    EADV,
+    ESRMNT,
+    ECOMM,
+    EPROTO,
+    EMULTIHOP,
+    ELBIN,
+    EDOTDOT,
+    EBADMSG,
+    EFTYPE,
+    ENOTUNIQ,
+    EBADFD,
+    EREMCHG,
+    ELIBACC,
+    ELIBBAD,
+    ELIBSCN,
+    ELIBMAX,
+    ELIBEXEC,
+    ENOSYS,
+    ENMFILE,
+    ENOTEMPTY,
+    ENAMETOOLONG,
+    ELOOP,
+    EOPNOTSUPP,
+    EPFNOSUPPORT,
+    ECONNRESET,
+    ENOBUFS,
+    EAFNOSUPPORT,
+    EPROTOTYPE,
+    ENOTSOCK,
+    ENOPROTOOPT,
+    ESHUTDOWN,
+    ECONNREFUSED,
+    EADDRINUSE,
+    ECONNABORTED,
+    ENETUNREACH,
+    ENETDOWN,
+    ETIMEDOUT,
+    EHOSTDOWN,
+    EHOSTUNREACH,
+    EINPROGRESS,
+    EALREADY,
+    EDESTADDRREQ,
+    EMSGSIZE,
+    EPROTONOSUPPORT,
+    ESOCKTNOSUPPORT,
+    EADDRNOTAVAIL,
+    ENETRESET,
+    EISCONN,
+    ENOTCONN,
+    ETOOMANYREFS,
+    EPROCLIM,
+    EUSERS,
+    EDQUOT,
+    ESTALE,
+    ENOTSUP,
+    ENOMEDIUM,
+    ENOSHARE,
+    ECASECLASH,
+    EILSEQ,
+    EOVERFLOW,
+ ) : i32
+
+## pub (
+    memcpy,
+    memmove
+) : func(dst: &void, src: &const void, len: u64) -> &void
+
+pub native func memset(
+    dst: &void,
+    ch: i32,
+    len: u64
+) : &void;
+
+## pub(
+    strlen
+): func(str: &const char) -> u64
+
+## pub(
+    CXY__builtins_sizeof
+): func(it: auto) -> u64
+
+## pub(
+    CXY__builtins_assert
+): func(cond: bool, fmt: &const char, line: u64, col: u64) -> void
+
+
+## pub CXY__builtins_alloc : func(
+    typ: auto,
+    size: u64,
+    dctor: func(ptr: &void) -> void
+) -> &void
+
+@inline
+pub func alloc[T](count: u64 = 1) => CXY__builtins_alloc(#T, count, destructor!(#T)) : &T
+
+## pub(
+    dealloc => CXY__builtins_dealloc
+) : func(ptr: &void) -> void
+
+pub native func CXY__builtins_alloc_slice(
+    typ: auto,
+    size: u64,
+    dctor: func(ptr: &void) -> void
+) : &void
+
+## pub CXY__builtins_memset_slice: func(
+    typ: auto,
+    ptr: &void,
+    size: u64
+) -> void
+
+@inline
+pub func allocSlice[T](
+    count: u64
+) => CXY__builtins_alloc_slice(#[T], count, destructor!(#[T])) : [T]
+
+pub native func CXY__builtins_realloc_slice(
+    typ: auto,
+    ptr: &void,
+    count: u64,
+    dctor: func(ptr: &void) -> void
+) : &void
+
+@inline
+pub func reallocSlice[T](
+    data: [T], count: u64
+) => CXY__builtins_realloc_slice(#[T], data, count, destructor!(#[T])) : [T];
+
+type HashCode = u32
+
+## pub(hashInit => CXY__hash_fnv1a_init):  func() -> u32
+
+## pub (
+    hashPointer => CXY__hash_fnv1a_pointer
+): func(init: HashCode, ptr: &const void) -> u32
+
+## pub(
+    hashUint8 => CXY__hash_fnv1a_uint8
+): func(init: HashCode, val: u8) -> u32
+
+## pub(
+    hashUint16 => CXY__hash_fnv1a_uint16
+): func(init: HashCode, val: u16) -> u32
+
+## pub(
+    hashUint32 => CXY__hash_fnv1a_uint32
+): func(init: HashCode, val: u32) -> u32
+
+## pub(
+    hashUint64 => CXY__hash_fnv1a_uint64
+): func(init: HashCode, val: u64) -> u32
+
+## pub(
+    hashBytes => CXY__hash_fnv1a_bytes
+): func(init: HashCode, str: &const void, size: u64) -> u32
+
+## pub(
+    CXY__hash_fnv1a_string
+): func(init: HashCode, str: &const char) -> u32
+
+@inline
+pub func hashString(
+    init: HashCode,
+    str: string
+) => CXY__hash_fnv1a_string(init, str !: &const char)
+
+@inline
+pub func hashStringSize(
+    init: HashCode,
+    str: string,
+    len: u64
+) => hashBytes(init, str !: &const char, len)
+
+pub func hash[T](val: T) {
+    #if (#T == #string) {
+        return hashString(hashInit(), val)
+    }
+    else #if (#T == #i8 || #T == #u8) {
+        return hashUint8(hashInit(), <u8>val)
+    }
+    else #if (#T == #i16 || #T == #u16) {
+        return hashUint16(hashInit(), <u16>val)
+    }
+    else #if (#T == #i32 || #T == #u32) {
+        return hashUint32(hashInit(), <u32>val)
+    }
+    else #if (#T == #i64 || #T == #u64) {
+        return hashUint64(hashInit(), <u64>val)
+    }
+    else {
+        // this will fail if T does not implement hash function
+        return val.hash()
+    }
+}
+
+pub native func CXY__hash_next_prime(i: u64) : u64;
+pub native func CXY__hash_mod_prime(i: u64, p: u64) : u64;
+
+pub native type CXY__builtins_string_builder_t;
+
+pub native func CXY__builtins_string_builder_new(): &CXY__builtins_string_builder_t;
+
+pub native func CXY__builtins_string_builder_delete(
+    self: &CXY__builtins_string_builder_t
+) : void;
+
+pub native func CXY__builtins_string_builder_release(
+    self: &CXY__builtins_string_builder_t
+) : &char;
+
+pub native func CXY__builtins_string_builder_append_cstr0(
+    self: &CXY__builtins_string_builder_t,
+    str:  &const char,
+    len:  u64
+) : void;
+
+pub native func CXY__builtins_string_builder_append_cstr1(
+    self: &CXY__builtins_string_builder_t,
+    str:  &const char,
+) : void;
+
+pub native func CXY__builtins_string_builder_append_int(
+    self: &CXY__builtins_string_builder_t,
+    num: i64
+) : void;
+
+pub native func CXY__builtins_string_builder_append_float(
+    self: &CXY__builtins_string_builder_t,
+    num: f64
+) : void;
+
+pub native func CXY__builtins_string_builder_append_char(
+    self: &CXY__builtins_string_builder_t,
+    ch: wchar
+): void;
+
+pub native func CXY__builtins_string_builder_append_bool(
+    self: &CXY__builtins_string_builder_t,
+    val: bool
+): void;
+
+pub struct StringBuilder {
+    - sb: &CXY__builtins_string_builder_t
+
+    @inline
+    func `new`() : void {  sb = CXY__builtins_string_builder_new() }
+
+    @inline
+    func `delete`() => CXY__builtins_string_builder_delete(sb)
+
+    @inline
+    func appendString(str: string) =>
+        CXY__builtins_string_builder_append_cstr1(sb, str !: &const char)
+
+    @inline
+    func appendInt(num: i64) =>
+        CXY__builtins_string_builder_append_int(sb, num)
+
+    @inline
+    func appendFloat(num: f64) =>
+        CXY__builtins_string_builder_append_float(sb, num)
+
+    @inline
+    func appendChar(ch: wchar) =>
+        CXY__builtins_string_builder_append_char(sb, ch)
+
+
+    @inline
+    func appendBool(val: bool) =>
+        CXY__builtins_string_builder_append_bool(sb, val)
+
+    @inline
+    func `<<`[U](val: U) {
+        #if ((#U).isString)
+            appendString(val)
+        else #if ((#U).isInteger)
+            appendInt(<i64>val)
+        else #if ((#U).isFloat)
+            appendFloat(val)
+        else #if ((#U).isBoolean)
+            appendBool(val)
+        else #if ((#U) == #wchar)
+             appendChar(val)
+        else #if ((#U).isEnum)
+            appendInt(<i64>val)
+        else #if ((#U).isStruct)
+            val.toString(this)
+        return this
+    }
+
+    @inline
+    func toString() {
+        var ret = CXY__builtins_string_builder_release(sb);
+        return ret !: string
+    }
+
+    @inline
+    func toString(dst: This) {
+         dst.appendString(this.toString())
+    }
+
+    @inline
+    func `str`() => this.toString()
+}
+
+/**
+ * Builtin optional type
+ *
+ * Corresponds to type T?
+ */
+struct Optional[T] {
+    - valid: bool = false;
+    - value: T
+
+    /* Creates an invalid optional type */
+    @inline
+    func `new`() { valid = false }
+
+    /* Creates a valid optional type */
+    @inline
+    func `new`(value: T) {
+        this.value = value
+        valid = true
+    }
+
+    /* Checks whether an optional is valid or not */
+    @inline
+    const func `!!`() => valid
+
+    /* Dereference an optional, i.e get the underlying value. */
+    @inline
+    const func `deref`() => value
+
+    /* Convert optional value to string */
+    const func toString(sb: &StringBuilder) {
+        if (valid)
+            sb << value
+        else
+            sb << "null"
+    }
+}
+
+/* Creates a valid optional value */
+@inline
+func Some[T](value: T) => Optional[T](value)
+
+/* Creates an invalid optional value */
+@inline
+func None[T]() => Optional[T]()

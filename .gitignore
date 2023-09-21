@@ -80,3 +80,4 @@ generated.dSYM
 
 # IDE files
 .idea
+./hello.cxy

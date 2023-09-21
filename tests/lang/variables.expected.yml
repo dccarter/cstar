@@ -1,0 +1,247 @@
+Program:
+decls:
+- VarDecl:
+  flags: (TopLevelDecl)
+  names:
+  - Identifier:
+    value: X
+  init:
+    IntegerLit:
+    value: 10
+- VarDecl:
+  flags: (Const|TopLevelDecl)
+  names:
+  - Identifier:
+    value: Y
+  init:
+    TupleExpr:
+    members:
+    - StringLit:
+      value: "Hello"
+    - StringLit:
+      value: "World"
+- StructDecl:
+  flags: (Closure)
+  name: closure_1
+  members:
+  - FuncDecl:
+    overload: op__call
+    name: op__call
+    body:
+      TupleExpr:
+      members:
+      - IntegerLit:
+        value: 20
+      - IntegerLit:
+        value: 20
+- FuncDecl:
+  flags: (TopLevelDecl)
+  name: main
+  params:
+  - FuncParam:
+    name: args
+    index: 0
+    paramType:
+      ArrayType:
+      flags: (TypeAst)
+      element:
+        StringType:
+        flags: (TypeAst)
+  body:
+    BlockStmt:
+    stmts:
+    - VarDecl:
+      names:
+      - Identifier:
+        value: x
+    - VarDecl:
+      names:
+      - Identifier:
+        value: y
+      init:
+        IntegerLit:
+        value: 10
+    - VarDecl:
+      flags: (Const)
+      names:
+      - Identifier:
+        value: k
+      init:
+        Path:
+        elements:
+        - PathElem:
+          name: y
+        isType: false
+    - ExprStmt:
+      expr:
+        AssignExpr:
+        op: =
+        lhs:
+          Path:
+          elements:
+          - PathElem:
+            name: x
+          isType: false
+        rhs:
+          Path:
+          flags: (Const)
+          elements:
+          - PathElem:
+            name: k
+          isType: false
+    - BlockStmt:
+      stmts:
+      - VarDecl:
+        names:
+        - Identifier:
+          value: k
+        init:
+          IntegerLit:
+          value: 10
+      - VarDecl:
+        names:
+        - Identifier:
+          value: y
+        init:
+          Path:
+          elements:
+          - PathElem:
+            name: x
+          isType: false
+    - BlockStmt:
+      stmts:
+      - VarDecl:
+        names:
+        - Identifier:
+          value: x
+        varType:
+          PrimitiveType:
+          flags: (TypeAst)
+          name: i32
+      - VarDecl:
+        names:
+        - Identifier:
+          value: y
+        varType:
+          TupleType:
+          flags: (TypeAst)
+          members:
+          - PrimitiveType:
+            flags: (TypeAst)
+            name: bool
+          - PrimitiveType:
+            flags: (TypeAst)
+            name: i32
+        init:
+          TupleExpr:
+          members:
+          - BoolLit:
+            value: true
+          - IntegerLit:
+            value: 20
+    - BlockStmt:
+      stmts:
+      - VarDecl:
+        names:
+        - Identifier:
+          value: x
+        init:
+          IntegerLit:
+          value: 20
+      - VarDecl:
+        names:
+        - Identifier:
+          value: y
+        init:
+          BoolLit:
+          value: true
+      - VarDecl:
+        names:
+        - Identifier:
+          value: m
+        varType:
+          PrimitiveType:
+          flags: (TypeAst)
+          name: i32
+      - VarDecl:
+        names:
+        - Identifier:
+          value: n
+        varType:
+          PrimitiveType:
+          flags: (TypeAst)
+          name: i32
+      - VarDecl:
+        names:
+        - Identifier:
+          value: a
+        init:
+          IntegerLit:
+          value: 20
+      - VarDecl:
+        names:
+        - Identifier:
+          value: b
+        init:
+          CharLit:
+          value: ' '
+      - VarDecl:
+        names:
+        - Identifier:
+          value: d
+        init:
+          IntegerLit:
+          value: 20
+      - VarDecl:
+        names:
+        - Identifier:
+          value: e
+        init:
+          CharLit:
+          value: ' '
+      - VarDecl:
+        names:
+        - Identifier:
+          value: __gen_var_0
+        init:
+          CallExpr:
+          callee:
+            GroupExpr:
+            expr:
+              StructExpr:
+              left:
+                Path:
+                elements:
+                - PathElem:
+                  name: closure_1
+                isType: false
+      - VarDecl:
+        names:
+        - Identifier:
+          value: f
+        init:
+          MemberExpr:
+          target:
+            Path:
+            elements:
+            - PathElem:
+              name: __gen_var_0
+            isType: false
+          member:
+            IntegerLit:
+            value: 0
+      - VarDecl:
+        names:
+        - Identifier:
+          value: g
+        init:
+          MemberExpr:
+          target:
+            Path:
+            elements:
+            - PathElem:
+              name: __gen_var_0
+            isType: false
+          member:
+            IntegerLit:
+            value: 1

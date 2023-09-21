@@ -3,6 +3,7 @@
 #include "core/utils.h"
 
 #include <assert.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -15,6 +16,89 @@ typedef struct {
     const char *fileName;
     FILE *file;
 } FileEntry;
+
+typedef struct {
+    const char *name;
+    size_t len;
+    WarningId value;
+} Warning;
+
+static bool compareWarningIds(const void *left, const void *right)
+{
+    return ((Warning *)left)->len == ((Warning *)right)->len &&
+           !memcmp(((Warning *)left)->name,
+                   ((Warning *)right)->name,
+                   ((Warning *)left)->len);
+}
+
+static void registerWarnings(HashTable *warnings)
+{
+#define f(name, IDX)                                                           \
+    insertInHashTable(warnings,                                                \
+                      &(Warning){#name, strlen(#name), (u64)1 << IDX},         \
+                      hashStr(hashInit(), #name),                              \
+                      sizeof(Warning),                                         \
+                      compareWarningIds);
+    CXY_COMPILER_WARNINGS(f)
+#undef f
+    insertInHashTable(warnings,
+                      &(Warning){"All", 3, wrnAll},
+                      hashStr(hashInit(), "All"),
+                      sizeof(Warning),
+                      compareWarningIds);
+    insertInHashTable(warnings,
+                      &(Warning){"None", 4, wrnNone},
+                      hashStr(hashInit(), "None"),
+                      sizeof(Warning),
+                      compareWarningIds);
+}
+
+static WarningId parseNextWarningId(Log *L, char *start, char *end)
+{
+    static bool initialized = false;
+    static HashTable warningIds;
+    if (!initialized) {
+        initialized = true;
+        warningIds = newHashTable(sizeof(Warning));
+        registerWarnings(&warningIds);
+    }
+    char *p = start;
+    while (isspace(*p))
+        p++;
+    if (*p == '0') {
+        logError(L,
+                 NULL,
+                 "parsing warning failed, expecting a warning name (got '{s}')",
+                 (FormatArg[]){{.s = start}});
+        return wrn_Error;
+    }
+
+    u64 len;
+    if (end) {
+        while (isspace(*end))
+            end--;
+        end[1] = '\0';
+        len = end - p;
+    }
+    else
+        len = strlen(p);
+
+    Warning *warning = findInHashTable(&warningIds,
+                                       &(Warning){.name = p, .len = len},
+                                       hashRawBytes(hashInit(), p, len),
+                                       sizeof(Warning),
+                                       compareWarningIds);
+
+    if (warning == NULL) {
+        logError(L,
+                 NULL,
+                 "parsing warning failed, unknown warning name ('{s}')",
+                 (FormatArg[]){{.s = start}});
+        return wrn_Error;
+    }
+
+    return warning->value;
+}
 
 Log newLog(FormatState *state)
 {
@@ -277,6 +361,57 @@ void logWarning(Log *log,
                 const FormatArg *args)
 {
     printMessage(log, LOG_WARNING, fileLoc, format_str, args);
+}
+
+void logWarningWithId(Log *log,
+                      u8 warningId,
+                      const FileLoc *fileLoc,
+                      const char *format_str,
+                      const FormatArg *args)
+{
+    if (log->enabledWarnings.num & (1 << warningId))
+        printMessage(log, LOG_WARNING, fileLoc, format_str, args);
+}
+
+u64 parseWarningLevels(Log *L, cstring str)
+{
+    WarningId warnings = wrnNone;
+    char *copy = strdup(str);
+    char *start = copy, *end = strchr(str, '|');
+
+    while (start) {
+        char *last = end;
+        if (last) {
+            *last = '\0';
+            last--;
+            end++;
+        }
+
+        while (isspace(*start))
+            start++;
+        bool flip = start[0] == '~';
+        if (flip)
+            start++;
+
+        u64 warning = parseNextWarningId(L, start, last);
+        if (warning == wrn_Error || warning == wrnNone || warning == wrnAll)
+            return warning;
+
+        if (flip)
+            warnings &= ~warning;
+        else
+            warnings |= warning;
+
+        while (end && *end == '|')
+            end++;
+
+        start = end;
+        end = last ? strchr(last, '|') : NULL;
+    }
+
+    free(copy);
+
+    return warnings;
 }
 
 void logNote(Log *log,

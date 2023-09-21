@@ -1,24 +1,15 @@
-import { println, STDIN, FileDescriptor } from "stdlib/io.cxy"
+import { HashMap } from "stdlib/map.cxy"
+import { println } from "stdlib/io.cxy"
+import { String } from "stdlib/str.cxy"
 
-async func hello() {
-    var fd = FileDescriptor(STDIN);
-    var data: [char, 256];
-
-    fd.nonBlocking()
-    const n = fd.asyncRead(data, 256);
-    data.[n] = '\0'
-
-    println(10)
-    println(data !: string)
-}
-
-func many(...b: i32) {
-}
-
-func main(args: [string]) {
-//    @go hello()
-//    asleep(5000);
-    many()
-    many(10, 20, 30)
-    println(10)
+func main(args:[string]) {
+    var names = HashMap[String, i32]();
+    names.["age"] = 19;
+    const age = names.["age"];
+    println(names)
+    println(age)
+    var str = String();
+    str = str.append("hello")
+    str = str.append(" ")
+    println(str)
 }

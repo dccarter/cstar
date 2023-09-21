@@ -11,6 +11,7 @@
 #define fileno _fileno
 #include <io.h>
 #else
+#include <string.h>
 #include <unistd.h>
 #endif
 
@@ -169,6 +170,11 @@ int binarySearch(const void *arr,
             upper = mid - 1;
     }
     return -1;
+}
+
+int compareStrings(const void *lhs, const void *rhs)
+{
+    return strcmp((cstring)lhs, (cstring)rhs);
 }
 
 void cxyAbort(const char *fmt, ...)

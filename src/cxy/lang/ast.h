@@ -5,221 +5,116 @@
 #include "core/format.h"
 #include "core/log.h"
 #include "core/mempool.h"
+#include "lang/operator.h"
 #include "lang/token.h"
+
+struct StrPool;
 
 // clang-format off
 
-#define AST_ARITH_EXPR_LIST(f)                     \
-    f(Add, 3, Plus, "+", "add")                    \
-    f(Sub, 3, Minus,"-", "sub")                   \
-    f(Mul, 2, Mult, "*", "mul")                    \
-    f(Div, 2, Div,  "/", "div")                   \
-    f(Mod, 2, Mod,  "%", "rem")
-
-#define AST_BIT_EXPR_LIST(f)                        \
-    f(BAnd, 7, BAnd, "&", "and")                    \
-    f(BOr,  9, BOr,  "|", "or")                     \
-    f(BXor, 8, BXor, "^", "xor")
-
-#define AST_SHIFT_EXPR_LIST(f)         \
-    f(Shl, 4, Shl, "<<", "lshift")     \
-    f(Shr, 4, Shr, ">>", "rshift")
-
-#define AST_CMP_EXPR_LIST(f)                   \
-    f(Eq,  6, Equal,        "==", "eq")        \
-    f(Ne,  6, NotEqual,     "!=", "neq")       \
-    f(Gt,  5, Greater,      ">", "gt")         \
-    f(Lt,  5, Less,         "<", "lt")         \
-    f(Geq, 5, GreaterEqual, ">=", "geq")       \
-    f(Leq, 5, LessEqual,    "<=", "leq")
-
-#define AST_LOGIC_EXPR_LIST(f)                \
-    f(LAnd, 10, LAnd, "&&", "land")             \
-    f(LOr,  11, LOr,  "||", "lor")
-
-#define AST_BINARY_EXPR_LIST(f)           \
-    f(Range, 13,DotDot, "..", "range")    \
-    AST_ARITH_EXPR_LIST(f)                \
-    AST_BIT_EXPR_LIST(f)                  \
-    AST_SHIFT_EXPR_LIST(f)                \
-    AST_CMP_EXPR_LIST(f)                  \
-    AST_LOGIC_EXPR_LIST(f)
-
-#define AST_ASSIGN_EXPR_LIST(f)          \
-    f(Assign, 0, Assign, "",  "assign")  \
-    AST_ARITH_EXPR_LIST(f)               \
-    AST_BIT_EXPR_LIST(f)                 \
-    AST_SHIFT_EXPR_LIST(f)
-
-#define AST_PREFIX_EXPR_LIST(f)         \
-    f(PreDec, MinusMinus, "--")         \
-    f(PreInc, PlusPlus, "++")           \
-    f(AddrOf, BAnd, "&")                \
-    f(Move,   LAnd, "&&")               \
-    f(Deref,  Mult, "*")                \
-    f(Minus,  Minus, "-")               \
-    f(Plus,   Plus, "+")                \
-    f(Not,    LNot, "!")                \
-    f(Compl,  BNot, "~")                \
-    f(Spread, Elipsis, "...")           \
-    f(New,    New,  "new")              \
-    f(Await,  Await, "await")           \
-    f(Delete, Delete,"delete")          \
-
-#define AST_POSTFIX_EXPR_LIST(f)        \
-    f(PostDec, MinusMinus, "--")        \
-    f(PostInc, PlusPlus,  "++")
-
-#define AST_UNARY_EXPR_LIST(f)                                                 \
-    AST_PREFIX_EXPR_LIST(f)                                                    \
-    AST_POSTFIX_EXPR_LIST(f)
-
-typedef enum {
-#define f(name, ...) op##name,
-    AST_BINARY_EXPR_LIST(f)
-    AST_UNARY_EXPR_LIST(f)
-#undef f
-#define f(name, ...) op##name##Equal,
-    opAssign,
-    AST_ASSIGN_EXPR_LIST(f)
-#undef f
-    opCallOverload,
-    opIndexOverload,
-    opIndexAssignOverload,
-    opStringOverload,
-    opTruthy,
-    opInvalid
-} Operator;
+#define CXY_LANG_AST_TAGS(f) \
+    f(Error)                \
+    f(Nop)                  \
+    f(Ref)                  \
+    f(Deleted)              \
+    f(ComptimeOnly)         \
+    f(Program)              \
+    f(Metadata)             \
+    f(CCode)                \
+    f(Define)               \
+    f(Attr)                 \
+    f(PathElem)             \
+    f(Path)                 \
+    f(GenericParam)         \
+    f(GenericDecl)          \
+    f(Identifier)           \
+    f(ImportEntity)         \
+    f(DestructorRef)        \
+    f(TypeRef)              \
+    f(VoidType)             \
+    f(AutoType)             \
+    f(StringType)           \
+    f(TupleType)            \
+    f(ArrayType)            \
+    f(PointerType)          \
+    f(FuncType)             \
+    f(PrimitiveType)        \
+    f(OptionalType)         \
+    f(Literals)             \
+    f(NullLit)              \
+    f(BoolLit)              \
+    f(CharLit)              \
+    f(IntegerLit)           \
+    f(FloatLit)             \
+    f(StringLit)            \
+    f(Declarations)         \
+    f(FuncParam)            \
+    f(FuncDecl)             \
+    f(MacroDecl)            \
+    f(VarDecl)              \
+    f(TypeDecl)             \
+    f(UnionDecl)            \
+    f(EnumOption)           \
+    f(EnumDecl)             \
+    f(StructField)          \
+    f(StructDecl)           \
+    f(InterfaceDecl)        \
+    f(ModuleDecl)           \
+    f(ImportDecl)           \
+    f(Expressions)          \
+    f(GroupExpr)            \
+    f(UnaryExpr)            \
+    f(AddressOf)            \
+    f(BinaryExpr)           \
+    f(AssignExpr)           \
+    f(TernaryExpr)          \
+    f(StmtExpr)             \
+    f(StringExpr)           \
+    f(TypedExpr)            \
+    f(CastExpr)             \
+    f(CallExpr)             \
+    f(MacroCallExpr)        \
+    f(ClosureExpr)          \
+    f(ArrayExpr)            \
+    f(IndexExpr)            \
+    f(TupleExpr)            \
+    f(FieldExpr)            \
+    f(StructExpr)           \
+    f(MemberExpr)           \
+    f(RangeExpr)            \
+    f(NewExpr)              \
+    f(SpreadExpr)           \
+    f(Statements)           \
+    f(ExprStmt)             \
+    f(BreakStmt)            \
+    f(ContinueStmt)         \
+    f(DeferStmt)            \
+    f(ReturnStmt)           \
+    f(BlockStmt)            \
+    f(IfStmt)               \
+    f(ForStmt)              \
+    f(WhileStmt)            \
+    f(SwitchStmt)           \
+    f(CaseStmt)
 
 // clang-format on
 
 typedef enum {
-    astError,
-    astNop,
-    astComptimeOnly,
-    astProgram,
-    astCCode,
-    astDefine,
-    astAttr,
-    astPathElem,
-    astPath,
-    astGenericParam,
-    astGenericDecl,
-    astIdentifier,
-    astImportEntity,
-    astDestructorRef,
-    /* Types */
-    astVoidType,
-    astAutoType,
-    astStringType,
-    astTupleType,
-    astArrayType,
-    astPointerType,
-    astFuncType,
-    astPrimitiveType,
-    astOptionalType,
-    /* Literals */
-    astNullLit,
-    astBoolLit,
-    astCharLit,
-    astIntegerLit,
-    astFloatLit,
-    astStringLit,
-    /* Declarations */
-    astFuncParam,
-    astFuncDecl,
-    astMacroDecl,
-    astVarDecl,
-    astTypeDecl,
-    astUnionDecl,
-    astEnumOption,
-    astEnumDecl,
-    astStructField,
-    astStructDecl,
-    astModuleDecl,
-    astImportDecl,
-    /* Expressions */
-    astGroupExpr,
-    astUnaryExpr,
-    astAddressOf,
-    astBinaryExpr,
-    astAssignExpr,
-    astTernaryExpr,
-    astStmtExpr,
-    astStringExpr,
-    astTypedExpr,
-    astCastExpr,
-    astCallExpr,
-    astMacroCallExpr,
-    astClosureExpr,
-    astArrayExpr,
-    astIndexExpr,
-    astTupleExpr,
-    astFieldExpr,
-    astStructExpr,
-    astMemberExpr,
-    astRangeExpr,
-    astNewExpr,
-    /* Statements */
-    astExprStmt,
-    astBreakStmt,
-    astContinueStmt,
-    astDeferStmt,
-    astReturnStmt,
-    astBlockStmt,
-    astIfStmt,
-    astForStmt,
-    astWhileStmt,
-    astSwitchStmt,
-    astCaseStmt,
-    COUNT
+
+#define f(name) ast##name,
+    CXY_LANG_AST_TAGS(f)
+#undef f
+
+        astCOUNT
 } AstTag;
 
-enum {
-    flgNone = 0,
-    flgNative = BIT(0),
-    flgBuiltin = BIT(1),
-    flgPublic = BIT(2),
-    flgPrivate = BIT(3),
-    flgAsync = BIT(4),
-    flgTypeAst = BIT(5),
-    flgMain = BIT(6),
-    flgVariadic = BIT(7),
-    flgConst = BIT(8),
-    flgDefault = BIT(9),
-    flgDeferred = BIT(10),
-    flgCapture = BIT(11),
-    flgClosure = BIT(12),
-    flgCapturePointer = BIT(13),
-    flgClosureStyle = BIT(14),
-    flgFuncTypeParam = BIT(15),
-    flgMember = BIT(16),
-    flgAddThis = BIT(17),
-    flgAddSuper = BIT(18),
-    flgTypeinfo = BIT(19),
-    flgNewAllocated = BIT(20),
-    flgAppendNS = BIT(21),
-    flgTopLevelDecl = BIT(22),
-    flgGenerated = BIT(23),
-    flgCodeGenerated = BIT(24),
-    flgImportAlias = BIT(25),
-    flgEnumLiteral = BIT(26),
-    flgComptime = BIT(27),
-    flgVisited = BIT(28),
-    flgImplementsDelete = BIT(28),
-    flgImmediatelyReturned = BIT(29),
-    flgUnsafe = BIT(30),
-    flgFunctionPtr = BIT(31),
-    flgBuiltinMember = BIT(32),
-    flgComptimeIterable = BIT(33),
-    flgDebugBreak = BIT(33),
-    flgDefine = BIT(34),
-    flgCPointerCast = BIT(35)
-};
-
 struct Scope;
+struct AstVisitor;
 
 typedef struct AstNode AstNode;
+typedef AstNode *(*EvaluateMacro)(struct AstVisitor *,
+                                  const AstNode *,
+                                  AstNode *);
 
 typedef struct AstNodeList {
     AstNode *first;
@@ -227,9 +122,17 @@ typedef struct AstNodeList {
 } AstNodeList;
 
 typedef struct CaptureSet {
-    HashTable table;
+    HashTable *table;
     u64 index;
 } ClosureCapture;
+
+typedef struct Capture Capture;
+
+typedef struct {
+    bool createMapping;
+    MemPool *pool;
+    HashTable mapping;
+} CloneAstConfig;
 
 #define CXY_AST_NODE_HEAD                                                      \
     AstTag tag;                                                                \
@@ -238,10 +141,26 @@ typedef struct CaptureSet {
     const Type *type;                                                          \
     struct AstNode *parentScope;                                               \
     struct AstNode *next;                                                      \
+    struct {                                                                   \
+        struct AstNode *first;                                                 \
+        struct AstNode *link;                                                  \
+    } list;                                                                    \
     struct AstNode *attrs;
 
 typedef enum { iptModule, iptPath } ImportKind;
 typedef enum { cInclude, cDefine } CCodeKind;
+
+typedef struct FunctionSignature {
+    struct AstNode *params;
+    struct AstNode *ret;
+    struct AstNode *typeParams;
+} FunctionSignature;
+
+typedef struct SortedNodes {
+    u64 count;
+    int (*compare)(const void *lhs, const void *rhs);
+    struct AstNode *nodes[0];
+} SortedNodes;
 
 struct AstNode {
     union {
@@ -258,6 +177,10 @@ struct AstNode {
         } _body;
 
         struct {
+            cstring name;
+        } _namedNode;
+
+        struct {
             struct AstNode *module;
             struct AstNode *top;
             struct AstNode *decls;
@@ -272,6 +195,7 @@ struct AstNode {
             AstNode *names;
             AstNode *type;
             AstNode *container;
+            Env *env;
         } define;
 
         struct {
@@ -283,10 +207,9 @@ struct AstNode {
         } import;
 
         struct {
-            cstring alias;
             cstring name;
-            cstring module;
-            cstring path;
+            cstring alias;
+            AstNode *target;
         } importEntity;
 
         struct {
@@ -301,6 +224,7 @@ struct AstNode {
         struct {
             cstring value;
             cstring alias;
+            AstNode *resolvesTo;
         } ident;
 
         struct {
@@ -325,13 +249,13 @@ struct AstNode {
         } stringLiteral;
 
         struct {
-            const char *name;
+            cstring name;
             struct AstNode *args;
         } attr;
 
         struct {
             u64 len;
-            struct AstNode *args;
+            struct AstNode *elements;
         } tupleType, tupleExpr;
 
         struct {
@@ -390,10 +314,13 @@ struct AstNode {
         struct {
             const char *name;
             struct AstNode *constraints;
+            u16 inferIndex;
         } genericParam;
 
         struct {
-            Env *env;
+            cstring name;
+            u16 paramsCount;
+            i16 inferrable;
             struct AstNode *params;
             struct AstNode *decl;
         } genericDecl;
@@ -401,25 +328,29 @@ struct AstNode {
         struct {
             const char *name;
             const char *alt;
+            struct AstNode *args;
             union {
-                const char *alt2;
-                struct Scope *scope;
+                struct AstNode *enclosure;
+                struct AstNode *resolvesTo;
             };
-            struct AstNode *args, *resolvesTo;
-            u64 index;
+            u32 index;
+            bool isKeyword;
         } pathElement;
 
         struct {
             struct AstNode *elements;
             bool isType;
+            u16 inheritanceDepth;
         } path;
 
         struct {
-            Operator operatorOverload;
-            u32 index;
             const char *name;
-            struct AstNode *params;
-            struct AstNode *ret;
+            Operator operatorOverload;
+            u16 index;
+            u16 requiredParamsCount;
+            u16 paramsCount;
+            FunctionSignature *signature;
+            struct AstNode *opaqueParams;
             struct AstNode *body;
         } funcDecl;
 
@@ -438,47 +369,62 @@ struct AstNode {
         } funcParam;
 
         struct {
+            cstring name;
             struct AstNode *names;
             struct AstNode *type;
             struct AstNode *init;
         } varDecl;
 
         struct {
-            const char *name;
+            cstring name;
             struct AstNode *aliased;
+            struct AstNode *typeParams;
         } typeDecl;
 
         struct {
-            const char *name;
+            cstring name;
             struct AstNode *members;
+            struct AstNode *typeParams;
+            SortedNodes *sortedMembers;
         } unionDecl;
 
         struct {
-            const char *name;
+            cstring name;
             struct AstNode *value;
             u64 index;
         } enumOption;
 
         struct {
+            cstring name;
             u64 len;
-            const char *name;
             struct AstNode *base;
             struct AstNode *options;
+            SortedNodes *sortedOptions;
         } enumDecl;
 
         struct {
-            const char *name;
+            cstring name;
             u64 index;
             struct AstNode *type;
             struct AstNode *value;
         } structField;
 
         struct {
-            const char *name;
+            cstring name;
             struct AstNode *base;
+            struct AstNode *implements;
             struct AstNode *members;
-            const Type *generatedFrom;
+            struct AstNode *typeParams;
+            const struct Type *thisType;
+            SortedNodes *sortedMembers;
         } structDecl;
+
+        struct {
+            cstring name;
+            struct AstNode *members;
+            struct AstNode *typeParams;
+            SortedNodes *sortedMembers;
+        } interfaceDecl;
 
         struct {
             Operator op;
@@ -514,11 +460,18 @@ struct AstNode {
         struct {
             struct AstNode *callee;
             struct AstNode *args;
+            EvaluateMacro evaluator;
             u32 overload;
         } callExpr, macroCallExpr;
 
         struct {
-            ClosureCapture capture;
+            union {
+                ClosureCapture captureSet;
+                struct {
+                    const Capture **capture;
+                    u64 captureCount;
+                };
+            };
             struct AstNode *params;
             struct AstNode *ret;
             struct AstNode *body;
@@ -538,7 +491,12 @@ struct AstNode {
 
         struct {
             struct AstNode *expr;
-        } exprStmt, deferStmt, groupExpr;
+        } exprStmt, groupExpr, spreadExpr;
+
+        struct {
+            struct AstNode *expr;
+            struct AstNode *block;
+        } deferStmt;
 
         struct {
             struct AstNode *loop;
@@ -581,72 +539,167 @@ struct AstNode {
             AstNode *original;
             cstring message;
         } error;
+
+        struct {
+            AstNode *node;
+            u16 stages;
+            cstring filePath;
+            union {
+                FormatState *state;
+            };
+        } metadata;
+
+        struct {
+            AstNode *target;
+        } reference;
     };
 };
 
 #define CXY_AST_NODE_BODY_SIZE (sizeof(AstNode) - sizeof(((AstNode *)0)->_head))
 
-typedef struct AstVisitor AstVisitor;
-
-typedef void (*Visitor)(struct AstVisitor *, AstNode *);
-
-typedef struct AstVisitor {
-    void *context;
-    AstNode *current;
-
-    void (*visitors[COUNT])(struct AstVisitor *, AstNode *node);
-
-    void (*fallback)(struct AstVisitor *, AstNode *);
-
-    void (*dispatch)(Visitor, struct AstVisitor *, AstNode *);
-} AstVisitor;
-
-typedef struct ConstAstVisitor ConstAstVisitor;
-
-typedef void (*ConstVisitor)(struct ConstAstVisitor *, const AstNode *);
-
-typedef struct ConstAstVisitor {
-    void *context;
-    const AstNode *current;
-
-    void (*visitors[COUNT])(struct ConstAstVisitor *, const AstNode *node);
-
-    void (*fallback)(struct ConstAstVisitor *, const AstNode *);
-
-    void (*dispatch)(ConstVisitor, struct ConstAstVisitor *, const AstNode *);
-} ConstAstVisitor;
-
-// clang-format off
-#define getAstVisitorContext(V) ((AstVisitor *)(V))->context
-#define makeAstVisitor(C, ...) (AstVisitor){.context = (C), .visitors = __VA_ARGS__}
-#define getConstAstVisitorContext(V) ((ConstAstVisitor *)(V))->context
-#define makeConstAstVisitor(C, ...) (ConstAstVisitor){.context = (C), .visitors = __VA_ARGS__}
-// clang-format on
-
-void astVisit(AstVisitor *visitor, AstNode *node);
-
-void astConstVisit(ConstAstVisitor *visitor, const AstNode *node);
-
 void clearAstBody(AstNode *node);
-
 AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *node);
-AstNode *makeSingleNodePath(MemPool *pool,
-                            const FileLoc *loc,
-                            cstring name,
-                            u64 flags,
-                            const Type *type);
+
+AstNode *makePath(MemPool *pool,
+                  const FileLoc *loc,
+                  cstring name,
+                  u64 flags,
+                  const Type *type);
+
+AstNode *makePathWithElements(MemPool *pool,
+                              const FileLoc *loc,
+                              u64 flags,
+                              AstNode *elements,
+                              AstNode *next);
+
+AstNode *makeResolvedPath(MemPool *pool,
+                          const FileLoc *loc,
+                          cstring name,
+                          u64 flags,
+                          AstNode *resolvesTo,
+                          const Type *type);
+
+AstNode *makeResolvedPathWithArgs(MemPool *pool,
+                                  const FileLoc *loc,
+                                  cstring name,
+                                  u64 flags,
+                                  AstNode *resolvesTo,
+                                  AstNode *genericArgs,
+                                  const Type *type);
+
+AstNode *makeResolvedPathElement(MemPool *pool,
+                                 const FileLoc *loc,
+                                 cstring name,
+                                 u64 flags,
+                                 AstNode *resolvesTo,
+                                 AstNode *next,
+                                 const Type *type);
+
+AstNode *makeResolvedPathElementWithArgs(MemPool *pool,
+                                         const FileLoc *loc,
+                                         cstring name,
+                                         u64 flags,
+                                         AstNode *resolvesTo,
+                                         AstNode *next,
+                                         AstNode *genericArgs,
+                                         const Type *type);
+
+attr(always_inline) static AstNode *makePathElement(MemPool *pool,
+                                                    const FileLoc *loc,
+                                                    cstring name,
+                                                    u64 flags,
+                                                    AstNode *next,
+                                                    const Type *type)
+{
+    return makeResolvedPathElement(pool, loc, name, flags, NULL, next, type);
+}
+
+AstNode *makeCallExpr(MemPool *pool,
+                      const FileLoc *loc,
+                      AstNode *callee,
+                      AstNode *args,
+                      u64 flags,
+                      AstNode *next,
+                      const Type *type);
+
+AstNode *makePathFromIdent(MemPool *pool, const AstNode *ident);
+
+AstNode *makeGenIdent(MemPool *pool,
+                      struct StrPool *strPool,
+                      const FileLoc *loc,
+                      const Type *type);
+
+AstNode *makeExprStmt(MemPool *pool,
+                      const FileLoc *loc,
+                      AstNode *expr,
+                      u64 flags,
+                      AstNode *next,
+                      const Type *type);
+
+AstNode *makeStmtExpr(MemPool *pool,
+                      const FileLoc *loc,
+                      AstNode *stmt,
+                      u64 flags,
+                      AstNode *next,
+                      const Type *type);
+
+AstNode *makeBlockStmt(MemPool *pool,
+                       const FileLoc *loc,
+                       AstNode *stmts,
+                       AstNode *next,
+                       const Type *type);
+
+AstNode *makeNewExpr(MemPool *pool,
+                     const FileLoc *loc,
+                     u64 flags,
+                     AstNode *target,
+                     AstNode *init,
+                     AstNode *next,
+                     const Type *type);
+
+AstNode *makeStructExpr(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        AstNode *left,
+                        AstNode *fields,
+                        AstNode *next,
+                        const Type *type);
+
+AstNode *makeVarDecl(MemPool *pool,
+                     const FileLoc *loc,
+                     u64 flags,
+                     cstring name,
+                     AstNode *init,
+                     AstNode *next,
+                     const Type *type);
 
 AstNode *copyAstNode(MemPool *pool, const AstNode *node);
 
-AstNode *copyAstNodeAsIs(MemPool *pool, const AstNode *node);
+AstNode *duplicateAstNode(MemPool *pool, const AstNode *node);
 
-AstNode *cloneAstNode(MemPool *pool, const AstNode *node);
+void initCloneAstNodeMapping(CloneAstConfig *config);
+void deinitCloneAstNodeConfig(CloneAstConfig *config);
+
+AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node);
+
+static inline AstNode *shallowCloneAstNode(MemPool *pool, const AstNode *node)
+{
+    return cloneAstNode(&(CloneAstConfig){.pool = pool, .createMapping = false},
+                        node);
+}
+
+AstNode *cloneGenericDeclaration(MemPool *pool, const AstNode *node);
 
 AstNode *replaceAstNode(AstNode *node, const AstNode *with);
 
-void printAst(FormatState *state, const AstNode *node, bool cleanAst);
+AstNode *replaceAstNodeWith(AstNode *node, const AstNode *with);
 
-#define nodeIs(NODE, TAG) ((NODE) && ((NODE)->tag == ast##TAG))
+static inline bool nodeIs_(const AstNode *node, AstTag tag)
+{
+    return node && node->tag == tag;
+}
+#define nodeIs(NODE, TAG) nodeIs_((NODE), ast##TAG)
+
 #define hasFlag(ITEM, FLG) ((ITEM) && ((ITEM)->flags & (flg##FLG)))
 #define hasFlags(ITEM, FLGS) ((ITEM) && ((ITEM)->flags & (FLGS)))
 
@@ -667,6 +720,7 @@ bool isBuiltinTypeExpr(const AstNode *node);
 bool comptimeCompareTypes(const AstNode *lhs, const AstNode *rhs);
 
 u64 countAstNodes(const AstNode *node);
+u64 countProgramDecls(const AstNode *program);
 
 AstNode *getLastAstNode(AstNode *node);
 
@@ -690,34 +744,64 @@ void insertAstNode(AstNodeList *list, AstNode *node);
 
 void unlinkAstNode(AstNode **head, AstNode *prev, AstNode *node);
 
-const char *getPrimitiveTypeName(PrtId tag);
-
-u64 getPrimitiveTypeSize(PrtId tag);
-
-const char *getUnaryOpString(Operator op);
-
-const char *getBinaryOpString(Operator op);
-
-const char *getAssignOpString(Operator op);
-
-const char *getBinaryOpFuncName(Operator op);
-
 const char *getDeclKeyword(AstTag tag);
 
-const char *getDeclName(const AstNode *node);
-
-int getMaxBinaryOpPrecedence(void);
-
-int getBinaryOpPrecedence(Operator op);
+const char *getDeclarationName(const AstNode *node);
+void setDeclarationName(AstNode *node, cstring name);
+AstNode *getGenericDeclarationParams(AstNode *node);
+void setGenericDeclarationParams(AstNode *node, AstNode *params);
 
 const AstNode *findAttribute(const AstNode *node, cstring name);
 
+FileLoc *getDeclarationLoc(FileLoc *dst, const AstNode *node);
+
 const AstNode *findAttributeArgument(const AstNode *attr, cstring name);
 
-Operator tokenToUnaryOperator(TokenTag tag);
+bool mapAstNode(HashTable *mapping, const AstNode *from, AstNode *to);
 
-Operator tokenToBinaryOperator(TokenTag tag);
+cstring getAstNodeName(const AstNode *node);
 
-Operator tokenToAssignmentOperator(TokenTag tag);
+FunctionSignature *makeFunctionSignature(MemPool *pool,
+                                         const FunctionSignature *from);
 
-bool isPrefixOpKeyword(Operator op);
+AstNode *getParentScope(AstNode *node);
+
+AstNode *makeTypeReferenceNode(MemPool *pool,
+                               const Type *type,
+                               const FileLoc *loc);
+
+AstNode *findInAstNode(AstNode *node, cstring name);
+AstNode *resolvePath(const AstNode *path);
+AstNode *getResolvedPath(const AstNode *path);
+
+int isInInheritanceChain(const AstNode *node, const AstNode *parent);
+AstNode *getBaseClassAtLevel(AstNode *node, u64 level);
+AstNode *getBaseClassByName(AstNode *node, cstring name);
+
+attr(always_inline) static i64 integerLiteralValue(const AstNode *node)
+{
+    csAssert0(nodeIs(node, IntegerLit));
+    return node->intLiteral.hasMinus ? -node->intLiteral.value
+                                     : node->intLiteral.value;
+}
+
+int compareNamedAstNodes(const void *lhs, const void *rhs);
+SortedNodes *makeSortedNodes(MemPool *pool,
+                             AstNode *nodes,
+                             int (*compare)(const void *, const void *));
+
+const AstNode *getOptionalDecl();
+
+AstNode *findInSortedNodes(SortedNodes *sorted, cstring name);
+
+static inline AstNode *underlyingDeclaration(AstNode *decl)
+{
+    return nodeIs(decl, GenericDecl) ? decl->genericDecl.decl : decl;
+}
+
+attr(always_inline) static bool isStructDeclaration(AstNode *node)
+{
+    return nodeIs(node, StructDecl) ||
+           nodeIs(node, GenericDecl) &&
+               isStructDeclaration(node->genericDecl.decl);
+}

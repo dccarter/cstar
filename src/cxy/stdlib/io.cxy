@@ -10,16 +10,6 @@ module io
     O_NONBLOCK
 ): i32
 
-##pub (
-    Read => AE_READABLE,
-    Write => AE_WRITABLE
-) : i32 as Event
-
-##pub (
-    Ok => AE_OK,
-    Error => AE_ERR
-) : i32 as Status
-
 @alias(name: "C_write")
 pub native func write(fd: i32, data: &const void, size: u64) : i64;
 
@@ -32,15 +22,10 @@ pub native func close(fd: i32) : i32;
 pub native func C__fcntl_GETFL(fd: i32): i32;
 pub native func C__fcntl_SETFL(fd: i32, flags: i32): i32;
 
-@alias(name: "fdWaitRead")
-pub native func __cxy_eventloop_wait_read(fd: i32, timeout: u64 = 0) : i32;
-
-@alias(name: "fdWaitWrite")
-pub native func __cxy_eventloop_wait_write(fd: i32, timeout: u64 = 0) : i32;
-
 pub func print[T](it: T) {
+    @flatten
     #if (T.isString) {
-        C_write(STDOUT, cstr!(it), len!(it))
+        C_write(STDOUT, it: string, len!(it))
     }
     else {
         print[string](f"${it}")
@@ -51,112 +36,11 @@ pub func print[T](it: T) {
 pub func println(...args: auto) {
     #const i = 0;
 
-    #for (const argT: #{args.Tinfo}) {
-        var x: #{argT};
-        print[#{argT}](args.#{i})
+    @flatten
+    #for (const T: args) {
+        print[#{T}](args.#{i})
         #{i += 1}
     }
 
-    C_write(STDOUT, cstr!("\n"), 1)
-}
-
-pub struct FileDescriptor {
-    - fd: i32 = -1
-
-    @explicit
-    func `new`(fd: i32 = -1) {
-        this.fd = fd
-    }
-
-    func `delete`() {
-        C_close(this.fd)
-    }
-
-    @inline
-    func `!!`() => fd != -1
-
-    @inline
-    func close() => C_close(this.fd)
-
-    func nonBlocking(value: bool = true) {
-        var flags = C__fcntl_GETFL(fd);
-        assert!(flags != Status.Error) // TODO raise
-
-        if (value)
-            flags |= O_NONBLOCK
-        else
-            flags &= O_NONBLOCK
-
-        flags = C__fcntl_SETFL(fd, flags);
-        assert!(flags != Status.Error) // TODO raise
-    }
-
-    func read(data: &void, size: u64) : i64 {
-        var nread : i64 = 0;
-        @transient var p = <&u8> data;
-        while (nread != size) {
-            const cread = C_read(fd, <&void> ptroff!(p + nread), size - nread);
-            assert!(cread >= 0) // TODO raise error
-            nread += nread
-        }
-
-        return nread
-    }
-
-    func asyncRead(data: &void, size: u64, timeout: i64 = 0) : i64 {
-        const status = fdWaitRead(fd, timeout);
-        assert!(status == Event.Read); // TODO raise error
-        const nread = C_read(fd, data, size);
-        assert!(nread != Status.Error);
-
-        return nread;
-    }
-
-    func write_(data: &const void, size: u64) : void {
-        var nwr : i64 = 0;
-        @transient const p = <&const u8> data;
-        while (nwr != size) {
-            const cwr = C_write(fd, <&const void> ptroff!(p + nwr), size - nwr);
-            assert!(cwr >= 0); // TODO raise error
-            nwr += cwr;
-        }
-    }
-
-    func write[T](data: const T) {
-         #if (T.isString) {
-             write_(<&const void>data, len!(data))
-         }
-         else #if (T.isSlice) {
-             write_(<&const void>data!(data), len!(data))
-         }
-         else {
-             const str = f"${data}";
-             write_(<&const void>str, len!(str))
-         }
-    }
-
-    func asyncWrite_(data: &const void, size: u64, timeout: i64) : void {
-        var nwr : i64 = 0;
-        @transient const p = <&const u8> data;
-        while (nwr != size) {
-            const event = fdWaitWrite(fd, timeout);
-            assert!(event == Event.Write);
-            const cwr = C_write(fd, <&const void> ptroff!(p + nwr), size - nwr);
-            assert!(cwr != Status.Error); // TODO raise error
-            nwr += cwr;
-        }
-    }
-
-    func asyncWrite[T](data: const T, timeout: i64 = 0) {
-        #if (T.isString) {
-            asyncWrite_(<&const void>data, len!(data), timeout)
-        }
-        else #if (T.isSlice) {
-            asyncWrite_(<&const void>data!(data), len!(data))
-        }
-        else {
-            const str = f"${data}";
-            asyncWrite_(<&const void>str, len!(str), timeout)
-        }
-    }
+    C_write(STDOUT, "\n" : &const char, 1)
 }

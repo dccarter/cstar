@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,7 +46,7 @@ extern "C" {
 #define sizeof__(A) (sizeof(A) / sizeof(*(A)))
 
 #ifndef BIT
-#define BIT(N) (1 << (N))
+#define BIT(N) (((u64)1) << (N))
 #endif
 
 #ifndef __has_attribute
@@ -104,7 +105,7 @@ extern "C" {
 #if __has_attribute(cleanup)
 #define cxy_cleanup(func) __attribute__((cleanup(func)))
 #elif __has_attribute(__cleanup__)
-#define cxy_cleanup(func) __attribute__((__cleanup__(func)))
+#define cxy_cleanup(enclosure) __attribute__((__cleanup__(enclosure)))
 #else
 #warning                                                                       \
     "Cleanup attribute not available, attempt to use cxy_cleanup will cause an error"
@@ -133,6 +134,8 @@ extern "C" {
 #else
 #define unreachable(...) csAssert(false, "Unreachable code reached");
 #endif
+
+#define TODO(fmt, ...) csAssert(false, "TODO: " fmt, ##__VA_ARGS__)
 
 #define attr(A, ...) CXY_PASTE(cxy_, A)(__VA_ARGS__)
 
@@ -251,9 +254,36 @@ int binarySearch(const void *arr,
                  u64 size,
                  int (*compare)(const void *, const void *));
 
+static inline int binarySearchWithRef(const void *arr,
+                                      u64 len,
+                                      const void *x,
+                                      u64 size,
+                                      int (*compare)(const void *,
+                                                     const void *))
+{
+    return binarySearch(arr, len, &x, size, compare);
+}
+
+int compareStrings(const void *lhs, const void *rhs);
+
 static inline bool isIgnoreVar(cstring s)
 {
     return s && s[0] == '_' && s[1] == '\0';
+}
+
+static inline u64 timespecToNanoSeconds(struct timespec *ts)
+{
+    return ts->tv_sec * 1000000000 + ts->tv_nsec;
+}
+
+static inline u64 timespecToMicroSeconds(struct timespec *ts)
+{
+    return ts->tv_sec * 1000000 + ts->tv_nsec / 1000;
+}
+
+static inline u64 timespecToMilliseconds(struct timespec *ts)
+{
+    return ts->tv_sec * 1000 + ts->tv_nsec / 1000000;
 }
 
 #ifdef __cplusplus

@@ -4,7 +4,9 @@
 
 #include "ttable.h"
 #include "ast.h"
+#include "flag.h"
 #include "scope.h"
+#include "strings.h"
 
 #include <core/alloc.h>
 #include <core/htable.h>
@@ -104,10 +106,15 @@ static bool compareManyTypes(const Type **left, const Type **right, u64 count)
     return true;
 }
 
-static bool compareTypes(const Type *left, const Type *right)
+static bool compareTypes(const Type *lhs, const Type *rhs)
 {
-    if (left->tag != right->tag)
+    u64 lhsFlags = flgNone, rhsFlags = flgNone;
+    const Type *left = unwrapType(lhs, &lhsFlags),
+               *right = unwrapType(rhs, &rhsFlags);
+
+    if (left->tag != right->tag || (lhsFlags != rhsFlags))
         return false;
+
     switch (left->tag) {
     case typAuto:
     case typError:
@@ -117,8 +124,7 @@ static bool compareTypes(const Type *left, const Type *right)
     case typPrimitive:
         return left->primitive.id == right->primitive.id;
     case typPointer:
-        return ((left->flags & flgConst) == (right->flags & flgConst)) &&
-               compareTypes(left->pointer.pointed, right->pointer.pointed);
+        return compareTypes(left->pointer.pointed, right->pointer.pointed);
     case typArray:
         return (left->array.len == right->array.len) &&
                compareTypes(left->array.elementType, right->array.elementType);
@@ -140,15 +146,15 @@ static bool compareTypes(const Type *left, const Type *right)
                                 right->tUnion.members,
                                 left->tUnion.count);
     case typFunc:
-        if (left->name && right->name && strcmp(left->name, right->name) != 0)
+        if (left->name && right->name && left->name != right->name)
             return false;
+
         if (left->func.decl && right->func.decl &&
             left->func.decl->parentScope && right->func.decl->parentScope &&
             left->func.decl->parentScope != right->func.decl->parentScope)
             return false;
 
-        return ((left->flags & flgVariadic) == (right->flags & flgVariadic)) &&
-               (left->func.paramsCount == right->func.paramsCount) &&
+        return (left->func.paramsCount == right->func.paramsCount) &&
                compareTypes(left->func.retType, right->func.retType) &&
                compareManyTypes(left->func.params,
                                 right->func.params,
@@ -159,14 +165,21 @@ static bool compareTypes(const Type *left, const Type *right)
                compareManyTypes(left->applied.args,
                                 right->applied.args,
                                 right->applied.totalArgsCount);
+    case typString:
+        return typeIs(right, String) || typeIs(right, Null);
+
+    case typModule:
+        return typeIs(right, Module) && left->module.path == right->module.path;
+
     case typEnum:
     case typStruct:
     case typGeneric:
     case typInfo:
+    case typInterface:
         return left == right;
 
     default:
-        csAssert0("invalid type");
+        unreachable("invalid type");
     }
 
     return true;
@@ -212,6 +225,20 @@ static GetOrInset getOrInsertType(TypeTable *table, const Type *type)
     Type tmp = *type;
     tmp.namespace = table->currentNamespace;
     return getOrInsertTypeScoped(table, &tmp);
+}
+
+static int sortCompareStructMember(const void *lhs, const void *rhs)
+{
+    const StructMember *left = *((const StructMember **)lhs),
+                       *right = *((const StructMember **)rhs);
+    return left->name == right->name ? 0 : strcmp(left->name, right->name);
+}
+
+static int sortCompareEnumOption(const void *lhs, const void *rhs)
+{
+    const EnumOption *left = *((const EnumOption **)lhs),
+                     *right = *((const EnumOption **)rhs);
+    return left->name == right->name ? 0 : strcmp(left->name, right->name);
 }
 
 typedef struct {
@@ -291,6 +318,9 @@ const Type *resolveType(const Type *type)
         case typInfo:
             type = resolveType(type->info.target);
             break;
+        case typThis:
+            type = resolveType(type->this.that);
+            break;
         default:
             return type;
         }
@@ -313,7 +343,7 @@ const Type *stripPointer(const Type *type)
 
 const Type *stripAll(const Type *type)
 {
-    while (true) {
+    while (type) {
         switch (resolveType(type)->tag) {
         case typPointer:
             type = stripAll(type->pointer.pointed);
@@ -325,6 +355,7 @@ const Type *stripAll(const Type *type)
             return type;
         }
     }
+    return NULL;
 }
 
 u64 pointerLevels(const Type *type)
@@ -357,12 +388,24 @@ const Type *makeNullType(TypeTable *table) { return table->nullType; }
 
 const Type *makeStringType(TypeTable *table) { return table->stringType; }
 
-const Type *makeContainerType(TypeTable *table, cstring name, Env *env)
+const Type *makeContainerType(
+    TypeTable *table, cstring name, const Type *base, cstring *names, u64 count)
 {
-    Type type = make(
-        Type, .tag = typContainer, .name = name, .container = {.env = env});
+    names = allocFromMemPool(table->memPool, sizeof(cstring) * count);
+    Type type = make(Type,
+                     .tag = typContainer,
+                     .name = name,
+                     .container = {.base = base, .namesCount = count});
 
-    return getOrInsertType(table, &type).s;
+    GetOrInset goi = getOrInsertType(table, &type);
+    if (!goi.f) {
+        Type *inserted = ((Type *)goi.s);
+        inserted->container.names =
+            allocFromMemPool(table->memPool, sizeof(cstring) * count);
+        memcpy(inserted->container.names, names, sizeof(cstring) * count);
+    }
+
+    return goi.s;
 }
 
 const Type *getPrimitiveType(TypeTable *table, PrtId id)
@@ -393,16 +436,18 @@ const Type *makeTypeInfo(TypeTable *table, const Type *target)
 
 const Type *makePointerType(TypeTable *table, const Type *pointed, u64 flags)
 {
+    pointed = flattenWrappedType(pointed, &flags);
     Type type = make(Type,
                      .tag = typPointer,
                      .flags = flags,
-                     .pointer = {.pointed = unwrapType(pointed, NULL)});
+                     .pointer = {.pointed = pointed});
 
     return getOrInsertType(table, &type).s;
 }
 
 const Type *makeOptionalType(TypeTable *table, const Type *target, u64 flags)
 {
+    target = flattenWrappedType(target, &flags);
     Type type = make(Type,
                      .tag = typOptional,
                      .flags = flags,
@@ -423,6 +468,7 @@ const Type *makeAliasType(TypeTable *table,
                           cstring name,
                           u64 flags)
 {
+    aliased = flattenWrappedType(aliased, &flags);
     Type type = make(Type,
                      .tag = typAlias,
                      .name = name,
@@ -487,42 +533,59 @@ const Type *makeFuncType(TypeTable *table, const Type *init)
     return ret.s;
 }
 
+const Type *changeFunctionRetType(TypeTable *table,
+                                  const Type *func,
+                                  const Type *ret)
+{
+    Type type = *func;
+    type.func.retType = ret;
+    GetOrInset goi = getOrInsertType(table, &type);
+    removeFromTypeTable(table, func);
+    return goi.s;
+}
+
 const Type *makeEnum(TypeTable *table, const Type *init)
 {
     GetOrInset ret = getOrInsertType(table, init);
     if (!ret.f) {
         Type *tEnum = (Type *)ret.s;
         tEnum->tEnum.options = allocFromMemPool(
-            table->memPool, sizeof(EnumOption) * init->tEnum.count);
+            table->memPool, sizeof(EnumOption) * init->tEnum.optionsCount);
         memcpy(tEnum->tEnum.options,
                init->tEnum.options,
-               sizeof(EnumOption) * init->tEnum.count);
-        tEnum->tEnum.env = allocFromMemPool(table->memPool, sizeof(Env));
-        *tEnum->tEnum.env = *init->tEnum.env;
+               sizeof(EnumOption) * init->tEnum.optionsCount);
+
+        tEnum->tEnum.sortedOptions = allocFromMemPool(
+            table->memPool, sizeof(EnumOption *) * init->tEnum.optionsCount);
+        for (u64 i = 0; i < init->tEnum.optionsCount; i++)
+            tEnum->tEnum.sortedOptions[i] = &tEnum->tEnum.options[i];
+
+        qsort(tEnum->tEnum.sortedOptions,
+              tEnum->tEnum.optionsCount,
+              sizeof(EnumOption *),
+              sortCompareEnumOption);
     }
 
     return ret.s;
 }
 
-const Type *makeGenericType(TypeTable *table, const Type *init)
+const Type *makeGenericType(TypeTable *table, AstNode *decl, bool inferrable)
 {
-    GetOrInset ret = getOrInsertType(table, init);
-    if (!ret.f) {
-        Type *generic = (Type *)ret.s;
-        generic->generic.params = allocFromMemPool(
-            table->memPool, sizeof(GenericParam) * init->generic.paramsCount);
-        memcpy(generic->generic.params,
-               init->generic.params,
-               sizeof(GenericParam) * init->generic.paramsCount);
-    }
-
-    return ret.s;
+    Type type =
+        make(Type,
+             .tag = typGeneric,
+             .generic = {.decl = decl,
+                         .paramsCount = countAstNodes(decl->genericDecl.params),
+                         .inferrable = inferrable});
+    return getOrInsertType(table, &type).s;
 }
 
 const Type *makeWrappedType(TypeTable *table, const Type *target, u64 flags)
 {
     if ((target->flags & flags) == flags)
         return target;
+
+    target = flattenWrappedType(target, &flags);
     Type type = {.tag = typWrapped, .flags = flags, .wrapped.target = target};
     return getOrInsertType(table, &type).s;
 }
@@ -539,6 +602,21 @@ const Type *unwrapType(const Type *type, u64 *flags)
     if (flags)
         *flags = tmp | type->flags;
 
+    *flags &= flgTypeApplicable;
+    return type;
+}
+
+const Type *flattenWrappedType(const Type *type, u64 *flags)
+{
+    u64 tmp = flgNone;
+
+    while (typeIs(type, Wrapped)) {
+        tmp |= type->flags;
+        type = type->wrapped.target;
+    }
+
+    if (flags)
+        *flags |= tmp;
     return type;
 }
 
@@ -577,20 +655,104 @@ const Type *makeStruct(TypeTable *table, const Type *init)
     GetOrInset ret = getOrInsertType(table, init);
     if (!ret.f) {
         Type *tStruct = (Type *)ret.s;
-        tStruct->tStruct.fields = allocFromMemPool(
-            table->memPool, sizeof(StructField) * init->tStruct.fieldsCount);
-        memcpy(tStruct->tStruct.fields,
-               init->tStruct.fields,
-               sizeof(StructField) * init->tStruct.fieldsCount);
+        tStruct->tStruct.members = allocFromMemPool(
+            table->memPool, sizeof(StructMember) * init->tStruct.membersCount);
+        memcpy(tStruct->tStruct.members,
+               init->tStruct.members,
+               sizeof(StructMember) * init->tStruct.membersCount);
+
+        if (tStruct->tStruct.interfaces) {
+            tStruct->tStruct.interfaces = allocFromMemPool(
+                table->memPool,
+                sizeof(StructMember) * init->tStruct.interfacesCount);
+            memcpy(tStruct->tStruct.interfaces,
+                   init->tStruct.interfaces,
+                   sizeof(StructMember) * init->tStruct.interfacesCount);
+        }
+
+        tStruct->tStruct.sortedMembers = allocFromMemPool(
+            table->memPool,
+            sizeof(StructMember *) * init->tStruct.membersCount);
+        for (u64 i = 0; i < init->tStruct.membersCount; i++)
+            tStruct->tStruct.sortedMembers[i] = &tStruct->tStruct.members[i];
+
+        qsort(tStruct->tStruct.sortedMembers,
+              tStruct->tStruct.membersCount,
+              sizeof(StructMember *),
+              sortCompareStructMember);
     }
 
     return ret.s;
 }
 
-const Type *makeModuleType(TypeTable *table, cstring name)
+const Type *replaceStructType(TypeTable *table,
+                              const Type *og,
+                              const Type *with)
 {
-    Type type = make(Type, .tag = typModule, .name = name, .flags = flgNone);
+    removeFromTypeTable(table, og);
+    return makeStruct(table, with);
+}
+
+const Type *makeInterfaceType(TypeTable *table, const Type *init)
+{
+    GetOrInset ret = getOrInsertType(table, init);
+    if (!ret.f) {
+        Type *tStruct = (Type *)ret.s;
+        tStruct->tInterface.members = allocFromMemPool(
+            table->memPool,
+            sizeof(StructMember) * init->tInterface.membersCount);
+        memcpy(tStruct->tInterface.members,
+               init->tInterface.members,
+               sizeof(StructMember) * init->tInterface.membersCount);
+
+        tStruct->tInterface.sortedMembers = allocFromMemPool(
+            table->memPool,
+            sizeof(StructMember *) * init->tInterface.membersCount);
+        for (u64 i = 0; i < init->tInterface.membersCount; i++)
+            tStruct->tInterface.sortedMembers[i] =
+                &tStruct->tInterface.members[i];
+
+        qsort(tStruct->tInterface.sortedMembers,
+              tStruct->tInterface.membersCount,
+              sizeof(StructMember *),
+              sortCompareStructMember);
+    }
+
+    return ret.s;
+}
+
+const Type *makeModuleType(TypeTable *table,
+                           cstring name,
+                           cstring path,
+                           ModuleMember *members,
+                           u64 count)
+{
+    Type type = make(
+        Type,
+        .tag = typModule,
+        .name = name,
+        .flags = flgNone,
+        .module = {.members = members, .membersCount = count, .path = path});
     GetOrInset ret = getOrInsertType(table, &type);
+    if (!ret.f) {
+        Type *module = (Type *)ret.s;
+        module->module.members = allocFromMemPool(
+            table->memPool, sizeof(ModuleMember) * type.module.membersCount);
+        memcpy(module->module.members,
+               type.module.members,
+               sizeof(ModuleMember) * type.module.membersCount);
+
+        module->module.sortedMembers = allocFromMemPool(
+            table->memPool, sizeof(ModuleMember *) * type.module.membersCount);
+        for (u64 i = 0; i < type.module.membersCount; i++)
+            module->module.sortedMembers[i] = &module->module.members[i];
+
+        qsort(module->module.sortedMembers,
+              module->module.membersCount,
+              sizeof(ModuleMember *),
+              sortCompareStructMember);
+    }
+
     return ret.s;
 }
 
@@ -667,14 +829,74 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right)
     }
 }
 
-const Type *getBuiltinOptionalType(TypeTable *table)
+const Type *findInType(TypeTable *table, const Type *type, cstring name)
 {
-    static const Type *optionalType = NULL;
-    if (optionalType == NULL && getBuiltinEnv() != NULL) {
-        AstNode *node = findSymbolOnly(getBuiltinEnv(), "Optional");
-        if (node != NULL) {
-            optionalType = node->type;
-        }
+    const Type *found = NULL;
+    switch (type->tag) {
+    case typThis:
+        found = findInType(table, type->this.that, name);
+        break;
+    case typStruct:
+        found = findStructMemberType(type, name);
+        break;
+    case typInterface:
+        found = findInterfaceMemberType(type, name);
+        break;
+    case typEnum:
+        found = findEnumOptionType(type, name);
+        break;
+    case typModule:
+        found = findModuleMemberType(type, name);
+        break;
+    default:
+        break;
     }
-    return optionalType;
+
+    return found;
+}
+
+const Type *expectInType(TypeTable *table,
+                         const Type *type,
+                         Log *L,
+                         cstring name,
+                         const FileLoc *loc)
+{
+    const Type *found = findInType(table, type, name);
+    if (L && found == NULL) {
+        logError(L,
+                 loc,
+                 "'{s}' is undefined in '{s}'",
+                 (FormatArg[]){{.s = name}, {.s = type->name}});
+        return makeErrorType(table);
+    }
+    return found;
+}
+
+const Type *getIntegerTypeForLiteral(TypeTable *table, i64 literal)
+{
+    if (literal >= INT8_MIN && literal <= INT8_MAX)
+        return getPrimitiveType(table, prtI8);
+    else if (literal >= INT16_MIN && literal <= INT16_MAX)
+        return getPrimitiveType(table, prtI16);
+    else if (literal >= INT32_MIN && literal <= INT32_MAX)
+        return getPrimitiveType(table, prtI32);
+    else
+        return getPrimitiveType(table, prtI64);
+}
+
+bool isIntegerTypeInRange(const Type *type, i64 min, i64 max)
+{
+    csAssert0(min <= max);
+    const IntMinMax minMax = getIntegerTypeMinMax(type);
+    return min <= (i64)minMax.s && max >= minMax.f;
+}
+
+int findTypeInArray(const Type **types, u64 count, const Type *type)
+{
+    for (int i = 0; i < count; i++) {
+        if (compareTypes(types[i], type))
+            return i;
+    }
+
+    return -1;
 }

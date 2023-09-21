@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "core/log.h"
 #include <core/mempool.h>
 #include <core/strpool.h>
 #include <lang/types.h>
@@ -51,7 +52,11 @@ const Type *makePointerType(TypeTable *table, const Type *pointed, u64 flags);
 const Type *makeOptionalType(TypeTable *table, const Type *target, u64 flags);
 const Type *makeTypeInfo(TypeTable *table, const Type *target);
 const Type *makeArrayType(TypeTable *table, const Type *elementType, u64 size);
-const Type *makeContainerType(TypeTable *table, cstring name, Env *env);
+const Type *makeContainerType(TypeTable *table,
+                              cstring name,
+                              const Type *base,
+                              cstring *names,
+                              u64 count);
 
 static inline const Type *makeVoidPointerType(TypeTable *table, u64 flags)
 {
@@ -78,16 +83,31 @@ const Type *makeThisType(TypeTable *table, cstring name, u64 flags);
 
 const Type *makeFuncType(TypeTable *table, const Type *init);
 
+const Type *changeFunctionRetType(TypeTable *table,
+                                  const Type *func,
+                                  const Type *ret);
+
 const Type *makeStruct(TypeTable *table, const Type *init);
 
-const Type *makeModuleType(TypeTable *table, cstring name);
+const Type *replaceStructType(TypeTable *table,
+                              const Type *og,
+                              const Type *with);
+
+const Type *makeInterfaceType(TypeTable *table, const Type *init);
+
+const Type *makeModuleType(TypeTable *table,
+                           cstring name,
+                           cstring path,
+                           ModuleMember *members,
+                           u64 count);
 
 const Type *makeEnum(TypeTable *table, const Type *init);
 
-const Type *makeGenericType(TypeTable *table, const Type *init);
+const Type *makeGenericType(TypeTable *table, AstNode *decl, bool inferrable);
 
 const Type *makeWrappedType(TypeTable *table, const Type *target, u64 flags);
 const Type *unwrapType(const Type *type, u64 *flags);
+const Type *flattenWrappedType(const Type *type, u64 *flags);
 
 GetOrInset makeAppliedType(TypeTable *table, const Type *init);
 
@@ -102,4 +122,17 @@ void enumerateTypeTable(TypeTable *table,
                         bool(with)(void *, const void *));
 
 const Type *promoteType(TypeTable *table, const Type *left, const Type *right);
-const Type *getBuiltinOptionalType(TypeTable *table);
+
+const Type *getBuiltinOptionalType(Log *L);
+
+const Type *findInType(TypeTable *table, const Type *type, cstring name);
+
+const Type *expectInType(TypeTable *table,
+                         const Type *type,
+                         Log *L,
+                         cstring name,
+                         const FileLoc *loc);
+
+const Type *getIntegerTypeForLiteral(TypeTable *table, i64 literal);
+bool isIntegerTypeInRange(const Type *type, i64 min, i64 max);
+int findTypeInArray(const Type **types, u64 count, const Type *type);

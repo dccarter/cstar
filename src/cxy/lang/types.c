@@ -4,9 +4,26 @@
 
 #include "types.h"
 #include "ast.h"
+#include "builtins.h"
+#include "flag.h"
+#include "strings.h"
 #include "ttable.h"
 
+#include <string.h>
+
 #include "token.h"
+
+static int searchCompareStructMember(const void *lhs, const void *rhs)
+{
+    const StructMember *right = *((const StructMember **)rhs), *left = lhs;
+    return left->name == right->name ? 0 : strcmp(left->name, right->name);
+}
+
+static int searchCompareEnumOption(const void *lhs, const void *rhs)
+{
+    const EnumOption *right = *((const EnumOption **)rhs), *left = lhs;
+    return left->name == right->name ? 0 : strcmp(left->name, right->name);
+}
 
 static void printManyTypes(FormatState *state,
                            const Type **types,
@@ -87,6 +104,12 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
     from = resolveType(from);
     if (to == from)
         return true;
+    if (hasFlag(to, Optional) && !hasFlag(from, Optional)) {
+        if (typeIs(from, Pointer) && typeIs(from->pointer.pointed, Null))
+            return true;
+
+        to = getOptionalTargetType(to);
+    }
 
     const Type *_to = unwrapType(to, NULL), *_from = unwrapType(from, NULL);
     if (isTypeConst(from) && !isTypeConst(to)) {
@@ -95,9 +118,11 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
     }
 
     to = _to, from = _from;
+    if (to == from)
+        return true;
 
-    if (to->tag == typPointer && from->tag == typPointer) {
-        if (to->pointer.pointed->tag == typVoid)
+    if (typeIs(to, Pointer) && typeIs(from, Pointer)) {
+        if (typeIs(to->pointer.pointed, Void))
             return true;
         if (typeIs(from->pointer.pointed, Null))
             return true;
@@ -105,17 +130,13 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
         return isTypeAssignableFrom(to->pointer.pointed, from->pointer.pointed);
     }
 
-    if (to->tag == typOptional && from->tag == typOptional) {
-        return isTypeAssignableFrom(to->optional.target, from->optional.target);
-    }
-
     switch (to->tag) {
     case typAuto:
-        return from->tag != typError;
+        return !typeIs(from, Error);
     case typString:
         return typeIs(from, String) || typeIs(stripPointer(from), Null);
     case typPrimitive:
-        if (from->tag == typEnum) {
+        if (typeIs(from, Enum)) {
             return isTypeAssignableFrom(to, from->tEnum.base);
         }
 
@@ -149,11 +170,11 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
             return typeIs(from, Pointer) || typeIs(from, String) ||
                    typeIs(from, Array);
 
-        if (from->tag == typArray)
+        if (typeIs(from, Array))
             return isTypeAssignableFrom(to->pointer.pointed,
                                         from->array.elementType);
 
-        return typeIs(from->pointer.pointed, Void);
+        return typeIs(from, Pointer) && typeIs(from->pointer.pointed, Void);
 
     case typArray:
         if (!typeIs(from, Array) ||
@@ -165,12 +186,15 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
         return to->array.len == from->array.len;
 
     case typOptional:
-        return from->tag == typNull ||
+        if (typeIs(from, Optional))
+            return isTypeAssignableFrom(to->optional.target,
+                                        from->optional.target);
+        return stripPointer(from)->tag == typNull ||
                isTypeAssignableFrom(to->optional.target, from);
     case typThis:
         return to->this.that == from;
     case typTuple:
-        if (from->tag != typTuple || to->tuple.count != from->tuple.count)
+        if (!typeIs(from, Tuple) || to->tuple.count != from->tuple.count)
             return false;
         for (u64 i = 0; i < from->tuple.count; i++) {
             if (!isTypeAssignableFrom(to->tuple.members[i],
@@ -178,11 +202,12 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
                 return false;
         }
         return true;
+
     case typFunc: {
-        if (hasFlag(to, FunctionPtr) && typeIs(stripPointer(from), Null))
+        if (stripPointer(from)->tag == typNull)
             return true;
 
-        if (!isTypeAssignableFrom(to->func.retType, to->func.retType))
+        if (!isTypeAssignableFrom(to->func.retType, from->func.retType))
             return false;
         bool isNameFuncParam =
             (to->flags & flgFuncTypeParam) && !(from->flags & flgClosure);
@@ -199,13 +224,15 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
         return true;
     }
     case typEnum:
-        return from->tag == typEnum &&
+        return typeIs(from, Enum) &&
                isTypeAssignableFrom(to->tEnum.base, from->tEnum.base);
     case typStruct:
         return typeIs(from, This) && to == from->this.that;
     case typInfo:
         return typeIs(from, Info) &&
                isTypeAssignableFrom(to->info.target, from->info.target);
+    case typInterface:
+        return typeIs(from, Struct) && implementsInterface(from, to);
     default:
         return false;
     }
@@ -219,6 +246,14 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
     const Type *unwrappedTo = unwrapType(to, &toFlags);
     const Type *unwrappedFrom = unwrapType(from, &fromFlags);
 
+    if (hasFlag(unwrappedTo, Optional) && !hasFlag(unwrappedFrom, Optional)) {
+        if (typeIs(unwrappedFrom, Pointer) &&
+            typeIs(unwrappedFrom->pointer.pointed, Null))
+            return true;
+
+        to = getOptionalTargetType(unwrappedTo);
+    }
+
     if (unwrappedTo->tag == unwrappedFrom->tag) {
         if (to->tag != typPrimitive)
             return (fromFlags & flgConst) ? (toFlags & flgConst) : true;
@@ -231,6 +266,11 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
     case typAuto:
         return false;
     case typPrimitive:
+        if (typeIs(to, Optional))
+            to = to->optional.target;
+        if (!typeIs(to, Primitive))
+            return false;
+
         switch (to->primitive.id) {
 #define f(I, ...) case prt##I:
             INTEGER_TYPE_LIST(f)
@@ -244,7 +284,6 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
         default:
             return unwrappedTo->primitive.id == unwrappedFrom->primitive.id;
         }
-
     default:
         return isTypeAssignableFrom(to, from);
     }
@@ -293,6 +332,7 @@ bool isIntegralType(const Type *type)
         INTEGER_TYPE_LIST(f)
     case prtBool:
     case prtChar:
+    case prtCChar:
         return true;
 #undef f
     default:
@@ -495,6 +535,10 @@ void printType(FormatState *state, const Type *type)
         format(state, "&", NULL);
         printType(state, type->pointer.pointed);
         break;
+    case typOptional:
+        printType(state, type->optional.target);
+        format(state, "", NULL);
+        break;
     case typArray:
         format(state, "[", NULL);
         printType(state, type->array.elementType);
@@ -542,11 +586,18 @@ void printType(FormatState *state, const Type *type)
             format(state, " {s}", (FormatArg[]){{.s = type->name}});
         }
         break;
+    case typInterface:
+        printKeyword(state, "interface");
+        if (type->name) {
+            format(state, " {s}", (FormatArg[]){{.s = type->name}});
+        }
+        break;
     case typGeneric:
         printGenericType(state, type);
         break;
     case typApplied:
-        printType(state, type->applied.generated);
+        if (type->applied.decl)
+            printType(state, type->applied.decl->type);
         format(state, " aka ", NULL);
         printType(state, type->applied.from);
         format(state, "where (", NULL);
@@ -560,7 +611,7 @@ void printType(FormatState *state, const Type *type)
                        {.s = type->applied.from->generic.params[i].name}});
             printType(state, type->applied.args[i]);
         }
-        format(state, "where )", NULL);
+        format(state, " )", NULL);
         break;
     case typInfo:
         format(state, "@typeof(", NULL);
@@ -579,4 +630,131 @@ void printType(FormatState *state, const Type *type)
     default:
         unreachable("TODO");
     }
+}
+
+const char *getPrimitiveTypeName(PrtId tag)
+{
+    switch (tag) {
+#define f(name, str, ...)                                                      \
+    case prt##name:                                                            \
+        return str;
+        PRIM_TYPE_LIST(f)
+#undef f
+    default:
+        csAssert0(false);
+    }
+}
+
+u64 getPrimitiveTypeSize(PrtId tag)
+{
+    switch (tag) {
+#define f(name, str, size)                                                     \
+    case prt##name:                                                            \
+        return size;
+        PRIM_TYPE_LIST(f)
+#undef f
+    default:
+        csAssert0(false);
+    }
+}
+
+const IntMinMax getIntegerTypeMinMax(const Type *type)
+{
+    static IntMinMax minMaxTable[] = {
+        [prtBool] = {.f = false, .s = true},
+        [prtCChar] = {.f = 0, .s = 255},
+        [prtChar] = {.f = 0, .s = UINT32_MAX},
+        [prtI8] = {.f = INT8_MIN, .s = INT8_MAX},
+        [prtU8] = {.f = 0, .s = UINT8_MAX},
+        [prtI16] = {.f = INT16_MIN, .s = INT16_MAX},
+        [prtU16] = {.f = 0, .s = UINT16_MAX},
+        [prtI32] = {.f = INT32_MIN, .s = INT32_MAX},
+        [prtU32] = {.f = 0, .s = UINT32_MAX},
+        [prtI64] = {.f = INT64_MIN, .s = INT64_MAX},
+        [prtU64] = {.f = 0, .s = UINT64_MAX},
+    };
+
+    csAssert0(isIntegralType(type));
+    if (typeIs(type, Enum)) {
+        csAssert0(type->tEnum.optionsCount);
+        return (IntMinMax){
+            .f = type->tEnum.options[0].value,
+            type->tEnum.options[type->tEnum.optionsCount - 1].value};
+    }
+    return minMaxTable[type->primitive.id];
+}
+
+const StructMember *findStructMember(const Type *type, cstring member)
+{
+    int index = binarySearch(type->tStruct.sortedMembers,
+                             type->tStruct.membersCount,
+                             &(StructMember){.name = member},
+                             sizeof(StructMember *),
+                             searchCompareStructMember);
+
+    return index == -1 ? NULL : type->tStruct.sortedMembers[index];
+}
+
+const StructMember *findInterfaceMember(const Type *type, cstring member)
+{
+    int index = binarySearch(type->tInterface.sortedMembers,
+                             type->tInterface.membersCount,
+                             &(StructMember){.name = member},
+                             sizeof(StructMember *),
+                             searchCompareStructMember);
+
+    return index == -1 ? NULL : type->tInterface.sortedMembers[index];
+}
+
+bool implementsInterface(const Type *type, const Type *inf)
+{
+    for (u64 i = 0; i < type->tStruct.interfacesCount; i++) {
+        if (type->tStruct.interfaces[i] == inf)
+            return true;
+    }
+
+    return false;
+}
+
+const EnumOption *findEnumOption(const Type *type, cstring option)
+{
+    int index = binarySearch(type->tEnum.sortedOptions,
+                             type->tEnum.optionsCount,
+                             &(EnumOption){.name = option},
+                             sizeof(StructMember *),
+                             searchCompareEnumOption);
+
+    return index == -1 ? NULL : type->tEnum.sortedOptions[index];
+}
+
+const ModuleMember *findModuleMember(const Type *type, cstring member)
+{
+    int index = binarySearch(type->module.sortedMembers,
+                             type->module.membersCount,
+                             &(ModuleMember){.name = member},
+                             sizeof(ModuleMember *),
+                             searchCompareStructMember);
+
+    return index == -1 ? NULL : type->module.sortedMembers[index];
+}
+
+bool isTruthyType(const Type *type)
+{
+    return isIntegralType(type) || isFloatType(type) || typeIs(type, Pointer) ||
+           typeIs(type, Optional) ||
+           (typeIs(type, Struct) &&
+            findStructMemberType(type, S_Truthy) != NULL);
+}
+
+const Type *getOptionalType()
+{
+    static const Type *optionalType = NULL;
+    if (optionalType == NULL)
+        optionalType = findBuiltinType(S_Optional);
+    return optionalType;
+}
+
+const Type *getOptionalTargetType(const Type *type)
+{
+    return hasFlag(type, Optional) ? type->tStruct.members[1].type : NULL;
 }

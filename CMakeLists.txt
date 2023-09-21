@@ -24,7 +24,61 @@ set(CMAKE_MODULE_PATH
 
 option(ENABLE_TESTS "Enable CMake tests" ON)
 
+include(CxyUtils)
+include(FetchContent)
+
+# Fetch message-pack library
+set(MSGPACK_BUILD_TESTS OFF)
+set(MSGPACK_BUILD_EXAMPLES OFF)
+set(MSGPACK_ENABLE_STATIC ON)
+set(MSGPACK_ENABLE_SHARED OFF)
+set(MSGPACK_GEN_COVERAGE OFF)
+
+cmake_policy(PUSH)
+set(CMAKE_POLICY_DEFAULT_CMP0048 "NEW")
+set(CMAKE_POLICY_DEFAULT_CMP0077 "NEW")
+FetchContent_Declare(
+        msgpack-c
+        GIT_REPOSITORY https://github.com/msgpack/msgpack-c
+        GIT_TAG c-6.0.0
+)
+FetchContent_MakeAvailable(msgpack-c)
+
+set(BUILD_TESTING OFF)
+FetchContent_Declare(
+        libyaml
+        GIT_REPOSITORY https://github.com/yaml/libyaml.git
+        GIT_TAG master
+)
+FetchContent_MakeAvailable(libyaml)
+
+cmake_policy(POP)
+
 include_directories(src/cxy)
+
+add_executable(amalgamate
+        src/tools/amalgamate.c
+        src/cxy/core/utils.c)
+
+CxyAmalgamate(builtins
+        OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/generated
+        FILES
+            src/cxy/lang/runtime/builtins.cxy)
+
+CxyAmalgamate(epilogue
+        OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/generated
+        FILES
+        src/cxy/lang/runtime/epilogue.c)
+
+CxyAmalgamate(prologue
+        OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/generated
+        FILES
+            src/cxy/lang/runtime/prologue.h)
+
+CxyAmalgamate(runtime
+        OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/generated
+        FILES
+        src/cxy/lang/runtime/runtime.c)
 
 set(CXY_3RD_PARTY_SOURCES
         src/cxy/3rdparty/cJSON.c)
@@ -42,102 +96,87 @@ set(CXY_CORE_SOURCES
         src/cxy/core/strpool.c
         src/cxy/core/utils.c)
 
-set(CXY_LANG_NODE_SOURCES
-        src/cxy/lang/nodes/array.c
-        src/cxy/lang/nodes/assign.c
-        src/cxy/lang/nodes/attributes.c
-        src/cxy/lang/nodes/binary.c
-        src/cxy/lang/nodes/block.c
-        src/cxy/lang/nodes/builtins.c
-        src/cxy/lang/nodes/call.c
-        src/cxy/lang/nodes/cast.c
-        src/cxy/lang/nodes/ccode.c
-        src/cxy/lang/nodes/closure.c
-        src/cxy/lang/nodes/comptime.c
-        src/cxy/lang/nodes/coroutine.c
-        src/cxy/lang/nodes/define.c
-        src/cxy/lang/nodes/enum.c
-        src/cxy/lang/nodes/forstmt.c
-        src/cxy/lang/nodes/function.c
-        src/cxy/lang/nodes/generics.c
-        src/cxy/lang/nodes/if.c
-        src/cxy/lang/nodes/index.c
-        src/cxy/lang/nodes/literals.c
-        src/cxy/lang/nodes/macro.c
-        src/cxy/lang/nodes/member.c
-        src/cxy/lang/nodes/module.c
-        src/cxy/lang/nodes/new.c
-        src/cxy/lang/nodes/path.c
-        src/cxy/lang/nodes/range.c
-        src/cxy/lang/nodes/return.c
-        src/cxy/lang/nodes/strexpr.c
-        src/cxy/lang/nodes/struct.c
-        src/cxy/lang/nodes/switch.c
-        src/cxy/lang/nodes/ternary.c
-        src/cxy/lang/nodes/tuple.c
-        src/cxy/lang/nodes/type.c
-        src/cxy/lang/nodes/unary.c
-        src/cxy/lang/nodes/variables.c
-        src/cxy/lang/nodes/while.c)
+set(CXY_3RD_PARTY_SOURCES
+        src/cxy/3rdParty/cJSON.c)
 
 set(CXY_LANG_SOURCES
         src/cxy/lang/ast.c
+        src/cxy/lang/builtins.c
         src/cxy/lang/capture.c
-        src/cxy/lang/codegen.c
-        src/cxy/lang/eval.c
+        src/cxy/lang/encode.c
+        src/cxy/lang/decode.c
         src/cxy/lang/lexer.c
-        src/cxy/lang/node.c
+        src/cxy/lang/operator.c
         src/cxy/lang/parser.c
+        src/cxy/lang/strings.c
         src/cxy/lang/scope.c
         src/cxy/lang/ttable.c
         src/cxy/lang/types.c
-        src/cxy/lang/semantics.c)
+        src/cxy/lang/visitor.c)
+
+
+set(CXY_OPERATIONS_SOURCES
+        src/cxy/lang/operations/bind.c
+        src/cxy/lang/operations/check.c
+        src/cxy/lang/operations/codegen.c
+        src/cxy/lang/operations/comptime.c
+        src/cxy/lang/operations/eval.c
+        src/cxy/lang/operations/finalize.c
+        src/cxy/lang/operations/json.c
+        src/cxy/lang/operations/macro.c
+        src/cxy/lang/operations/shake.c
+        src/cxy/lang/operations/yaml.c
+        src/cxy/lang/operations/nodes/array.c
+        src/cxy/lang/operations/nodes/assign.c
+        src/cxy/lang/operations/nodes/binary.c
+        src/cxy/lang/operations/nodes/call.c
+        src/cxy/lang/operations/nodes/closure.c
+        src/cxy/lang/operations/nodes/enum.c
+        src/cxy/lang/operations/nodes/for.c
+        src/cxy/lang/operations/nodes/function.c
+        src/cxy/lang/operations/nodes/generics.c
+        src/cxy/lang/operations/nodes/if.c
+        src/cxy/lang/operations/nodes/index.c
+        src/cxy/lang/operations/nodes/literal.c
+        src/cxy/lang/operations/nodes/member.c
+        src/cxy/lang/operations/nodes/new.c
+        src/cxy/lang/operations/nodes/node.c
+        src/cxy/lang/operations/nodes/path.c
+        src/cxy/lang/operations/nodes/struct.c
+        src/cxy/lang/operations/nodes/string.c
+        src/cxy/lang/operations/nodes/ternary.c
+        src/cxy/lang/operations/nodes/tuple.c
+        src/cxy/lang/operations/nodes/type.c
+        src/cxy/lang/operations/nodes/switch.c
+        src/cxy/lang/operations/nodes/unary.c
+        src/cxy/lang/operations/nodes/variables.c)
 
 set(CXY_DRIVER_SOURCES
         src/cxy/driver/cc.c
         src/cxy/driver/driver.c
-        src/cxy/driver/options.c)
+        src/cxy/driver/options.c
+        src/cxy/driver/stages.c
+        src/cxy/driver/stats.c)
 
 add_executable(cxy
         src/cxy/driver/main.c
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/builtins.c
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/epilogue.c
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/prologue.c
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/runtime.c
+        ${CXY_3RD_PARTY_SOURCES}
         ${CXY_CORE_SOURCES}
         ${CXY_LANG_SOURCES}
         ${CXY_LANG_NODE_SOURCES}
-        ${CXY_DRIVER_SOURCES})
+        ${CXY_DRIVER_SOURCES}
+        ${CXY_OPERATIONS_SOURCES})
 
-add_executable(escape src/tools/escape.c src/cxy/core/utils.c)
-
+target_link_libraries(cxy msgpack-c yaml)
 target_compile_definitions(cxy PRIVATE
         -DCXY_VERSION="${CXY_VERSION}"
         -DCXY_SOURCE_LANG_DIR="${CMAKE_SOURCE_DIR}/src/cxy/lang")
 
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/stdlib)
-
-include_directories(${CMAKE_CURRENT_BINARY_DIR}/generated)
-
-add_custom_target(
-        cxy-code ALL
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        COMMAND escape src/cxy/lang/native/c.c ${CMAKE_CURRENT_BINARY_DIR}/generated/c.inc.h CXY_C_WRAPPERS
-        COMMAND escape src/cxy/lang/native/coro.c ${CMAKE_CURRENT_BINARY_DIR}/generated/coro.inc.h CXY_CORO
-        COMMAND escape src/cxy/lang/native/thread.c ${CMAKE_CURRENT_BINARY_DIR}/generated/thread.inc.h CXY_THREAD
-        COMMAND escape src/cxy/lang/native/scheduler.c ${CMAKE_CURRENT_BINARY_DIR}/generated/scheduler.inc.h CXY_SCHEDULER
-        COMMAND escape src/cxy/lang/native/evloop.c ${CMAKE_CURRENT_BINARY_DIR}/generated/evloop.inc.h CXY_EV_LOOP
-        COMMAND escape src/cxy/lang/native/setup.h ${CMAKE_CURRENT_BINARY_DIR}/generated/setup.inc.h CXY_SETUP
-        COMMAND escape src/cxy/lang/native/main.c.h ${CMAKE_CURRENT_BINARY_DIR}/generated/main.inc.h CXY_MAIN
-        COMMAND escape src/cxy/lang/builtins.cxy ${CMAKE_CURRENT_BINARY_DIR}/generated/builtins.cxy.h CXY_BUILTINS
-        DEPENDS src/cxy/lang/native/c.c
-                src/cxy/lang/native/coro.c
-                src/cxy/lang/native/thread.c
-                src/cxy/lang/native/scheduler.c
-                src/cxy/lang/native/evloop.c
-                src/cxy/lang/native/setup.h
-                src/cxy/lang/native/main.c.h
-                src/cxy/lang/builtins.cxy
-                escape
-)
-
 set(CXY_STD_LIB_SOURCES
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/io.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/json.cxy
@@ -151,4 +190,7 @@ add_custom_target(
         DEPENDS ${CXY_STD_LIB_SOURCES}
 )
 
-add_dependencies(cxy cxy-code cxy-stdlib)
+add_dependencies(cxy cxy-stdlib)
+
+
+

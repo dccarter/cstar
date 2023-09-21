@@ -1,26 +1,25 @@
 #include "driver.h"
+#include "builtins.h"
 #include "cc.h"
+#include "options.h"
+#include "stages.h"
 
 #include "core/log.h"
 #include "core/mempool.h"
 #include "core/utils.h"
-#include "driver/options.h"
+
 #include "lang/ast.h"
-#include "lang/codegen.h"
+#include "lang/builtins.h"
+#include "lang/flag.h"
 #include "lang/lexer.h"
 #include "lang/parser.h"
-#include "lang/semantics.h"
+#include "lang/strings.h"
 #include "lang/ttable.h"
 
 #include <errno.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
-
-#include "builtins.cxy.h"
-
-#define BYTES_TO_GB(B) (((double)(B)) / 1000000000)
-#define BYTES_TO_MB(B) (((double)(B)) / 1000000)
-#define BYTES_TO_KB(B) (((double)(B)) / 1000)
 
 typedef struct CachedModule {
     cstring path;
@@ -31,6 +30,25 @@ static bool compareCachedModules(const void *lhs, const void *rhs)
 {
     return strcmp(((CachedModule *)lhs)->path, ((CachedModule *)rhs)->path) ==
            0;
+}
+
+static int compareModifiedTime(const struct stat *lhs, const struct stat *rhs)
+{
+    if (lhs->st_mtimespec.tv_sec < rhs->st_mtimespec.tv_sec) {
+        return -1;
+    }
+    else if (lhs->st_mtimespec.tv_sec > rhs->st_mtimespec.tv_sec) {
+        return 1;
+    }
+    else if (lhs->st_mtimespec.tv_nsec < rhs->st_mtimespec.tv_nsec) {
+        return -1;
+    }
+    else if (lhs->st_mtimespec.tv_nsec > rhs->st_mtimespec.tv_nsec) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
 }
 
 static AstNode *findCachedModule(CompilerDriver *driver, cstring path)
@@ -61,6 +79,18 @@ static void addCachedModule(CompilerDriver *driver,
     csAssert0(status);
 }
 
+attr(always_inline) static char *getCachedAstPath(Options *options,
+                                                  const char *fileName)
+{
+    FormatState state = newFormatState("", true);
+    format(&state,
+           "{s}/cache/{s}",
+           (FormatArg[]){{.s = options->buildDir}, {.s = fileName}});
+    char *path = formatStateToString(&state);
+    freeFormatState(&state);
+    return path;
+}
+
 static AstNode *parseFile(CompilerDriver *driver, const char *fileName)
 {
     size_t file_size = 0;
@@ -73,9 +103,11 @@ static AstNode *parseFile(CompilerDriver *driver, const char *fileName)
         return NULL;
     }
 
+    compilerStatsSnapshot(driver);
     Lexer lexer = newLexer(fileName, fileData, file_size, driver->L);
     Parser parser = makeParser(&lexer, driver);
     AstNode *program = parseProgram(&parser);
+    compilerStatsRecord(driver, ccs_Parse);
 
     freeLexer(&lexer);
     free(fileData);
@@ -97,12 +129,7 @@ static AstNode *parseString(CompilerDriver *driver,
     return program;
 }
 
-static inline bool hasErrors(CompilerDriver *driver)
-{
-    return driver->L->errorCount > 0;
-}
-
-static cstring getFilenameWithoutDirs(cstring fileName)
+cstring getFilenameWithoutDirs(cstring fileName)
 {
     if (fileName[0] == '/') {
         const char *slash = strrchr(fileName, '/');
@@ -114,10 +141,10 @@ static cstring getFilenameWithoutDirs(cstring fileName)
     return fileName;
 }
 
-static char *getGeneratedPath(const Options *options,
-                              cstring dir,
-                              cstring filePath,
-                              cstring ext)
+char *getGeneratedPath(const Options *options,
+                       cstring dir,
+                       cstring filePath,
+                       cstring ext)
 {
     FormatState state = newFormatState("    ", true);
     cstring fileName = getFilenameWithoutDirs(filePath);
@@ -153,51 +180,9 @@ void makeDirectoryForPath(CompilerDriver *driver, cstring path)
     system(dir);
 }
 
-static bool generateSourceFiles(CompilerDriver *driver,
-                                AstNode *program,
-                                cstring filePath,
-                                bool isImport)
+static inline bool hasDumpEnable(const Options *opts)
 {
-    const Options *options = &driver->options;
-    char *sourceFile = getGeneratedPath(
-        &driver->options, isImport ? "c/imports" : "c/src", filePath, ".c");
-
-    makeDirectoryForPath(driver, sourceFile);
-
-    FILE *output = fopen(sourceFile, "w");
-    if (output == NULL) {
-        logError(driver->L,
-                 NULL,
-                 "creating output file '{s}' failed, {s}",
-                 (FormatArg[]){{.s = options->output}, {.s = strerror(errno)}});
-        free(sourceFile);
-        return false;
-    }
-
-    FormatState state = newFormatState("  ", true);
-    generateCode(
-        &state, driver->typeTable, &driver->strPool, program, isImport);
-    writeFormatState(&state, output);
-    freeFormatState(&state);
-    fclose(output);
-
-    if (!isImport && options->cmd == cmdBuild) {
-        compileCSourceFile(driver, sourceFile);
-    }
-
-    free(sourceFile);
-
-    return true;
-}
-
-static void dumpGeneratedAst(CompilerDriver *driver, const AstNode *program)
-{
-    FormatState state = newFormatState(
-        "    ", driver->L->state->ignoreStyle || !isColorSupported(stdout));
-    printAst(&state, program, driver->options.cleanAst);
-    writeFormatState(&state, stdout);
-    freeFormatState(&state);
-    printf("\n");
+    return opts->cmd == cmdDev && opts->dev.printAst;
 }
 
 static bool compileProgram(CompilerDriver *driver,
@@ -205,37 +190,43 @@ static bool compileProgram(CompilerDriver *driver,
                            const char *fileName)
 {
     const Options *options = &driver->options;
+    bool status = true;
 
-    if (program == NULL)
-        return false;
+    AstNode *metadata = makeAstNode(
+        &driver->pool,
+        builtinLoc(),
+        &(AstNode){.tag = astMetadata,
+                   .flags = program->flags & flgBuiltinsModule,
+                   .metadata = {.filePath = fileName, .node = program}});
 
-    if (options->cmd == cmdBuild ||
-        (!options->noTypeCheck && !hasErrors(driver))) {
-        semanticsCheck(program,
-                       driver->L,
-                       &driver->memPool,
-                       &driver->strPool,
-                       driver->typeTable,
-                       driver->builtins);
+    CompilerStage stage = ccs_First + 1,
+                  maxStage =
+                      (options->cmd == cmdDev ? options->dev.lastStage.num + 1
+                                              : ccsCOUNT);
+
+    for (; stage < maxStage; stage++) {
+        metadata = executeCompilerStage(driver, stage, metadata);
+        if (metadata == NULL) {
+            status = false;
+            goto compileProgramDone;
+        }
     }
 
-    if (options->printAst && !hasErrors(driver)) {
-        dumpGeneratedAst(driver, program);
-        return true;
+    if (hasDumpEnable(options)) {
+        metadata = executeCompilerStage(driver, ccs_Dump, metadata);
+        if (metadata == NULL)
+            status = false;
     }
 
-    if (!hasErrors(driver)) {
-        generateSourceFiles(driver, program, fileName, false);
+compileProgramDone:
+    stopCompilerStats(driver);
+    bool dumpStats = !options->dev.cleanAst &&
+                     !hasFlag(metadata, BuiltinsModule) &&
+                     !(hasFlag(program, ImportedModule));
+    if (dumpStats) {
+        compilerStatsPrint(driver);
     }
-
-    MemPoolStats stats;
-    getMemPoolStats(&driver->memPool, &stats);
-    printf("\tMemory usage: blocks: %zu, allocated: %f kb, used: %f kb\n",
-           stats.numberOfBlocks,
-           BYTES_TO_KB(stats.totalAllocated),
-           BYTES_TO_KB(stats.totalUsed));
-
-    return true;
+    return status;
 }
 
 static bool compileBuiltin(CompilerDriver *driver,
@@ -243,49 +234,47 @@ static bool compileBuiltin(CompilerDriver *driver,
                            u64 size,
                            const char *fileName)
 {
-    const Options *options = &driver->options;
     AstNode *program = parseString(driver, code, size, fileName);
     if (program == NULL)
         return false;
 
-    if (!hasErrors(driver)) {
-        semanticsCheck(program,
-                       driver->L,
-                       &driver->memPool,
-                       &driver->strPool,
-                       driver->typeTable,
-                       NULL);
+    program->flags |= flgBuiltinsModule;
+    if (compileProgram(driver, program, fileName)) {
+        initializeBuiltins(driver->L, &program->loc, program->type);
+        return true;
     }
 
-    if (!hasErrors(driver)) {
-        setBuiltinEnvironment(program->program.module->moduleDecl.env);
-        generateSourceFiles(driver, program, fileName, true);
+    return false;
+}
+
+bool initCompilerDriver(CompilerDriver *compiler, Log *log)
+{
+    compiler->pool = newMemPool();
+    compiler->strPool = newStrPool(&compiler->pool);
+    compiler->typeTable = newTypeTable(&compiler->pool, &compiler->strPool);
+    compiler->moduleCache = newHashTable(sizeof(CachedModule));
+    compiler->L = log;
+    internCommonStrings(&compiler->strPool);
+
+    if (compiler->options.cmd == cmdBuild) {
+        if (!generateAllBuiltinSources(compiler))
+            return false;
+
+        return compileBuiltin(compiler,
+                              CXY_BUILTINS_SOURCE,
+                              CXY_BUILTINS_SOURCE_SIZE,
+                              "__builtins.cxy");
     }
 
     return true;
 }
 
-bool initCompilerDriver(CompilerDriver *compiler, Log *log)
+const Type *compileModule(CompilerDriver *driver,
+                          const AstNode *source,
+                          AstNode *entities)
 {
-    compiler->memPool = newMemPool();
-    compiler->strPool = newStrPool(&compiler->memPool);
-    compiler->typeTable = newTypeTable(&compiler->memPool, &compiler->strPool);
-    compiler->moduleCache = newHashTable(sizeof(CachedModule));
-    compiler->L = log;
-
-    return compileBuiltin(
-        compiler, CXY_BUILTINS_CODE, CXY_BUILTINS_CODE_SIZE, "__builtins.cxy");
-}
-
-AstNode *compileModule(CompilerDriver *driver,
-                       const AstNode *source,
-                       const AstNode *entities)
-{
-    const Options *options = &driver->options;
-    AstNode *program = NULL;
     cstring name = source->stringLiteral.value;
-
-    program = findCachedModule(driver, name);
+    AstNode *program = findCachedModule(driver, name);
     bool cached = true;
     if (program == NULL) {
         cached = false;
@@ -308,28 +297,23 @@ AstNode *compileModule(CompilerDriver *driver,
         }
 
         if (program == NULL)
-            return false;
+            return NULL;
 
-        if (options->cmd == cmdBuild ||
-            (!options->noTypeCheck && !hasErrors(driver))) {
-            semanticsCheck(program,
-                           driver->L,
-                           &driver->memPool,
-                           &driver->strPool,
-                           driver->typeTable,
-                           driver->builtins);
-        }
-
-        if (hasErrors(driver))
+        program->flags |= flgImportedModule;
+        if (!compileProgram(driver, program, name))
             return NULL;
     }
 
-    const AstNode *entity = entities;
-    AstNode *module = program->program.module;
+    AstNode *entity = entities;
+    const Type *module = program->type;
 
     for (; entity; entity = entity->next) {
-        if (!findSymbolOnly(module->moduleDecl.env,
-                            entity->importEntity.name)) {
+        const ModuleMember *member =
+            findModuleMember(module, entity->importEntity.name);
+        if (member) {
+            entity->importEntity.target = (AstNode *)member->decl;
+        }
+        else {
             logError(
                 driver->L,
                 &entity->loc,
@@ -338,31 +322,27 @@ AstNode *compileModule(CompilerDriver *driver,
         }
     }
 
-    if (hasErrors(driver))
+    if (hasErrors(driver->L))
         return NULL;
 
-    if (!cached) {
-        generateSourceFiles(driver, program, name, true);
+    if (!cached)
         addCachedModule(driver, name, program);
-    }
 
-    return module;
+    return program->type;
 }
 
-bool compileSource(const char *fileName, CompilerDriver *driver)
+bool compileFile(const char *fileName, CompilerDriver *driver)
 {
-    if (driver->options.cmd == cmdBuild && !generateBuiltinSources(driver))
-        return false;
-
+    startCompilerStats(driver);
     AstNode *program = parseFile(driver, fileName);
-
+    program->flags |= flgMain;
     return compileProgram(driver, program, fileName);
 }
 
-bool compileSourceString(CompilerDriver *driver,
-                         cstring source,
-                         u64 size,
-                         cstring filename)
+bool compileString(CompilerDriver *driver,
+                   cstring source,
+                   u64 size,
+                   cstring filename)
 {
     AstNode *program = parseString(driver, source, size, filename);
     return compileProgram(driver, program, filename);

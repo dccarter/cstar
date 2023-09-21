@@ -1,838 +1,167 @@
 
 #include "ast.h"
+#include "builtins.h"
+#include "capture.h"
+#include "flag.h"
+#include "scope.h"
+#include "strings.h"
 
 #include <memory.h>
 
 typedef struct {
-    FormatState *state;
-    u32 isWithinStruct;
-    const AstNode *parent;
-    bool clean;
-} AstPrintContext;
+    const AstNode *from;
+    AstNode *to;
+} AstNodeMapping;
 
-static inline void printManyAsts(ConstAstVisitor *visitor,
-                                 const char *sep,
-                                 const AstNode *nodes)
+AstNode *cloneManyAstNodes(CloneAstConfig *config, const AstNode *nodes)
 {
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    for (const AstNode *node = nodes; node; node = node->next) {
-        astConstVisit(visitor, node);
-        if (node->next)
-            format(context->state, sep, NULL);
-    }
-}
-
-static inline void printManyAstsWithDelim(ConstAstVisitor *visitor,
-                                          const char *open,
-                                          const char *sep,
-                                          const char *close,
-                                          const AstNode *nodes)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    format(context->state, open, NULL);
-    printManyAsts(visitor, sep, nodes);
-    format(context->state, close, NULL);
-}
-
-static inline void printAstWithDelim(ConstAstVisitor *visitor,
-                                     const char *open,
-                                     const char *close,
-                                     const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    format(context->state, open, NULL);
-    astConstVisit(visitor, node);
-    format(context->state, close, NULL);
-}
-
-static inline void printManyAstsWithinBlock(ConstAstVisitor *visitor,
-                                            const char *sep,
-                                            const AstNode *nodes,
-                                            bool newLine)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    if (!nodes)
-        format(context->state, "{{}", NULL);
-    else if (!newLine && !nodes->next)
-        printAstWithDelim(visitor, "{{ ", " }", nodes);
-    else
-        printManyAstsWithDelim(visitor, "{{{>}\n", sep, "{<}\n}", nodes);
-}
-
-static inline void printManyAstsWithinParen(ConstAstVisitor *visitor,
-                                            const AstNode *node)
-{
-    if (node && isTuple(node))
-        astConstVisit(visitor, node);
-    else
-        printManyAstsWithDelim(visitor, "(", ", ", ")", node);
-}
-
-static inline void printOperand(ConstAstVisitor *visitor,
-                                const AstNode *operand,
-                                int prec)
-{
-    if (operand->tag == astBinaryExpr &&
-        getBinaryOpPrecedence(operand->binaryExpr.op) > prec) {
-        printAstWithDelim(visitor, "(", ")", operand);
-    }
-    else
-        astConstVisit(visitor, operand);
-}
-
-static void printAttributes(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    if (node) {
-        format(context->state, "@", NULL);
-        if (node->next)
-            printManyAstsWithDelim(visitor, "[", ", ", "]", node);
-        else
-            astConstVisit(visitor, node);
-    }
-}
-
-static void printGroupExpr(ConstAstVisitor *visitor, const AstNode *expr)
-{
-    printAstWithDelim(visitor, "(", ")", expr->groupExpr.expr);
-}
-
-static void printUnaryExpr(ConstAstVisitor *visitor, const AstNode *expr)
-{
-    csAssert0(expr && expr->tag == astUnaryExpr);
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    const Operator op = expr->unaryExpr.op;
-    if (expr->unaryExpr.isPrefix) {
-        if (isPrefixOpKeyword(op)) {
-            printKeyword(context->state, getUnaryOpString(op));
-            format(context->state, " ", NULL);
-            astConstVisit(visitor, expr->unaryExpr.operand);
-        }
-        else
-            printAstWithDelim(
-                visitor, getUnaryOpString(op), "", expr->unaryExpr.operand);
-    }
-    else {
-        printAstWithDelim(
-            visitor, "", getUnaryOpString(op), expr->unaryExpr.operand);
-    }
-}
-
-static void printBinaryExpr(ConstAstVisitor *visitor, const AstNode *expr)
-{
-    csAssert0(expr && expr->tag == astBinaryExpr);
-
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    int prec = getBinaryOpPrecedence(expr->binaryExpr.op);
-
-    printOperand(visitor, expr->binaryExpr.lhs, prec);
-    format(context->state,
-           " {s} ",
-           (FormatArg[]){{.s = getBinaryOpString(expr->binaryExpr.op)}});
-    printOperand(visitor, expr->binaryExpr.rhs, prec);
-}
-
-static void printAssignExpr(ConstAstVisitor *visitor, const AstNode *expr)
-{
-    csAssert0(expr && expr->tag == astAssignExpr);
-
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    astConstVisit(visitor, expr->assignExpr.lhs);
-    format(context->state,
-           " {s} ",
-           (FormatArg[]){{.s = getAssignOpString(expr->binaryExpr.op)}});
-    astConstVisit(visitor, expr->assignExpr.rhs);
-}
-
-static void printTernaryExpr(ConstAstVisitor *visitor, const AstNode *expr)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    astConstVisit(visitor, expr->ternaryExpr.cond);
-    format(context->state, "? ", NULL);
-    astConstVisit(visitor, expr->ternaryExpr.body);
-    format(context->state, " : ", NULL);
-    astConstVisit(visitor, expr->ternaryExpr.otherwise);
-}
-
-static void printStmtExpr(ConstAstVisitor *visitor, const AstNode *expr)
-{
-    astConstVisit(visitor, expr->stmtExpr.stmt);
-}
-
-static void printStringExpr(ConstAstVisitor *visitor, const AstNode *expr)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    format(context->state,
-           "{$}f\"{$}",
-           (FormatArg[]){{.style = literalStyle}, {.style = resetStyle}});
-
-    for (const AstNode *part = expr->stringExpr.parts; part;
-         part = part->next) {
-        if (part->tag == astStringLit) {
-            format(context->state,
-                   "{$}{s}{$}",
-                   (FormatArg[]){{.style = literalStyle},
-                                 {.s = part->stringLiteral.value},
-                                 {.style = resetStyle}});
+    AstNode *first = NULL, *node = NULL;
+    while (nodes) {
+        if (!first) {
+            first = cloneAstNode(config, nodes);
+            node = first;
         }
         else {
-            format(context->state, "${{", NULL);
-            astConstVisit(visitor, part);
-            format(context->state, "}", NULL);
+            node->next = cloneAstNode(config, nodes);
+            node = node->next;
+        }
+        nodes = nodes->next;
+    }
+    return first;
+}
+
+static bool compareAstNodes(const void *lhs, const void *rhs)
+{
+    return ((AstNodeMapping *)lhs)->from == ((AstNodeMapping *)rhs)->from;
+}
+
+static AstNode *findCorrespondingNode(HashTable *mapping, const AstNode *node)
+{
+    AstNodeMapping *found = findInHashTable(mapping,
+                                            &(AstNodeMapping){.from = node},
+                                            hashPtr(hashInit(), node),
+                                            sizeof(AstNodeMapping),
+                                            compareAstNodes);
+    return found ? found->to : NULL;
+}
+
+static void replaceWithCorrespondingNode(HashTable *mapping, AstNode **node)
+{
+    if (*node) {
+        AstNode *found = findCorrespondingNode(mapping, *node);
+        if (found) {
+            *node = found;
         }
     }
-
-    format(context->state,
-           "{$}\"{$}",
-           (FormatArg[]){{.style = literalStyle}, {.style = resetStyle}});
 }
 
-static void printTypedExpr(ConstAstVisitor *visitor, const AstNode *expr)
+static void postCloneAstNode(CloneAstConfig *config,
+                             const AstNode *from,
+                             AstNode *to)
 {
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    astConstVisit(visitor, expr->typedExpr.expr);
-    format(context->state, " : ", NULL);
-    astConstVisit(visitor, expr->typedExpr.type);
-}
-
-static void printCallExpr(ConstAstVisitor *visitor, const AstNode *expr)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    if (expr->callExpr.callee->tag == astClosureExpr)
-        printAstWithDelim(visitor, "(", ")", expr->callExpr.callee);
-    else
-        astConstVisit(visitor, expr->callExpr.callee);
-    if (expr->tag == astMacroCallExpr)
-        format(context->state, "!", NULL);
-    printManyAstsWithinParen(visitor, expr->callExpr.args);
-}
-
-static void printClosureExpr(ConstAstVisitor *visitor, const AstNode *expr)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    if (expr->flags & flgAsync)
-        printKeyword(context->state, "async");
-
-    printManyAstsWithinParen(visitor, expr->closureExpr.params);
-
-    if (expr->closureExpr.ret) {
-        format(context->state, " : ", NULL);
-        astConstVisit(visitor, expr->closureExpr.ret);
-    }
-
-    if (expr->closureExpr.body) {
-        format(context->state, " => ", NULL);
-        astConstVisit(visitor, expr->closureExpr.body);
-    }
-}
-
-static void printArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
-    printManyAstsWithDelim(visitor, "[", ",", "]", node->arrayExpr.elements);
-}
-
-static void printIndexExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
-    if (node->indexExpr.target)
-        astConstVisit(visitor, node->indexExpr.target);
-    printManyAstsWithDelim(visitor, ".[", ", ", "]", node->indexExpr.index);
-}
-
-static void printRangeExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    format(context->state, "range(", NULL);
-    astConstVisit(visitor, node->rangeExpr.start);
-    format(context->state, ", ", NULL);
-    astConstVisit(visitor, node->rangeExpr.end);
-    if (node->rangeExpr.step) {
-        format(context->state, ", ", NULL);
-        astConstVisit(visitor, node->rangeExpr.step);
-    }
-    format(context->state, ")", NULL);
-}
-
-static void printCastExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    format(context->state, "<", NULL);
-    astConstVisit(visitor, node->castExpr.to);
-    format(context->state, ">", NULL);
-    astConstVisit(visitor, node->castExpr.expr);
-}
-
-static void printFieldExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    format(context->state, "{s}: ", (FormatArg[]){{.s = node->fieldExpr.name}});
-    astConstVisit(visitor, node->fieldExpr.value);
-}
-
-static void printStructExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
-    astConstVisit(visitor, node->structExpr.left);
-    printManyAstsWithinBlock(visitor, ", ", node->structExpr.fields, false);
-}
-
-static void printMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    astConstVisit(visitor, node->memberExpr.target);
-    format(context->state, ".", NULL);
-    astConstVisit(visitor, node->memberExpr.member);
-}
-
-static void printIdentifier(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    format(context->state, "{s}", (FormatArg[]){{.s = node->ident.value}});
-}
-
-static void printNullLiteral(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    printKeyword(context->state, "null");
-}
-
-static void printBoolLiteral(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    printKeyword(context->state, node->boolLiteral.value ? "true" : "false");
-}
-
-static void printCharLiteral(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    format(context->state,
-           "{$}'{cE}'{$}",
-           (FormatArg[]){{.style = literalStyle},
-                         {.u32 = node->charLiteral.value},
-                         {.style = resetStyle}});
-}
-
-static void printIntLiteral(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    format(context->state,
-           "{$}{i64}{$}",
-           (FormatArg[]){{.style = literalStyle},
-                         {.i64 = node->intLiteral.value},
-                         {.style = resetStyle}});
-}
-
-static void printFloatLiteral(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    format(context->state,
-           "{$}{f64}{$}",
-           (FormatArg[]){{.style = literalStyle},
-                         {.f64 = node->floatLiteral.value},
-                         {.style = resetStyle}});
-}
-
-static void printStringLiteral(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    format(context->state,
-           "{$}\"{s}\"{$}",
-           (FormatArg[]){{.style = literalStyle},
-                         {.s = node->stringLiteral.value},
-                         {.style = resetStyle}});
-}
-
-static void printPrimitiveType(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    printKeyword(context->state, getPrimitiveTypeName(node->primitiveType.id));
-}
-
-static void printStringType(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    printKeyword(context->state, "string");
-}
-
-static void printTupleType(ConstAstVisitor *visitor, const AstNode *node)
-{
-    printManyAstsWithDelim(visitor, "(", ", ", ")", node->tupleType.args);
-}
-
-static void printOptionalType(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    astConstVisit(visitor, node->optionalType.type);
-    format(context->state, "?", NULL);
-}
-
-static void printArrayType(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    format(context->state, "[", NULL);
-    astConstVisit(visitor, node->arrayType.elementType);
-    if (node->arrayType.dim != NULL)
-        printManyAstsWithDelim(visitor, "", ", ", "", node->arrayType.dim);
-    format(context->state, "]", NULL);
-}
-
-static void printPointerType(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    format(context->state, "&", NULL);
-    if (node->flags & flgConst) {
-        printKeyword(context->state, "const");
-        format(context->state, " ", NULL);
-    }
-    astConstVisit(visitor, node->pointerType.pointed);
-}
-
-static void printFuncType(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    if (node->flags & flgAsync) {
-        printKeyword(context->state, "async");
-        format(context->state, " ", NULL);
-    }
-    printKeyword(context->state, "func");
-    printManyAstsWithinParen(visitor, node->funcType.params);
-    format(context->state, " -> ", NULL);
-    astConstVisit(visitor, node->funcType.ret);
-}
-
-static void printFuncParam(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-
-    if (node->attrs) {
-        printAttributes(visitor, node->attrs);
-        format(context->state, " ", NULL);
-    }
-
-    if (node->flags & flgVariadic)
-        format(context->state, "...", NULL);
-
-    format(context->state, "{s}: ", (FormatArg[]){{.s = node->funcParam.name}});
-    if (hasFlag(node, Capture))
-        format(context->state, "&Capture", NULL);
-    else
-        astConstVisit(visitor, node->funcParam.type);
-}
-
-static void printError(ConstAstVisitor *visitor,
-                       attr(unused) const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    format(context->state,
-           "{$}<error>{$}",
-           (FormatArg[]){{.style = errorStyle}, {.style = resetStyle}});
-}
-
-static void printProgram(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    if (!context->clean) {
-        format(context->state,
-               "{$}/*\n"
-               "* Generated from {s}\n"
-               "*/{$}\n\n",
-               (FormatArg[]){{.style = commentStyle},
-                             {.s = node->loc.fileName},
-                             {.style = resetStyle}});
-    }
-
-    printManyAstsWithDelim(visitor, "", "\n\n", "", node->program.decls);
-}
-
-static void printAttribute(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    format(context->state, "{s}", (FormatArg[]){{.s = node->attr.name}});
-    if (node->attr.args)
-        printManyAstsWithinParen(visitor, node->attr.args);
-}
-
-static void printGenericParam(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    format(
-        context->state, "{s}", (FormatArg[]){{.s = node->genericParam.name}});
-    if (node->genericParam.constraints) {
-        format(context->state, ": ", NULL);
-        printManyAstsWithDelim(
-            visitor, "", "|", "", node->genericParam.constraints);
-    }
-}
-
-static void printGenericDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    context->parent = node;
-    astConstVisit(visitor, node->genericDecl.decl);
-}
-
-static void printPathElement(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    format(context->state, "{s}", (FormatArg[]){{.s = node->pathElement.name}});
-    if (node->pathElement.args)
-        printManyAstsWithDelim(visitor, "[", ",", "]", node->pathElement.args);
-}
-
-static void printPath(ConstAstVisitor *visitor, const AstNode *node)
-{
-    printManyAstsWithDelim(visitor, "", ".", "", node->path.elements);
-}
-
-static void printFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    if (node->attrs) {
-        printAttributes(visitor, node->attrs);
-        format(context->state, "\n", NULL);
-    }
-
-    if (context->isWithinStruct && !(node->flags & flgPublic))
-        format(context->state, "- ", NULL);
-
-    if (node->flags & flgPublic) {
-        printKeyword(context->state, "async");
-        format(context->state, " ", NULL);
-    }
-
-    printKeyword(context->state, "func");
-    format(context->state, " {s}", (FormatArg[]){{.s = node->funcDecl.name}});
-    if (nodeIs(context->parent, GenericDecl) &&
-        context->parent->genericDecl.params) {
-        printManyAstsWithDelim(
-            visitor, "[", ",", "]", context->parent->genericDecl.params);
-    }
-    printManyAstsWithinParen(visitor, node->funcDecl.params);
-
-    if (node->funcDecl.ret) {
-        format(context->state, " : ", NULL);
-        astConstVisit(visitor, node->funcDecl.ret);
-    }
-    format(context->state, " ", NULL);
-
-    if (node->funcDecl.body) {
-        if (node->funcDecl.body->tag != astBlockStmt)
-            format(context->state, " => ", NULL);
-        astConstVisit(visitor, node->funcDecl.body);
-    }
-}
-
-static void printMacroDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-
-    printKeyword(context->state, "macro");
-    format(context->state, " {s}", (FormatArg[]){{.s = node->macroDecl.name}});
-    printManyAstsWithinParen(visitor, node->macroDecl.params);
-
-    if (node->macroDecl.ret) {
-        format(context->state, " : ", NULL);
-        astConstVisit(visitor, node->macroDecl.ret);
-    }
-
-    format(context->state, " ", NULL);
-    astConstVisit(visitor, node->macroDecl.body);
-}
-
-static void printVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-
-    if (node->flags & flgConst)
-        printKeyword(context->state, "var");
-    else
-        printKeyword(context->state, "const");
-    format(context->state, " ", NULL);
-
-    if (node->varDecl.names->next)
-        printManyAstsWithinParen(visitor, node->varDecl.names);
-    else
-        astConstVisit(visitor, node->varDecl.names);
-
-    if (node->varDecl.type) {
-        format(context->state, " : ", NULL);
-        astConstVisit(visitor, node->varDecl.type);
-    }
-
-    if (node->varDecl.init) {
-        format(context->state, " = ", NULL);
-        astConstVisit(visitor, node->varDecl.init);
-    }
-}
-
-static void printTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    if (node->attrs) {
-        printAttributes(visitor, node->attrs);
-        format(context->state, "\n", NULL);
-    }
-
-    if (context->isWithinStruct && !(node->flags & flgPublic))
-        format(context->state, "- ", NULL);
-
-    printKeyword(context->state, "type");
-    format(context->state, " {s}", (FormatArg[]){{.s = node->typeDecl.name}});
-    if (context->parent && nodeIs(context->parent, GenericDecl) &&
-        context->parent->genericDecl.params) {
-        printManyAstsWithDelim(
-            visitor, "[", ",", "]", context->parent->genericDecl.params);
-    }
-
-    if (node->typeDecl.aliased) {
-        format(context->state, " = ", NULL);
-        astConstVisit(visitor, node->typeDecl.aliased);
-    }
-}
-
-static void printUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    if (node->attrs) {
-        printAttributes(visitor, node->attrs);
-        format(context->state, "\n", NULL);
-    }
-
-    if (context->isWithinStruct && !(node->flags & flgPublic))
-        format(context->state, "- ", NULL);
-
-    printKeyword(context->state, "type");
-    format(context->state, " {s}", (FormatArg[]){{.s = node->unionDecl.name}});
-    if (context->parent && nodeIs(context->parent, GenericDecl) &&
-        context->parent->genericDecl.params) {
-        printManyAstsWithDelim(
-            visitor, "[", ",", "]", context->parent->genericDecl.params);
-    }
-
-    if (node->unionDecl.members) {
-        format(context->state, " = ", NULL);
-        printManyAstsWithDelim(visitor, "", " | ", "", node->unionDecl.members);
-    }
-}
-
-static void printEnumDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    if (node->attrs) {
-        printAttributes(visitor, node->attrs);
-        format(context->state, "\n", NULL);
-    }
-
-    if (context->isWithinStruct && !(node->flags & flgPublic))
-        format(context->state, "- ", NULL);
-
-    printKeyword(context->state, "enum");
-    format(context->state, " {s}", (FormatArg[]){{.s = node->enumDecl.name}});
-    if (node->enumDecl.base) {
-        format(context->state, " : ", NULL);
-        astConstVisit(visitor, node->enumDecl.base);
-    }
-
-    if (node->enumDecl.options) {
-        format(context->state, " = ", NULL);
-        printManyAstsWithinBlock(visitor, ",", node->unionDecl.members, true);
-    }
-}
-
-static void printEnumOption(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    if (node->attrs) {
-        printAttributes(visitor, node->attrs);
-        format(context->state, "\n", NULL);
-    }
-
-    format(context->state, " {s}", (FormatArg[]){{.s = node->enumOption.name}});
-    if (node->enumOption.value) {
-        format(context->state, " = ", NULL);
-        astConstVisit(visitor, node->enumOption.value);
-    }
-}
-
-static void printStructField(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    if (node->attrs) {
-        printAttributes(visitor, node->attrs);
-        format(context->state, "\n", NULL);
-    }
-
-    if (node->flags & flgPrivate)
-        format(context->state, "- ", NULL);
-
-    format(
-        context->state, "{s}: ", (FormatArg[]){{.s = node->structField.name}});
-    astConstVisit(visitor, node->structField.type);
-    if (node->structField.value) {
-        format(context->state, " = ", NULL);
-        astConstVisit(visitor, node->structField.value);
-    }
-}
-
-static void printStructDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    if (node->attrs) {
-        printAttributes(visitor, node->attrs);
-        format(context->state, "\n", NULL);
-    }
-
-    if (context->isWithinStruct && !(node->flags & flgPublic))
-        format(context->state, "- ", NULL);
-    context->isWithinStruct++;
-
-    printKeyword(context->state, "struct");
-    format(context->state, " {s}", (FormatArg[]){{.s = node->structDecl.name}});
-    if (nodeIs(context->parent, GenericDecl) &&
-        context->parent->genericDecl.params) {
-        printManyAstsWithDelim(
-            visitor, "[", ",", "]", context->parent->genericDecl.params);
-    }
-
-    if (node->structDecl.base) {
-        format(context->state, " : ", NULL);
-        astConstVisit(visitor, node->structDecl.base);
-    }
-    format(context->state, " ", NULL);
-
-    if (node->structDecl.members) {
-        printManyAstsWithinBlock(visitor, "\n", node->structDecl.members, true);
-    }
-
-    context->isWithinStruct--;
-}
-
-static void printExprStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
-    astConstVisit(visitor, node->exprStmt.expr);
-}
-
-static void printBreakContinueStmt(ConstAstVisitor *visitor,
-                                   const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    printKeyword(context->state,
-                 node->tag == astBreakStmt ? "break" : "continue");
-}
-
-static void printReturnStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    printKeyword(context->state, "return");
-    if (node->returnStmt.expr) {
-        format(context->state, " ", NULL);
-        astConstVisit(visitor, node->returnStmt.expr);
-    }
-}
-
-static void printBlockStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
-    printManyAstsWithinBlock(visitor, "\n", node->blockStmt.stmts, true);
-}
-
-static void printIfStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    printKeyword(context->state, "if");
-    format(context->state, " (", NULL);
-    astConstVisit(visitor, node->ifStmt.cond);
-    format(context->state, ")", NULL);
-    if (node->ifStmt.body->tag != astBlockStmt) {
-        format(context->state, " {{{>}\n", NULL);
-        astConstVisit(visitor, node->ifStmt.body);
-        format(context->state, "{<}\n}", NULL);
-    }
-    else {
-        format(context->state, " ", NULL);
-        astConstVisit(visitor, node->ifStmt.body);
-    }
-
-    if (node->ifStmt.otherwise) {
-        printKeyword(context->state, " else");
-        format(context->state, " ", NULL);
-        astConstVisit(visitor, node->ifStmt.otherwise);
-    }
-}
-
-static void printForStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    printKeyword(context->state, "for");
-    format(context->state, " (", NULL);
-    astConstVisit(visitor, node->forStmt.var);
-    format(context->state, " : ", NULL);
-    astConstVisit(visitor, node->forStmt.range);
-    format(context->state, ")", NULL);
-    if (node->forStmt.body->tag != astBlockStmt) {
-        format(context->state, " {{\n{>}", NULL);
-        astConstVisit(visitor, node->forStmt.body);
-        format(context->state, " {>}}", NULL);
-    }
-    else {
-        format(context->state, " ", NULL);
-        astConstVisit(visitor, node->forStmt.body);
-    }
-}
-
-static void printWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    printKeyword(context->state, "while");
-    format(context->state, " (", NULL);
-    astConstVisit(visitor, node->whileStmt.cond);
-    format(context->state, ")", NULL);
-    if (node->whileStmt.body) {
-        if (node->whileStmt.body->tag != astBlockStmt) {
-            format(context->state, " {{{>}\n", NULL);
-            astConstVisit(visitor, node->whileStmt.body);
-            format(context->state, " {<}\n}", NULL);
+    switch (from->tag) {
+    case astFuncDecl:
+        if (from->list.first) {
+            if (from->list.first == from) {
+                to->list.first = to;
+            }
+            else {
+                replaceWithCorrespondingNode(&config->mapping, &to->list.first);
+                AstNode *prev = to->list.first, *node = prev->list.link;
+                while (node) {
+                    if (node == from) {
+                        prev->list.link = to;
+                        break;
+                    }
+                    prev = node;
+                    node = node->list.link;
+                }
+            }
         }
+    case astFuncParam:
+    case astStructDecl:
+    case astStructField:
+    case astInterfaceDecl:
+    case astUnionDecl:
+    case astTypeDecl:
+    case astGenericParam:
+    case astDefine:
+    case astVarDecl:
+    case astGenericDecl:
+    case astEnumDecl:
+    case astEnumOption:
+        mapAstNode(&config->mapping, from, to);
+        break;
+    case astIdentifier:
+        if (nodeIs(from->parentScope, Define))
+            mapAstNode(&config->mapping, from, to);
         else {
-            format(context->state, " ", NULL);
-            astConstVisit(visitor, node->whileStmt.body);
+            replaceWithCorrespondingNode(&config->mapping,
+                                         &to->ident.resolvesTo);
         }
+        break;
+    case astPathElem:
+        replaceWithCorrespondingNode(&config->mapping,
+                                     &to->pathElement.resolvesTo);
+        break;
+    case astReturnStmt:
+        replaceWithCorrespondingNode(&config->mapping, &to->returnStmt.func);
+        break;
+    case astClosureExpr:
+        mapAstNode(&config->mapping, from, to);
+        if (from->closureExpr.capture == NULL)
+            break;
+        to->closureExpr.capture = allocFromMemPool(
+            config->pool, sizeof(Capture *) * from->closureExpr.captureCount);
+        memcpy(to->closureExpr.capture,
+               from->closureExpr.capture,
+               sizeof(Capture *) * from->closureExpr.captureCount);
+        for (u64 i = 0; i < from->closureExpr.captureCount; i++) {
+            AstNode *capture = (AstNode *)from->closureExpr.capture[i]->node;
+            replaceWithCorrespondingNode(&config->mapping, &capture);
+            ((Capture *)to->closureExpr.capture[i])->node = capture;
+        }
+        break;
+    default:
+        break;
     }
-    else {
-        format(context->state, ";", NULL);
+
+    if (from->parentScope) {
+        to->parentScope = from->parentScope;
+        replaceWithCorrespondingNode(&config->mapping, &to->parentScope);
     }
+    if (nodeIs(to, FuncDecl))
+        replaceWithCorrespondingNode(&config->mapping, &to->list.first);
 }
 
-static void printCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
+static void unmapAstNode(HashTable *mapping, const AstNode *node)
 {
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    if (node->flags & flgDefault) {
-        printKeyword(context->state, "default");
-    }
-    else {
-        printKeyword(context->state, "case");
-        format(context->state, " ", NULL);
-        astConstVisit(visitor, node->caseStmt.match);
-    }
-    format(context->state, ":", NULL);
-    if (node->caseStmt.body) {
-        if (node->caseStmt.body->tag != astBlockStmt) {
-            format(context->state, " {{{>}\n", NULL);
-            astConstVisit(visitor, node->caseStmt.body);
-            format(context->state, " {<}\n}", NULL);
-        }
-        else {
-            format(context->state, " ", NULL);
-            astConstVisit(visitor, node->caseStmt.body);
-        }
-    }
+    AstNodeMapping *found = findInHashTable(mapping,
+                                            &(AstNodeMapping){.from = node},
+                                            hashPtr(hashInit(), node),
+                                            sizeof(AstNodeMapping),
+                                            compareAstNodes);
+    if (found)
+        removeFromHashTable(mapping, found, sizeof(AstNodeMapping));
 }
 
-static void printSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
+static SortedNodes *copySortedNodes(CloneAstConfig *config,
+                                    const SortedNodes *src)
 {
-    AstPrintContext *context = getConstAstVisitorContext(visitor);
-    printKeyword(context->state, "switch");
-    format(context->state, "(", NULL);
-    astConstVisit(visitor, node->switchStmt.cond);
-    format(context->state, ") ", NULL);
-    printManyAstsWithinBlock(visitor, "\n", node->switchStmt.cases, true);
+    if (src == NULL)
+        return NULL;
+
+    SortedNodes *sortedNodes = allocFromMemPool(
+        config->pool, sizeof(SortedNodes) + (sizeof(AstNode *) * src->count));
+    csAssert0(sortedNodes);
+
+    memcpy(sortedNodes, src, sizeof(SortedNodes));
+
+    for (u64 i = 0; i < src->count; i++) {
+        replaceWithCorrespondingNode(&config->mapping, &sortedNodes->nodes[i]);
+    }
+
+    return sortedNodes;
 }
 
 AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *init)
@@ -843,11 +172,11 @@ AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *init)
     return node;
 }
 
-AstNode *makeSingleNodePath(MemPool *pool,
-                            const FileLoc *loc,
-                            cstring name,
-                            u64 flags,
-                            const Type *type)
+AstNode *makePath(MemPool *pool,
+                  const FileLoc *loc,
+                  cstring name,
+                  u64 flags,
+                  const Type *type)
 {
     return makeAstNode(pool,
                        loc,
@@ -863,6 +192,248 @@ AstNode *makeSingleNodePath(MemPool *pool,
                                                  .pathElement.name = name})});
 }
 
+AstNode *makeResolvedPath(MemPool *pool,
+                          const FileLoc *loc,
+                          cstring name,
+                          u64 flags,
+                          AstNode *resolvesTo,
+                          const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astPath,
+                   .flags = flags,
+                   .type = type,
+                   .path.elements = makeAstNode(
+                       pool,
+                       loc,
+                       &(AstNode){.flags = flags,
+                                  .type = type,
+                                  .tag = astPathElem,
+                                  .pathElement = {.name = name,
+                                                  .resolvesTo = resolvesTo}})});
+}
+
+AstNode *makeResolvedPathWithArgs(MemPool *pool,
+                                  const FileLoc *loc,
+                                  cstring name,
+                                  u64 flags,
+                                  AstNode *resolvesTo,
+                                  AstNode *genericArgs,
+                                  const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astPath,
+                   .flags = flags,
+                   .type = type,
+                   .path.elements = makeAstNode(
+                       pool,
+                       loc,
+                       &(AstNode){.flags = flags,
+                                  .type = type,
+                                  .tag = astPathElem,
+                                  .pathElement = {.name = name,
+                                                  .resolvesTo = resolvesTo,
+                                                  .args = genericArgs}})});
+}
+
+AstNode *makePathWithElements(MemPool *pool,
+                              const FileLoc *loc,
+                              u64 flags,
+                              AstNode *elements,
+                              AstNode *next)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astPath,
+                                  .flags = flags,
+                                  .type = getLastAstNode(elements)->type,
+                                  .next = next,
+                                  .path.elements = elements});
+}
+
+AstNode *makeResolvedPathElement(MemPool *pool,
+                                 const FileLoc *loc,
+                                 cstring name,
+                                 u64 flags,
+                                 AstNode *resolvesTo,
+                                 AstNode *next,
+                                 const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.flags = flags,
+                   .type = type,
+                   .tag = astPathElem,
+                   .next = next,
+                   .pathElement = {.name = name, .resolvesTo = resolvesTo}});
+}
+
+AstNode *makeResolvedPathElementWithArgs(MemPool *pool,
+                                         const FileLoc *loc,
+                                         cstring name,
+                                         u64 flags,
+                                         AstNode *resolvesTo,
+                                         AstNode *next,
+                                         AstNode *genericArgs,
+                                         const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.flags = flags,
+                                  .type = type,
+                                  .tag = astPathElem,
+                                  .next = next,
+                                  .pathElement = {.name = name,
+                                                  .resolvesTo = resolvesTo,
+                                                  .args = genericArgs}});
+}
+
+AstNode *makeCallExpr(MemPool *pool,
+                      const FileLoc *loc,
+                      AstNode *callee,
+                      AstNode *args,
+                      u64 flags,
+                      AstNode *next,
+                      const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astCallExpr,
+                   .flags = flags,
+                   .type = type,
+                   .next = next,
+                   .callExpr = {.callee = callee, .args = args}});
+}
+
+AstNode *makeExprStmt(MemPool *pool,
+                      const FileLoc *loc,
+                      AstNode *expr,
+                      u64 flags,
+                      AstNode *next,
+                      const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astExprStmt,
+                                  .flags = flags,
+                                  .type = type,
+                                  .next = next,
+                                  .exprStmt.expr = expr});
+}
+
+AstNode *makeStmtExpr(MemPool *pool,
+                      const FileLoc *loc,
+                      AstNode *stmt,
+                      u64 flags,
+                      AstNode *next,
+                      const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astStmtExpr,
+                                  .flags = flags,
+                                  .type = type,
+                                  .next = next,
+                                  .stmtExpr.stmt = stmt});
+}
+
+AstNode *makeBlockStmt(MemPool *pool,
+                       const FileLoc *loc,
+                       AstNode *stmts,
+                       AstNode *next,
+                       const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astBlockStmt,
+                                  .type = type,
+                                  .next = next,
+                                  .blockStmt.stmts = stmts});
+}
+
+AstNode *makeNewExpr(MemPool *pool,
+                     const FileLoc *loc,
+                     u64 flags,
+                     AstNode *target,
+                     AstNode *init,
+                     AstNode *next,
+                     const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astNewExpr,
+                                  .type = type,
+                                  .next = next,
+                                  .flags = flags,
+                                  .newExpr = {.type = target, .init = init}});
+}
+
+AstNode *makeStructExpr(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        AstNode *left,
+                        AstNode *fields,
+                        AstNode *next,
+                        const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astStructExpr,
+                   .type = type,
+                   .next = next,
+                   .flags = flags,
+                   .structExpr = {.left = left, .fields = fields}});
+}
+
+AstNode *makeVarDecl(MemPool *pool,
+                     const FileLoc *loc,
+                     u64 flags,
+                     cstring name,
+                     AstNode *init,
+                     AstNode *next,
+                     const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){
+            .tag = astVarDecl,
+            .flags = flags,
+            .type = type,
+            .next = next,
+            .varDecl = {.name = name,
+                        .names = makeAstNode(pool,
+                                             loc,
+                                             &(AstNode){.tag = astIdentifier,
+                                                        .ident.value = name}),
+                        .init = init}});
+}
+
+AstNode *makePathFromIdent(MemPool *pool, const AstNode *ident)
+{
+    return makePath(
+        pool, &ident->loc, ident->ident.value, ident->flags, ident->type);
+}
+
+AstNode *makeGenIdent(MemPool *pool,
+                      StrPool *strPool,
+                      const FileLoc *loc,
+                      const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astIdentifier,
+                   .ident.value = makeAnonymousVariable(strPool, "__gen_var")});
+}
+
 void clearAstBody(AstNode *node)
 {
     memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);
@@ -870,6 +441,9 @@ void clearAstBody(AstNode *node)
 
 AstNode *copyAstNode(MemPool *pool, const AstNode *node)
 {
+    if (node == NULL)
+        return NULL;
+
     AstNode *copy = allocFromMemPool(pool, sizeof(AstNode));
     memcpy(copy, node, sizeof(AstNode));
     copy->next = NULL;
@@ -877,126 +451,21 @@ AstNode *copyAstNode(MemPool *pool, const AstNode *node)
     return copy;
 }
 
-AstNode *copyAstNodeAsIs(MemPool *pool, const AstNode *node)
+AstNode *duplicateAstNode(MemPool *pool, const AstNode *node)
 {
+    if (node == NULL)
+        return NULL;
+
     AstNode *copy = allocFromMemPool(pool, sizeof(AstNode));
     memcpy(copy, node, sizeof(AstNode));
     return copy;
-}
-
-void astVisit(AstVisitor *visitor, AstNode *node)
-{
-    Visitor func = visitor->visitors[node->tag] ?: visitor->fallback;
-
-    if (func == NULL)
-        return;
-
-    AstNode *stack = visitor->current;
-    visitor->current = node;
-
-    if (visitor->dispatch)
-        visitor->dispatch(func, visitor, node);
-    else
-        func(visitor, node);
-
-    visitor->current = stack;
-}
-
-void astConstVisit(ConstAstVisitor *visitor, const AstNode *node)
-{
-    ConstVisitor func = visitor->visitors[node->tag] ?: visitor->fallback;
-
-    if (func == NULL)
-        return;
-
-    const AstNode *stack = visitor->current;
-    visitor->current = node;
-
-    if (visitor->dispatch)
-        visitor->dispatch(func, visitor, node);
-    else
-        func(visitor, node);
-
-    visitor->current = stack;
-}
-
-void printAst(FormatState *state, const AstNode *node, bool cleanAst)
-{
-    AstPrintContext context = {.state = state, .clean = cleanAst};
-    // clang-format off
-    ConstAstVisitor visitor = makeConstAstVisitor(&context, {
-        [astError] = printError,
-        [astProgram] = printProgram,
-        [astAttr] = printAttribute,
-        [astPathElem] = printPathElement,
-        [astPath] = printPath,
-        [astGenericParam] = printGenericParam,
-        [astGenericDecl] = printGenericDecl,
-        [astIdentifier] = printIdentifier,
-        [astTupleType] = printTupleType,
-        [astArrayType] = printArrayType,
-        [astPointerType] = printPointerType,
-        [astFuncType] = printFuncType,
-        [astPrimitiveType] = printPrimitiveType,
-        [astStringType] = printStringType,
-        [astNullLit] = printNullLiteral,
-        [astBoolLit] = printBoolLiteral,
-        [astCharLit] = printCharLiteral,
-        [astIntegerLit] = printIntLiteral,
-        [astFloatLit] = printFloatLiteral,
-        [astStringLit] = printStringLiteral,
-        [astFuncParam] = printFuncParam,
-        [astFuncDecl] = printFuncDecl,
-        [astMacroDecl] = printMacroDecl,
-        [astVarDecl] = printVariableDecl,
-        [astTypeDecl] = printTypeDecl,
-        [astUnionDecl] = printUnionDecl,
-        [astEnumOption] = printEnumOption,
-        [astEnumDecl] = printEnumDecl,
-        [astStructField] = printStructField,
-        [astStructDecl] = printStructDecl,
-        [astGroupExpr] = printGroupExpr,
-        [astUnaryExpr] = printUnaryExpr,
-        [astBinaryExpr] = printBinaryExpr,
-        [astAssignExpr] = printAssignExpr,
-        [astTernaryExpr] = printTernaryExpr,
-        [astStmtExpr] = printStmtExpr,
-        [astStringExpr] = printStringExpr,
-        [astTypedExpr] = printTypedExpr,
-        [astCallExpr] = printCallExpr,
-        [astMacroCallExpr] = printCallExpr,
-        [astClosureExpr] = printClosureExpr,
-        [astArrayExpr] = printArrayExpr,
-        [astIndexExpr] = printIndexExpr,
-        [astRangeExpr] = printRangeExpr,
-        [astCastExpr] = printCastExpr,
-        [astTupleExpr] = printTupleType,
-        [astOptionalType] = printOptionalType,
-        [astFieldExpr] = printFieldExpr,
-        [astStructExpr] = printStructExpr,
-        [astMemberExpr] = printMemberExpr,
-        [astExprStmt] = printExprStmt,
-        [astBreakStmt] = printBreakContinueStmt,
-        [astContinueStmt] = printBreakContinueStmt,
-        [astReturnStmt] = printReturnStmt,
-        [astBlockStmt] = printBlockStmt,
-        [astIfStmt] = printIfStmt,
-        [astForStmt] = printForStmt,
-        [astWhileStmt] = printWhileStmt,
-        [astSwitchStmt] = printSwitchStmt,
-        [astCaseStmt] = printCaseStmt,
-    });
-
-    // clang-format on
-
-    astConstVisit(&visitor, node);
 }
 
 bool isTuple(const AstNode *node)
 {
     if (node->tag != astTupleExpr)
         return false;
-    if (node->tupleExpr.args->next == NULL)
+    if (node->tupleExpr.elements->next == NULL)
         return false;
     return true;
 }
@@ -1063,7 +532,10 @@ bool isTypeExpr(const AstNode *node)
     case astEnumDecl:
     case astUnionDecl:
     case astFuncDecl:
+    case astTypeRef:
         return true;
+    case astRef:
+        return isTypeExpr(node->reference.target);
     default:
         return false;
     }
@@ -1088,6 +560,22 @@ u64 countAstNodes(const AstNode *node)
     u64 len = 0;
     for (; node; node = node->next)
         len++;
+    return len;
+}
+
+u64 countProgramDecls(const AstNode *node)
+{
+    u64 len = 0;
+    for (; node; node = node->next) {
+        if (nodeIs(node, Define)) {
+            len += (node->define.container ? 1
+                                           : countAstNodes(node->define.names));
+        }
+        else if (nodeIs(node, ImportDecl))
+            len += countAstNodes(node->import.entities);
+        else
+            len++;
+    }
     return len;
 }
 
@@ -1168,23 +656,6 @@ const AstNode *getParentScopeWithTagConst(const AstNode *node, AstTag tag)
     return parentScope;
 }
 
-AstNode *cloneManyAstNodes(MemPool *pool, const AstNode *nodes)
-{
-    AstNode *first = NULL, *node = NULL;
-    while (nodes) {
-        if (!first) {
-            first = cloneAstNode(pool, nodes);
-            node = first;
-        }
-        else {
-            node->next = cloneAstNode(pool, nodes);
-            node = node->next;
-        }
-        nodes = nodes->next;
-    }
-    return first;
-}
-
 AstNode *replaceAstNode(AstNode *node, const AstNode *with)
 {
     AstNode *next = node->next, *parent = node->parentScope;
@@ -1195,17 +666,57 @@ AstNode *replaceAstNode(AstNode *node, const AstNode *with)
     return node;
 }
 
-AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
+AstNode *replaceAstNodeWith(AstNode *node, const AstNode *with)
+{
+    __typeof(node->_head) head = node->_head;
+    *node = *with;
+    node->flags |= head.flags;
+    node->next = head.next;
+    node->parentScope = head.parentScope;
+
+    return node;
+}
+
+bool mapAstNode(HashTable *mapping, const AstNode *from, AstNode *to)
+{
+    return insertInHashTable(mapping,
+                             &(AstNodeMapping){.from = from, .to = to},
+                             hashPtr(hashInit(), from),
+                             sizeof(AstNodeMapping),
+                             compareAstNodes);
+}
+
+void initCloneAstNodeMapping(CloneAstConfig *config)
+{
+    if (config->createMapping) {
+        config->mapping = newHashTable(sizeof(AstNodeMapping));
+    }
+}
+
+void deinitCloneAstNodeConfig(CloneAstConfig *config)
+{
+    if (config->createMapping) {
+        freeHashTable(&config->mapping);
+    }
+}
+
+AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
 {
     if (node == NULL)
         return NULL;
 
-    AstNode *clone = copyAstNode(pool, node);
+    AstNode *clone = copyAstNode(config->pool, node);
+    if (config->createMapping)
+        postCloneAstNode(config, node, clone);
 
 #define CLONE_MANY(AST, MEMBER)                                                \
-    clone->AST.MEMBER = cloneManyAstNodes(pool, node->AST.MEMBER);
+    clone->AST.MEMBER = cloneManyAstNodes(config, node->AST.MEMBER);
 #define CLONE_ONE(AST, MEMBER)                                                 \
-    clone->AST.MEMBER = cloneAstNode(pool, node->AST.MEMBER);
+    clone->AST.MEMBER = cloneAstNode(config, node->AST.MEMBER);
+
+#define COPY_SORTED(AST, MEMBER)                                               \
+    if (config->createMapping)                                                 \
+    clone->AST.MEMBER = copySortedNodes(config, node->AST.MEMBER)
 
     switch (clone->tag) {
     case astProgram:
@@ -1229,14 +740,17 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         CLONE_ONE(genericDecl, decl);
         break;
     case astTupleType:
-        CLONE_MANY(tupleType, args);
+        CLONE_MANY(tupleType, elements);
         break;
     case astArrayType:
         CLONE_ONE(arrayType, elementType);
         CLONE_MANY(arrayType, dim);
         break;
     case astPointerType:
-        CLONE_MANY(pointerType, pointed);
+        CLONE_ONE(pointerType, pointed);
+        break;
+    case astOptionalType:
+        CLONE_ONE(optionalType, type);
         break;
     case astFuncType:
         CLONE_ONE(funcType, ret);
@@ -1247,9 +761,15 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         CLONE_ONE(funcParam, def);
         break;
     case astFuncDecl:
-        CLONE_MANY(funcDecl, params);
-        CLONE_ONE(funcDecl, ret);
+        clone->funcDecl.signature = makeFunctionSignature(
+            config->pool,
+            &(FunctionSignature){
+                .ret = cloneAstNode(config, node->funcDecl.signature->ret),
+                .params =
+                    cloneManyAstNodes(config, node->funcDecl.signature->params),
+                .typeParams = node->funcDecl.signature->typeParams});
         CLONE_ONE(funcDecl, body);
+        CLONE_MANY(funcDecl, opaqueParams)
         break;
     case astMacroDecl:
         CLONE_MANY(macroDecl, params);
@@ -1266,11 +786,18 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         break;
     case astUnionDecl:
         CLONE_MANY(unionDecl, members);
-        break;
+        COPY_SORTED(unionDecl, sortedMembers);
 
     case astStructDecl:
         CLONE_MANY(structDecl, members);
         CLONE_ONE(structDecl, base);
+        CLONE_MANY(structDecl, implements);
+        COPY_SORTED(structDecl, sortedMembers);
+        break;
+
+    case astInterfaceDecl:
+        CLONE_MANY(interfaceDecl, members);
+        COPY_SORTED(interfaceDecl, sortedMembers);
         break;
 
     case astEnumOption:
@@ -1280,6 +807,7 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
     case astEnumDecl:
         CLONE_MANY(enumDecl, options);
         CLONE_ONE(enumDecl, base);
+        COPY_SORTED(enumDecl, sortedOptions);
         break;
 
     case astStructField:
@@ -1288,6 +816,9 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         break;
 
     case astGroupExpr:
+    case astSpreadExpr:
+    case astExprStmt:
+    case astDeferStmt:
         CLONE_ONE(groupExpr, expr);
         break;
     case astUnaryExpr:
@@ -1335,7 +866,7 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         CLONE_MANY(indexExpr, index);
         break;
     case astTupleExpr:
-        CLONE_MANY(tupleExpr, args);
+        CLONE_MANY(tupleExpr, elements);
         break;
 
     case astFieldExpr:
@@ -1349,12 +880,6 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
     case astMemberExpr:
         CLONE_ONE(memberExpr, target);
         CLONE_ONE(memberExpr, member);
-        break;
-    case astExprStmt:
-        CLONE_ONE(exprStmt, expr);
-        break;
-    case astDeferStmt:
-        CLONE_ONE(deferStmt, expr);
         break;
     case astReturnStmt:
         CLONE_ONE(returnStmt, expr);
@@ -1385,8 +910,8 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
         CLONE_ONE(caseStmt, match);
         break;
 
-    case astError:
     case astIdentifier:
+    case astError:
     case astVoidType:
     case astAutoType:
     case astStringType:
@@ -1406,6 +931,31 @@ AstNode *cloneAstNode(MemPool *pool, const AstNode *node)
     return clone;
 }
 
+AstNode *cloneGenericDeclaration(MemPool *pool, const AstNode *node)
+{
+    AstNode *param = node->genericDecl.params;
+    AstNode *decl = node->genericDecl.decl;
+    AstNode *params = NULL, *it = NULL;
+    CloneAstConfig config = {.pool = pool, .createMapping = true};
+
+    initCloneAstNodeMapping(&config);
+
+    for (; param; param = param->next) {
+        AstNode *clone = cloneAstNode(&config, param);
+        if (params == NULL)
+            params = it = clone;
+        else
+            it = it->next = clone;
+    }
+
+    decl = cloneAstNode(&config, decl);
+    setGenericDeclarationParams(decl, params);
+    decl->attrs = node->attrs;
+    decl->parentScope = node->parentScope;
+    deinitCloneAstNodeConfig(&config);
+    return decl;
+}
+
 void insertAstNodeAfter(AstNode *before, AstNode *after)
 {
     getLastAstNode(after)->next = before->next;
@@ -1414,13 +964,16 @@ void insertAstNodeAfter(AstNode *before, AstNode *after)
 
 void insertAstNode(AstNodeList *list, AstNode *node)
 {
+    if (node == NULL)
+        return;
+
     if (list->first == NULL) {
         list->first = node;
     }
     else {
         list->last->next = node;
     }
-    list->last = node;
+    list->last = getLastAstNode(node);
 }
 
 void unlinkAstNode(AstNode **head, AstNode *prev, AstNode *node)
@@ -1431,96 +984,27 @@ void unlinkAstNode(AstNode **head, AstNode *prev, AstNode *node)
         prev->next = node->next;
 }
 
-const char *getPrimitiveTypeName(PrtId tag)
+const AstNode *findAttribute(const AstNode *node, cstring name)
 {
-    switch (tag) {
-#define f(name, str, ...)                                                      \
-    case prt##name:                                                            \
-        return str;
-        PRIM_TYPE_LIST(f)
-#undef f
-    default:
-        csAssert0(false);
+    const AstNode *attr = node->attrs;
+    while (attr) {
+        if (name == attr->attr.name)
+            break;
+        attr = attr->next;
     }
+
+    return attr;
 }
 
-u64 getPrimitiveTypeSize(PrtId tag)
+const AstNode *findAttributeArgument(const AstNode *attr, cstring name)
 {
-    switch (tag) {
-#define f(name, str, size)                                                     \
-    case prt##name:                                                            \
-        return size;
-        PRIM_TYPE_LIST(f)
-#undef f
-    default:
-        csAssert0(false);
+    const AstNode *arg = attr->attr.args;
+    while (arg) {
+        if (name == arg->fieldExpr.name)
+            break;
+        arg = arg->next;
     }
-}
-
-const char *getUnaryOpString(Operator op)
-{
-    switch (op) {
-#define f(name, _, str)                                                        \
-    case op##name:                                                             \
-        return str;
-        AST_UNARY_EXPR_LIST(f)
-#undef f
-    default:
-        csAssert0(false);
-    }
-}
-
-const char *getBinaryOpString(Operator op)
-{
-    switch (op) {
-#define f(name, p, t, s, ...)                                                  \
-    case op##name:                                                             \
-        return s;
-        AST_BINARY_EXPR_LIST(f)
-#undef f
-    default:
-        csAssert0(false);
-    }
-}
-
-const char *getAssignOpString(Operator op)
-{
-    switch (op) {
-#define f(name, p, t, s, ...)                                                  \
-    case op##name:                                                             \
-        return s "=";
-        AST_ASSIGN_EXPR_LIST(f)
-#undef f
-    default:
-        csAssert0(false);
-    }
-}
-
-const char *getBinaryOpFuncName(Operator op)
-{
-    switch (op) {
-#define f(name, p, t, s, fn)                                                   \
-    case op##name:                                                             \
-        return "op_" fn;
-        // NOLINTBEGIN
-        AST_BINARY_EXPR_LIST(f)
-        // NOLINTEND
-#undef f
-    case opNew:
-        return "op_new";
-    case opDelete:
-        return "op_delete";
-    case opCallOverload:
-        return "op_call";
-    case opStringOverload:
-        return "op_str";
-    case opIndexAssignOverload:
-        return "op_idx_assign";
-    case opIndexOverload:
-        return "op_idx";
-    default:
-        csAssert0(false);
-    }
+    return arg ? arg->fieldExpr.value : NULL;
 }
 
 const char *getDeclKeyword(AstTag tag)
@@ -1540,11 +1024,15 @@ const char *getDeclKeyword(AstTag tag)
     }
 }
 
-const char *getDeclName(const AstNode *node)
+const char *getDeclarationName(const AstNode *node)
 {
+    node = nodeIs(node, GenericDecl) ? node->genericDecl.decl : node;
+
     switch (node->tag) {
     case astFuncDecl:
         return node->funcDecl.name;
+    case astMacroDecl:
+        return node->macroDecl.name;
     case astTypeDecl:
         return node->typeDecl.name;
     case astEnumDecl:
@@ -1553,104 +1041,271 @@ const char *getDeclName(const AstNode *node)
         return node->unionDecl.name;
     case astStructDecl:
         return node->structDecl.name;
+    case astInterfaceDecl:
+        return node->interfaceDecl.name;
+    case astDefine:
+        return node->define.container->ident.value;
+    case astVarDecl:
+        return node->varDecl.name;
     default:
-        return false;
+        csAssert(false, "%s is not a declaration", getAstNodeName(node));
     }
 }
 
-int getMaxBinaryOpPrecedence(void)
+void setDeclarationName(AstNode *node, cstring name)
 {
-    static int maxPrecedence = -1;
-    if (maxPrecedence < 1) {
-        const int precedenceList[] = {
-#define f(n, prec, ...) prec,
-            AST_BINARY_EXPR_LIST(f)
+    switch (node->tag) {
+    case astFuncDecl:
+        node->funcDecl.name = name;
+        break;
+    case astMacroDecl:
+        node->macroDecl.name = name;
+        break;
+    case astTypeDecl:
+        node->typeDecl.name = name;
+        break;
+    case astEnumDecl:
+        node->enumDecl.name = name;
+        break;
+    case astUnionDecl:
+        node->unionDecl.name = name;
+        break;
+    case astStructDecl:
+        node->structDecl.name = name;
+        break;
+    case astInterfaceDecl:
+        node->interfaceDecl.name = name;
+        break;
+    default:
+        csAssert(false, "%s is not a declaration", getAstNodeName(node));
+    }
+}
+
+AstNode *getGenericDeclarationParams(AstNode *node)
+{
+    switch (node->tag) {
+    case astFuncDecl:
+        return node->funcDecl.signature->typeParams;
+    case astTypeDecl:
+        return node->typeDecl.typeParams;
+    case astUnionDecl:
+        return node->unionDecl.typeParams;
+    case astStructDecl:
+        return node->structDecl.typeParams;
+    case astInterfaceDecl:
+        return node->interfaceDecl.typeParams;
+    default:
+        csAssert(false, "%s is not a declaration", getAstNodeName(node));
+    }
+}
+
+void setGenericDeclarationParams(AstNode *node, AstNode *params)
+{
+    switch (node->tag) {
+    case astFuncDecl:
+        node->funcDecl.signature->typeParams = params;
+        break;
+    case astTypeDecl:
+        node->typeDecl.typeParams = params;
+        break;
+    case astUnionDecl:
+        node->unionDecl.typeParams = params;
+        break;
+    case astStructDecl:
+        node->structDecl.typeParams = params;
+        break;
+    case astInterfaceDecl:
+        node->interfaceDecl.typeParams = params;
+        break;
+    default:
+        csAssert(false, "%s is not a declaration", getAstNodeName(node));
+    }
+}
+
+cstring getAstNodeName(const AstNode *node)
+{
+    switch (node->tag) {
+#define f(name)                                                                \
+    case ast##name:                                                            \
+        return #name;
+        CXY_LANG_AST_TAGS(f)
 #undef f
-        };
-        for (int i = 0; i < (sizeof(precedenceList) / sizeof(int)); i++) {
-            maxPrecedence = MAX(maxPrecedence, precedenceList[i]);
+    default:
+        return "<max>";
+    }
+}
+
+FunctionSignature *makeFunctionSignature(MemPool *pool,
+                                         const FunctionSignature *from)
+{
+    FunctionSignature *signature = allocFromMemPool(pool, sizeof *from);
+    *signature = *from;
+    return signature;
+}
+
+AstNode *getParentScope(AstNode *node)
+{
+    if (nodeIs(node->parentScope, GenericDecl)) {
+        return node->parentScope->parentScope;
+    }
+    return node->parentScope;
+}
+
+AstNode *makeTypeReferenceNode(MemPool *pool,
+                               const Type *type,
+                               const FileLoc *loc)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astTypeRef, .flags = type->flags, .type = type});
+}
+
+AstNode *findInAstNode(AstNode *node, cstring name)
+{
+    node = underlyingDeclaration(node);
+    switch (node->tag) {
+    case astStructDecl:
+        return findInSortedNodes(node->structDecl.sortedMembers, name);
+    case astInterfaceDecl:
+        return findInSortedNodes(node->interfaceDecl.sortedMembers, name);
+    case astUnionDecl:
+        return findInSortedNodes(node->unionDecl.sortedMembers, name);
+    case astEnumDecl:
+        return findInSortedNodes(node->enumDecl.sortedOptions, name);
+    default:
+        unreachable("NOT SUPPORTED");
+    }
+}
+
+AstNode *resolvePath(const AstNode *path)
+{
+    if (path == NULL)
+        return NULL;
+
+    AstNode *base = path->path.elements;
+    if (base->pathElement.resolvesTo == NULL)
+        return NULL;
+
+    AstNode *resolved = base->pathElement.resolvesTo;
+
+    AstNode *elem = base->next;
+    for (; elem && resolved; elem = elem->next) {
+        if (elem->pathElement.resolvesTo == NULL) {
+            elem->pathElement.resolvesTo = findInAstNode(
+                resolved, elem->pathElement.alt ?: elem->pathElement.name);
         }
-        maxPrecedence += 1;
+        resolved = elem->pathElement.resolvesTo;
     }
-
-    return maxPrecedence;
+    return resolved;
 }
 
-int getBinaryOpPrecedence(Operator op)
+AstNode *getResolvedPath(const AstNode *path)
 {
-    switch (op) {
-#define f(name, prec, ...)                                                     \
-    case op##name:                                                             \
-        return prec;
-        // NOLINTBEGIN
-        AST_BINARY_EXPR_LIST(f);
-        // NOLINTEND
-#undef f
-    default:
-        return getMaxBinaryOpPrecedence();
-    }
+    if (!nodeIs(path, Path))
+        return NULL;
+    AstNode *elem = path->path.elements, *resolved = NULL;
+    do {
+        resolved = elem->pathElement.resolvesTo;
+        elem = elem->next;
+    } while (elem);
+
+    return resolved;
 }
 
-bool isAssignmentOperator(TokenTag tag)
+static int isInInheritanceChain_(const AstNode *node,
+                                 const AstNode *parent,
+                                 int depth)
 {
-    switch (tag) {
-#define f(O, P, T, ...) case tok##T##Equal:
-        AST_ASSIGN_EXPR_LIST(f)
-#undef f
-        return true;
-    default:
-        return false;
-    }
+    if (!nodeIs(node, StructDecl) || node->structDecl.base == NULL)
+        return 0;
+    const AstNode *base = resolvePath(node->structDecl.base);
+    if (base == NULL)
+        return 0;
+    if (base == parent)
+        return depth;
+    return isInInheritanceChain_(base, parent, depth + 1);
 }
 
-Operator tokenToUnaryOperator(TokenTag tag)
+int isInInheritanceChain(const AstNode *node, const AstNode *parent)
 {
-    switch (tag) {
-#define f(O, T, ...)                                                           \
-    case tok##T:                                                               \
-        return op##O;
-        AST_PREFIX_EXPR_LIST(f);
-#undef f
-    default:
-        csAssert(false, "expecting unary operator");
-    }
+    return isInInheritanceChain_(node, parent, 1);
 }
 
-Operator tokenToBinaryOperator(TokenTag tag)
+AstNode *getBaseClassAtLevel(AstNode *node, u64 level)
 {
-    switch (tag) {
-#define f(O, P, T, ...)                                                        \
-    case tok##T:                                                               \
-        return op##O;
-        AST_BINARY_EXPR_LIST(f);
-#undef f
-    default:
-        return opInvalid;
-    }
+    csAssert0(level > 0);
+    int i = 0;
+    do {
+        if (i == level)
+            return node;
+
+        node = underlyingDeclaration(resolvePath(node->structDecl.base));
+        i++;
+    } while (node);
+    return node;
 }
 
-Operator tokenToAssignmentOperator(TokenTag tag)
+AstNode *getBaseClassByName(AstNode *node, cstring name)
 {
-    switch (tag) {
-#define f(O, P, T, ...)                                                        \
-    case tok##T##Equal:                                                        \
-        return op##O;
-        AST_ASSIGN_EXPR_LIST(f);
-#undef f
-    default:
-        csAssert(false, "expecting binary operator");
+    for (;;) {
+        node = underlyingDeclaration(resolvePath(node->structDecl.base));
+        if (node == NULL)
+            return NULL;
+
+        if (strncmp(node->structDecl.name, name, strlen(name)) == 0)
+            return node;
     }
 }
 
-bool isPrefixOpKeyword(Operator op)
+int compareNamedAstNodes(const void *lhs, const void *rhs)
 {
-    switch (op) {
-#define f(O, T, ...)                                                           \
-    case op##O:                                                                \
-        return isKeyword(tok##T);
-        AST_PREFIX_EXPR_LIST(f)
-#undef f
-    default:
-        return false;
-    }
+    cstring left = (*((const AstNode **)lhs))->_namedNode.name,
+            right = (*((const AstNode **)rhs))->_namedNode.name;
+    return left == right ? 0 : strcmp(left, right);
+}
+
+SortedNodes *makeSortedNodes(MemPool *pool,
+                             AstNode *nodes,
+                             int (*compare)(const void *, const void *))
+{
+    u64 count = countAstNodes(nodes);
+    if (count == 0)
+        return NULL;
+    SortedNodes *sortedNodes = allocFromMemPool(
+        pool, sizeof(SortedNodes) + (sizeof(AstNode *) * count));
+    csAssert0(sortedNodes);
+    sortedNodes->count = count;
+    sortedNodes->compare = compare ?: compareNamedAstNodes;
+
+    AstNode *node = nodes;
+    for (u64 i = 0; node; node = node->next, i++)
+        sortedNodes->nodes[i] = node;
+
+    qsort(sortedNodes->nodes, count, sizeof(AstNode *), sortedNodes->compare);
+    return sortedNodes;
+}
+
+AstNode *findInSortedNodes(SortedNodes *sorted, cstring name)
+{
+    if (sorted == NULL)
+        return NULL;
+
+    int found = binarySearchWithRef(sorted->nodes,
+                                    sorted->count,
+                                    &(AstNode){._namedNode.name = name},
+                                    sizeof(struct AstNode *),
+                                    sorted->compare);
+    if (found < 0)
+        return NULL;
+
+    return sorted->nodes[found];
+}
+
+const AstNode *getOptionalDecl()
+{
+    static const AstNode *optionalDecl = NULL;
+    if (optionalDecl == NULL)
+        optionalDecl = findBuiltinDecl(S_Optional);
+    return optionalDecl;
 }

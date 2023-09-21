@@ -2,9 +2,11 @@
  * Credits: https://github.com/madmann91/fu/blob/master/src/fu/lang/parser.c
  */
 
-#include "lang/parser.h"
-#include "lang/ast.h"
-#include "lang/lexer.h"
+#include "parser.h"
+#include "ast.h"
+#include "flag.h"
+#include "lexer.h"
+#include "strings.h"
 
 #include "driver/driver.h"
 
@@ -41,7 +43,7 @@ static AstNode *parsePath(Parser *P);
 static AstNode *variable(
     Parser *P, bool isPublic, bool isExport, bool isExpression, bool woInit);
 
-static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative);
+static AstNode *funcDecl(Parser *P, u64 flags);
 
 static AstNode *aliasDecl(Parser *P, bool isPublic, bool isNative);
 
@@ -470,6 +472,13 @@ static AstNode *newOperator(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 {
     bool isBand = check(P, tokBAnd);
+    if (check(P, tokMinus) && peek(P, 1)->tag == tokIntLiteral) {
+        consume0(P, tokMinus);
+        AstNode *lit = parseInteger(P);
+        lit->intLiteral.hasMinus = true;
+        return lit;
+    }
+
     switch (current(P)->tag) {
 #define f(O, T, ...) case tok##T:
         AST_PREFIX_EXPR_LIST(f)
@@ -710,7 +719,7 @@ static AstNode *parseTupleType(Parser *P)
     return newAstNode(
         P,
         &tok.fileLoc.begin,
-        &(AstNode){.tag = astTupleType, .tupleType = {.args = elems}});
+        &(AstNode){.tag = astTupleType, .tupleType = {.elements = elems}});
 }
 
 static AstNode *parseArrayType(Parser *P)
@@ -749,7 +758,7 @@ static AstNode *parseGenericParam(Parser *P)
                                     .constraints = constraints.first}});
 }
 
-// async func(a: T, ...b:T[]) -> T;
+// async enclosure(a: T, ...b:T[]) -> T;
 static AstNode *parseFuncType(Parser *P)
 {
     AstNode *gParams = NULL, *params = NULL, *ret = NULL;
@@ -795,7 +804,7 @@ static AstNode *createTupleOrGroupExpression(Parser *P,
             P, begin, &(AstNode){.tag = astGroupExpr, .groupExpr.expr = node});
 
     return newAstNode(
-        P, begin, &(AstNode){.tag = astTupleExpr, .tupleExpr.args = node});
+        P, begin, &(AstNode){.tag = astTupleExpr, .tupleExpr.elements = node});
 }
 
 static AstNode *parsePointerType(Parser *P)
@@ -843,10 +852,22 @@ static AstNode *macroExpression(Parser *P, AstNode *callee)
                    .macroCallExpr = {.callee = callee, .args = args}});
 }
 
+static AstNode *parseCallArguments(Parser *P)
+{
+    Token tok = *current(P);
+    bool isSpread = match(P, tokElipsis);
+    AstNode *expr = expressionWithoutStructs(P);
+    return isSpread ? newAstNode(P,
+                                 &tok.fileLoc.begin,
+                                 &(AstNode){.tag = astSpreadExpr,
+                                            .spreadExpr.expr = expr})
+                    : expr;
+}
+
 static AstNode *callExpression(Parser *P, AstNode *callee)
 {
     consume0(P, tokLParen);
-    AstNode *args = parseMany(P, tokRParen, tokComma, expressionWithStructs);
+    AstNode *args = parseMany(P, tokRParen, tokComma, parseCallArguments);
     consume0(P, tokRParen);
 
     return newAstNode(P,
@@ -903,8 +924,30 @@ static AstNode *parseTypeOrIndex(Parser *P)
 static AstNode *pathElement(Parser *P)
 {
     AstNode *args = NULL;
-    Token tok = *consume0(P, tokIdent);
-    const char *name = getTokenString(P, &tok, false);
+    Token tok = *current(P);
+    const char *name = NULL;
+    bool isKeyword = false;
+    switch (tok.tag) {
+    case tokIdent:
+        name = getTokenString(P, &tok, false);
+        break;
+    case tokThis:
+        name = S_this;
+        isKeyword = true;
+        break;
+    case tokSuper:
+        name = S_super;
+        isKeyword = true;
+        break;
+    case tokThisClass:
+        name = S_This;
+        isKeyword = true;
+        break;
+    default:
+        reportUnexpectedToken(P,
+                              "an identifier or the keywords 'this' / 'super'");
+    }
+    advance(P);
 
     if (match(P, tokLBracket)) {
         args = parseMany(P, tokRBracket, tokComma, parseTypeOrIndex);
@@ -914,7 +957,9 @@ static AstNode *pathElement(Parser *P)
     return newAstNode(P,
                       &tok.fileLoc.begin,
                       &(AstNode){.tag = astPathElem,
-                                 .pathElement = {.name = name, .args = args}});
+                                 .pathElement = {.name = name,
+                                                 .args = args,
+                                                 .isKeyword = isKeyword}});
 }
 
 static AstNode *parsePath(Parser *P)
@@ -1042,7 +1087,9 @@ static AstNode *primary(Parser *P, bool allowStructs)
         return untypedExpr(P, allowStructs);
     case tokSubstitutue:
         return substitute(P, allowStructs);
-    case tokIdent: {
+    case tokIdent:
+    case tokThis:
+    case tokSuper: {
         AstNode *path = parsePath(P);
         if (allowStructs && check(P, tokLBrace))
             return structExpr(P, path, fieldExpr);
@@ -1307,18 +1354,15 @@ static OperatorOverload operatorOverload(Parser *P)
     if (match(P, tokLBracket)) {
         consume0(P, tokRBracket);
         if (match(P, tokAssign)) {
-            op = (OperatorOverload){
-                .f = opIndexAssignOverload,
-                .s = makeString(P->strPool, "op_idx_assign")};
+            op = (OperatorOverload){.f = opIndexAssignOverload,
+                                    .s = S_IndexAssignOverload};
         }
         else {
-            op = (OperatorOverload){.f = opIndexOverload,
-                                    .s = makeString(P->strPool, "op_idx")};
+            op = (OperatorOverload){.f = opIndexOverload, .s = S_IndexOverload};
         }
     }
     else if (match(P, tokLParen)) {
-        op = (OperatorOverload){.f = opCallOverload,
-                                .s = makeString(P->strPool, "op_call")};
+        op = (OperatorOverload){.f = opCallOverload, .s = S_CallOverload};
         consume0(P, tokRParen);
     }
     else if (match(P, tokIdent)) {
@@ -1326,11 +1370,10 @@ static OperatorOverload operatorOverload(Parser *P)
         cstring name = getTokenString(P, &ident, false);
         if (strcmp(name, "str") == 0) {
             op = (OperatorOverload){.f = opStringOverload,
-                                    .s = makeString(P->strPool, "op_str")};
+                                    .s = S_StringOverload};
         }
         else if (strcmp(name, "deref") == 0) {
-            op = (OperatorOverload){.f = opDeref,
-                                    .s = makeString(P->strPool, "op_deref")};
+            op = (OperatorOverload){.f = opDeref, .s = S_Deref};
         }
         else {
             parserError(P,
@@ -1342,28 +1385,23 @@ static OperatorOverload operatorOverload(Parser *P)
     else {
         switch (current(P)->tag) {
         case tokNew:
-            op = (OperatorOverload){.f = opNew,
-                                    .s = makeString(P->strPool, "op_new")};
+            op = (OperatorOverload){.f = opNew, .s = S_New};
             break;
         case tokDelete:
-            op = (OperatorOverload){.f = opDelete,
-                                    .s = makeString(P->strPool, "op_delete")};
+            op = (OperatorOverload){.f = opDelete, .s = S_Delete};
             break;
         case tokLNot:
             if (checkPeek(P, 1, tokLNot)) {
-                op = (OperatorOverload){
-                    .f = opTruthy, .s = makeString(P->strPool, "op_truthy")};
+                op = (OperatorOverload){.f = opTruthy, .s = S_Truthy};
                 advance(P);
             }
             else
-                op = (OperatorOverload){.f = opNot,
-                                        .s = makeString(P->strPool, "op_not")};
+                op = (OperatorOverload){.f = opNot, .s = S_Not};
             break;
 
 #define f(O, PP, T, S, N)                                                      \
     case tok##T:                                                               \
-        op = (OperatorOverload){.f = op##O,                                    \
-                                .s = makeString(P->strPool, "op_" N)};         \
+        op = (OperatorOverload){.f = op##O, .s = S_##O};                       \
         break;
             AST_BINARY_EXPR_LIST(f);
 
@@ -1377,12 +1415,12 @@ static OperatorOverload operatorOverload(Parser *P)
     return op;
 }
 
-static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative)
+static AstNode *funcDecl(Parser *P, u64 flags)
 {
     AstNode *gParams = NULL, *params = NULL, *ret = NULL, *body = NULL;
     Token tok = *current(P);
-    u64 flags = isPublic ? flgPublic : flgNone;
-    flags |= isNative ? flgNative : flgNone;
+    bool declarationOnly = (flags & flgDeclarationOnly) == flgDeclarationOnly;
+
     flags |= match(P, tokAsync) ? flgAsync : flgNone;
 
     consume0(P, tokFunc);
@@ -1398,7 +1436,7 @@ static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative)
     }
 
     if (match(P, tokLBracket)) {
-        if (isNative)
+        if (flags & flgNative)
             reportUnexpectedToken(
                 P, "a '(', native functions cannot have generic parameters");
 
@@ -1413,10 +1451,11 @@ static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative)
 
     if (match(P, tokColon))
         ret = parseType(P);
-    else if (isNative)
-        reportUnexpectedToken(P, "colon before native function return type");
+    else if (declarationOnly)
+        reportUnexpectedToken(P,
+                              "colon before function declaration return type");
 
-    if (!isNative) {
+    if (!declarationOnly) {
         if (match(P, tokFatArrow)) {
             body = expression(P, true);
             match(P, tokSemicolon);
@@ -1426,22 +1465,29 @@ static AstNode *funcDecl(Parser *P, bool isPublic, bool isNative)
         }
     }
     else {
-        consume(P,
-                tokSemicolon,
-                "';', native function declaration must be terminated with a "
-                "semicolon",
-                NULL);
+        Token tmp = *current(P);
+        if (match(P, tokFatArrow, tokLBrace)) {
+            parserError(P,
+                        &tmp.fileLoc,
+                        "unexpected function body after a function declaration",
+                        NULL);
+        }
+        // make semi-colon optional
+        match(P, tokSemicolon);
     }
 
-    AstNode *func = newAstNode(P,
-                               &tok.fileLoc.begin,
-                               &(AstNode){.tag = astFuncDecl,
-                                          .flags = flags,
-                                          .funcDecl = {.name = name,
-                                                       .operatorOverload = op,
-                                                       .params = params,
-                                                       .ret = ret,
-                                                       .body = body}});
+    AstNode *func = newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astFuncDecl,
+                   .flags = flags,
+                   .funcDecl = {
+                       .name = name,
+                       .operatorOverload = op,
+                       .signature = makeFunctionSignature(
+                           P->memPool,
+                           &(FunctionSignature){.params = params, .ret = ret}),
+                       .body = body}});
     if (gParams) {
         return newAstNode(
             P,
@@ -1529,7 +1575,7 @@ static AstNode *caseStatement(Parser *P)
     u64 flags = flgNone;
     Token tok = *current(P);
     AstNode *match = NULL, *body = NULL;
-    if (match(P, tokCase)) {
+    if (match(P, tokCase) || previous(P)->tag == tokComma) {
         P->inCase = true;
         match = expression(P, false);
         P->inCase = false;
@@ -1540,9 +1586,12 @@ static AstNode *caseStatement(Parser *P)
         flags |= flgDefault;
     }
 
-    consume0(P, tokColon);
-    if (!check(P, tokCase))
-        body = statement(P);
+    if (!match(P, tokComma)) {
+        consume0(P, tokFatArrow);
+        if (!check(P, tokCase, tokRBrace)) {
+            body = statement(P);
+        }
+    }
 
     return newAstNode(P,
                       &tok.fileLoc.begin,
@@ -1620,7 +1669,7 @@ static AstNode *continueStatement(Parser *P)
 static AstNode *statement(Parser *P)
 {
     AstNode *attrs = NULL;
-    u64 flags = match(P, tokDebugBreak) == NULL ? flgNone : flgDebugBreak;
+    u64 flags = flgNone;
     if (check(P, tokAt))
         attrs = attributes(P);
 
@@ -1662,7 +1711,7 @@ static AstNode *statement(Parser *P)
         stmt = variable(P, false, false, false, false);
         break;
     case tokFunc:
-        stmt = funcDecl(P, false, false);
+        stmt = funcDecl(P, flgNone);
         break;
     case tokLBrace:
         stmt = block(P);
@@ -1693,6 +1742,7 @@ static AstNode *parseType(Parser *P)
     else {
         switch (tok.tag) {
         case tokIdent:
+        case tokThisClass:
             type = parsePath(P);
             type->path.isType = true;
             break;
@@ -1764,6 +1814,8 @@ static AstNode *parseStructField(Parser *P, bool isPrivate)
         consume0(P, tokAssign);
         value = expression(P, false);
     }
+    // consume optional semicolon
+    match(P, tokSemicolon);
 
     return newAstNode(
         P,
@@ -1791,7 +1843,7 @@ static AstNode *parseStructMember(Parser *P)
         break;
     case tokFunc:
     case tokAsync:
-        member = funcDecl(P, !isPrivate, false);
+        member = funcDecl(P, isPrivate ? flgNone : flgPublic);
         break;
     case tokMacro:
         if (attrs)
@@ -1809,6 +1861,31 @@ static AstNode *parseStructMember(Parser *P)
         break;
     default:
         reportUnexpectedToken(P, "struct member");
+    }
+    member->flags |= (isConst ? flgConst : flgNone);
+    member->attrs = attrs;
+    return member;
+}
+
+static AstNode *parseInterfaceMember(Parser *P)
+{
+    AstNode *member = NULL, *attrs = NULL;
+    Token tok = *current(P);
+
+    if (check(P, tokAt))
+        attrs = attributes(P);
+
+    bool isPrivate = match(P, tokMinus);
+    bool isConst = match(P, tokConst);
+
+    switch (current(P)->tag) {
+    case tokFunc:
+    case tokAsync:
+        member = funcDecl(
+            P, isPrivate ? flgDeclarationOnly : flgPublic | flgDeclarationOnly);
+        break;
+    default:
+        reportUnexpectedToken(P, "interface member");
     }
     member->flags |= (isConst ? flgConst : flgNone);
     member->attrs = attrs;
@@ -1932,7 +2009,7 @@ static AstNode *comptime(Parser *P, AstNode *(*parser)(Parser *))
 
 static AstNode *structDecl(Parser *P, bool isPublic)
 {
-    AstNode *base = NULL, *gParams = NULL;
+    AstNode *base = NULL, *gParams = NULL, *implements = NULL;
     AstNodeList members = {NULL};
     Token tok = *consume0(P, tokStruct);
     cstring name = getTokenString(P, consume0(P, tokIdent), false);
@@ -1943,8 +2020,14 @@ static AstNode *structDecl(Parser *P, bool isPublic)
         consume0(P, tokRBracket);
     }
 
-    if (match(P, tokColon))
-        base = parseType(P);
+    if (match(P, tokColon)) {
+        if (!check(P, tokColon))
+            base = parseType(P);
+
+        if (match(P, tokColon))
+            implements = parseAtLeastOne(
+                P, "interface to implement", tokLBrace, tokComma, parseType);
+    }
 
     consume0(P, tokLBrace);
     while (!check(P, tokRBrace, tokEoF)) {
@@ -1952,13 +2035,52 @@ static AstNode *structDecl(Parser *P, bool isPublic)
     }
     consume0(P, tokRBrace);
 
+    AstNode *node =
+        newAstNode(P,
+                   &tok.fileLoc.begin,
+                   &(AstNode){.tag = astStructDecl,
+                              .flags = isPublic ? flgPublic : flgNone,
+                              .structDecl = {.name = name,
+                                             .base = base,
+                                             .members = members.first,
+                                             .implements = implements}});
+
+    if (gParams) {
+        return newAstNode(
+            P,
+            &tok.fileLoc.begin,
+            &(AstNode){.tag = astGenericDecl,
+                       .flags = isPublic ? flgPublic : flgNone,
+                       .genericDecl = {.params = gParams, .decl = node}});
+    }
+    return node;
+}
+
+static AstNode *interfaceDecl(Parser *P, bool isPublic)
+{
+    AstNode *gParams = NULL;
+    AstNodeList members = {NULL};
+    Token tok = *consume0(P, tokInterface);
+    cstring name = getTokenString(P, consume0(P, tokIdent), false);
+
+    if (match(P, tokLBracket)) {
+        gParams = parseAtLeastOne(
+            P, "generic type params", tokRBracket, tokComma, parseGenericParam);
+        consume0(P, tokRBracket);
+    }
+
+    consume0(P, tokLBrace);
+    while (!check(P, tokRBrace, tokEoF)) {
+        listAddAstNode(&members, comptime(P, parseInterfaceMember));
+    }
+    consume0(P, tokRBrace);
+
     AstNode *node = newAstNode(
         P,
         &tok.fileLoc.begin,
-        &(AstNode){.tag = astStructDecl,
+        &(AstNode){.tag = astInterfaceDecl,
                    .flags = isPublic ? flgPublic : flgNone,
-                   .structDecl = {
-                       .name = name, .base = base, .members = members.first}});
+                   .interfaceDecl = {.name = name, .members = members.first}});
 
     if (gParams) {
         return newAstNode(
@@ -2099,6 +2221,9 @@ static AstNode *declaration(Parser *P)
     case tokStruct:
         decl = structDecl(P, isPublic);
         break;
+    case tokInterface:
+        decl = interfaceDecl(P, isPublic);
+        break;
     case tokEnum:
         decl = enumDecl(P, isPublic);
         break;
@@ -2111,7 +2236,10 @@ static AstNode *declaration(Parser *P)
         break;
     case tokFunc:
     case tokAsync:
-        decl = funcDecl(P, isPublic, isNative);
+        decl =
+            funcDecl(P,
+                     (isPublic ? flgPublic : flgNone) |
+                         (isNative ? flgNative | flgDeclarationOnly : flgNone));
         break;
     case tokDefine:
         decl = define(P);
@@ -2159,6 +2287,8 @@ static void synchronize(Parser *P)
         case tokEoF:
         case tokDefine:
         case tokCDefine:
+        case tokInterface:
+        case tokPub:
             return;
         default:
             advance(P);
@@ -2201,7 +2331,8 @@ static AstNode *parseImportDecl(Parser *P)
 {
     Token tok = *consume0(P, tokImport);
     AstNode *module;
-    AstNode *entities = NULL, *alias = NULL, *exports;
+    AstNode *entities = NULL, *alias = NULL;
+    const Type *exports;
     if (check(P, tokIdent)) {
         entities = parseImportEntity(P);
     }
@@ -2232,8 +2363,8 @@ static AstNode *parseImportDecl(Parser *P)
     return makeAstNode(P->memPool,
                        &tok.fileLoc,
                        &(AstNode){.tag = astImportDecl,
+                                  .type = exports,
                                   .import = {.module = module,
-                                             .exports = exports,
                                              .alias = alias,
                                              .entities = entities}});
 }
@@ -2271,7 +2402,7 @@ Parser makeParser(Lexer *lexer, CompilerDriver *cc)
     Parser parser = {.cc = cc,
                      .lexer = lexer,
                      .L = lexer->log,
-                     .memPool = &cc->memPool,
+                     .memPool = &cc->pool,
                      .strPool = &cc->strPool};
     parser.ahead[0] = (Token){.tag = tokEoF};
     for (u32 i = 1; i < TOKEN_BUFFER; i++)
