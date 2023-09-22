@@ -82,8 +82,7 @@ static const Type *checkBasePathElement(AstVisitor *visitor,
     else {
         csAssert0(node->pathElement.resolvesTo);
         node->flags |=
-            (nodeIs(node->pathElement.resolvesTo, StructField) ? flgMember
-                                                               : flgNone);
+            (nodeIs(node->pathElement.resolvesTo, Field) ? flgMember : flgNone);
         return node->type = node->pathElement.resolvesTo->type;
     }
 }

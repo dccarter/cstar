@@ -418,6 +418,7 @@ struct AstNode {
                 struct AstNode *typeParams;
                 const struct Type *thisType;
                 SortedNodes *sortedMembers;
+                AstNode *deinit;
             } structDecl;
 
             struct {

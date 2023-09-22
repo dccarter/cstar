@@ -327,7 +327,7 @@ static AstNode *makeLenNode(AstVisitor *visitor,
 
     case typStruct: {
         const NamedTypeMember *symbol = findStructMember(raw, S_len);
-        if (symbol && nodeIs(symbol->decl, StructField) &&
+        if (symbol && nodeIs(symbol->decl, Field) &&
             isUnsignedType(symbol->type)) {
             return makeAstNode(
                 ctx->pool,

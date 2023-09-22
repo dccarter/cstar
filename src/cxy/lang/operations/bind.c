@@ -71,7 +71,7 @@ static inline bool shouldCaptureSymbol(const AstNode *closure,
                                        const AstNode *symbol)
 {
     return closure && (nodeIs(symbol, VarDecl) || nodeIs(symbol, FuncParam) ||
-                       nodeIs(symbol, StructField));
+                       nodeIs(symbol, Field));
 }
 
 static void captureSymbol(AstNode *closure,
@@ -100,7 +100,7 @@ static void captureSymbol(AstNode *closure,
 
             prev = addClosureCapture(&parent->closureExpr.captureSet, symbol);
             root->flags |= flgMember;
-            if (nodeIs(symbol, StructField))
+            if (nodeIs(symbol, Field))
                 prev->flags |= flgMember;
         }
         parent = parent->parentScope;

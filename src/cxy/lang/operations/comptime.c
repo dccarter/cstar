@@ -315,11 +315,10 @@ static AstNode *isEnum(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 
 static AstNode *isField(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 {
-    return makeAstNode(
-        ctx->pool,
-        loc,
-        &(AstNode){.tag = astBoolLit,
-                   .boolLiteral.value = nodeIs(node, StructField)});
+    return makeAstNode(ctx->pool,
+                       loc,
+                       &(AstNode){.tag = astBoolLit,
+                                  .boolLiteral.value = nodeIs(node, Field)});
 }
 
 static void initDefaultMembers(EvalContext *ctx)

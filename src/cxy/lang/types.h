@@ -296,6 +296,18 @@ static inline const Type *findStructMemberType(const Type *type, cstring member)
     return found ? found->type : NULL;
 }
 
+static inline const NamedTypeMember *findClassMember(const Type *type,
+                                                     cstring member)
+{
+    return findNamedTypeMemberInContainer(type->tClass.members, member);
+}
+
+static inline const Type *findClassMemberType(const Type *type, cstring member)
+{
+    const NamedTypeMember *found = findClassMember(type, member);
+    return found ? found->type : NULL;
+}
+
 const TypeInheritance *getTypeInheritance(const Type *type);
 const Type *getTypeBase(const Type *type);
 

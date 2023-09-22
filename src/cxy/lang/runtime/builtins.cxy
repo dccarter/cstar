@@ -129,73 +129,30 @@
     EOVERFLOW,
  ) : i32
 
-
-
 ## pub (
     memcpy,
     memmove
 ) : func(dst: &void, src: &const void, len: u64) -> &void
 
-pub native func memset(
-    dst: &void,
-    ch: i32,
-    len: u64
-) : &void;
+## pub (
+    memset
+) : func(dst: &void, ch: i32, len: u64) -> &void
+
+## pub (
+    CXY__alloc
+) : func(size: u64) -> &void
+
+## pub (
+    CXY__realloc
+) : func(ptr: &void, size: u64) -> &void
+
+## pub (
+    CXY__free
+) : func(ptr: &void) -> void
 
 ## pub(
     strlen
 ): func(str: &const char) -> u64
-
-## pub(
-    CXY__builtins_sizeof
-): func(it: auto) -> u64
-
-## pub(
-    CXY__builtins_assert
-): func(cond: bool, fmt: &const char, line: u64, col: u64) -> void
-
-
-## pub CXY__builtins_alloc : func(
-    typ: auto,
-    size: u64,
-    dctor: func(ptr: &void) -> void
-) -> &void
-
-@inline
-pub func alloc[T](count: u64 = 1) => CXY__builtins_alloc(#T, count, destructor!(#T)) : T
-
-## pub(
-    dealloc => CXY__builtins_dealloc
-) : func(ptr: &void) -> void
-
-pub native func CXY__builtins_alloc_slice(
-    typ: auto,
-    size: u64,
-    dctor: func(ptr: &void) -> void
-) : &void
-
-## pub CXY__builtins_memset_slice: func(
-    typ: auto,
-    ptr: &void,
-    size: u64
-) -> void
-
-@inline
-pub func allocSlice[T](
-    count: u64
-) => CXY__builtins_alloc_slice(#[T], count, destructor!(#[T])) : [T]
-
-pub native func CXY__builtins_realloc_slice(
-    typ: auto,
-    ptr: &void,
-    count: u64,
-    dctor: func(ptr: &void) -> void
-) : &void
-
-@inline
-pub func reallocSlice[T](
-    data: [T], count: u64
-) => CXY__builtins_realloc_slice(#[T], data, count, destructor!(#[T])) : [T];
 
 type HashCode = u32
 
@@ -242,7 +199,7 @@ pub func hashStringSize(
     len: u64
 ) => hashBytes(init, str !: &const char, len)
 
-pub func hash[T](val: T) {
+pub func hash[T](val: T, init: HashCode = 0) {
     #if (#T == #string) {
         return hashString(hashInit(), val)
     }
@@ -379,7 +336,7 @@ pub class StringBuilder {
  *
  * Corresponds to type T?
  */
-struct Optional[T] {
+pub struct Optional[T] {
     - valid: bool = false;
     - value: T
 
@@ -397,6 +354,12 @@ struct Optional[T] {
     /* Checks whether an optional is valid or not */
     @inline
     const func `!!`() => valid
+
+    @inline
+    const func read() {
+        assert!(valid)
+        return value
+    }
 
     /* Convert optional value to string */
     const func toString(sb: StringBuilder) {

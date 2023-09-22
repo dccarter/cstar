@@ -613,7 +613,7 @@ AstNode *findStructMemberByName(AstNode *node, cstring name)
 {
     AstNode *member = node->structDecl.members;
     while (member) {
-        if ((nodeIs(member, StructField) && member->structField.name == name) ||
+        if ((nodeIs(member, Field) && member->structField.name == name) ||
             (nodeIs(member, FuncDecl) && member->structField.name == name))
             return member;
         member = member->next;

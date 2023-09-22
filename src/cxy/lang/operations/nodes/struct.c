@@ -29,8 +29,15 @@ static void preCheckMembers(AstVisitor *visitor,
         const Type *type;
         if (nodeIs(member, FuncDecl)) {
             type = checkFunctionSignature(visitor, member);
-            if (member->funcDecl.operatorOverload == opDeinitialize)
-                node->flags |= flgImplementsDelete;
+            if (member->funcDecl.operatorOverload == opDeinitialize) {
+                logError(ctx->L,
+                         &member->loc,
+                         "struct should not implement `deinit` operator, "
+                         "structs are value types",
+                         NULL);
+                node->type = ERROR_TYPE(ctx);
+                continue;
+            }
         }
         else {
             type = checkType(visitor, member);

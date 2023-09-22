@@ -322,9 +322,6 @@ const Type *resolveType(const Type *type)
         case typInfo:
             type = resolveType(type->info.target);
             break;
-        case typThis:
-            type = resolveType(type->this.that);
-            break;
         default:
             return type;
         }
@@ -868,6 +865,9 @@ const Type *findMemberInType(const Type *type, cstring name)
         break;
     case typStruct:
         found = findStructMemberType(type, name);
+        break;
+    case typClass:
+        found = findClassMemberType(type, name);
         break;
     case typInterface:
         found = findInterfaceMemberType(type, name);

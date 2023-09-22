@@ -114,6 +114,7 @@ void checkPath(AstVisitor *visitor, AstNode *node);
 void checkFunctionParam(AstVisitor *visitor, AstNode *node);
 void checkField(AstVisitor *visitor, AstNode *node);
 void checkStructDecl(AstVisitor *visitor, AstNode *node);
+void checkClassDecl(AstVisitor *visitor, AstNode *node);
 void checkFunctionDecl(AstVisitor *visitor, AstNode *node);
 void checkEnumDecl(AstVisitor *visitor, AstNode *node);
 void checkTypeDecl(AstVisitor *visitor, AstNode *node);

@@ -16,8 +16,6 @@
 
 #include "core/alloc.h"
 
-#include <string.h>
-
 static void checkClassBaseDecl(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
@@ -88,104 +86,6 @@ static void preCheckMembers(AstVisitor *visitor,
         return;
 }
 
-void checkClassExpr(AstVisitor *visitor, AstNode *node)
-{
-    TypingContext *ctx = getAstVisitorContext(visitor);
-    const Type *target = checkType(visitor, node->structExpr.left);
-    if (typeIs(target, Error)) {
-        node->type = ERROR_TYPE(ctx);
-        return;
-    }
-
-    if (!typeIs(target, Struct)) {
-        logError(ctx->L,
-                 &node->structExpr.left->loc,
-                 "unsupported type used with struct initializer, '{t}' is not "
-                 "a struct",
-                 (FormatArg[]){{.t = target}});
-        node->type = ERROR_TYPE(ctx);
-        return;
-    }
-
-    AstNode *field = node->structExpr.fields, *prev = node->structExpr.fields;
-    bool *initialized =
-        callocOrDie(1, sizeof(bool) * target->tStruct.members->count);
-
-    for (; field; field = field->next) {
-        prev = field;
-        const NamedTypeMember *member =
-            findStructMember(target, field->fieldExpr.name);
-        if (member == NULL) {
-            logError(
-                ctx->L,
-                &field->loc,
-                "field '{s}' does not exist in target struct type '{t}'",
-                ((FormatArg[]){{.s = field->fieldExpr.name}, {.t = target}}));
-            node->type = ERROR_TYPE(ctx);
-            continue;
-        }
-
-        if (!nodeIs(member->decl, Field)) {
-            logError(
-                ctx->L,
-                &field->loc,
-                "member '{s}' is not a field, only struct can be initialized",
-                (FormatArg[]){{.s = field->fieldExpr.name}});
-            node->type = ERROR_TYPE(ctx);
-            continue;
-        }
-
-        const Type *type = checkType(visitor, field->fieldExpr.value);
-        if (!isTypeAssignableFrom(member->type, type)) {
-            logError(ctx->L,
-                     &field->fieldExpr.value->loc,
-                     "value type '{t}' is not assignable to field type '{t}'",
-                     (FormatArg[]){{.t = type}, {.t = member->type}});
-            node->type = ERROR_TYPE(ctx);
-            continue;
-        }
-
-        field->type = member->type;
-        initialized[member->decl->structField.index] = true;
-    }
-
-    if (node->type == ERROR_TYPE(ctx))
-        return;
-
-    for (u64 i = 0; i < target->tStruct.members->count; i++) {
-        const AstNode *targetField = target->tStruct.members->members[i].decl;
-        if (initialized[i] || !nodeIs(targetField, Field))
-            continue;
-
-        if (targetField->structField.value == NULL) {
-            logError(
-                ctx->L,
-                &node->loc,
-                "initializer expression missing struct required member '{s}'",
-                (FormatArg[]){{.s = targetField->structField.name}});
-            logNote(
-                ctx->L, &targetField->loc, "struct field declared here", NULL);
-            node->type = ERROR_TYPE(ctx);
-            continue;
-        }
-        AstNode *temp = makeAstNode(
-            ctx->pool,
-            &(prev ?: node)->loc,
-            &(AstNode){.tag = astFieldExpr,
-                       .type = targetField->type,
-                       .flags = targetField->flags,
-                       .fieldExpr = {.name = targetField->structField.name,
-                                     .value = targetField->structField.value}});
-        if (prev)
-            prev = prev->next = temp;
-        else
-            prev = node->structExpr.fields = temp;
-    }
-
-    if (node->type != ERROR_TYPE(ctx))
-        node->type = target;
-}
-
 void checkClassDecl(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
@@ -216,6 +116,7 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
             ?: makeThisType(ctx->types, node->classDecl.name, flgNone);
     const Type *this = node->classDecl.thisType;
 
+    node->type = this;
     ctx->currentClass = node;
     preCheckMembers(visitor, node, members);
     ctx->currentClass = NULL;

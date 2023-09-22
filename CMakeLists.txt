@@ -130,13 +130,16 @@ set(CXY_OPERATIONS_SOURCES
         src/cxy/lang/operations/nodes/assign.c
         src/cxy/lang/operations/nodes/binary.c
         src/cxy/lang/operations/nodes/call.c
+        src/cxy/lang/operations/nodes/class.c
         src/cxy/lang/operations/nodes/closure.c
         src/cxy/lang/operations/nodes/enum.c
+        src/cxy/lang/operations/nodes/field.c
         src/cxy/lang/operations/nodes/for.c
         src/cxy/lang/operations/nodes/function.c
         src/cxy/lang/operations/nodes/generics.c
         src/cxy/lang/operations/nodes/if.c
         src/cxy/lang/operations/nodes/index.c
+        src/cxy/lang/operations/nodes/interface.c
         src/cxy/lang/operations/nodes/literal.c
         src/cxy/lang/operations/nodes/member.c
         src/cxy/lang/operations/nodes/new.c

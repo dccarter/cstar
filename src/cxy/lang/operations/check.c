@@ -665,6 +665,7 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astGenericDecl] = checkGenericDecl,
         [astField] = checkField,
         [astStructDecl] = checkStructDecl,
+        [astClassDecl] = checkClassDecl,
         [astInterfaceDecl] = checkInterfaceDecl,
         [astImportDecl] = checkImportDecl,
         [astReturnStmt] = checkReturnStmt,
