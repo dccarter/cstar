@@ -18,6 +18,19 @@ static inline bool isInlineFunction(const AstNode *node)
     return findAttribute(node, S_inline) != NULL;
 }
 
+static inline bool isIteratorFunction(const Type *type)
+{
+    if (!typeIs(type, Struct) || !hasFlag(type, Closure))
+        return false;
+
+    const Type *iter = findStructMemberType(type, S_CallOverload);
+    if (iter == NULL)
+        return false;
+
+    const Type *ret = iter->func.retType;
+    return typeIs(ret, Struct) && hasFlag(ret, Optional);
+}
+
 void generateFuncParam(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -355,6 +368,42 @@ const Type *matchOverloadedFunction(TypingContext *ctx,
         }
     }
     return NULL;
+}
+
+bool checkMemberFunctions(AstVisitor *visitor,
+                          AstNode *node,
+                          NamedTypeMember *members)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    AstNode *member = node->structDecl.members;
+
+    bool retype = false;
+    for (u64 i = 0; member; member = member->next, i++) {
+        if (nodeIs(member, FuncDecl)) {
+            const Type *type = checkFunctionBody(visitor, member);
+            if (typeIs(type, Error)) {
+                node->type = ERROR_TYPE(ctx);
+                return false;
+            }
+
+            if (member->funcDecl.operatorOverload == opRange &&
+                !isIteratorFunction(type->func.retType)) //
+            {
+                logError(ctx->L,
+                         &member->loc,
+                         "expecting an iterator function overload to return an "
+                         "iterator, got '{t}'",
+                         (FormatArg[]){{.t = type->func.retType}});
+                node->type = ERROR_TYPE(ctx);
+                return false;
+            }
+
+            retype = members[i].type != type;
+            members[i].type = type;
+        }
+    }
+
+    return retype;
 }
 
 void checkFunctionParam(AstVisitor *visitor, AstNode *node)

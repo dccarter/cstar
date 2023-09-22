@@ -49,7 +49,7 @@ static AstNode *aliasDecl(Parser *P, bool isPublic, bool isNative);
 
 static AstNode *enumDecl(Parser *P, bool isPublic);
 
-static AstNode *structDecl(Parser *P, bool isPublic);
+static AstNode *classOrStructDecl(Parser *P, bool isPublic);
 
 static AstNode *attributes(Parser *P);
 
@@ -440,35 +440,6 @@ static AstNode *structExpr(Parser *P,
 
 static AstNode *functionParam(Parser *P);
 
-static AstNode *newOperator(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
-{
-    Token tok = *current(P);
-    AstNode *type = NULL;
-    AstNode *init = NULL;
-    if (match(P, tokAuto)) {
-        init = parsePrimary(P, true);
-    }
-    else {
-        type = parseType(P);
-        if (match(P, tokLParen)) {
-            init = parseMany(P, tokRParen, tokComma, expressionWithStructs);
-            consume0(P, tokRParen);
-        }
-
-        init =
-            makeAstNode(P->memPool,
-                        &tok.fileLoc,
-                        &(AstNode){.tag = astCallExpr,
-                                   .flags = type->flags,
-                                   .callExpr = {.callee = type, .args = init}});
-        type = NULL;
-    }
-    return makeAstNode(
-        P->memPool,
-        &tok.fileLoc,
-        &(AstNode){.tag = astNewExpr, .newExpr = {.type = type, .init = init}});
-}
-
 static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 {
     bool isBand = check(P, tokBAnd);
@@ -489,11 +460,7 @@ static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
     }
 
     const Token tok = *advance(P);
-    AstNode *operand;
-    if (tok.tag == tokNew)
-        return newOperator(P, parsePrimary);
-    else
-        operand = prefix(P, parsePrimary);
+    AstNode *operand = prefix(P, parsePrimary);
 
     if (!isBand) {
         return newAstNode(
@@ -1372,8 +1339,11 @@ static OperatorOverload operatorOverload(Parser *P)
             op = (OperatorOverload){.f = opStringOverload,
                                     .s = S_StringOverload};
         }
-        else if (strcmp(name, "deref") == 0) {
-            op = (OperatorOverload){.f = opDeref, .s = S_Deref};
+        else if (strcmp(name, "init") == 0) {
+            op = (OperatorOverload){.f = opInitializer, .s = S_Initializer};
+        }
+        else if (strcmp(name, "deinit") == 0) {
+            op = (OperatorOverload){.f = opDeinitialize, .s = S_Deinitialize};
         }
         else {
             parserError(P,
@@ -1384,12 +1354,6 @@ static OperatorOverload operatorOverload(Parser *P)
     }
     else {
         switch (current(P)->tag) {
-        case tokNew:
-            op = (OperatorOverload){.f = opNew, .s = S_New};
-            break;
-        case tokDelete:
-            op = (OperatorOverload){.f = opDelete, .s = S_Delete};
-            break;
         case tokLNot:
             if (checkPeek(P, 1, tokLNot)) {
                 op = (OperatorOverload){.f = opTruthy, .s = S_Truthy};
@@ -1821,12 +1785,12 @@ static AstNode *parseStructField(Parser *P, bool isPrivate)
         P,
         &tok.fileLoc.begin,
         &(AstNode){
-            .tag = astStructField,
+            .tag = astField,
             .flags = isPrivate ? flgPrivate : flgNone,
             .structField = {.name = name, .type = type, .value = value}});
 }
 
-static AstNode *parseStructMember(Parser *P)
+static AstNode *parseClassOrStructMember(Parser *P)
 {
     AstNode *member = NULL, *attrs = NULL;
     Token tok = *current(P);
@@ -1857,7 +1821,7 @@ static AstNode *parseStructMember(Parser *P)
         member = aliasDecl(P, !isPrivate, false);
         break;
     case tokStruct:
-        member = structDecl(P, !isPrivate);
+        member = classOrStructDecl(P, !isPrivate);
         break;
     default:
         reportUnexpectedToken(P, "struct member");
@@ -2007,11 +1971,11 @@ static AstNode *comptime(Parser *P, AstNode *(*parser)(Parser *))
     unreachable("");
 }
 
-static AstNode *structDecl(Parser *P, bool isPublic)
+static AstNode *classOrStructDecl(Parser *P, bool isPublic)
 {
     AstNode *base = NULL, *gParams = NULL, *implements = NULL;
     AstNodeList members = {NULL};
-    Token tok = *consume0(P, tokStruct);
+    Token tok = *match(P, tokClass, tokStruct);
     cstring name = getTokenString(P, consume0(P, tokIdent), false);
 
     if (match(P, tokLBracket)) {
@@ -2021,9 +1985,8 @@ static AstNode *structDecl(Parser *P, bool isPublic)
     }
 
     if (match(P, tokColon)) {
-        if (!check(P, tokColon))
+        if (tok.tag == tokClass && match(P, tokColon))
             base = parseType(P);
-
         if (match(P, tokColon))
             implements = parseAtLeastOne(
                 P, "interface to implement", tokLBrace, tokComma, parseType);
@@ -2031,19 +1994,19 @@ static AstNode *structDecl(Parser *P, bool isPublic)
 
     consume0(P, tokLBrace);
     while (!check(P, tokRBrace, tokEoF)) {
-        listAddAstNode(&members, comptime(P, parseStructMember));
+        listAddAstNode(&members, comptime(P, parseClassOrStructMember));
     }
     consume0(P, tokRBrace);
 
-    AstNode *node =
-        newAstNode(P,
-                   &tok.fileLoc.begin,
-                   &(AstNode){.tag = astStructDecl,
-                              .flags = isPublic ? flgPublic : flgNone,
-                              .structDecl = {.name = name,
-                                             .base = base,
-                                             .members = members.first,
-                                             .implements = implements}});
+    AstNode *node = newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = tok.tag == tokClass ? astClassDecl : astStructDecl,
+                   .flags = isPublic ? flgPublic : flgNone,
+                   .classDecl = {.name = name,
+                                 .members = members.first,
+                                 .implements = implements,
+                                 .base = base}});
 
     if (gParams) {
         return newAstNode(
@@ -2219,7 +2182,8 @@ static AstNode *declaration(Parser *P)
 
     switch (current(P)->tag) {
     case tokStruct:
-        decl = structDecl(P, isPublic);
+    case tokClass:
+        decl = classOrStructDecl(P, isPublic);
         break;
     case tokInterface:
         decl = interfaceDecl(P, isPublic);

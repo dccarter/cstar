@@ -80,7 +80,7 @@ static void postCloneAstNode(CloneAstConfig *config,
         }
     case astFuncParam:
     case astStructDecl:
-    case astStructField:
+    case astField:
     case astInterfaceDecl:
     case astUnionDecl:
     case astTypeDecl:
@@ -790,9 +790,15 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
 
     case astStructDecl:
         CLONE_MANY(structDecl, members);
-        CLONE_ONE(structDecl, base);
         CLONE_MANY(structDecl, implements);
         COPY_SORTED(structDecl, sortedMembers);
+        break;
+
+    case astClassDecl:
+        CLONE_MANY(classDecl, members);
+        CLONE_ONE(classDecl, base);
+        CLONE_MANY(classDecl, implements);
+        COPY_SORTED(classDecl, sortedMembers);
         break;
 
     case astInterfaceDecl:
@@ -810,7 +816,7 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
         COPY_SORTED(enumDecl, sortedOptions);
         break;
 
-    case astStructField:
+    case astField:
         CLONE_ONE(structField, value)
         CLONE_ONE(structField, type)
         break;
@@ -1019,6 +1025,8 @@ const char *getDeclKeyword(AstTag tag)
         return "enum";
     case astStructDecl:
         return "struct";
+    case astClassDecl:
+        return "class";
     default:
         return false;
     }
@@ -1040,6 +1048,7 @@ const char *getDeclarationName(const AstNode *node)
     case astUnionDecl:
         return node->unionDecl.name;
     case astStructDecl:
+    case astClassDecl:
         return node->structDecl.name;
     case astInterfaceDecl:
         return node->interfaceDecl.name;
@@ -1071,6 +1080,7 @@ void setDeclarationName(AstNode *node, cstring name)
         node->unionDecl.name = name;
         break;
     case astStructDecl:
+    case astClassDecl:
         node->structDecl.name = name;
         break;
     case astInterfaceDecl:
@@ -1091,6 +1101,7 @@ AstNode *getGenericDeclarationParams(AstNode *node)
     case astUnionDecl:
         return node->unionDecl.typeParams;
     case astStructDecl:
+    case astClassDecl:
         return node->structDecl.typeParams;
     case astInterfaceDecl:
         return node->interfaceDecl.typeParams;
@@ -1112,6 +1123,7 @@ void setGenericDeclarationParams(AstNode *node, AstNode *params)
         node->unionDecl.typeParams = params;
         break;
     case astStructDecl:
+    case astClassDecl:
         node->structDecl.typeParams = params;
         break;
     case astInterfaceDecl:
@@ -1217,9 +1229,9 @@ static int isInInheritanceChain_(const AstNode *node,
                                  const AstNode *parent,
                                  int depth)
 {
-    if (!nodeIs(node, StructDecl) || node->structDecl.base == NULL)
+    if (!nodeIs(node, ClassDecl) || node->classDecl.base == NULL)
         return 0;
-    const AstNode *base = resolvePath(node->structDecl.base);
+    const AstNode *base = resolvePath(node->classDecl.base);
     if (base == NULL)
         return 0;
     if (base == parent)
@@ -1234,13 +1246,12 @@ int isInInheritanceChain(const AstNode *node, const AstNode *parent)
 
 AstNode *getBaseClassAtLevel(AstNode *node, u64 level)
 {
-    csAssert0(level > 0);
     int i = 0;
     do {
         if (i == level)
             return node;
 
-        node = underlyingDeclaration(resolvePath(node->structDecl.base));
+        node = underlyingDeclaration(resolvePath(node->classDecl.base));
         i++;
     } while (node);
     return node;
@@ -1249,7 +1260,7 @@ AstNode *getBaseClassAtLevel(AstNode *node, u64 level)
 AstNode *getBaseClassByName(AstNode *node, cstring name)
 {
     for (;;) {
-        node = underlyingDeclaration(resolvePath(node->structDecl.base));
+        node = underlyingDeclaration(resolvePath(node->classDecl.base));
         if (node == NULL)
             return NULL;
 

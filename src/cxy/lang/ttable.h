@@ -87,19 +87,56 @@ const Type *changeFunctionRetType(TypeTable *table,
                                   const Type *func,
                                   const Type *ret);
 
-const Type *makeStruct(TypeTable *table, const Type *init);
+const Type *makeStructType(TypeTable *table,
+                           cstring name,
+                           NamedTypeMember *members,
+                           u64 memberCount,
+                           AstNode *decl,
+                           const Type **interfaces,
+                           u64 interfacesCount,
+                           u64 flags);
+
+const Type *makeClassType(TypeTable *table,
+                          cstring name,
+                          NamedTypeMember *members,
+                          u64 memberCount,
+                          AstNode *decl,
+                          const Type *base,
+                          const Type **interfaces,
+                          u64 interfacesCount,
+                          u64 flags);
 
 const Type *replaceStructType(TypeTable *table,
                               const Type *og,
-                              const Type *with);
+                              NamedTypeMember *members,
+                              u64 membersCount,
+                              AstNode *decl,
+                              const Type **interfaces,
+                              u64 interfacesCount,
+                              u64 flags);
 
-const Type *makeInterfaceType(TypeTable *table, const Type *init);
+const Type *replaceClassType(TypeTable *table,
+                             const Type *og,
+                             NamedTypeMember *members,
+                             u64 membersCount,
+                             AstNode *decl,
+                             const Type *base,
+                             const Type **interfaces,
+                             u64 interfacesCount,
+                             u64 flags);
+
+const Type *makeInterfaceType(TypeTable *table,
+                              cstring name,
+                              NamedTypeMember *members,
+                              u64 memberCount,
+                              AstNode *decl,
+                              u64 flags);
 
 const Type *makeModuleType(TypeTable *table,
                            cstring name,
                            cstring path,
-                           ModuleMember *members,
-                           u64 count);
+                           NamedTypeMember *members,
+                           u64 memberCount);
 
 const Type *makeEnum(TypeTable *table, const Type *init);
 
@@ -125,7 +162,7 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right);
 
 const Type *getBuiltinOptionalType(Log *L);
 
-const Type *findInType(TypeTable *table, const Type *type, cstring name);
+const Type *findMemberInType(const Type *type, cstring name);
 
 const Type *expectInType(TypeTable *table,
                          const Type *type,

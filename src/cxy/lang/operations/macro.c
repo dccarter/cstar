@@ -326,7 +326,7 @@ static AstNode *makeLenNode(AstVisitor *visitor,
                                                  raw->array.elementType))}})});
 
     case typStruct: {
-        const StructMember *symbol = findStructMember(raw, S_len);
+        const NamedTypeMember *symbol = findStructMember(raw, S_len);
         if (symbol && nodeIs(symbol->decl, StructField) &&
             isUnsignedType(symbol->type)) {
             return makeAstNode(
@@ -587,19 +587,16 @@ static AstNode *makeBaseOfNode(AstVisitor *visitor,
     }
 
     type = type->info.target;
-    if (!typeIs(type, Enum) && !typeIs(type, Struct)) {
+    if (!typeIs(type, Enum) && !typeIs(type, Class)) {
         logError(ctx->L,
                  &node->loc,
                  "invalid `typeof!` macro argument, unexpected type '{t}', "
-                 "expecting a struct or enum type",
+                 "expecting a class or enum type",
                  (FormatArg[]){{.t = type}});
         return NULL;
     }
 
-    type = typeIs(type, Enum)
-               ? type->tEnum.base
-               : (type->tStruct.base ?: makeVoidType(ctx->types));
-
+    type = getTypeBase(type) ?: makeVoidType(ctx->types);
     args->type = makeTypeInfo(ctx->types, type);
     return args;
 }

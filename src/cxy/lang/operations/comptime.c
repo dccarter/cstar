@@ -79,7 +79,7 @@ static AstNode *getName(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 {
     cstring name = NULL;
     switch (node->tag) {
-    case astStructField:
+    case astField:
         name = node->structField.name;
         break;
     case astStructDecl:
@@ -352,27 +352,27 @@ static void initDefaultMembers(EvalContext *ctx)
 #undef ADD_MEMBER
 }
 
-static AstNode *getStructMembers(EvalContext *ctx,
-                                 const FileLoc *loc,
-                                 AstNode *node)
+static AstNode *getStructOrClassMembers(EvalContext *ctx,
+                                        const FileLoc *loc,
+                                        AstNode *node)
 {
     return comptimeWrapped(
         ctx, loc, node->structDecl.members, flgComptimeIterable);
 }
 
-static AstNode *getStructBase(EvalContext *ctx,
-                              const FileLoc *loc,
-                              AstNode *node)
+static AstNode *getClassBase(EvalContext *ctx,
+                             const FileLoc *loc,
+                             AstNode *node)
 {
-    if (node->structDecl.base) {
-        return getResolvedPath(node->structDecl.base);
+    if (node->classDecl.base) {
+        return getResolvedPath(node->classDecl.base);
     }
 
     logError(ctx->L,
              loc,
-             "struct '{s}' does not extend any base type",
-             (FormatArg[]){{.s = node->structDecl.name}});
-    logNote(ctx->L, &node->loc, "struct declared here", NULL);
+             "class '{s}' does not extend any base type",
+             (FormatArg[]){{.s = node->classDecl.name}});
+    logNote(ctx->L, &node->loc, "class declared here", NULL);
 
     return NULL;
 }
@@ -383,8 +383,8 @@ static void initStructDeclMembers(EvalContext *ctx)
 #define ADD_MEMBER(name, G)                                                    \
     insertAstNodeGetter(&structDeclMembers, makeString(ctx->strings, name), G)
 
-    ADD_MEMBER("members", getStructMembers);
-    ADD_MEMBER("base", getStructBase);
+    ADD_MEMBER("members", getStructOrClassMembers);
+    ADD_MEMBER("base", getClassBase);
 
 #undef ADD_MEMBER
 }
@@ -428,7 +428,7 @@ AstNode *evalAstNodeMemberAccess(EvalContext *ctx,
     case astStructDecl:
         table = &structDeclMembers;
         break;
-    case astStructField:
+    case astField:
         table = &fieldDeclMembers;
         break;
     default:

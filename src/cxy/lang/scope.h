@@ -68,7 +68,20 @@ AstNode *findEnclosingStruct(Env *env,
                              cstring keyword,
                              const FileLoc *loc);
 
-AstNode *findEnclosingBlock(Env *env, Log *L, const FileLoc *loc);
+AstNode *findEnclosingClass(Env *env,
+                            Log *L,
+                            cstring keyword,
+                            const FileLoc *loc);
+
+AstNode *findEnclosingClassOrStruct(Env *env,
+                                    Log *L,
+                                    cstring keyword,
+                                    const FileLoc *loc);
+
+AstNode *findEnclosingBlock(Env *env,
+                            cstring keyword,
+                            Log *L,
+                            const FileLoc *loc);
 
 void pushScope(Env *env, AstNode *node);
 

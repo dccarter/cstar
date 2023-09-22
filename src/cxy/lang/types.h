@@ -74,6 +74,7 @@ typedef enum {
     typEnum,
     typModule,
     typStruct,
+    typClass,
     typInterface,
     typGeneric,
     typApplied,
@@ -85,11 +86,23 @@ typedef struct TypeTable TypeTable;
 typedef struct Env Env;
 typedef struct AstNode AstNode;
 
-typedef struct StructMember {
+typedef struct NamedTypeMember {
     const char *name;
     const Type *type;
     const AstNode *decl;
-} StructMember, ModuleMember;
+} NamedTypeMember;
+
+typedef struct TypeMemberContainer {
+    NamedTypeMember *members;
+    NamedTypeMember **sortedMembers;
+    u64 count;
+} TypeMembersContainer;
+
+typedef struct TypeInheritance {
+    const Type *base;
+    const Type **interfaces;
+    u64 interfacesCount;
+} TypeInheritance;
 
 typedef struct GenericParam {
     const char *name;
@@ -101,13 +114,19 @@ typedef struct EnumOption {
     i64 value;
 } EnumOption;
 
+typedef struct AppliedTypeParams {
+    const Type **params;
+    u64 count;
+} AppliedTypeParams;
+
 #define CXY_TYPE_HEAD                                                          \
     TTag tag;                                                                  \
     u64 size;                                                                  \
     u64 index;                                                                 \
     u64 flags;                                                                 \
     cstring name;                                                              \
-    cstring namespace;
+    cstring namespace;                                                         \
+    const Type *from;
 
 typedef struct Type {
     union {
@@ -180,10 +199,8 @@ typedef struct Type {
         } container;
 
         struct {
-            ModuleMember *members;
-            ModuleMember **sortedMembers;
+            TypeMembersContainer *members;
             cstring path;
-            u32 membersCount;
         } module;
 
         struct {
@@ -195,20 +212,19 @@ typedef struct Type {
         } tEnum;
 
         struct {
-            const Type *base;
-            const Type **interfaces;
-            StructMember *members;
-            StructMember **sortedMembers;
-            u32 interfacesCount;
-            u32 membersCount;
+            TypeInheritance *inheritance;
+            TypeMembersContainer *members;
             AstNode *decl;
-            AstNode *generatedFrom;
         } tStruct;
 
         struct {
-            StructMember *members;
-            StructMember **sortedMembers;
-            u64 membersCount;
+            TypeInheritance *inheritance;
+            TypeMembersContainer *members;
+            AstNode *decl;
+        } tClass;
+
+        struct {
+            TypeMembersContainer *members;
             AstNode *decl;
         } tInterface;
 
@@ -263,24 +279,38 @@ static inline bool isSliceType(const Type *type)
     return typeIs(type, Array) && type->array.len == UINT64_MAX;
 }
 
-const IntMinMax getIntegerTypeMinMax(const Type *id);
+IntMinMax getIntegerTypeMinMax(const Type *id);
 
-const StructMember *findStructMember(const Type *type, cstring member);
+const NamedTypeMember *findNamedTypeMemberInContainer(
+    const TypeMembersContainer *container, cstring member);
+
+static inline const NamedTypeMember *findStructMember(const Type *type,
+                                                      cstring member)
+{
+    return findNamedTypeMemberInContainer(type->tStruct.members, member);
+}
 
 static inline const Type *findStructMemberType(const Type *type, cstring member)
 {
-    const StructMember *found = findStructMember(type, member);
+    const NamedTypeMember *found = findStructMember(type, member);
     return found ? found->type : NULL;
 }
 
+const TypeInheritance *getTypeInheritance(const Type *type);
+const Type *getTypeBase(const Type *type);
+
 bool implementsInterface(const Type *type, const Type *inf);
 
-const StructMember *findInterfaceMember(const Type *type, cstring member);
+static inline const NamedTypeMember *findInterfaceMember(const Type *type,
+                                                         cstring member)
+{
+    return findNamedTypeMemberInContainer(type->tInterface.members, member);
+}
 
 static inline const Type *findInterfaceMemberType(const Type *type,
                                                   cstring member)
 {
-    const StructMember *found = findInterfaceMember(type, member);
+    const NamedTypeMember *found = findInterfaceMember(type, member);
     return found ? found->type : NULL;
 }
 
@@ -292,13 +322,26 @@ static inline const Type *findEnumOptionType(const Type *type, cstring member)
     return found ? type : NULL;
 }
 
-const ModuleMember *findModuleMember(const Type *type, cstring member);
+static inline const NamedTypeMember *findModuleMember(const Type *type,
+                                                      cstring member)
+{
+    return findNamedTypeMemberInContainer(type->module.members, member);
+}
 
 static inline const Type *findModuleMemberType(const Type *type, cstring member)
 {
-    const ModuleMember *found = findModuleMember(type, member);
+    const NamedTypeMember *found = findModuleMember(type, member);
     return found ? found->type : NULL;
 }
+
+TypeMembersContainer *makeTypeMembersContainer(TypeTable *types,
+                                               const NamedTypeMember *members,
+                                               u64 count);
+
+TypeInheritance *makeTypeInheritance(TypeTable *types,
+                                     const Type *base,
+                                     const Type **interfaces,
+                                     u64 interfaceCount);
 
 bool isTruthyType(const Type *type);
 const Type *getOptionalType();

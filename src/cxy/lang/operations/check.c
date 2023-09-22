@@ -157,7 +157,8 @@ static void checkInterfaceDecl(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *member = node->interfaceDecl.members;
     u64 membersCount = countAstNodes(member);
-    StructMember *members = mallocOrDie(sizeof(StructMember) * membersCount);
+    NamedTypeMember *members =
+        mallocOrDie(sizeof(NamedTypeMember) * membersCount);
 
     for (u64 i = 0; member; member = member->next, i++) {
         const Type *type = checkType(visitor, member);
@@ -165,21 +166,19 @@ static void checkInterfaceDecl(AstVisitor *visitor, AstNode *node)
             node->type = ERROR_TYPE(ctx);
             continue;
         }
-        members[i] = (StructMember){
+        members[i] = (NamedTypeMember){
             .name = getDeclarationName(member), .type = type, .decl = member};
     }
 
     if (typeIs(node->type, Error))
         goto checkInterfaceMembersError;
 
-    node->type =
-        makeInterfaceType(ctx->types,
-                          &(Type){.name = getDeclarationName(node),
-                                  .tag = typInterface,
-                                  .flags = node->flags,
-                                  .tInterface = {.members = members,
-                                                 .membersCount = membersCount,
-                                                 .decl = node}});
+    node->type = makeInterfaceType(ctx->types,
+                                   getDeclarationName(node),
+                                   members,
+                                   membersCount,
+                                   node,
+                                   node->flags & flgTypeApplicable);
 
 checkInterfaceMembersError:
     if (members)
@@ -211,7 +210,8 @@ static void checkBlockStmt(AstVisitor *visitor, AstNode *node)
             if (node->type && !isTypeAssignableFrom(node->type, type)) {
                 logError(ctx->L,
                          &stmt->loc,
-                         "inconsistent return types within block, got '{t}', "
+                         "inconsistent return types within "
+                         "block, got '{t}', "
                          "expecting '{t}'",
                          (FormatArg[]){{.t = type}, {.t = node->type}});
                 node->type = ERROR_TYPE(ctx);
@@ -248,11 +248,13 @@ static void checkReturnStmt(AstVisitor *visitor, AstNode *node)
         if (!isTypeAssignableFrom(ret->type, expr_)) {
             logError(ctx->L,
                      &node->loc,
-                     "inconsistent return type, expecting '{t}', got '{t}'",
+                     "inconsistent return type, "
+                     "expecting '{t}', got '{t}'",
                      (FormatArg[]){{.t = ret->type}, {.t = expr_}});
             logNote(ctx->L,
                     &ret->loc,
-                    "return type first declared or deduced here",
+                    "return type first declared or "
+                    "deduced here",
                     NULL);
 
             node->type = ERROR_TYPE(ctx);
@@ -324,7 +326,8 @@ static void checkWhileStmt(AstVisitor *visitor, AstNode *node)
     if (!isTruthyType(cond_)) {
         logError(ctx->L,
                  &cond->loc,
-                 "expecting a truthy type in an `while` statement condition, "
+                 "expecting a truthy type in an `while` "
+                 "statement condition, "
                  "got '{t}'",
                  (FormatArg[]){{.t = cond_}});
         node->type = ERROR_TYPE(ctx);
@@ -378,11 +381,11 @@ static void checkSpreadExpr(AstVisitor *visitor, AstNode *node)
     const Type *type = checkType(visitor, expr);
 
     if (!typeIs(type, Tuple)) {
-        logError(
-            ctx->L,
-            &node->loc,
-            "spread operator `...` can only be used with tuple expressions",
-            NULL);
+        logError(ctx->L,
+                 &node->loc,
+                 "spread operator `...` can only be used "
+                 "with tuple expressions",
+                 NULL);
         node->type = ERROR_TYPE(ctx);
         return;
     }
@@ -513,30 +516,30 @@ static void checkMacroCallExpr(AstVisitor *visitor, AstNode *node)
         node->type = ERROR_TYPE(ctx);
 }
 
-static u64 addDefineToModuleMembers(ModuleMember *members,
+static u64 addDefineToModuleMembers(NamedTypeMember *members,
                                     u64 index,
                                     AstNode *decl,
                                     u64 builtinFlags)
 {
     if (decl->define.container) {
         decl->flags |= builtinFlags;
-        members[index++] = (ModuleMember){
+        members[index++] = (NamedTypeMember){
             .decl = decl, .name = getDeclarationName(decl), .type = decl->type};
     }
     else {
         AstNode *name = decl->define.names;
         for (; name; name = name->next) {
             name->flags |= builtinFlags;
-            members[index++] =
-                (ModuleMember){.decl = name,
-                               .name = name->ident.alias ?: name->ident.value,
-                               .type = name->type};
+            members[index++] = (NamedTypeMember){
+                .decl = name,
+                .name = name->ident.alias ?: name->ident.value,
+                .type = name->type};
         }
     }
     return index;
 }
 
-static u64 addModuleTypeMember(ModuleMember *members,
+static u64 addModuleTypeMember(NamedTypeMember *members,
                                u64 index,
                                AstNode *decl,
                                u64 builtinFlags)
@@ -546,7 +549,7 @@ static u64 addModuleTypeMember(ModuleMember *members,
     }
     else if (!nodeIs(decl, CCode)) {
         decl->flags |= builtinFlags;
-        members[index++] = (ModuleMember){
+        members[index++] = (NamedTypeMember){
             .decl = decl, .name = getDeclarationName(decl), .type = decl->type};
         return index;
     }
@@ -563,7 +566,7 @@ static void buildModuleType(TypingContext *ctx,
                 countProgramDecls(node->program.top),
         i = 0;
 
-    ModuleMember *members = mallocOrDie(sizeof(ModuleMember) * count);
+    NamedTypeMember *members = mallocOrDie(sizeof(NamedTypeMember) * count);
 
     AstNode *decl = node->program.top;
     for (; decl; decl = decl->next) {
@@ -660,7 +663,7 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astUnionDecl] = checkUnionDecl,
         [astEnumDecl] = checkEnumDecl,
         [astGenericDecl] = checkGenericDecl,
-        [astStructField] = checkStructField,
+        [astField] = checkField,
         [astStructDecl] = checkStructDecl,
         [astInterfaceDecl] = checkInterfaceDecl,
         [astImportDecl] = checkImportDecl,

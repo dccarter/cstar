@@ -110,9 +110,9 @@ static void captureSymbol(AstNode *closure,
 static AstNode *resolvePathBaseUpChain(BindContext *ctx, AstNode *path)
 {
     AstNode *root = path->path.elements;
-    AstNode *parent = findEnclosingStruct(ctx->env, NULL, NULL, NULL);
-    if (parent == NULL || parent->structDecl.base == NULL ||
-        !nodeIs(parent->structDecl.base, Path)) //
+    AstNode *parent = findEnclosingClassOrStruct(ctx->env, NULL, NULL, NULL);
+    if (!nodeIs(parent, ClassDecl) || parent->classDecl.base == NULL ||
+        !nodeIs(parent->classDecl.base, Path)) //
     {
         return findSymbol(ctx->env,
                           ctx->L,
@@ -126,12 +126,11 @@ static AstNode *resolvePathBaseUpChain(BindContext *ctx, AstNode *path)
     if (resolved)
         return resolved;
 
-    AstNode *base = resolvePath(parent->structDecl.base);
+    AstNode *base = resolvePath(parent->classDecl.base);
 
     // lookup symbol upstream
     for (u64 i = 1; isStructDeclaration(base);
-         base = resolvePath(underlyingDeclaration(base)->structDecl.base),
-             i++) {
+         base = resolvePath(underlyingDeclaration(base)->classDecl.base), i++) {
         resolved = findInAstNode(
             base, root->pathElement.alt ?: root->pathElement.name);
         if (resolved) {
@@ -192,8 +191,8 @@ void bindPath(AstVisitor *visitor, AstNode *node)
     else {
         cstring keyword = base->pathElement.name;
         if (keyword == S_This) {
-            base->pathElement.enclosure =
-                findEnclosingStruct(ctx->env, ctx->L, keyword, &base->loc);
+            base->pathElement.enclosure = findEnclosingClassOrStruct(
+                ctx->env, ctx->L, keyword, &base->loc);
             if (base->pathElement.enclosure == NULL)
                 return;
         }
@@ -205,7 +204,7 @@ void bindPath(AstVisitor *visitor, AstNode *node)
 
             AstNode *parent = getParentScope(base->pathElement.enclosure);
 
-            if (!nodeIs(parent, StructDecl)) {
+            if (!nodeIs(parent, ClassDecl) && !nodeIs(parent, StructDecl)) {
                 logError(
                     ctx->L,
                     &base->loc,
@@ -214,13 +213,23 @@ void bindPath(AstVisitor *visitor, AstNode *node)
                 return;
             }
 
-            if (keyword == S_super && parent->structDecl.base == NULL) {
-                logError(ctx->L,
-                         &base->loc,
-                         "keyword 'super' can only be used within a struct "
-                         "which extends a base struct",
-                         NULL);
-                return;
+            if (keyword == S_super) {
+                if (!nodeIs(parent, ClassDecl)) {
+                    logError(ctx->L,
+                             &base->loc,
+                             "keyword 'super' can only be used inside a class "
+                             "member function",
+                             (FormatArg[]){{.s = keyword}});
+                    return;
+                }
+                if (parent->classDecl.base == NULL) {
+                    logError(ctx->L,
+                             &base->loc,
+                             "keyword 'super' can only be used within a class "
+                             "which extends a base class",
+                             NULL);
+                    return;
+                }
             }
         }
     }
@@ -248,8 +257,12 @@ void bindGenericDecl(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
 
-    if (!nodeIs(node->parentScope, StructDecl))
+    if (!nodeIs(node->parentScope, StructDecl) &&
+        !nodeIs(node->parentScope, ClassDecl)) //
+    {
         defineDeclaration(ctx, getDeclarationName(node), node);
+    }
+
     pushScope(ctx->env, node);
     astVisitManyNodes(visitor, node->genericDecl.params);
     astVisit(visitor, node->genericDecl.decl);
@@ -432,16 +445,19 @@ void bindStructField(AstVisitor *visitor, AstNode *node)
     defineSymbol(ctx->env, ctx->L, node->structField.name, node);
 }
 
-void bindStructDecl(AstVisitor *visitor, AstNode *node)
+void bindStructOrClassDecl(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
     AstNode *member = node->structDecl.members;
 
-    astVisit(visitor, node->structDecl.base);
+    if (nodeIs(node, ClassDecl))
+        astVisit(visitor, node->classDecl.base);
+
     astVisitManyNodes(visitor, node->structDecl.implements);
 
     pushScope(ctx->env, node);
-    defineSymbol(ctx->env, ctx->L, S_This, node);
+    if (nodeIs(node, ClassDecl))
+        defineSymbol(ctx->env, ctx->L, S_This, node);
 
     for (; member; member = member->next) {
         // functions will be visited later
@@ -459,7 +475,8 @@ void bindStructDecl(AstVisitor *visitor, AstNode *node)
             astVisit(visitor, member);
     }
 
-    defineDeclaration(ctx, node->structDecl.name, node);
+    if (nodeIs(node, ClassDecl))
+        defineDeclaration(ctx, node->structDecl.name, node);
     member = node->structDecl.members;
     for (; member; member = member->next) {
         // visit unvisited functions or macros
@@ -529,7 +546,8 @@ void bindDeferStmt(AstVisitor *visitor, AstNode *node)
     BindContext *ctx = getAstVisitorContext(visitor);
 
     astVisit(visitor, node->deferStmt.expr);
-    node->deferStmt.block = findEnclosingBlock(ctx->env, ctx->L, &node->loc);
+    node->deferStmt.block =
+        findEnclosingBlock(ctx->env, "defer", ctx->L, &node->loc);
 }
 
 void bindBreakOrContinueStmt(AstVisitor *visitor, AstNode *node)
@@ -680,8 +698,9 @@ AstNode *bindAst(CompilerDriver *driver, AstNode *node)
         [astUnionDecl] = bindUnionDecl,
         [astEnumOption] = bindEnumOption,
         [astEnumDecl] = bindEnumDecl,
-        [astStructField] = bindStructField,
-        [astStructDecl] = bindStructDecl,
+        [astField] = bindStructField,
+        [astStructDecl] = bindStructOrClassDecl,
+        [astClassDecl] = bindStructOrClassDecl,
         [astInterfaceDecl] = bindInterfaceDecl,
         [astIfStmt] = bindIfStmt,
         [astClosureExpr] = bindClosureExpr,

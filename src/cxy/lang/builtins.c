@@ -28,14 +28,14 @@ void initializeBuiltins(Log *L, const FileLoc *loc, const Type *module)
 AstNode *findBuiltinDecl(cstring name)
 {
     csAssert0(cxy_builtins.module);
-    const ModuleMember *member = findModuleMember(cxy_builtins.module, name);
+    const NamedTypeMember *member = findModuleMember(cxy_builtins.module, name);
     return member ? (AstNode *)member->decl : NULL;
 }
 
 const Type *findBuiltinType(cstring name)
 {
     if (cxy_builtins.module) {
-        const ModuleMember *member =
+        const NamedTypeMember *member =
             findModuleMember(cxy_builtins.module, name);
         return member ? member->type : NULL;
     }

@@ -225,7 +225,7 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
     AstNode *substitute = cloneGenericDeclaration(ctx->pool, generic),
             *param = getGenericDeclarationParams(substitute);
     substitute->flags |= flgGenerated;
-    
+
     cstring name =
         makeAnonymousVariable(ctx->strings, getDeclarationName(substitute));
     setDeclarationName(substitute, name);
@@ -261,6 +261,7 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
     node->pathElement.args = NULL;
 
     ctx->types->currentNamespace = namespace;
+    ((Type *)substitute->type)->from = type;
     return substitute->type;
 
 resolveGenericDeclError:

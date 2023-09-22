@@ -23,7 +23,7 @@ static const Type *createStructForClosure(AstVisitor *visitor, AstNode *node)
             ctx->pool,
             &capture->node->loc,
             &(AstNode){
-                .tag = astStructField,
+                .tag = astField,
                 .type = capture->node->type,
                 .flags = flgPrivate | capture->node->flags | flgMember,
                 .structField = {

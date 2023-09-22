@@ -56,8 +56,9 @@ struct StrPool;
     f(UnionDecl)            \
     f(EnumOption)           \
     f(EnumDecl)             \
-    f(StructField)          \
+    f(Field)                \
     f(StructDecl)           \
+    f(ClassDecl)            \
     f(InterfaceDecl)        \
     f(ModuleDecl)           \
     f(ImportDecl)           \
@@ -409,15 +410,26 @@ struct AstNode {
             struct AstNode *value;
         } structField;
 
-        struct {
-            cstring name;
-            struct AstNode *base;
-            struct AstNode *implements;
-            struct AstNode *members;
-            struct AstNode *typeParams;
-            const struct Type *thisType;
-            SortedNodes *sortedMembers;
-        } structDecl;
+        union {
+            struct {
+                cstring name;
+                struct AstNode *implements;
+                struct AstNode *members;
+                struct AstNode *typeParams;
+                const struct Type *thisType;
+                SortedNodes *sortedMembers;
+            } structDecl;
+
+            struct {
+                cstring name;
+                struct AstNode *implements;
+                struct AstNode *members;
+                struct AstNode *typeParams;
+                const struct Type *thisType;
+                SortedNodes *sortedMembers;
+                struct AstNode *base;
+            } classDecl;
+        };
 
         struct {
             cstring name;

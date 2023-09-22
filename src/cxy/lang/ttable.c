@@ -25,9 +25,7 @@ static HashCode hashTypes(HashCode hash, const Type **types, u64 count)
 static HashCode hashType(HashCode hash, const Type *type)
 {
     hash = hashUint32(hash, type->tag);
-    hash = hashUint64(hash, type->flags);
-    //    if (type->namespace)
-    //        hash = hashStr(hash, type->namespace);
+    hash = hashUint64(hash, (type->flags & flgTypeApplicable));
 
     switch (type->tag) {
     case typAuto:
@@ -77,6 +75,8 @@ static HashCode hashType(HashCode hash, const Type *type)
     case typModule:
         if (type->name)
             hash = hashStr(hash, type->name);
+        if (type->namespace)
+            hash = hashStr(hash, type->namespace);
         break;
     case typGeneric:
         hash = hashUint64(hash, type->generic.paramsCount);
@@ -111,6 +111,9 @@ static bool compareTypes(const Type *lhs, const Type *rhs)
     u64 lhsFlags = flgNone, rhsFlags = flgNone;
     const Type *left = unwrapType(lhs, &lhsFlags),
                *right = unwrapType(rhs, &rhsFlags);
+
+    if (left == right)
+        return lhsFlags == rhsFlags;
 
     if (left->tag != right->tag || (lhsFlags != rhsFlags))
         return false;
@@ -176,7 +179,8 @@ static bool compareTypes(const Type *lhs, const Type *rhs)
     case typGeneric:
     case typInfo:
     case typInterface:
-        return left == right;
+        return (left->name == right->name) &&
+               (left->namespace == right->namespace);
 
     default:
         unreachable("invalid type");
@@ -229,8 +233,8 @@ static GetOrInset getOrInsertType(TypeTable *table, const Type *type)
 
 static int sortCompareStructMember(const void *lhs, const void *rhs)
 {
-    const StructMember *left = *((const StructMember **)lhs),
-                       *right = *((const StructMember **)rhs);
+    const NamedTypeMember *left = *((const NamedTypeMember **)lhs),
+                          *right = *((const NamedTypeMember **)rhs);
     return left->name == right->name ? 0 : strcmp(left->name, right->name);
 }
 
@@ -603,7 +607,7 @@ const Type *unwrapType(const Type *type, u64 *flags)
         *flags = tmp | type->flags;
         *flags &= flgTypeApplicable;
     }
-    
+
     return type;
 }
 
@@ -651,36 +655,50 @@ const Type *makeDestructorType(TypeTable *table)
                                        .retType = makeVoidType(table)}});
 }
 
-const Type *makeStruct(TypeTable *table, const Type *init)
+const Type *makeStructType(TypeTable *table,
+                           cstring name,
+                           NamedTypeMember *members,
+                           u64 membersCount,
+                           AstNode *decl,
+                           const Type **interfaces,
+                           u64 interfacesCount,
+                           u64 flags)
 {
-    GetOrInset ret = getOrInsertType(table, init);
+    GetOrInset ret = getOrInsertType(
+        table, &(Type){.tag = typStruct, .name = name, .flags = flags});
+
     if (!ret.f) {
-        Type *tStruct = (Type *)ret.s;
-        tStruct->tStruct.members = allocFromMemPool(
-            table->memPool, sizeof(StructMember) * init->tStruct.membersCount);
-        memcpy(tStruct->tStruct.members,
-               init->tStruct.members,
-               sizeof(StructMember) * init->tStruct.membersCount);
+        Type *type = (Type *)ret.s;
+        type->tStruct.members =
+            makeTypeMembersContainer(table, members, membersCount);
+        type->tStruct.inheritance =
+            makeTypeInheritance(table, NULL, interfaces, interfacesCount);
+        type->tStruct.decl = decl;
+    }
 
-        if (tStruct->tStruct.interfaces) {
-            tStruct->tStruct.interfaces = allocFromMemPool(
-                table->memPool,
-                sizeof(StructMember) * init->tStruct.interfacesCount);
-            memcpy(tStruct->tStruct.interfaces,
-                   init->tStruct.interfaces,
-                   sizeof(StructMember) * init->tStruct.interfacesCount);
-        }
+    return ret.s;
+}
 
-        tStruct->tStruct.sortedMembers = allocFromMemPool(
-            table->memPool,
-            sizeof(StructMember *) * init->tStruct.membersCount);
-        for (u64 i = 0; i < init->tStruct.membersCount; i++)
-            tStruct->tStruct.sortedMembers[i] = &tStruct->tStruct.members[i];
+const Type *makeClassType(TypeTable *table,
+                          cstring name,
+                          NamedTypeMember *members,
+                          u64 membersCount,
+                          AstNode *decl,
+                          const Type *base,
+                          const Type **interfaces,
+                          u64 interfacesCount,
+                          u64 flags)
+{
+    GetOrInset ret = getOrInsertType(
+        table, &(Type){.tag = typClass, .name = name, .flags = flags});
 
-        qsort(tStruct->tStruct.sortedMembers,
-              tStruct->tStruct.membersCount,
-              sizeof(StructMember *),
-              sortCompareStructMember);
+    if (!ret.f) {
+        Type *type = (Type *)ret.s;
+        type->tClass.members =
+            makeTypeMembersContainer(table, members, membersCount);
+        type->tClass.inheritance =
+            makeTypeInheritance(table, base, interfaces, interfacesCount);
+        type->tClass.decl = decl;
     }
 
     return ret.s;
@@ -688,35 +706,60 @@ const Type *makeStruct(TypeTable *table, const Type *init)
 
 const Type *replaceStructType(TypeTable *table,
                               const Type *og,
-                              const Type *with)
+                              NamedTypeMember *members,
+                              u64 membersCount,
+                              AstNode *decl,
+                              const Type **interfaces,
+                              u64 interfacesCount,
+                              u64 flags)
 {
     removeFromTypeTable(table, og);
-    return makeStruct(table, with);
+    return makeStructType(table,
+                          og->name,
+                          members,
+                          membersCount,
+                          decl,
+                          interfaces,
+                          interfacesCount,
+                          flags);
 }
 
-const Type *makeInterfaceType(TypeTable *table, const Type *init)
+const Type *replaceClassType(TypeTable *table,
+                             const Type *og,
+                             NamedTypeMember *members,
+                             u64 membersCount,
+                             AstNode *decl,
+                             const Type *base,
+                             const Type **interfaces,
+                             u64 interfacesCount,
+                             u64 flags)
 {
-    GetOrInset ret = getOrInsertType(table, init);
+    removeFromTypeTable(table, og);
+    return makeClassType(table,
+                         og->name,
+                         members,
+                         membersCount,
+                         decl,
+                         base,
+                         interfaces,
+                         interfacesCount,
+                         flags);
+}
+
+const Type *makeInterfaceType(TypeTable *table,
+                              cstring name,
+                              NamedTypeMember *members,
+                              u64 membersCount,
+                              AstNode *decl,
+                              u64 flags)
+{
+    GetOrInset ret = getOrInsertType(
+        table, &(Type){.tag = typInterface, .name = name, .flags = flags});
     if (!ret.f) {
-        Type *tStruct = (Type *)ret.s;
-        tStruct->tInterface.members = allocFromMemPool(
-            table->memPool,
-            sizeof(StructMember) * init->tInterface.membersCount);
-        memcpy(tStruct->tInterface.members,
-               init->tInterface.members,
-               sizeof(StructMember) * init->tInterface.membersCount);
-
-        tStruct->tInterface.sortedMembers = allocFromMemPool(
-            table->memPool,
-            sizeof(StructMember *) * init->tInterface.membersCount);
-        for (u64 i = 0; i < init->tInterface.membersCount; i++)
-            tStruct->tInterface.sortedMembers[i] =
-                &tStruct->tInterface.members[i];
-
-        qsort(tStruct->tInterface.sortedMembers,
-              tStruct->tInterface.membersCount,
-              sizeof(StructMember *),
-              sortCompareStructMember);
+        Type *interface = (Type *)ret.s;
+        interface->tInterface.members =
+            makeTypeMembersContainer(table, members, membersCount);
+        interface->tInterface.decl = decl;
     }
 
     return ret.s;
@@ -725,33 +768,19 @@ const Type *makeInterfaceType(TypeTable *table, const Type *init)
 const Type *makeModuleType(TypeTable *table,
                            cstring name,
                            cstring path,
-                           ModuleMember *members,
-                           u64 count)
+                           NamedTypeMember *members,
+                           u64 membersCount)
 {
-    Type type = make(
-        Type,
-        .tag = typModule,
-        .name = name,
-        .flags = flgNone,
-        .module = {.members = members, .membersCount = count, .path = path});
+    Type type = make(Type,
+                     .tag = typModule,
+                     .name = name,
+                     .flags = flgNone,
+                     .module = {.path = path});
     GetOrInset ret = getOrInsertType(table, &type);
     if (!ret.f) {
         Type *module = (Type *)ret.s;
-        module->module.members = allocFromMemPool(
-            table->memPool, sizeof(ModuleMember) * type.module.membersCount);
-        memcpy(module->module.members,
-               type.module.members,
-               sizeof(ModuleMember) * type.module.membersCount);
-
-        module->module.sortedMembers = allocFromMemPool(
-            table->memPool, sizeof(ModuleMember *) * type.module.membersCount);
-        for (u64 i = 0; i < type.module.membersCount; i++)
-            module->module.sortedMembers[i] = &module->module.members[i];
-
-        qsort(module->module.sortedMembers,
-              module->module.membersCount,
-              sizeof(ModuleMember *),
-              sortCompareStructMember);
+        module->module.members =
+            makeTypeMembersContainer(table, members, membersCount);
     }
 
     return ret.s;
@@ -830,12 +859,12 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right)
     }
 }
 
-const Type *findInType(TypeTable *table, const Type *type, cstring name)
+const Type *findMemberInType(const Type *type, cstring name)
 {
     const Type *found = NULL;
     switch (type->tag) {
     case typThis:
-        found = findInType(table, type->this.that, name);
+        found = findMemberInType(type->this.that, name);
         break;
     case typStruct:
         found = findStructMemberType(type, name);
@@ -862,7 +891,7 @@ const Type *expectInType(TypeTable *table,
                          cstring name,
                          const FileLoc *loc)
 {
-    const Type *found = findInType(table, type, name);
+    const Type *found = findMemberInType(type, name);
     if (L && found == NULL) {
         logError(L,
                  loc,

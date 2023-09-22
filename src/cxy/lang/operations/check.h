@@ -33,11 +33,13 @@ typedef struct {
         struct {
             AstNode *currentCall;
             AstNode *currentStruct;
+            AstNode *currentClass;
         } stack;
 
         struct {
             AstNode *currentCall;
             AstNode *currentStruct;
+            AstNode *currentClass;
         };
     };
 } TypingContext;
@@ -68,7 +70,15 @@ bool evalExplicitConstruction(AstVisitor *visitor,
                               const Type *type,
                               AstNode *node);
 
-AstNode *makeAddressOf(TypingContext *ctx, AstNode *node);
+bool checkTypeImplementsAllMembers(TypingContext *ctx, AstNode *node);
+
+bool checkMemberFunctions(AstVisitor *visitor,
+                          AstNode *node,
+                          NamedTypeMember *members);
+void checkImplements(AstVisitor *visitor,
+                     AstNode *node,
+                     const Type **implements,
+                     u64 count);
 
 void transformToMemberCallExpr(AstVisitor *visitor,
                                AstNode *node,
@@ -102,7 +112,7 @@ void checkLiteral(AstVisitor *visitor, AstNode *node);
 void checkVarDecl(AstVisitor *visitor, AstNode *node);
 void checkPath(AstVisitor *visitor, AstNode *node);
 void checkFunctionParam(AstVisitor *visitor, AstNode *node);
-void checkStructField(AstVisitor *visitor, AstNode *node);
+void checkField(AstVisitor *visitor, AstNode *node);
 void checkStructDecl(AstVisitor *visitor, AstNode *node);
 void checkFunctionDecl(AstVisitor *visitor, AstNode *node);
 void checkEnumDecl(AstVisitor *visitor, AstNode *node);

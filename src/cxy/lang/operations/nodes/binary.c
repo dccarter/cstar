@@ -470,7 +470,7 @@ static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
     const Type *left = node->binaryExpr.lhs->type;
     cstring name = getOpOverloadName(node->binaryExpr.op);
     const Type *target = stripPointer(left);
-    const StructMember *overload = findStructMember(target, name);
+    const NamedTypeMember *overload = findStructMember(target, name);
 
     if (overload == NULL) {
         logError(ctx->L,
@@ -485,16 +485,6 @@ static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
     if (typeIs(right, Error)) {
         node->type = ERROR_TYPE(ctx);
         return;
-    }
-
-    const AstNode *argument =
-        (nodeIs(overload->decl, GenericDecl) ? overload->decl->genericDecl.decl
-                                             : overload->decl)
-            ->funcDecl.signature->params->funcParam.type;
-
-    if (isArgumentTypeThis(argument) &&
-        !typeIs(unwrapType(right, NULL), Pointer)) {
-        node->binaryExpr.rhs = makeAddressOf(ctx, node->binaryExpr.rhs);
     }
 
     transformToMemberCallExpr(

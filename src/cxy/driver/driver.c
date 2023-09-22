@@ -308,7 +308,7 @@ const Type *compileModule(CompilerDriver *driver,
     const Type *module = program->type;
 
     for (; entity; entity = entity->next) {
-        const ModuleMember *member =
+        const NamedTypeMember *member =
             findModuleMember(module, entity->importEntity.name);
         if (member) {
             entity->importEntity.target = (AstNode *)member->decl;

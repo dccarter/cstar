@@ -143,14 +143,18 @@
         MODE##Visit(visitor, node->enumDecl.base);                             \
         MODE##VisitManyNodes(visitor, node->enumDecl.options);                 \
         break;                                                                 \
-    case astStructField:                                                       \
+    case astField:                                                             \
         MODE##Visit(visitor, node->structField.type);                          \
         MODE##Visit(visitor, node->structField.value);                         \
         break;                                                                 \
     case astStructDecl:                                                        \
-        MODE##Visit(visitor, node->structDecl.base);                           \
         MODE##VisitManyNodes(visitor, node->structDecl.implements);            \
         MODE##VisitManyNodes(visitor, node->structDecl.members);               \
+        break;                                                                 \
+    case astClassDecl:                                                         \
+        MODE##Visit(visitor, node->classDecl.base);                            \
+        MODE##VisitManyNodes(visitor, node->classDecl.implements);             \
+        MODE##VisitManyNodes(visitor, node->classDecl.members);                \
         break;                                                                 \
     case astInterfaceDecl:                                                     \
         MODE##VisitManyNodes(visitor, node->interfaceDecl.members);            \

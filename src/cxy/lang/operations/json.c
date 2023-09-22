@@ -599,14 +599,18 @@ static void visitStructField(ConstAstVisitor *visitor, const AstNode *node)
     Return(ctx, jsonNode);
 }
 
-static void visitStructDecl(ConstAstVisitor *visitor, const AstNode *node)
+static void visitClassOrStructDecl(ConstAstVisitor *visitor,
+                                   const AstNode *node)
 {
     JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
     cJSON *jsonNode = nodeCreateJSON(visitor, node);
 
     cJSON_AddStringToObject(jsonNode, "name", node->structDecl.name);
-    cJSON_AddItemToObject(
-        jsonNode, "base", nodeToJson(visitor, node->structDecl.base));
+    if (nodeIs(node, ClassDecl)) {
+        cJSON_AddItemToObject(
+            jsonNode, "base", nodeToJson(visitor, node->classDecl.base));
+    }
+
     cJSON_AddItemToObject(
         jsonNode,
         "implements",
@@ -927,8 +931,9 @@ AstNode *dumpAstJson(CompilerDriver *driver, AstNode *node, FILE *file)
         [astUnionDecl] = visitUnionDecl,
         [astEnumOption] = visitEnumOption,
         [astEnumDecl] = visitEnumDecl,
-        [astStructField] = visitStructField,
-        [astStructDecl] = visitStructDecl,
+        [astField] = visitStructField,
+        [astStructDecl] = visitClassOrStructDecl,
+        [astClassDecl] = visitClassOrStructDecl,
         [astInterfaceDecl] = visitInterfaceDecl,
         [astAssignExpr] = visitBinaryExpr,
         [astBinaryExpr] = visitBinaryExpr,

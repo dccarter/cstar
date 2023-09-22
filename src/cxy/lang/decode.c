@@ -241,15 +241,21 @@ static void unpackNodeBody(AstNodeUnpackContext *ctx, AstNode *node)
         node->enumDecl.options = unpackManyNodes(ctx, &len);
         node->enumDecl.len = len;
         break;
-    case astStructField:
+    case astField:
         node->structField.name = unpackString(ctx);
         node->structField.type = unpackNode(ctx);
         node->structField.value = unpackNode(ctx);
         break;
     case astStructDecl:
         node->structDecl.name = unpackString(ctx);
-        node->structDecl.base = unpackNode(ctx);
         node->structDecl.members = unpackManyNodes(ctx, NULL);
+        node->structDecl.implements = unpackManyNodes(ctx, NULL);
+        break;
+    case astClassDecl:
+        node->classDecl.name = unpackString(ctx);
+        node->classDecl.base = unpackNode(ctx);
+        node->classDecl.members = unpackManyNodes(ctx, NULL);
+        node->classDecl.implements = unpackManyNodes(ctx, NULL);
         break;
     case astBinaryExpr:
         node->binaryExpr.op = unpackU64(ctx);

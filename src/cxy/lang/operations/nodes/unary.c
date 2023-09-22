@@ -118,45 +118,6 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
             operand = ERROR_TYPE(ctx);
         }
         break;
-    case opDeref:
-        if (!typeIs(operand, Pointer)) {
-            if (typeIs(operand, Struct)) {
-                if (transformToDerefOperator(visitor, node)) {
-                    operand = node->type;
-                }
-                else {
-                    logError(ctx->L,
-                             &node->unaryExpr.operand->loc,
-                             "struct '{t}' does not overload dereference "
-                             "`deref` operator",
-                             (FormatArg[]){{.t = operand}});
-                    operand = ERROR_TYPE(ctx);
-                }
-            }
-            else {
-                logError(ctx->L,
-                         &node->unaryExpr.operand->loc,
-                         "cannot not dereference an non-pointer type '{t}'",
-                         (FormatArg[]){{.t = operand}});
-                operand = ERROR_TYPE(ctx);
-            }
-        }
-        else {
-            node->flags |=
-                (operand->flags | (node->unaryExpr.operand->flags & flgConst));
-            operand = operand->pointer.pointed;
-        }
-        break;
-    case opDelete:
-        if (typeIs(operand, Primitive)) {
-            logError(
-                ctx->L, &node->loc, "cannot delete a primitive value", NULL);
-            operand = ERROR_TYPE(ctx);
-        }
-        else {
-            operand = makeVoidType(ctx->types);
-        }
-        break;
     default:
         operand = ERROR_TYPE(ctx);
         break;
@@ -185,15 +146,6 @@ void generateUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     if (node->unaryExpr.isPrefix) {
         switch (node->unaryExpr.op) {
-        case opDelete:
-            generateDeleteExpr(visitor, node);
-            break;
-        case opDeref:
-            format(ctx->state, "(*", NULL);
-            astConstVisit(visitor, node->unaryExpr.operand);
-            format(ctx->state, ")", NULL);
-            break;
-
         default:
             format(ctx->state,
                    "{s}",

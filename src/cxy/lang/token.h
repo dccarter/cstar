@@ -91,8 +91,6 @@
     f(Enum, "enum")                 \
     f(Pub, "pub")                   \
     f(Opaque, "opaque")             \
-    f(New,    "new")                \
-    f(Delete, "delete")             \
     f(Async,  "async")              \
     f(Await,  "await")              \
     f(Switch, "switch")             \
@@ -114,7 +112,7 @@
     f(This,      "this")            \
     f(ThisClass,  "This")           \
     f(Super,     "super")           \
-    f(DebugBreak, "__DebugBreak")   \
+    f(Class,     "class")           \
     PRIM_TYPE_LIST(f)
 
 #define SPECIAL_TOKEN_LIST(f)                   \

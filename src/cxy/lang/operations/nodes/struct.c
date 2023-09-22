@@ -18,63 +18,9 @@
 
 #include <string.h>
 
-static inline bool isIteratorFunction(TypingContext *ctx, const Type *type)
-{
-    if (!typeIs(type, Struct) || !hasFlag(type, Closure))
-        return false;
-
-    const Type *iter = findStructMemberType(type, S_CallOverload);
-    if (iter == NULL)
-        return false;
-
-    const Type *ret = iter->func.retType;
-    return typeIs(ret, Struct) && hasFlag(ret, Optional);
-}
-
-static void checkImplements(AstVisitor *visitor,
-                            AstNode *node,
-                            const Type **implements,
-                            u64 count)
-{
-    TypingContext *ctx = getAstVisitorContext(visitor);
-    AstNode *inf = node->structDecl.implements;
-    for (u64 i = 0; inf; inf = inf->next, i++) {
-        implements[i] = checkType(visitor, inf);
-        if (typeIs(implements[i], Error)) {
-            node->type = ERROR_TYPE(ctx);
-            continue;
-        }
-
-        if (!typeIs(implements[i], Interface)) {
-            logError(ctx->L,
-                     &inf->loc,
-                     "only interfaces can be implemented by structs, type "
-                     "'{t}' is not an interface",
-                     (FormatArg[]){{.t = implements[i]}});
-            node->type = ERROR_TYPE(ctx);
-            continue;
-        }
-
-        int duplicate = findTypeInArray(implements, i, implements[i]);
-        if (duplicate >= 0) {
-            logError(ctx->L,
-                     &inf->loc,
-                     "duplicate interface type '{t}'",
-                     (FormatArg[]){{.t = implements[i]}});
-            logNote(
-                ctx->L,
-                &getNodeAtIndex(node->structDecl.implements, duplicate)->loc,
-                "interface already implemented here",
-                NULL);
-
-            node->type = ERROR_TYPE(ctx);
-        }
-    }
-}
-
 static void preCheckMembers(AstVisitor *visitor,
                             AstNode *node,
-                            StructMember *members)
+                            NamedTypeMember *members)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *member = node->structDecl.members;
@@ -83,7 +29,7 @@ static void preCheckMembers(AstVisitor *visitor,
         const Type *type;
         if (nodeIs(member, FuncDecl)) {
             type = checkFunctionSignature(visitor, member);
-            if (member->funcDecl.operatorOverload == opDelete)
+            if (member->funcDecl.operatorOverload == opDeinitialize)
                 node->flags |= flgImplementsDelete;
         }
         else {
@@ -95,56 +41,20 @@ static void preCheckMembers(AstVisitor *visitor,
             continue;
         }
 
-        if (nodeIs(member, StructField)) {
-            members[i] = (StructMember){
+        if (nodeIs(member, Field)) {
+            members[i] = (NamedTypeMember){
                 .name = member->structField.name, .type = type, .decl = member};
             member->structField.index = i;
         }
         else {
-            members[i] = (StructMember){.name = getDeclarationName(member),
-                                        .type = type,
-                                        .decl = member};
+            members[i] = (NamedTypeMember){.name = getDeclarationName(member),
+                                           .type = type,
+                                           .decl = member};
         }
     }
 
     if (typeIs(node->type, Error))
         return;
-}
-
-static bool checkMemberFunctions(AstVisitor *visitor,
-                                 AstNode *node,
-                                 StructMember *members)
-{
-    TypingContext *ctx = getAstVisitorContext(visitor);
-    AstNode *member = node->structDecl.members;
-
-    bool retype = false;
-    for (u64 i = 0; member; member = member->next, i++) {
-        if (nodeIs(member, FuncDecl)) {
-            const Type *type = checkFunctionBody(visitor, member);
-            if (typeIs(type, Error)) {
-                node->type = ERROR_TYPE(ctx);
-                return false;
-            }
-
-            if (member->funcDecl.operatorOverload == opRange &&
-                !isIteratorFunction(ctx, type->func.retType)) //
-            {
-                logError(ctx->L,
-                         &member->loc,
-                         "expecting an iterator function overload to return an "
-                         "iterator, got '{t}'",
-                         (FormatArg[]){{.t = type->func.retType}});
-                node->type = ERROR_TYPE(ctx);
-                return false;
-            }
-
-            retype = members[i].type != type;
-            members[i].type = type;
-        }
-    }
-
-    return retype;
 }
 
 void generateStructDelete(CodegenContext *context, const Type *type)
@@ -163,8 +73,8 @@ void generateStructDelete(CodegenContext *context, const Type *type)
     else {
         format(state, "\n", NULL);
         u64 y = 0;
-        for (u64 i = 0; i < type->tStruct.membersCount; i++) {
-            const StructMember *field = &type->tStruct.members[i];
+        for (u64 i = 0; i < type->tStruct.members->count; i++) {
+            const NamedTypeMember *field = &type->tStruct.members->members[i];
             if (typeIs(field->type, Func) || typeIs(field->type, Generic) ||
                 typeIs(field->type, Struct))
                 continue;
@@ -329,7 +239,7 @@ static bool structHasToString(const Type *type)
     if (sb == NULL || stripAll(type) == sb)
         return true;
 
-    const StructMember *toString = findStructMember(type, "toString");
+    const NamedTypeMember *toString = findStructMember(type, "toString");
     if (toString == NULL)
         return false;
 
@@ -362,8 +272,8 @@ static void generateStructToString(CodegenContext *context, const Type *type)
     format(state, "{{\");\n", NULL);
 
     u64 y = 0;
-    for (u64 i = 0; i < type->tStruct.membersCount; i++) {
-        const StructMember *field = &type->tStruct.members[i];
+    for (u64 i = 0; i < type->tStruct.members->count; i++) {
+        const NamedTypeMember *field = &type->tStruct.members->members[i];
         if (typeIs(field->type, Func) || typeIs(field->type, Generic) ||
             typeIs(field->type, Struct))
             continue;
@@ -417,15 +327,11 @@ void generateStructDefinition(CodegenContext *context, const Type *type)
     format(state, "struct ", NULL);
     writeTypename(context, type);
     format(state, " {{{>}\n", NULL);
-    if (type->tStruct.base) {
-        writeTypename(context, type->tStruct.base);
-        format(state, " super;\n", NULL);
-    }
     format(state, "void *__mgmt;\n", NULL);
 
     u64 y = 0;
-    for (u64 i = 0; i < type->tStruct.membersCount; i++) {
-        const StructMember *field = &type->tStruct.members[i];
+    for (u64 i = 0; i < type->tStruct.members->count; i++) {
+        const NamedTypeMember *field = &type->tStruct.members->members[i];
         if (typeIs(field->type, Func) || typeIs(field->type, Generic))
             continue;
 
@@ -447,8 +353,8 @@ void generateStructDecl(ConstAstVisitor *visitor, const AstNode *node)
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     const Type *type = node->type;
 
-    for (u64 i = 0; i < type->tStruct.membersCount; i++) {
-        const StructMember *member = &type->tStruct.members[i];
+    for (u64 i = 0; i < type->tStruct.members->count; i++) {
+        const NamedTypeMember *member = &type->tStruct.members->members[i];
         if (typeIs(member->type, Func)) {
             astConstVisit(visitor, member->decl);
         }
@@ -472,7 +378,7 @@ bool isExplicitConstructableFrom(TypingContext *ctx,
     if (!typeIs(type, Struct))
         return isTypeAssignableFrom(type, from);
 
-    const Type *constructor = findStructMemberType(type, S_New);
+    const Type *constructor = findStructMemberType(type, S_Initializer);
     if (constructor == NULL)
         return false;
 
@@ -509,7 +415,7 @@ bool evalExplicitConstruction(AstVisitor *visitor,
     if (!typeIs(type, Struct))
         return false;
 
-    const StructMember *member = findStructMember(type, S_New);
+    const NamedTypeMember *member = findStructMember(type, S_Initializer);
     if (member == NULL)
         return false;
 
@@ -563,23 +469,13 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    if (target->tStruct.base) {
-        logError(ctx->L,
-                 &node->structExpr.left->loc,
-                 "type '{t}' cannot be initialized with an initializer "
-                 "expression, struct extends a base type",
-                 (FormatArg[]){{.t = target}});
-        node->type = ERROR_TYPE(ctx);
-        return;
-    }
-
     AstNode *field = node->structExpr.fields, *prev = node->structExpr.fields;
     bool *initialized =
-        callocOrDie(1, sizeof(bool) * target->tStruct.membersCount);
+        callocOrDie(1, sizeof(bool) * target->tStruct.members->count);
 
     for (; field; field = field->next) {
         prev = field;
-        const StructMember *member =
+        const NamedTypeMember *member =
             findStructMember(target, field->fieldExpr.name);
         if (member == NULL) {
             logError(
@@ -591,7 +487,7 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
             continue;
         }
 
-        if (!nodeIs(member->decl, StructField)) {
+        if (!nodeIs(member->decl, Field)) {
             logError(
                 ctx->L,
                 &field->loc,
@@ -618,9 +514,9 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
     if (node->type == ERROR_TYPE(ctx))
         return;
 
-    for (u64 i = 0; i < target->tStruct.membersCount; i++) {
-        const AstNode *targetField = target->tStruct.members[i].decl;
-        if (initialized[i] || !nodeIs(targetField, StructField))
+    for (u64 i = 0; i < target->tStruct.members->count; i++) {
+        const AstNode *targetField = target->tStruct.members->members[i].decl;
+        if (initialized[i] || !nodeIs(targetField, Field))
             continue;
 
         if (targetField->structField.value == NULL) {
@@ -652,55 +548,10 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
         node->type = target;
 }
 
-void checkStructField(AstVisitor *visitor, AstNode *node)
-{
-    TypingContext *ctx = getAstVisitorContext(visitor);
-    const Type *type =
-        checkType(visitor, node->structField.type) ?: makeAutoType(ctx->types);
-    if (typeIs(type, Error)) {
-        node->type = ERROR_TYPE(ctx);
-        return;
-    }
-
-    const Type *value = checkType(visitor, node->structField.value);
-    if (typeIs(value, Error)) {
-        node->type = ERROR_TYPE(ctx);
-        return;
-    }
-
-    if (value && !isTypeAssignableFrom(type, value)) {
-        logError(ctx->L,
-                 &node->structField.value->loc,
-                 "field initializer of type '{t}' not compatible with "
-                 "field type '{t}'",
-                 (FormatArg[]){{.t = value}, {.t = type}});
-        node->type = ERROR_TYPE(ctx);
-        return;
-    }
-
-    node->type = typeIs(type, Auto) ? value : type;
-}
-
 void checkStructDecl(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    const Type *base = checkType(visitor, node->structDecl.base);
 
-    if (base) {
-        if (typeIs(base, Error)) {
-            node->type = ERROR_TYPE(ctx);
-            return;
-        }
-        if (!typeIs(base, Struct)) {
-            logError(
-                ctx->L,
-                &node->structDecl.base->loc,
-                "base of type of '{t}' is not supported, base must be a struct",
-                (FormatArg[]){{.t = base}});
-            node->type = ERROR_TYPE(ctx);
-            return;
-        }
-    }
     const Type **implements = NULL;
     u64 implementsCount = countAstNodes(node->structDecl.implements);
     if (implementsCount) {
@@ -713,7 +564,8 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
         goto checkStructInterfacesError;
 
     u64 membersCount = countAstNodes(node->structDecl.members);
-    StructMember *members = mallocOrDie(sizeof(StructMember) * membersCount);
+    NamedTypeMember *members =
+        mallocOrDie(sizeof(NamedTypeMember) * membersCount);
     node->structDecl.thisType =
         node->structDecl.thisType
             ?: makeThisType(ctx->types, node->structDecl.name, flgNone);
@@ -726,33 +578,26 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
     if (typeIs(node->type, Error))
         goto checkStructMembersError;
 
-    ((Type *)this)->this.that =
-        makeStruct(ctx->types,
-                   &(Type){.tag = typStruct,
-                           .flags = node->flags & flgTypeApplicable,
-                           .name = node->structDecl.name,
-                           .tStruct = {.base = base,
-                                       .members = members,
-                                       .membersCount = membersCount,
-                                       .interfaces = implements,
-                                       .interfacesCount = implementsCount,
-                                       .decl = node}});
+    ((Type *)this)->this.that = makeStructType(ctx->types,
+                                               getDeclarationName(node),
+                                               members,
+                                               membersCount,
+                                               node,
+                                               implements,
+                                               implementsCount,
+                                               node->flags & flgTypeApplicable);
     node->type = this;
 
     ctx->currentStruct = node;
     if (checkMemberFunctions(visitor, node, members)) {
-        node->type = replaceStructType(
-            ctx->types,
-            this->this.that,
-            &(Type){.tag = typStruct,
-                    .flags = node->flags & flgTypeApplicable,
-                    .name = node->structDecl.name,
-                    .tStruct = {.base = base,
-                                .members = members,
-                                .membersCount = membersCount,
-                                .interfaces = implements,
-                                .interfacesCount = implementsCount,
-                                .decl = node}});
+        node->type = replaceStructType(ctx->types,
+                                       this->this.that,
+                                       members,
+                                       membersCount,
+                                       node,
+                                       implements,
+                                       implementsCount,
+                                       node->flags & flgTypeApplicable);
         ((Type *)this)->this.that = node->type;
     }
     else
@@ -760,46 +605,8 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
 
     ctx->currentStruct = NULL;
 
-    for (u64 i = 0; i < implementsCount; i++) {
-        const Type *interface = implements[i];
-        for (u64 j = 0; j < interface->tInterface.membersCount; j++) {
-            const StructMember *member = &interface->tInterface.members[j];
-            const StructMember *found =
-                findStructMember(node->type, member->name);
-            if (found == NULL || !typeIs(found->type, Func)) {
-                logError(ctx->L,
-                         &getNodeAtIndex(node->structDecl.implements, i)->loc,
-                         "struct missing interface method '{s}' implementation",
-                         (FormatArg[]){{.s = member->name}});
-                logNote(ctx->L,
-                        &member->decl->loc,
-                        "interface method declared here",
-                        NULL);
-                node->type = ERROR_TYPE(ctx);
-                continue;
-            }
-
-            const Type *match =
-                matchOverloadedFunction(ctx,
-                                        found->type,
-                                        member->type->func.params,
-                                        member->type->func.paramsCount,
-                                        NULL,
-                                        member->type->flags);
-            if (match == NULL ||
-                match->func.retType != member->type->func.retType) {
-                logError(ctx->L,
-                         &getNodeAtIndex(node->structDecl.implements, i)->loc,
-                         "struct missing interface method '{s}' implementation",
-                         (FormatArg[]){{.s = member->name}});
-                logNote(ctx->L,
-                        &member->decl->loc,
-                        "interface method declared here",
-                        NULL);
-                node->type = ERROR_TYPE(ctx);
-            }
-        }
-    }
+    if (!checkTypeImplementsAllMembers(ctx, node))
+        node->type = ERROR_TYPE(ctx);
 
 checkStructMembersError:
     if (members)

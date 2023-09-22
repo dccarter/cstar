@@ -42,6 +42,7 @@
     f(column)                   \
     f(cstr)                     \
     f(data)                     \
+    f(init)                     \
     f(destructor)               \
     f(Destructor)               \
     f(file)                     \
@@ -59,6 +60,7 @@
     f(unchecked)                \
     f(_Variadic)                \
     f(flatten)                  \
+    f(final)                    \
     f(CXY__main)
 
 // clang-format on

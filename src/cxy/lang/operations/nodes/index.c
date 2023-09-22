@@ -160,19 +160,6 @@ void checkIndexExpr(AstVisitor *visitor, AstNode *node)
 
     node->flags |= node->indexExpr.target->flags;
     const Type *unwrapped = unwrapType(target, NULL);
-    if (typeIs(unwrapped, Pointer)) {
-        target = stripPointer(target);
-        node->indexExpr.target = makeAstNode(
-            ctx->pool,
-            &node->indexExpr.target->loc,
-            &(AstNode){.tag = astUnaryExpr,
-                       .type = target,
-                       .flags = node->indexExpr.target->flags,
-                       .unaryExpr = {.op = opDeref,
-                                     .operand = node->indexExpr.target,
-                                     .isPrefix = true}});
-    }
-
     if (typeIs(unwrapped, Array)) {
         if (!isIntegerType(index)) {
             logError(ctx->L,

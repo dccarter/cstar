@@ -129,6 +129,8 @@
     EOVERFLOW,
  ) : i32
 
+
+
 ## pub (
     memcpy,
     memmove
@@ -160,7 +162,7 @@ pub native func memset(
 ) -> &void
 
 @inline
-pub func alloc[T](count: u64 = 1) => CXY__builtins_alloc(#T, count, destructor!(#T)) : &T
+pub func alloc[T](count: u64 = 1) => CXY__builtins_alloc(#T, count, destructor!(#T)) : T
 
 ## pub(
     dealloc => CXY__builtins_dealloc
@@ -267,55 +269,55 @@ pub native func CXY__hash_mod_prime(i: u64, p: u64) : u64;
 
 pub native type CXY__builtins_string_builder_t;
 
-pub native func CXY__builtins_string_builder_new(): &CXY__builtins_string_builder_t;
+pub native func CXY__builtins_string_builder_new(): CXY__builtins_string_builder_t;
 
 pub native func CXY__builtins_string_builder_delete(
-    self: &CXY__builtins_string_builder_t
+    self: CXY__builtins_string_builder_t
 ) : void;
 
 pub native func CXY__builtins_string_builder_release(
-    self: &CXY__builtins_string_builder_t
+    self: CXY__builtins_string_builder_t
 ) : &char;
 
 pub native func CXY__builtins_string_builder_append_cstr0(
-    self: &CXY__builtins_string_builder_t,
+    self: CXY__builtins_string_builder_t,
     str:  &const char,
     len:  u64
 ) : void;
 
 pub native func CXY__builtins_string_builder_append_cstr1(
-    self: &CXY__builtins_string_builder_t,
+    self: CXY__builtins_string_builder_t,
     str:  &const char,
 ) : void;
 
 pub native func CXY__builtins_string_builder_append_int(
-    self: &CXY__builtins_string_builder_t,
+    self: CXY__builtins_string_builder_t,
     num: i64
 ) : void;
 
 pub native func CXY__builtins_string_builder_append_float(
-    self: &CXY__builtins_string_builder_t,
+    self: CXY__builtins_string_builder_t,
     num: f64
 ) : void;
 
 pub native func CXY__builtins_string_builder_append_char(
-    self: &CXY__builtins_string_builder_t,
+    self: CXY__builtins_string_builder_t,
     ch: wchar
 ): void;
 
 pub native func CXY__builtins_string_builder_append_bool(
-    self: &CXY__builtins_string_builder_t,
+    self: CXY__builtins_string_builder_t,
     val: bool
 ): void;
 
-pub struct StringBuilder {
-    - sb: &CXY__builtins_string_builder_t
+pub class StringBuilder {
+    - sb: CXY__builtins_string_builder_t
 
     @inline
-    func `new`() : void {  sb = CXY__builtins_string_builder_new() }
+    func `init`() : void {  sb = CXY__builtins_string_builder_new() }
 
     @inline
-    func `delete`() => CXY__builtins_string_builder_delete(sb)
+    func `deinit`() => CXY__builtins_string_builder_delete(sb)
 
     @inline
     func appendString(str: string) =>
@@ -364,7 +366,7 @@ pub struct StringBuilder {
     }
 
     @inline
-    func toString(dst: This) {
+    func toString(dst: StringBuilder) {
          dst.appendString(this.toString())
     }
 
@@ -383,11 +385,11 @@ struct Optional[T] {
 
     /* Creates an invalid optional type */
     @inline
-    func `new`() { valid = false }
+    func `init`() { valid = false }
 
     /* Creates a valid optional type */
     @inline
-    func `new`(value: T) {
+    func `init`(value: T) {
         this.value = value
         valid = true
     }
@@ -396,12 +398,8 @@ struct Optional[T] {
     @inline
     const func `!!`() => valid
 
-    /* Dereference an optional, i.e get the underlying value. */
-    @inline
-    const func `deref`() => value
-
     /* Convert optional value to string */
-    const func toString(sb: &StringBuilder) {
+    const func toString(sb: StringBuilder) {
         if (valid)
             sb << value
         else

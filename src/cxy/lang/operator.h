@@ -53,17 +53,12 @@
 #define AST_PREFIX_EXPR_LIST(f)                     \
     f(PreDec, MinusMinus, "--", "pre_dec")          \
     f(PreInc, PlusPlus, "++", "pre_inc")            \
-    f(AddrOf, BAnd, "&", "addroff")                 \
-    f(Move,   LAnd, "&&", "move")                   \
-    f(Deref,  Mult, "*",  "deref")                  \
     f(Minus,  Minus, "-", "pre_minus")              \
     f(Plus,   Plus, "+",  "pre_plus")               \
     f(Not,    LNot, "!",  "lnot")                   \
     f(Compl,  BNot, "~",  "bnot")                   \
     f(Spread, Elipsis, "...", "spread")             \
-    f(New,    New,  "new",    "new")                \
     f(Await,  Await, "await", "await")              \
-    f(Delete, Delete,"delete", "delete")            \
 
 #define AST_POSTFIX_EXPR_LIST(f)                \
     f(PostDec, MinusMinus, "--", "dec")         \
@@ -77,8 +72,9 @@
     f(CallOverload,             "call", "()")                  \
     f(IndexOverload,            "idx", "[]")                   \
     f(IndexAssignOverload,      "idx_assign", "=[]")           \
-    f(StringOverload,           "str", "str")
-
+    f(StringOverload,           "str", "str")                  \
+    f(Initializer,              "init", "init")                \
+    f(Deinitialize,             "deinit", "deinit")
 
 typedef enum {
 #define f(name, ...) op##name,

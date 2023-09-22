@@ -12,75 +12,6 @@
 
 #include <strings.h>
 
-AstNode *makeAddressOf(TypingContext *ctx, AstNode *node)
-{
-    if (nodeIs(node, Path) || nodeIs(node, Identifier)) {
-        return makeAstNode(
-            ctx->pool,
-            &node->loc,
-            &(AstNode){.tag = astAddressOf,
-                       .flags = node->flags,
-                       .type =
-                           makePointerType(ctx->types, node->type, node->flags),
-                       .unaryExpr = {
-                           .isPrefix = true, .op = opAddrOf, .operand = node}});
-    }
-    else {
-        cstring name = makeAnonymousVariable(ctx->strings, "operand");
-        AstNode *block = makeAstNode(ctx->pool,
-                                     &node->loc,
-                                     &(AstNode){
-                                         .tag = astBlockStmt,
-                                     });
-
-        AstNode *next = block->blockStmt.stmts = makeAstNode(
-            ctx->pool,
-            &node->loc,
-            &(AstNode){.tag = astVarDecl,
-                       .type = node->type,
-                       .flags = node->flags,
-                       .varDecl = {.names = makeAstNode(
-                                       ctx->pool,
-                                       &node->loc,
-                                       &(AstNode){.tag = astIdentifier,
-                                                  .flags = node->flags,
-                                                  .ident.value = name}),
-                                   .init = node}});
-
-        next = next->next = makeAstNode(
-            ctx->pool,
-            &node->loc,
-            &(AstNode){
-                .tag = astExprStmt,
-                .type = makePointerType(ctx->types, node->type, node->flags),
-                .flags = next->flags,
-                .exprStmt.expr = makeAstNode(
-                    ctx->pool,
-                    &node->loc,
-                    &(AstNode){
-                        .tag = astAddressOf,
-                        .flags = node->flags,
-                        .type = makePointerType(
-                            ctx->types, node->type, node->flags),
-                        .unaryExpr = {.isPrefix = true,
-                                      .op = opAddrOf,
-                                      .operand = makeAstNode(
-                                          ctx->pool,
-                                          &node->loc,
-                                          &(AstNode){.tag = astIdentifier,
-                                                     .type = node->type,
-                                                     .flags = node->flags,
-                                                     .ident.value = name})}})});
-
-        return makeAstNode(ctx->pool,
-                           &node->loc,
-                           &(AstNode){.tag = astStmtExpr,
-                                      .type = next->type,
-                                      .flags = node->flags,
-                                      .stmtExpr.stmt = block});
-    }
-}
-
 void transformToMemberCallExpr(AstVisitor *visitor,
                                AstNode *node,
                                AstNode *target,
@@ -148,7 +79,8 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
             name,
             flags,
             varDecl,
-            makePathElement(ctx->pool, &callee->loc, S_New, flags, NULL, NULL),
+            makePathElement(
+                ctx->pool, &callee->loc, S_Initializer, flags, NULL, NULL),
             NULL),
         NULL);
 
@@ -188,7 +120,7 @@ bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node)
     if (!typeIs(type, Struct))
         return false;
 
-    const StructMember *member = findStructMember(type, S_Truthy);
+    const NamedTypeMember *member = findStructMember(type, S_Truthy);
     if (member == NULL)
         return false;
 
@@ -197,25 +129,6 @@ bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node)
 
     type = checkType(visitor, node);
     return typeIs(type, Primitive);
-}
-
-bool transformToDerefOperator(AstVisitor *visitor, AstNode *node)
-{
-    TypingContext *ctx = getAstVisitorContext(visitor);
-    const Type *type =
-        node->type ?: checkType(visitor, node->unaryExpr.operand);
-    if (!typeIs(type, Struct))
-        return false;
-
-    const StructMember *member = findStructMember(type, S_Deref);
-    if (member == NULL)
-        return false;
-
-    transformToMemberCallExpr(
-        visitor, node, node->unaryExpr.operand, S_Deref, NULL);
-
-    type = checkType(visitor, node);
-    return !typeIs(type, Error);
 }
 
 bool transformOptionalSome(AstVisitor *visitor, AstNode *node, AstNode *value)

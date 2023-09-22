@@ -58,15 +58,18 @@ static const Type *checkNewInitializerOverload(AstVisitor *visitor,
         ctx->pool,
         &callee->loc,
         callee->flags,
-        makeResolvedPathElement(
-            ctx->pool,
-            &callee->loc,
-            name,
-            callee->flags,
-            varDecl,
-            makePathElement(
-                ctx->pool, &callee->loc, S_New, callee->flags, NULL, NULL),
-            NULL),
+        makeResolvedPathElement(ctx->pool,
+                                &callee->loc,
+                                name,
+                                callee->flags,
+                                varDecl,
+                                makePathElement(ctx->pool,
+                                                &callee->loc,
+                                                S_Initializer,
+                                                callee->flags,
+                                                NULL,
+                                                NULL),
+                                NULL),
         NULL);
 
     // tmp;
@@ -125,7 +128,7 @@ static const Type *checkNewInitializerExpr(AstVisitor *visitor, AstNode *node)
             return NULL;
         }
         else if (typeIs(callee, Struct)) {
-            if (!findStructMemberType(callee, S_New)) {
+            if (!findStructMemberType(callee, S_Initializer)) {
                 logError(ctx->L,
                          &init->callExpr.callee->loc,
                          "cannot use `new` constructor expression on type "

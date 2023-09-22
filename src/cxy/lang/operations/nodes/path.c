@@ -67,7 +67,7 @@ static const Type *checkBasePathElement(AstVisitor *visitor,
         AstNode *enclosure = node->pathElement.enclosure,
                 *parent = getParentScope(enclosure);
         if (keyword == S_super) {
-            return node->type = parent->type->tStruct.base;
+            return node->type = getTypeBase(parent->type);
         }
         else if (keyword == S_this) {
             return node->type = makePointerType(

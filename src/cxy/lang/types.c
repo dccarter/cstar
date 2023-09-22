@@ -15,13 +15,21 @@
 
 static int searchCompareStructMember(const void *lhs, const void *rhs)
 {
-    const StructMember *right = *((const StructMember **)rhs), *left = lhs;
+    const NamedTypeMember *right = *((const NamedTypeMember **)rhs),
+                          *left = lhs;
     return left->name == right->name ? 0 : strcmp(left->name, right->name);
 }
 
 static int searchCompareEnumOption(const void *lhs, const void *rhs)
 {
     const EnumOption *right = *((const EnumOption **)rhs), *left = lhs;
+    return left->name == right->name ? 0 : strcmp(left->name, right->name);
+}
+
+static int sortCompareStructMember(const void *lhs, const void *rhs)
+{
+    const NamedTypeMember *left = *((const NamedTypeMember **)lhs),
+                          *right = *((const NamedTypeMember **)rhs);
     return left->name == right->name ? 0 : strcmp(left->name, right->name);
 }
 
@@ -37,6 +45,14 @@ static void printManyTypes(FormatState *state,
     }
 }
 
+static void printNamedType(FormatState *state, const Type *type)
+{
+    if (type->namespace)
+        format(state, "{s}.", (FormatArg[]){{.s = type->namespace}});
+    if (type->name) {
+        format(state, " {s}", (FormatArg[]){{.s = type->name}});
+    }
+}
 static void printGenericType(FormatState *state, const Type *type)
 {
     if (nodeIs(type->generic.decl, StructDecl)) {
@@ -504,6 +520,9 @@ void printType(FormatState *state, const Type *type)
         printKeyword(state, "const ");
     }
 
+    if (type->from != NULL)
+        printType(state, type->from);
+
     switch (type->tag) {
     case typPrimitive:
         switch (type->primitive.id) {
@@ -517,7 +536,7 @@ void printType(FormatState *state, const Type *type)
             unreachable("");
         }
     case typError:
-        printWithStyle(state, "<error>", errorStyle);
+        printWithStyle(state, "|error|", errorStyle);
         break;
     case typVoid:
         printKeyword(state, "void");
@@ -537,7 +556,7 @@ void printType(FormatState *state, const Type *type)
         break;
     case typOptional:
         printType(state, type->optional.target);
-        format(state, "", NULL);
+        format(state, "?", NULL);
         break;
     case typArray:
         format(state, "[", NULL);
@@ -556,9 +575,8 @@ void printType(FormatState *state, const Type *type)
     case typAlias:
     case typUnion:
     case typOpaque:
-        printKeyword(state, "type");
-        format(state, " {s}", (FormatArg[]){{.s = type->name}});
-        break;
+        printKeyword(state, "type ");
+        printNamedType(state, type);
     case typTuple:
         format(state, "(", NULL);
         printManyTypes(state, type->tuple.members, type->tuple.count, ", ");
@@ -572,51 +590,43 @@ void printType(FormatState *state, const Type *type)
         printType(state, type->func.retType);
         break;
     case typThis:
-        printKeyword(state, "This");
+        printType(state, type->this.that);
         break;
     case typEnum:
-        printKeyword(state, "enum");
-        if (type->name) {
-            format(state, " {s}", (FormatArg[]){{.s = type->name}});
-        }
+        printKeyword(state, "enum ");
+        printNamedType(state, type);
         break;
     case typStruct:
-        printKeyword(state, "struct");
-        if (type->name) {
-            format(state, " {s}", (FormatArg[]){{.s = type->name}});
-        }
+        printKeyword(state, "struct ");
+        printNamedType(state, type);
         break;
+    case typClass:
+        printKeyword(state, "class ");
+        printNamedType(state, type);
     case typInterface:
-        printKeyword(state, "interface");
-        if (type->name) {
-            format(state, " {s}", (FormatArg[]){{.s = type->name}});
-        }
+        printKeyword(state, "interface ");
+        printNamedType(state, type);
         break;
     case typGeneric:
         printGenericType(state, type);
         break;
     case typApplied:
-        if (type->applied.decl)
-            printType(state, type->applied.decl->type);
-        format(state, " aka ", NULL);
-        printType(state, type->applied.from);
-        format(state, "where (", NULL);
+        if (type->applied.from->namespace)
+            format(state,
+                   "{s}.",
+                   (FormatArg[]){{.s = type->applied.from->namespace}});
+        format(state, "{s}[", (FormatArg[]){{.s = type->applied.from->name}});
+
         for (u64 i = 0; i < type->applied.argsCount; i++) {
             if (i != 0)
                 format(state, ", ", NULL);
-
-            format(state,
-                   "{s} = ",
-                   (FormatArg[]){
-                       {.s = type->applied.from->generic.params[i].name}});
             printType(state, type->applied.args[i]);
         }
-        format(state, " )", NULL);
+        format(state, "]", NULL);
         break;
     case typInfo:
-        format(state, "@typeof(", NULL);
+        format(state, "#", NULL);
         printType(state, type->info.target);
-        format(state, ")", NULL);
         break;
 
     case typModule:
@@ -624,9 +634,12 @@ void printType(FormatState *state, const Type *type)
         format(state, " {s}", (FormatArg[]){{.s = type->name}});
         break;
 
-    case typWrapped:
-        printType(state, unwrapType(type, NULL));
+    case typWrapped: {
+        Type tmp = *type->wrapped.target;
+        tmp.flags |= type->flags;
+        printType(state, &tmp);
         break;
+    }
     default:
         unreachable("TODO");
     }
@@ -658,7 +671,7 @@ u64 getPrimitiveTypeSize(PrtId tag)
     }
 }
 
-const IntMinMax getIntegerTypeMinMax(const Type *type)
+IntMinMax getIntegerTypeMinMax(const Type *type)
 {
     static IntMinMax minMaxTable[] = {
         [prtBool] = {.f = false, .s = true},
@@ -684,32 +697,97 @@ const IntMinMax getIntegerTypeMinMax(const Type *type)
     return minMaxTable[type->primitive.id];
 }
 
-const StructMember *findStructMember(const Type *type, cstring member)
+TypeMembersContainer *makeTypeMembersContainer(TypeTable *types,
+                                               const NamedTypeMember *members,
+                                               u64 count)
 {
-    int index = binarySearch(type->tStruct.sortedMembers,
-                             type->tStruct.membersCount,
-                             &(StructMember){.name = member},
-                             sizeof(StructMember *),
-                             searchCompareStructMember);
+    TypeMembersContainer *container =
+        allocFromMemPool(types->memPool, sizeof(TypeMembersContainer));
+    container->count = count;
+    container->members =
+        allocFromMemPool(types->memPool, sizeof(container->members[0]) * count);
+    memcpy(container->members, members, sizeof(container->members[0]) * count);
+    container->sortedMembers = allocFromMemPool(
+        types->memPool, sizeof(container->sortedMembers[0]) * count);
 
-    return index == -1 ? NULL : type->tStruct.sortedMembers[index];
+    for (u64 i = 0; i < count; i++)
+        container->sortedMembers[i] = &container->members[i];
+
+    qsort(container->sortedMembers,
+          container->count,
+          sizeof(container->sortedMembers[0]),
+          sortCompareStructMember);
+
+    return container;
 }
 
-const StructMember *findInterfaceMember(const Type *type, cstring member)
+TypeInheritance *makeTypeInheritance(TypeTable *types,
+                                     const Type *base,
+                                     const Type **interfaces,
+                                     u64 interfaceCount)
 {
-    int index = binarySearch(type->tInterface.sortedMembers,
-                             type->tInterface.membersCount,
-                             &(StructMember){.name = member},
-                             sizeof(StructMember *),
+    TypeInheritance *inheritance =
+        allocFromMemPool(types->memPool, sizeof(TypeInheritance));
+    inheritance->interfacesCount = interfaceCount;
+    inheritance->base = base;
+    if (interfaceCount) {
+        inheritance->interfaces = allocFromMemPool(
+            types->memPool,
+            sizeof(inheritance->interfaces[0]) * interfaceCount);
+        memcpy(inheritance->interfaces,
+               interfaces,
+               sizeof(inheritance->interfaces[0]) * interfaceCount);
+    }
+    else
+        inheritance->interfaces = NULL;
+
+    return inheritance;
+}
+
+const NamedTypeMember *findNamedTypeMemberInContainer(
+    const TypeMembersContainer *container, cstring member)
+{
+    int index = binarySearch(container->sortedMembers,
+                             container->count,
+                             &(NamedTypeMember){.name = member},
+                             sizeof(NamedTypeMember *),
                              searchCompareStructMember);
 
-    return index == -1 ? NULL : type->tInterface.sortedMembers[index];
+    return index == -1 ? NULL : container->sortedMembers[index];
+}
+
+const TypeInheritance *getTypeInheritance(const Type *type)
+{
+    switch (type->tag) {
+    case typStruct:
+        return type->tStruct.inheritance;
+    case typClass:
+        return type->tClass.inheritance;
+    default:
+        return NULL;
+    }
+}
+
+const Type *getTypeBase(const Type *type)
+{
+    switch (type->tag) {
+    case typClass:
+        return type->tClass.inheritance ? type->tClass.inheritance->base : NULL;
+    case typEnum:
+        return type->tEnum.base;
+    default:
+        return NULL;
+    }
 }
 
 bool implementsInterface(const Type *type, const Type *inf)
 {
-    for (u64 i = 0; i < type->tStruct.interfacesCount; i++) {
-        if (type->tStruct.interfaces[i] == inf)
+    const TypeInheritance *inheritance = getTypeInheritance(type);
+    if (inheritance == NULL)
+        return false;
+
+    for (u64 i = 0; i < inheritance->interfacesCount; i++) {
+        if (inheritance->interfaces[i] == inf)
             return true;
     }
 
@@ -721,21 +799,10 @@ const EnumOption *findEnumOption(const Type *type, cstring option)
     int index = binarySearch(type->tEnum.sortedOptions,
                              type->tEnum.optionsCount,
                              &(EnumOption){.name = option},
-                             sizeof(StructMember *),
+                             sizeof(NamedTypeMember *),
                              searchCompareEnumOption);
 
     return index == -1 ? NULL : type->tEnum.sortedOptions[index];
-}
-
-const ModuleMember *findModuleMember(const Type *type, cstring member)
-{
-    int index = binarySearch(type->module.sortedMembers,
-                             type->module.membersCount,
-                             &(ModuleMember){.name = member},
-                             sizeof(ModuleMember *),
-                             searchCompareStructMember);
-
-    return index == -1 ? NULL : type->module.sortedMembers[index];
 }
 
 bool isTruthyType(const Type *type)
@@ -756,5 +823,8 @@ const Type *getOptionalType()
 
 const Type *getOptionalTargetType(const Type *type)
 {
-    return hasFlag(type, Optional) ? type->tStruct.members[1].type : NULL;
+    if (!hasFlag(type, Optional))
+        return NULL;
+
+    return type->tStruct.members->members[0].type;
 }

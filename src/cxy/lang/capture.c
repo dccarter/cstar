@@ -81,7 +81,7 @@ cstring getCapturedNodeName(const AstNode *node)
         return node->varDecl.name;
     case astFuncParam:
         return node->funcParam.name;
-    case astStructField:
+    case astField:
         return node->structField.name;
     default:
         unreachable("Only variables and function params can be captured");

@@ -132,7 +132,7 @@ static bool validateOperatorOverloadArguments(ShakeAstContext *ctx,
 
 #define f(OP, _0, _1, STR, ...)                                                \
     case op##OP:                                                               \
-        if (op != opNew)                                                       \
+        if (op != opInitializer)                                               \
             return reportIfUnexpectedNumberOfParameters(                       \
                 ctx, &node->loc, STR, count, 0);                               \
         else                                                                   \
@@ -469,10 +469,11 @@ static void shakeGenericDecl(AstVisitor *visitor, AstNode *node)
     astVisit(visitor, decl);
 }
 
-static void shakeStructDecl(AstVisitor *visitor, AstNode *node)
+static void shakeClassOrStructDecl(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
-    astVisit(visitor, node->structDecl.base);
+    if (nodeIs(node, ClassDecl))
+        astVisit(visitor, node->classDecl.base);
     astVisitManyNodes(visitor, node->structDecl.implements);
     astVisitManyNodes(visitor, node->structDecl.members);
 
@@ -535,7 +536,7 @@ AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
         [astForStmt] = shakeForStmt,
         [astFuncDecl] = shakeFuncDecl,
         [astGenericDecl] = shakeGenericDecl,
-        [astStructDecl] = shakeStructDecl,
+        [astStructDecl] = shakeClassOrStructDecl,
         [astBlockStmt] = shakeBlockStmt
     }, .fallback = astVisitFallbackVisitAll);
     // clang-format on
