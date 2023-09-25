@@ -233,7 +233,8 @@ bool evalExprForStmtIterable(AstVisitor *visitor,
             return false;
         }
 
-        if (nodeIs(body, BlockStmt) && findAttribute(node, S_flatten)) {
+        if (nodeIs(body, BlockStmt) &&
+            findAttribute(node, S_consistent) == NULL) {
             insertAstNode(nodes, body->blockStmt.stmts);
         }
         else {
@@ -264,7 +265,8 @@ bool evalExprForStmtArray(AstVisitor *visitor,
             return false;
         }
 
-        if (nodeIs(body, BlockStmt) && findAttribute(node, S_flatten)) {
+        if (nodeIs(body, BlockStmt) &&
+            findAttribute(node, S_consistent) == NULL) {
             insertAstNode(nodes, body->blockStmt.stmts);
         }
         else {
@@ -295,7 +297,8 @@ bool evalExprForStmtVariadic(AstVisitor *visitor,
             return false;
         }
 
-        if (nodeIs(body, BlockStmt) && findAttribute(node, S_flatten)) {
+        if (nodeIs(body, BlockStmt) &&
+            findAttribute(node, S_consistent) == NULL) {
             insertAstNode(nodes, body->blockStmt.stmts);
         }
         else {
@@ -329,7 +332,8 @@ bool evalForStmtWithString(AstVisitor *visitor,
         }
 
         if (!nodeIs(body, Nop)) {
-            if (nodeIs(body, BlockStmt) && findAttribute(node, S_flatten)) {
+            if (nodeIs(body, BlockStmt) &&
+                findAttribute(node, S_consistent) == NULL) {
                 insertAstNode(nodes, body->blockStmt.stmts);
             }
             else {
@@ -367,7 +371,8 @@ bool evalForStmtWithRange(AstVisitor *visitor,
             return false;
         }
 
-        if (nodeIs(body, BlockStmt) && findAttribute(node, S_flatten)) {
+        if (nodeIs(body, BlockStmt) &&
+            findAttribute(node, S_consistent) == NULL) {
             insertAstNode(nodes, body->blockStmt.stmts);
         }
         else {
@@ -413,7 +418,7 @@ void evalForStmt(AstVisitor *visitor, AstNode *node)
             node->tag = astError;
             return;
         }
-        
+
         if (!evalExprForStmtVariadic(visitor, node, &nodes))
             return;
         break;

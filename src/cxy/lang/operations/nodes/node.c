@@ -58,8 +58,15 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
 
     cstring name = makeAnonymousVariable(ctx->strings, "_new_tmp");
     // S{}
-    AstNode *structExpr = makeStructExpr(
-        ctx->pool, &callee->loc, flags, callee, NULL, NULL, callee->type);
+    AstNode *structExpr = typeIs(callee->type, Struct)
+                              ? makeStructExpr(ctx->pool,
+                                               &callee->loc,
+                                               flags,
+                                               callee,
+                                               NULL,
+                                               NULL,
+                                               callee->type)
+                              : makeNewClassCall(ctx, callee);
     // var name = S{}
     AstNode *varDecl = makeVarDecl(ctx->pool,
                                    &callee->loc,
@@ -67,7 +74,7 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
                                    name,
                                    structExpr,
                                    NULL,
-                                   callee->type);
+                                   NULL);
     // tmp.init
     AstNode *newCallee = makePathWithElements(
         ctx->pool,
@@ -80,7 +87,7 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
             flags,
             varDecl,
             makePathElement(
-                ctx->pool, &callee->loc, S_Initializer, flags, NULL, NULL),
+                ctx->pool, &callee->loc, S_InitOverload, flags, NULL, NULL),
             NULL),
         NULL);
 
@@ -88,7 +95,8 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
     AstNode *ret = makeExprStmt(
         ctx->pool,
         &node->loc,
-        makeResolvedPath(ctx->pool, &node->loc, name, flgNone, varDecl, NULL),
+        makeResolvedPath(
+            ctx->pool, &node->loc, name, flgNone, varDecl, NULL, NULL),
         node->flags,
         NULL,
         NULL);
@@ -145,8 +153,8 @@ bool transformOptionalSome(AstVisitor *visitor, AstNode *node, AstNode *value)
     node->tag = astCallExpr;
     node->flags = flgNone;
     node->type = NULL;
-    node->callExpr.callee =
-        makeResolvedPath(ctx->pool, &node->loc, S_Some, flgNone, some, NULL);
+    node->callExpr.callee = makeResolvedPath(
+        ctx->pool, &node->loc, S_Some, flgNone, some, NULL, NULL);
     node->callExpr.args = value;
 
     type = checkType(visitor, node);

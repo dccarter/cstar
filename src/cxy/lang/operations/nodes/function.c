@@ -53,7 +53,8 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
     TypeTable *table = (ctx)->types;
 
     const AstNode *parent = node->parentScope;
-    bool isMember = parent && parent->tag == astStructDecl;
+    bool isMember =
+        parent && (nodeIs(parent, StructDecl) || nodeIs(parent, ClassDecl));
 
     format(ctx->state, "\n", NULL);
 
@@ -109,9 +110,8 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
     if (isInlineFunction(node))
         format(ctx->state, "attr(always_inline)\n", NULL);
 
-    generateTypeUsage(ctx, node->type->func.retType);
-    if (typeIs(node->type->func.retType, This))
-        format(ctx->state, "*", NULL);
+    const Type *ret = node->type->func.retType;
+    generateTypeUsage(ctx, ret);
 
     if (isMember) {
         format(ctx->state, " ", NULL);
@@ -179,15 +179,14 @@ void generateFuncDeclaration(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
     const AstNode *parent = type->func.decl->parentScope;
+    const Type *ret = type->func.retType;
     u32 index = type->func.decl->funcDecl.index;
     if (hasFlag(type->func.decl, BuiltinMember))
         return;
 
     generateTypeUsage(context, type->func.retType);
-    if (typeIs(type->func.retType, This))
-        format(context->state, " *", NULL);
-    else
-        format(state, " ", NULL);
+    format(state, " ", NULL);
+
     writeTypename(context, parent->type);
     format(state, "__{s}", (FormatArg[]){{.s = type->name}});
     if (index)
@@ -210,14 +209,13 @@ void generateFuncGeneratedDeclaration(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
     u32 index = type->func.decl->funcDecl.index;
+    const Type *ret = type->func.retType;
     if (hasFlag(type->func.decl, BuiltinMember))
         return;
 
     generateTypeUsage(context, type->func.retType);
-    if (typeIs(type->func.retType, This))
-        format(context->state, " *", NULL);
-    else
-        format(state, " ", NULL);
+    format(state, " ", NULL);
+
     if (hasFlag(type->func.decl, Generated))
         writeDeclNamespace(context, type->namespace, NULL);
     else
@@ -240,7 +238,8 @@ void generateFunctionTypedef(CodegenContext *context, const Type *type)
     FormatState *state = context->state;
     const AstNode *decl = type->func.decl,
                   *parent = decl ? type->func.decl->parentScope : NULL;
-    bool isMember = parent && parent->tag == astStructDecl;
+    bool isMember =
+        parent && (nodeIs(parent, StructDecl) || nodeIs(parent, ClassDecl));
 
     format(state, "typedef ", NULL);
     generateTypeUsage(context, type->func.retType);

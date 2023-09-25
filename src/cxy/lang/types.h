@@ -268,6 +268,12 @@ bool isBooleanType(const Type *type);
 bool isCharacterType(const Type *type);
 bool isArrayType(const Type *type);
 bool isPointerType(const Type *type);
+bool isVoidPointer(const Type *type);
+
+static inline bool isClassOrStructType(const Type *type)
+{
+    return typeIs(type, Class) || typeIs(type, Struct);
+}
 
 const char *getPrimitiveTypeName(PrtId tag);
 u64 getPrimitiveTypeSize(PrtId tag);

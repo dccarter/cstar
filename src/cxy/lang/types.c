@@ -182,15 +182,15 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
             return to->primitive.id == from->primitive.id;
         }
     case typPointer:
-        if (typeIs(to->pointer.pointed, Void))
+        if (isVoidPointer(to))
             return typeIs(from, Pointer) || typeIs(from, String) ||
-                   typeIs(from, Array);
+                   typeIs(from, Array) || typeIs(stripAll(from), Class);
 
         if (typeIs(from, Array))
             return isTypeAssignableFrom(to->pointer.pointed,
                                         from->array.elementType);
 
-        return typeIs(from, Pointer) && typeIs(from->pointer.pointed, Void);
+        return typeIs(from, Pointer) && isVoidPointer(from);
 
     case typArray:
         if (!typeIs(from, Array) ||
@@ -244,11 +244,16 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
                isTypeAssignableFrom(to->tEnum.base, from->tEnum.base);
     case typStruct:
         return typeIs(from, This) && to == from->this.that;
+    case typClass:
+        if (typeIs(from, This))
+            return to == from->this.that;
+        return typeIs(from, Null);
     case typInfo:
         return typeIs(from, Info) &&
                isTypeAssignableFrom(to->info.target, from->info.target);
     case typInterface:
-        return typeIs(from, Struct) && implementsInterface(from, to);
+        return (typeIs(from, Struct) || typeIs(from, Class)) &&
+               implementsInterface(from, to);
     default:
         return false;
     }
@@ -300,6 +305,14 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
         default:
             return unwrappedTo->primitive.id == unwrappedFrom->primitive.id;
         }
+    case typPointer:
+        if (isVoidPointer(unwrappedFrom) && typeIs(unwrappedTo, Class))
+            return true;
+        return isTypeAssignableFrom(to, from);
+    case typClass:
+        if (isVoidPointer(unwrappedTo))
+            return true;
+        // fallthrough
     default:
         return isTypeAssignableFrom(to, from);
     }
@@ -493,6 +506,16 @@ bool isPointerType(const Type *type)
     return typeIs(type, Pointer) || typeIs(type, Array) || typeIs(type, String);
 }
 
+bool isVoidPointer(const Type *type)
+{
+    type = resolveType(type);
+
+    if (typeIs(type, Wrapped))
+        return isVoidPointer(type->wrapped.target);
+
+    return typeIs(type, Pointer) && typeIs(type->pointer.pointed, Void);
+}
+
 bool isBuiltinType(const Type *type)
 {
     if (type == NULL)
@@ -520,8 +543,19 @@ void printType(FormatState *state, const Type *type)
         printKeyword(state, "const ");
     }
 
-    if (type->from != NULL)
+    if (type->from != NULL) {
+        if (typeIs(type, Func))
+            printKeyword(state, "func ");
         printType(state, type->from);
+        if (typeIs(type, Func)) {
+            format(state, "(", NULL);
+            printManyTypes(
+                state, type->func.params, type->func.paramsCount, ", ");
+            format(state, ") -> ", NULL);
+            printType(state, type->func.retType);
+        }
+        return;
+    }
 
     switch (type->tag) {
     case typPrimitive:
@@ -577,6 +611,7 @@ void printType(FormatState *state, const Type *type)
     case typOpaque:
         printKeyword(state, "type ");
         printNamedType(state, type);
+        break;
     case typTuple:
         format(state, "(", NULL);
         printManyTypes(state, type->tuple.members, type->tuple.count, ", ");
@@ -603,6 +638,7 @@ void printType(FormatState *state, const Type *type)
     case typClass:
         printKeyword(state, "class ");
         printNamedType(state, type);
+        break;
     case typInterface:
         printKeyword(state, "interface ");
         printNamedType(state, type);

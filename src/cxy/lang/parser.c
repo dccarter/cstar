@@ -71,6 +71,11 @@ static inline const char *getTokenString(Parser *P, const Token *tok, bool trim)
     size_t start = tok->fileLoc.begin.byteOffset + trim;
     size_t size = tok->fileLoc.end.byteOffset - trim - start;
     char *name = allocFromMemPool(P->memPool, size + 1);
+    if (P->lexer->fileData[start] == '`' &&
+        P->lexer->fileData[start + size - 1] == '`') {
+        return makeStringSized(
+            P->strPool, &P->lexer->fileData[start + 1], size - 2);
+    }
     return makeStringSized(P->strPool, &P->lexer->fileData[start], size);
 }
 
@@ -1335,15 +1340,19 @@ static OperatorOverload operatorOverload(Parser *P)
     else if (match(P, tokIdent)) {
         Token ident = *previous(P);
         cstring name = getTokenString(P, &ident, false);
-        if (strcmp(name, "str") == 0) {
+        if (name == S_StringOverload_) {
             op = (OperatorOverload){.f = opStringOverload,
                                     .s = S_StringOverload};
         }
-        else if (strcmp(name, "init") == 0) {
-            op = (OperatorOverload){.f = opInitializer, .s = S_Initializer};
+        else if (name == S_InitOverload_) {
+            op = (OperatorOverload){.f = opInitOverload, .s = S_InitOverload};
         }
-        else if (strcmp(name, "deinit") == 0) {
-            op = (OperatorOverload){.f = opDeinitialize, .s = S_Deinitialize};
+        else if (name == S_DeinitOverload_) {
+            op = (OperatorOverload){.f = opDeinitOverload,
+                                    .s = S_DeinitOverload};
+        }
+        else if (name == S_HashOverload_) {
+            op = (OperatorOverload){.f = opHashOverload, .s = S_HashOverload};
         }
         else {
             parserError(P,

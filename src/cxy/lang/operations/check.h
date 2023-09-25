@@ -75,10 +75,23 @@ bool checkTypeImplementsAllMembers(TypingContext *ctx, AstNode *node);
 bool checkMemberFunctions(AstVisitor *visitor,
                           AstNode *node,
                           NamedTypeMember *members);
+
+void implementClassOrStructBuiltins(AstVisitor *visitor, AstNode *node);
+
 void checkImplements(AstVisitor *visitor,
                      AstNode *node,
                      const Type **implements,
                      u64 count);
+
+AstNode *makeDropReferenceCall(TypingContext *ctx,
+                               AstNode *member,
+                               const FileLoc *loc);
+
+AstNode *makeNewClassCall(TypingContext *ctx, AstNode *node);
+
+AstNode *makeGetReferenceCall(TypingContext *ctx,
+                              AstNode *member,
+                              const FileLoc *loc);
 
 void transformToMemberCallExpr(AstVisitor *visitor,
                                AstNode *node,

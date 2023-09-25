@@ -38,7 +38,7 @@
     f(EnumLiteral,          26)                 \
     f(Comptime,             27)                 \
     f(Visited,              28)                 \
-    f(ImplementsDelete,     29)                 \
+    f(ImplementsDeinit,     29)                 \
     f(ImmediatelyReturned,  30)                 \
     f(Unsafe,               31)                 \
     f(FunctionPtr,          32)                 \
@@ -51,7 +51,8 @@
     f(BlockReturns,         39)                 \
     f(BuiltinsModule,       40)                 \
     f(Optional,             41)                 \
-    f(ImportedModule,       43)
+    f(ImportedModule,       43)                 \
+    f(ReferenceMembers,     44)
 
 // clang-format on
 static const u64 flgNone = 0;

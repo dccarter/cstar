@@ -47,9 +47,9 @@ static void checkClassBaseDecl(AstVisitor *visitor, AstNode *node)
     }
 }
 
-static void preCheckMembers(AstVisitor *visitor,
-                            AstNode *node,
-                            NamedTypeMember *members)
+static void preCheckClassMembers(AstVisitor *visitor,
+                                 AstNode *node,
+                                 NamedTypeMember *members)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *member = node->classDecl.members;
@@ -58,8 +58,6 @@ static void preCheckMembers(AstVisitor *visitor,
         const Type *type;
         if (nodeIs(member, FuncDecl)) {
             type = checkFunctionSignature(visitor, member);
-            if (member->funcDecl.operatorOverload == opDeinitialize)
-                node->flags |= flgImplementsDelete;
         }
         else {
             type = checkType(visitor, member);
@@ -84,6 +82,140 @@ static void preCheckMembers(AstVisitor *visitor,
 
     if (typeIs(node->type, Error))
         return;
+}
+
+void generateClassDefinition(CodegenContext *context, const Type *type)
+{
+    FormatState *state = context->state;
+    format(state, "struct ", NULL);
+    writeTypename(context, type);
+    format(state, " {{{>}\n", NULL);
+    format(state, "void *__mgmt;", NULL);
+
+    format(state, "\n", NULL);
+    for (u64 i = 0; i < type->tStruct.members->count; i++) {
+        const NamedTypeMember *field = &type->tStruct.members->members[i];
+        if (typeIs(field->type, Func) || typeIs(field->type, Generic))
+            continue;
+
+        format(state, "\n", NULL);
+
+        generateTypeUsage(context, field->type);
+        format(state, " {s};", (FormatArg[]){{.s = field->name}});
+    }
+    format(state, "{<}\n};\n", NULL);
+}
+
+void generateClassDecl(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    const Type *type = node->type;
+
+    for (u64 i = 0; i < type->tStruct.members->count; i++) {
+        const NamedTypeMember *member = &type->tStruct.members->members[i];
+        if (typeIs(member->type, Func)) {
+            astConstVisit(visitor, member->decl);
+        }
+    }
+}
+
+void generateClassTypedef(CodegenContext *ctx, const Type *type)
+{
+    FormatState *state = ctx->state;
+    format(state, "typedef struct ", NULL);
+    writeTypename(ctx, type);
+    format(state, " ", NULL);
+    writeTypename(ctx, type);
+    format(state, ";\n", NULL);
+}
+
+AstNode *makeNewClassCall(TypingContext *ctx, AstNode *node)
+{
+    const Type *type = node->type;
+    csAssert0(typeIs(type, Class));
+    AstNode *new = findBuiltinDecl(S_newClass);
+    csAssert0(new);
+
+    return makeCallExpr(
+        ctx->pool,
+        &node->loc,
+        makeResolvedPathWithArgs(ctx->pool,
+                                 &node->loc,
+                                 getDeclarationName(new),
+                                 flgNone,
+                                 new,
+                                 makeResolvedPath(ctx->pool,
+                                                  &node->loc,
+                                                  type->name,
+                                                  flgNone,
+                                                  type->tClass.decl,
+                                                  NULL,
+                                                  type),
+                                 NULL),
+        NULL,
+        flgNone,
+        NULL,
+        NULL);
+}
+
+AstNode *makeDropReferenceCall(TypingContext *ctx,
+                               AstNode *member,
+                               const FileLoc *loc)
+{
+    const Type *type = member->type;
+    csAssert0(typeIs(type, Class));
+    AstNode *drop = findBuiltinDecl(S_dropref);
+    csAssert0(drop);
+    return makeCallExpr(
+        ctx->pool,
+        loc,
+        makePathWithElements(
+            ctx->pool,
+            loc,
+            flgNone,
+            makeResolvedPathElement(
+                ctx->pool, loc, S_dropref, drop->flags, drop, NULL, NULL),
+            NULL),
+        makeResolvedPath(ctx->pool,
+                         loc,
+                         member->structField.name,
+                         member->flags | flgMember,
+                         member,
+                         NULL,
+                         member->type),
+        flgNone,
+        NULL,
+        NULL);
+}
+
+AstNode *makeGetReferenceCall(TypingContext *ctx,
+                              AstNode *member,
+                              const FileLoc *loc)
+{
+    const Type *type = member->type;
+    csAssert0(typeIs(type, Class));
+    AstNode *get = findBuiltinDecl(S_getref);
+    csAssert0(get);
+    return makeCallExpr(
+        ctx->pool,
+        loc,
+        makePathWithElements(
+            ctx->pool,
+            loc,
+            flgNone,
+            makeResolvedPathElement(
+                ctx->pool, loc, S_getref, get->flags, get, NULL, NULL),
+            NULL),
+        makeResolvedPath(ctx->pool,
+                         loc,
+                         member->structField.name,
+                         member->flags | flgMember,
+                         member,
+                         NULL,
+                         member->type),
+        flgNone,
+        NULL,
+        NULL);
 }
 
 void checkClassDecl(AstVisitor *visitor, AstNode *node)
@@ -118,7 +250,7 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
 
     node->type = this;
     ctx->currentClass = node;
-    preCheckMembers(visitor, node, members);
+    preCheckClassMembers(visitor, node, members);
     ctx->currentClass = NULL;
 
     if (typeIs(node->type, Error))
@@ -134,6 +266,10 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
                                               implementsCount,
                                               node->flags & flgTypeApplicable);
     node->type = this;
+
+    implementClassOrStructBuiltins(visitor, node);
+    if (typeIs(node->type, Error))
+        goto checkClassMembersError;
 
     ctx->currentClass = node;
     if (checkMemberFunctions(visitor, node, members)) {

@@ -37,12 +37,9 @@ void freeTypeTable(TypeTable *table);
 const Type *resolveType(const Type *type);
 const Type *stripPointer(const Type *type);
 const Type *stripAll(const Type *type);
-u64 pointerLevels(const Type *type);
 const Type *arrayToPointer(TypeTable *table, const Type *type);
 const Type *getPrimitiveType(TypeTable *table, PrtId id);
 const Type *getAnySliceType(TypeTable *table);
-
-void removeFromTypeTable(TypeTable *table, const Type *type);
 const Type *makeErrorType(TypeTable *table);
 const Type *makeAutoType(TypeTable *table);
 const Type *makeVoidType(TypeTable *table);
@@ -140,7 +137,7 @@ const Type *makeModuleType(TypeTable *table,
 
 const Type *makeEnum(TypeTable *table, const Type *init);
 
-const Type *makeGenericType(TypeTable *table, AstNode *decl, bool inferrable);
+const Type *makeGenericType(TypeTable *table, AstNode *decl);
 
 const Type *makeWrappedType(TypeTable *table, const Type *target, u64 flags);
 const Type *unwrapType(const Type *type, u64 *flags);
@@ -173,3 +170,7 @@ const Type *expectInType(TypeTable *table,
 const Type *getIntegerTypeForLiteral(TypeTable *table, i64 literal);
 bool isIntegerTypeInRange(const Type *type, i64 min, i64 max);
 int findTypeInArray(const Type **types, u64 count, const Type *type);
+u64 pointerLevels(const Type *type);
+void removeFromTypeTable(TypeTable *table, const Type *type);
+
+AstNode *getTypeDecl(const Type *type);

@@ -506,11 +506,9 @@ void generateBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
 void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    const Type *left = checkType(visitor, node->binaryExpr.lhs);
-    if (typeIs(left, This))
-        left = left->this.that;
-
-    if (stripAll(left)->tag == typStruct) {
+    const Type *left = checkType(visitor, node->binaryExpr.lhs),
+               *left_ = stripAll(left);
+    if (typeIs(left_, Struct) || typeIs(left_, Class)) {
         checkBinaryOperatorOverload(visitor, node);
         return;
     }

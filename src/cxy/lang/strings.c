@@ -9,9 +9,15 @@
 CXY_BUILTIN_NAMES(f, f)
 AST_UNARY_EXPR_LIST(f)
 AST_BINARY_EXPR_LIST(f)
-AST_OVERLOAD_ONLY_OPS(f)
 f(Truthy);
 #undef f
+
+#define f(name, ...)                                                           \
+    cstring S_##name = NULL;                                                   \
+    cstring S_##name##_ = NULL;
+AST_OVERLOAD_ONLY_OPS(f)
+#undef f
+
 #define f(name, ...) cstring S_##name##_eq = NULL;
 AST_ASSIGN_EXPR_LIST(f)
 #undef f
@@ -31,11 +37,14 @@ void internCommonStrings(StrPool *pool)
     AST_BINARY_EXPR_LIST(f)
 #undef f
 
-#define f(name, _0, _1, _2, str) S_##name##_eq = makeString(pool, str "_eq");
+#define f(name, _0, _1, _2, str)                                               \
+    S_##name##_eq = makeString(pool, "op__" str "_eq");
     AST_ASSIGN_EXPR_LIST(f)
 #undef f
 
-#define f(name, str, ...) S_##name = makeString(pool, "op__" str);
+#define f(name, str, ...)                                                      \
+    S_##name = makeString(pool, "op__" str);                                   \
+    S_##name##_ = makeString(pool, str);
     AST_OVERLOAD_ONLY_OPS(f)
 #undef f
     S_Truthy = makeString(pool, "op__truthy");

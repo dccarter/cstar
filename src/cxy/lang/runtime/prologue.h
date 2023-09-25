@@ -187,6 +187,7 @@ static void *CXY__default_calloc(u64 n, u64 size, void (*destructor)(void *))
 
 void *CXY__default_realloc(void *ptr, u64 size, void (*destructor)(void *));
 void CXY__default_dealloc(void *ptr);
+
 attr(always_inline) void *CXY__default_get_ref(void *ptr)
 {
     if (ptr) {
@@ -448,6 +449,14 @@ attr(always_inline) static void CXY__builtins_string_builder_append_float(
 {
     char data[32];
     i64 len = sprintf(data, "%g", num);
+    CXY__builtins_string_builder_append_cstr0(sb, data, len);
+}
+
+attr(always_inline) static void CXY__builtins_string_builder_append_ptr(
+    CXY__builtins_string_builder_t *sb, const void *ptr)
+{
+    char data[32];
+    i64 len = sprintf(data, "%p", ptr);
     CXY__builtins_string_builder_append_cstr0(sb, data, len);
 }
 

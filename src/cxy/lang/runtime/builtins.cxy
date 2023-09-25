@@ -138,6 +138,11 @@
     memset
 ) : func(dst: &void, ch: i32, len: u64) -> &void
 
+
+## pub (
+    CXY__builtins_sizeof
+) : func(typ: auto) -> u64
+
 ## pub (
     CXY__alloc
 ) : func(size: u64) -> &void
@@ -150,6 +155,9 @@
     CXY__free
 ) : func(ptr: &void) -> void
 
+@inline
+pub func newClass[T]() => CXY__alloc(sizeof!(#T)) : T
+
 ## pub(
     strlen
 ): func(str: &const char) -> u64
@@ -159,7 +167,7 @@ type HashCode = u32
 ## pub(hashInit => CXY__hash_fnv1a_init):  func() -> u32
 
 ## pub (
-    hashPointer => CXY__hash_fnv1a_pointer
+    hashPointer => CXY__hash_fnv1a_ptr
 ): func(init: HashCode, ptr: &const void) -> u32
 
 ## pub(
@@ -217,7 +225,7 @@ pub func hash[T](val: T, init: HashCode = 0) {
     }
     else {
         // this will fail if T does not implement hash function
-        return val.hash()
+        return val.op__hash()
     }
 }
 
@@ -267,7 +275,24 @@ pub native func CXY__builtins_string_builder_append_bool(
     val: bool
 ): void;
 
-pub class StringBuilder {
+pub native func CXY__builtins_string_builder_append_ptr(
+    self: CXY__builtins_string_builder_t,
+    val: &const void
+): void;
+
+pub native func CXY__builtins_get_ref(ptr: &void): void;
+pub native func CXY__builtins_drop(ptr: &void): void;
+
+@inline
+pub func getref[T](obj: T) {
+    CXY__builtins_get_ref(obj: &void)
+    return obj
+}
+
+@inline
+pub func dropref[T](obj: T) => CXY__free(obj: &void)
+
+class StringBuilder {
     - sb: CXY__builtins_string_builder_t
 
     @inline
@@ -297,8 +322,11 @@ pub class StringBuilder {
     func appendBool(val: bool) =>
         CXY__builtins_string_builder_append_bool(sb, val)
 
+    func appendPointer[T](ptr: &const T) =>
+        CXY__builtins_string_builder_append_ptr(sb, ptr: &const void)
+
     @inline
-    func `<<`[U](val: U) {
+    func `<<`[U](val: U) : StringBuilder {
         #if ((#U).isString)
             appendString(val)
         else #if ((#U).isInteger)
@@ -312,23 +340,17 @@ pub class StringBuilder {
         else #if ((#U).isEnum)
             appendInt(<i64>val)
         else #if ((#U).isStruct)
-            val.toString(this)
+            val.op__str(this)
+
+
         return this
     }
 
-    @inline
-    func toString() {
-        var ret = CXY__builtins_string_builder_release(sb);
-        return ret !: string
+    func `str`(sb: StringBuilder) {
+        appendPointer[void](sb: &const void)
     }
 
-    @inline
-    func toString(dst: StringBuilder) {
-         dst.appendString(this.toString())
-    }
-
-    @inline
-    func `str`() => this.toString()
+    const func `hash`() => hashPointer(hashInit(), this: &const void)
 }
 
 /**
@@ -336,7 +358,7 @@ pub class StringBuilder {
  *
  * Corresponds to type T?
  */
-pub struct Optional[T] {
+struct Optional[T] {
     - valid: bool = false;
     - value: T
 
@@ -361,13 +383,14 @@ pub struct Optional[T] {
         return value
     }
 
-    /* Convert optional value to string */
-    const func toString(sb: StringBuilder) {
+    const func `str`(sb: StringBuilder) {
         if (valid)
             sb << value
         else
             sb << "null"
     }
+
+    const func `hash`() => hash(this)
 }
 
 /* Creates a valid optional value */
@@ -377,3 +400,44 @@ func Some[T](value: T) => Optional[T](value)
 /* Creates an invalid optional value */
 @inline
 func None[T]() => Optional[T]()
+
+@inline
+func structToString[T](it: &const T, sb: StringBuilder) {
+    sb << #{T.name} << '{'
+    #const i = 0;
+    #for (const member: T.members) {
+        #if (member.isField) {
+            #if (i != 0) {
+                sb << ", "
+            }
+
+            sb << #{member.name} << ": " << it.#{mkIdent!(member.name)}
+            #{i += 1}
+        }
+    }
+    sb << '}'
+}
+
+@inline
+func computeStructHash[T](it: &const T) {
+    var code = hashInit();
+    #for (const member: T.members) {
+        #if (member.isField) {
+            code = hash[#{member.Tinfo}](it.#{mkIdent!(member.name)}, code)
+        }
+    }
+    return code
+}
+
+@inline
+func classToString[T](it: const T, sb: StringBuilder) {
+    sb << "<" << #{T.name} << ":"
+    sb.appendPointer[void](it: &const void)
+    sb << '>'
+}
+
+@inline
+func computeClassHash[T](it: const T) {
+    return hashPointer(hashInit(), it : &void)
+}
+

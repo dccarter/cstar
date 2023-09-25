@@ -77,12 +77,16 @@ static inline const Type *actualType(const Type *type)
 
 static AstNode *getName(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 {
+    if (node == NULL)
+        return NULL;
+
     cstring name = NULL;
     switch (node->tag) {
     case astField:
         name = node->structField.name;
         break;
     case astStructDecl:
+    case astClassDecl:
         name = node->structDecl.name;
         break;
     case astFuncDecl:
@@ -94,6 +98,8 @@ static AstNode *getName(EvalContext *ctx, const FileLoc *loc, AstNode *node)
     case astPrimitiveType:
         name = getPrimitiveTypeName(node->primitiveType.id);
         break;
+    case astGenericParam:
+        return getName(ctx, loc, getTypeDecl(stripAll(node->type)));
     default:
         return NULL;
     }
@@ -108,10 +114,20 @@ static AstNode *getMembers(EvalContext *ctx,
                            attr(unused) const FileLoc *loc,
                            AstNode *node)
 {
+    if (node == NULL)
+        return NULL;
+
+    const Type *type = stripAll(node->type);
     switch (node->tag) {
     case astTupleType:
         return comptimeWrapped(
             ctx, &node->loc, node->tupleExpr.elements, flgComptimeIterable);
+    case astStructDecl:
+    case astClassDecl:
+        return comptimeWrapped(
+            ctx, &node->loc, node->structDecl.members, flgComptimeIterable);
+    case astGenericParam:
+        return getMembers(ctx, loc, getTypeDecl(type));
     default:
         break;
     }

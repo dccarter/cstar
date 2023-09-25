@@ -123,13 +123,12 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     u32 index =
         nodeIs(type->func.decl, FuncDecl) ? type->func.decl->funcDecl.index : 0;
 
-    if (nodeIs(parent, StructDecl)) {
+    if (nodeIs(parent, StructDecl) || nodeIs(parent, ClassDecl)) {
         writeTypename(ctx, parent->type);
         format(ctx->state, "__", NULL);
     }
-    else if (hasFlag(type->func.decl, Generated))
-        writeDeclNamespace(ctx, type->namespace, NULL);
-    else if (!hasFlag(node->callExpr.callee, Define))
+    else if (hasFlag(type->func.decl, Generated) ||
+             !hasFlag(node->callExpr.callee, Define))
         writeDeclNamespace(ctx, type->namespace, NULL);
 
     if (type->name)
@@ -140,7 +139,7 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     if (index)
         format(ctx->state, "_{u32}", (FormatArg[]){{.u32 = index}});
 
-    bool isMember = nodeIs(parent, StructDecl);
+    bool isMember = nodeIs(parent, StructDecl) || nodeIs(parent, ClassDecl);
     if (isMember) {
         const AstNode *callee = node->callExpr.callee;
         bool needsThis =
@@ -164,7 +163,8 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
                     target = target->next;
                 }
 
-                if (!typeIs(target->type, Pointer))
+                if (!typeIs(target->type, Pointer) &&
+                    !typeIs(target->type, Class))
                     format(ctx->state, "&", NULL);
 
                 for (;; elem = elem->next) {
@@ -179,8 +179,10 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
             }
             else {
                 target = callee->memberExpr.target;
-                if (!typeIs(target->type, Pointer))
+                if (!typeIs(target->type, Class) &&
+                    !typeIs(target->type, Pointer)) {
                     format(ctx->state, "&", NULL);
+                }
                 astConstVisit(visitor, target);
             }
         }
@@ -226,9 +228,9 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
     }
 
     callee_ = flattenWrappedType(callee_, &flags);
-    if (typeIs(callee_, Struct)) {
+    if (isClassOrStructType(callee_)) {
         AstNode *symbol = callee->path.elements->pathElement.resolvesTo;
-        if (nodeIs(symbol, StructDecl)) {
+        if (isClassOrStructAstNode(symbol)) {
             node->type = transformToConstructCallExpr(visitor, node);
             return;
         }

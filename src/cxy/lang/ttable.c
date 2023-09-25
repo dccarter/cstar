@@ -179,6 +179,7 @@ static bool compareTypes(const Type *lhs, const Type *rhs)
     case typGeneric:
     case typInfo:
     case typInterface:
+    case typClass:
         return (left->name == right->name) &&
                (left->namespace == right->namespace);
 
@@ -351,6 +352,11 @@ const Type *stripAll(const Type *type)
             break;
         case typWrapped:
             type = stripAll(type->wrapped.target);
+            break;
+        case typThis:
+            if (type->this.that == NULL)
+                return type;
+            type = stripAll(type->this.that);
             break;
         default:
             return type;
@@ -570,14 +576,15 @@ const Type *makeEnum(TypeTable *table, const Type *init)
     return ret.s;
 }
 
-const Type *makeGenericType(TypeTable *table, AstNode *decl, bool inferrable)
+const Type *makeGenericType(TypeTable *table, AstNode *decl)
 {
     Type type =
         make(Type,
              .tag = typGeneric,
+             .name = getDeclarationName(decl),
              .generic = {.decl = decl,
                          .paramsCount = countAstNodes(decl->genericDecl.params),
-                         .inferrable = inferrable});
+                         .inferrable = decl->genericDecl.inferrable != 0});
     return getOrInsertType(table, &type).s;
 }
 
@@ -929,4 +936,29 @@ int findTypeInArray(const Type **types, u64 count, const Type *type)
     }
 
     return -1;
+}
+
+AstNode *getTypeDecl(const Type *type)
+{
+    if (type == NULL)
+        return NULL;
+
+    switch (type->tag) {
+    case typStruct:
+        return type->tStruct.decl;
+    case typClass:
+        return type->tClass.decl;
+    case typFunc:
+        return type->func.decl;
+    case typThis:
+        return getTypeDecl(type->this.that);
+    case typEnum:
+        return type->tEnum.decl;
+    case typGeneric:
+        return type->generic.decl;
+    case typInterface:
+        return type->tInterface.decl;
+    default:
+        return NULL;
+    }
 }

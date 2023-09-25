@@ -47,6 +47,9 @@ static void generateType(CodegenContext *context, const Type *type)
     case typStruct:
         generateStructDefinition(context, type);
         break;
+    case typClass:
+        generateClassDefinition(context, type);
+        break;
     case typOpaque:
         if (type->namespace == NULL)
             break;
@@ -72,13 +75,16 @@ static void generateAllTypes(CodegenContext *ctx)
 
     u64 empty = 0;
     for (u64 i = 0; i < sorted; i++) {
-        if (types[i] == NULL)
+        if (types[i] == NULL || hasFlag(types[i], CodeGenerated))
             continue;
 
-        if (typeIs(types[i], Struct) && !hasFlag(types[i], CodeGenerated)) {
+        if (typeIs(types[i], Struct))
             generateStructTypedef(ctx, types[i]);
-        }
+        else if (typeIs(types[i], Class))
+            generateClassTypedef(ctx, types[i]);
     }
+
+    format(ctx->state, "\n", NULL);
 
     for (u64 i = 0; i < sorted; i++) {
         if (types[i] == NULL)
@@ -439,14 +445,21 @@ void generateTypeUsage(CodegenContext *ctx, const Type *type)
         generateTypeUsage(ctx, type);
         break;
     }
+
     case typEnum:
-    case typOpaque:
     case typArray:
     case typTuple:
     case typStruct:
     case typFunc:
-    case typThis:
         writeTypename(ctx, type);
+        break;
+    case typThis:
+        generateTypeUsage(ctx, type->this.that);
+        break;
+    case typOpaque:
+    case typClass:
+        writeTypename(ctx, type);
+        format(ctx->state, " *", NULL);
         break;
     default:
         break;
@@ -579,6 +592,7 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
         [astVarDecl] = generateVariableDecl,
         [astTypeDecl] = generateTypeDecl,
         [astStructDecl] = generateStructDecl,
+        [astClassDecl] = generateClassDecl,
         [astDestructorRef] = generateDestructorRef
     }, .fallback = generateFallback);
 

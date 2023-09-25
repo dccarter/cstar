@@ -147,9 +147,8 @@ const Type *checkType(AstVisitor *visitor, AstNode *node)
 static void checkGenericDecl(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    AstNode *param = node->genericDecl.params, *decl = node->genericDecl.decl;
     bool inferrable = false;
-    node->type = makeGenericType(ctx->types, node, inferrable);
+    node->type = makeGenericType(ctx->types, node);
 }
 
 static void checkInterfaceDecl(AstVisitor *visitor, AstNode *node)

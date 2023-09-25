@@ -113,25 +113,26 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
         node->tag = astError;
         return;
     }
+    bool flatten = findAttribute(node, S_consistent) == NULL;
 
     AstNode *next = node->next;
-    AstNode *parent = node->parentScope;
     u64 visited = node->flags & flgVisited;
 
     if (cond->boolLiteral.value) {
         // select then branch & reclaim else branch if any
-        replaceAstNodeWith(node, node->ifStmt.body);
+        AstNode *replacement = node->ifStmt.body;
+        if (flatten && nodeIs(replacement, BlockStmt))
+            replacement = replacement->blockStmt.stmts
+                              ?: makeAstNop(ctx->pool, &replacement->loc);
+        replaceAstNodeWith(node, replacement);
     }
     else if (node->ifStmt.otherwise) {
         // select otherwise, reclaim if branch
-        replaceAstNodeWith(node, node->ifStmt.otherwise);
-        while (nodeIs(node, IfStmt) && hasFlag(node, Comptime)) {
-            node->flags &= ~flgComptime;
-            if (!evaluate(visitor, node)) {
-                node->tag = astError;
-                return;
-            }
-        }
+        AstNode *replacement = node->ifStmt.otherwise;
+        if (flatten && nodeIs(replacement, BlockStmt))
+            replacement = replacement->blockStmt.stmts
+                              ?: makeAstNop(ctx->pool, &replacement->loc);
+        replaceAstNodeWith(node, replacement);
     }
     else {
         // select next statement, reclaim if branch
@@ -143,5 +144,14 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
             node->flags &= ~flgComptime;
         }
     }
+
+    while (nodeIs(node, IfStmt) && hasFlag(node, Comptime)) {
+        node->flags &= ~flgComptime;
+        if (!evaluate(visitor, node)) {
+            node->tag = astError;
+            return;
+        }
+    }
+
     node->flags |= visited;
 }

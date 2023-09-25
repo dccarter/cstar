@@ -73,10 +73,14 @@
     f(IndexOverload,            "idx", "[]")                   \
     f(IndexAssignOverload,      "idx_assign", "=[]")           \
     f(StringOverload,           "str", "str")                  \
-    f(Initializer,              "init", "init")                \
-    f(Deinitialize,             "deinit", "deinit")
+    f(InitOverload,             "init", "init")                \
+    f(DeinitOverload,           "deinit", "deinit")            \
+    f(CopyOverload,             "copy",  "copy")               \
+    f(DestructorOverload,       "destructor", "destructor")    \
+    f(HashOverload,             "hash",       "hash")
 
 typedef enum {
+    opInvalid,
 #define f(name, ...) op##name,
     AST_BINARY_EXPR_LIST(f)
     AST_UNARY_EXPR_LIST(f)
@@ -89,8 +93,7 @@ typedef enum {
 #define f(name, ...) op##name,
     AST_OVERLOAD_ONLY_OPS(f)
 #undef f
-    opTruthy,
-    opInvalid
+    opTruthy
 } Operator;
 
 // clang-format on

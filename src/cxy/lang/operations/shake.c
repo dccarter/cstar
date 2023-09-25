@@ -1,6 +1,8 @@
 //
 // Created by Carter Mbotho on 2023-07-06.
 //
+#include "shake.h"
+
 #include "lang/operations.h"
 
 #include "lang/ast.h"
@@ -132,7 +134,7 @@ static bool validateOperatorOverloadArguments(ShakeAstContext *ctx,
 
 #define f(OP, _0, _1, STR, ...)                                                \
     case op##OP:                                                               \
-        if (op != opInitializer)                                               \
+        if (op != opInitOverload)                                              \
             return reportIfUnexpectedNumberOfParameters(                       \
                 ctx, &node->loc, STR, count, 0);                               \
         else                                                                   \
@@ -151,7 +153,7 @@ static bool validateOperatorOverloadArguments(ShakeAstContext *ctx,
 
     case opStringOverload:
         return reportIfUnexpectedNumberOfParameters(
-            ctx, &node->loc, "str", count, 0);
+            ctx, &node->loc, "str", count, 1);
 
     case opTruthy:
         return reportIfUnexpectedNumberOfParameters(
@@ -472,8 +474,17 @@ static void shakeGenericDecl(AstVisitor *visitor, AstNode *node)
 static void shakeClassOrStructDecl(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
-    if (nodeIs(node, ClassDecl))
+    AstNodeList members = {node->structDecl.members,
+                           getLastAstNode(node->structDecl.members)};
+    if (nodeIs(node, ClassDecl)) {
         astVisit(visitor, node->classDecl.base);
+        insertAstNode(&members, createClassOrStructBuiltins(ctx->pool, node));
+    }
+    else {
+        insertAstNode(&members, createClassOrStructBuiltins(ctx->pool, node));
+    }
+    node->structDecl.members = members.first;
+
     astVisitManyNodes(visitor, node->structDecl.implements);
     astVisitManyNodes(visitor, node->structDecl.members);
 
@@ -537,6 +548,7 @@ AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
         [astFuncDecl] = shakeFuncDecl,
         [astGenericDecl] = shakeGenericDecl,
         [astStructDecl] = shakeClassOrStructDecl,
+        [astClassDecl] = shakeClassOrStructDecl,
         [astBlockStmt] = shakeBlockStmt
     }, .fallback = astVisitFallbackVisitAll);
     // clang-format on

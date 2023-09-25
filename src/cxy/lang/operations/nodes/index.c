@@ -69,7 +69,7 @@ static bool evalStringIndexExpr(EvalContext *ctx, AstNode *node)
     AstNode *member =
         nodeIs(target, EnumDecl)
             ? findEnumOptionByName(target, index->stringLiteral.value)
-            : findStructMemberByName(target, index->stringLiteral.value);
+            : findMemberByName(target, index->stringLiteral.value);
 
     if (member == NULL)
         node->tag = astNullLit;

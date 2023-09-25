@@ -1,2 +1,22 @@
+
+class User {
+    - name: string
+    - age: i64
+
+    func `init`(name: string, age: i64) {
+        this.name = name
+        this.age = age
+    }
+}
+
+struct Goodbye {
+    - user: User
+}
+
+struct Hello {
+    - goodbye: Goodbye
+}
+
 func main(args:[string]) {
+    var hello = Hello{goodbye: Goodbye{user: User("Carter", 34)}};
 }

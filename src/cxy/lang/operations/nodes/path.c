@@ -27,6 +27,7 @@ const Type *checkPathElement(AstVisitor *visitor,
     case typContainer:
     case typModule:
     case typEnum:
+    case typClass:
         resolved = expectInType(
             ctx->types, parent, ctx->L, node->pathElement.name, &node->loc);
         break;
@@ -70,8 +71,12 @@ static const Type *checkBasePathElement(AstVisitor *visitor,
             return node->type = getTypeBase(parent->type);
         }
         else if (keyword == S_this) {
-            return node->type = makePointerType(
-                       ctx->types, parent->type, enclosure->flags & flgConst);
+            return node->type =
+                       nodeIs(parent, StructDecl)
+                           ? makePointerType(ctx->types,
+                                             parent->type,
+                                             enclosure->flags & flgConst)
+                           : parent->type;
         }
         else if (keyword == S_This) {
             return makePointerType(
@@ -182,6 +187,8 @@ void evalPath(AstVisitor *visitor, AstNode *node)
     EvalContext *ctx = getAstVisitorContext(visitor);
     AstNode *elem = node->path.elements;
     AstNode *symbol = elem->pathElement.resolvesTo;
+    if (nodeIs(symbol, VarDecl))
+        symbol = symbol->varDecl.init;
 
     if (symbol == NULL) {
         logError(ctx->L,
@@ -247,7 +254,8 @@ void evalPath(AstVisitor *visitor, AstNode *node)
             node->tag = astStringType;
             break;
         case typEnum:
-        case typStruct: {
+        case typStruct:
+        case typClass: {
             AstNode *decl =
                 typeIs(type, Enum) ? type->tEnum.decl : type->tStruct.decl;
             if (decl == NULL) {
@@ -283,6 +291,8 @@ void evalPath(AstVisitor *visitor, AstNode *node)
     else {
         replaceAstNodeWith(
             node, nodeIs(symbol, VarDecl) ? symbol->varDecl.init : symbol);
+        if (hasFlag(node, ComptimeIterable))
+            node->next = symbol->next;
         node->flags &= ~flgComptime;
     }
 }

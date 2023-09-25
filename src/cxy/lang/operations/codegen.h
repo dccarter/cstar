@@ -42,9 +42,6 @@ void generateManyAstsWithDelim(ConstAstVisitor *visitor,
                                const char *sep,
                                const char *close,
                                const AstNode *nodes);
-
-void generateStructDelete(CodegenContext *context, const Type *type);
-
 void generateArrayToSlice(ConstAstVisitor *visitor,
                           const Type *slice,
                           const AstNode *value);
@@ -57,12 +54,14 @@ void generateBlock(ConstAstVisitor *visitor, const AstNode *node);
 
 void generateTupleDefinition(CodegenContext *context, const Type *type);
 void generateStructDefinition(CodegenContext *context, const Type *type);
+void generateClassTypedef(CodegenContext *ctx, const Type *type);
 void generateEnumDefinition(CodegenContext *context, const Type *type);
 void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node);
 void generateFuncDeclaration(CodegenContext *context, const Type *type);
 void generateArrayDeclaration(CodegenContext *context, const Type *type);
 void generateFunctionTypedef(CodegenContext *context, const Type *type);
 void generateStructTypedef(CodegenContext *ctx, const Type *type);
+void generateClassDefinition(CodegenContext *context, const Type *type);
 
 void generateFallback(ConstAstVisitor *visitor, const AstNode *node);
 void generateArrayExpr(ConstAstVisitor *visitor, const AstNode *node);
@@ -90,3 +89,4 @@ void generateAssignExpr(ConstAstVisitor *visitor, const AstNode *node);
 void generateVariableDecl(ConstAstVisitor *visitor, const AstNode *node);
 void generateTypeDecl(ConstAstVisitor *visitor, const AstNode *node);
 void generateStructDecl(ConstAstVisitor *visitor, const AstNode *node);
+void generateClassDecl(ConstAstVisitor *visitor, const AstNode *node);

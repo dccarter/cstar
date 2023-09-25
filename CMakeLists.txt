@@ -132,6 +132,7 @@ set(CXY_OPERATIONS_SOURCES
         src/cxy/lang/operations/nodes/call.c
         src/cxy/lang/operations/nodes/class.c
         src/cxy/lang/operations/nodes/closure.c
+        src/cxy/lang/operations/nodes/builtins.c
         src/cxy/lang/operations/nodes/enum.c
         src/cxy/lang/operations/nodes/field.c
         src/cxy/lang/operations/nodes/for.c
