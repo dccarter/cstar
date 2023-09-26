@@ -104,6 +104,10 @@ static AstNode *makeSizeofNode(AstVisitor *visitor,
 
     AstNode *sizeOf = findBuiltinDecl(S_CXY__builtins_sizeof);
     csAssert0(sizeOf);
+    const Type *type = args->type ?: evalType(ctx, args);
+    csAssert0(type);
+    args->tag = astTypeRef;
+    args->type = type;
 
     return makeCallExpr(ctx->pool,
                         &node->loc,

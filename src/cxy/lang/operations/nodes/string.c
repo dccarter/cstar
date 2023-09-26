@@ -6,6 +6,7 @@
 #include "../codegen.h"
 #include "../eval.h"
 
+#include "lang/builtins.h"
 #include "lang/flag.h"
 #include "lang/operations.h"
 #include "lang/strings.h"

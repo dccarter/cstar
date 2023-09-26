@@ -256,6 +256,12 @@ void generateDestructorRef(ConstAstVisitor *visitor, const AstNode *node)
     format(ctx->state, "__builtin_destructor", NULL);
 }
 
+void generateTypeRef(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    writeTypename(ctx, node->type);
+}
+
 static void epilogue(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -405,6 +411,16 @@ void writeTypename(CodegenContext *ctx, const Type *type)
         case typPointer:
             writeTypename(ctx, type->pointer.pointed);
             break;
+        case typInfo:
+            writeTypename(ctx, type->info.target);
+            break;
+        case typWrapped: {
+            u64 flags = flgNone;
+            type = unwrapType(type, &flags);
+            if (flags & flgConst)
+                format(ctx->state, "const ", NULL);
+            writeTypename(ctx, type);
+        } break;
         default:
             unreachable();
         }
@@ -593,7 +609,8 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
         [astTypeDecl] = generateTypeDecl,
         [astStructDecl] = generateStructDecl,
         [astClassDecl] = generateClassDecl,
-        [astDestructorRef] = generateDestructorRef
+        [astDestructorRef] = generateDestructorRef,
+        [astTypeRef] = generateTypeRef,
     }, .fallback = generateFallback);
 
     // clang-format on

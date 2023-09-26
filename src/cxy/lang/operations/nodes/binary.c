@@ -29,7 +29,8 @@ typedef enum {
 static inline bool isSupportedBinaryOperand(AstNode *node)
 {
     node = nodeIs(node, Ref) ? node->reference.target : node;
-    return isLiteralExpr(node) || isTypeExpr(node);
+    return isLiteralExpr(node) || isTypeExpr(node) ||
+           nodeIs(node, GenericParam);
 }
 
 static inline bool isArgumentTypeThis(const AstNode *node)

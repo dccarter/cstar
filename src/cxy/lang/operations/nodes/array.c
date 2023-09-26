@@ -23,7 +23,7 @@ static void generateArrayDelete(CodegenContext *context, const Type *type)
 
     format(state, "\nattr(always_inline)\nstatic void ", NULL);
     writeTypename(context, type);
-    format(state, "__builtin_destructor(void *ptr) {{{>}\n", NULL);
+    format(state, "__op__destructor(void *ptr) {{{>}\n", NULL);
     if (isSliceType(type)) {
         writeTypename(context, type);
         format(state, " this = ptr;", NULL);
@@ -50,14 +50,14 @@ static void generateArrayDelete(CodegenContext *context, const Type *type)
                 format(state, "CXY__free((void *)this[i]);", NULL);
         }
         else if (typeIs(stripped, Struct) || typeIs(stripped, Array) ||
-                 typeIs(stripped, Tuple)) {
+                 typeIs(stripped, Tuple) || typeIs(stripped, Class)) {
             if (isSliceType(type)) {
                 writeTypename(context, stripped);
-                format(state, "__builtin_destructor(&this->data[i]);", NULL);
+                format(state, "__op__destructor(&this->data[i]);", NULL);
             }
             else {
                 writeTypename(context, stripped);
-                format(state, "__builtin_destructor(&this[i]);", NULL);
+                format(state, "__op__destructor(&this[i]);", NULL);
             }
         }
         format(state, "{<}\n};", NULL);
@@ -150,7 +150,7 @@ static void buildStringFormatForIndex(CodegenContext *context,
     case typTuple:
         writeTypename(context, stripped);
         format(state,
-               "__toString({cl}(&this{s}[i]), sb);",
+               "__op__str({cl}(&this{s}[i]), sb);",
                (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = target}});
         break;
     case typOpaque:
@@ -183,7 +183,7 @@ static void generateArrayToString(CodegenContext *context, const Type *type)
     FormatState *state = context->state;
     format(state, "\nstatic void ", NULL);
     writeTypename(context, type);
-    format(state, "__toString(", NULL);
+    format(state, "__op__str(const ", NULL);
     writeTypename(context, type);
     format(state, " this, StringBuilder* sb) {{{>}\n", NULL);
 
@@ -299,6 +299,7 @@ void generateForStmtArray(ConstAstVisitor *visitor, const AstNode *node)
 
 void generateArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
     generateManyAstsWithDelim(
         visitor, "{{", ", ", "}", node->arrayExpr.elements);
 }

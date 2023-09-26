@@ -134,6 +134,27 @@ static AstNode *getMembers(EvalContext *ctx,
     return NULL;
 }
 
+static AstNode *getMembersCount(EvalContext *ctx,
+                                attr(unused) const FileLoc *loc,
+                                AstNode *node)
+{
+    if (node == NULL)
+        return NULL;
+
+    const Type *type = stripAll(node->type);
+    switch (type->tag) {
+    case typTuple:
+        return makeAstNode(
+            ctx->pool,
+            loc,
+            &(AstNode){.tag = astIntegerLit,
+                       .intLiteral.value = (i64)type->tuple.count});
+    default:
+        break;
+    }
+    return NULL;
+}
+
 static AstNode *getTypeInfo(EvalContext *ctx,
                             attr(unused) const FileLoc *loc,
                             AstNode *node)
@@ -319,6 +340,28 @@ static AstNode *isStruct(EvalContext *ctx, const FileLoc *loc, AstNode *node)
                                   .boolLiteral.value = typeIs(type, Struct)});
 }
 
+static AstNode *isClass(EvalContext *ctx, const FileLoc *loc, AstNode *node)
+{
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = resolveType(type);
+
+    return makeAstNode(ctx->pool,
+                       loc,
+                       &(AstNode){.tag = astBoolLit,
+                                  .boolLiteral.value = typeIs(type, Class)});
+}
+
+static AstNode *isTupleType(EvalContext *ctx, const FileLoc *loc, AstNode *node)
+{
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = resolveType(type);
+
+    return makeAstNode(ctx->pool,
+                       loc,
+                       &(AstNode){.tag = astBoolLit,
+                                  .boolLiteral.value = typeIs(type, Tuple)});
+}
+
 static AstNode *isEnum(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 {
     node->type ?: evalType(ctx, node);
@@ -348,6 +391,7 @@ static void initDefaultMembers(EvalContext *ctx)
     ADD_MEMBER("Tinfo", getTypeInfo);
     ADD_MEMBER("elementType", getElementType);
     ADD_MEMBER("pointedType", getPointedType);
+    ADD_MEMBER("membersCount", getMembersCount);
     ADD_MEMBER("isInteger", isInteger);
     ADD_MEMBER("isSigned", isSigned);
     ADD_MEMBER("isUnsigned", isUnsigned);
@@ -356,6 +400,8 @@ static void initDefaultMembers(EvalContext *ctx)
     ADD_MEMBER("isNumber", isNumeric);
     ADD_MEMBER("isPointer", isPointer);
     ADD_MEMBER("isStruct", isStruct);
+    ADD_MEMBER("isClass", isClass);
+    ADD_MEMBER("isTuple", isTupleType);
     ADD_MEMBER("isField", isField);
     ADD_MEMBER("isString", isString);
     ADD_MEMBER("isBoolean", isBoolean);

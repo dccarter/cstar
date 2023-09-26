@@ -69,6 +69,7 @@
     f(computeStructHash)        \
     f(computeClassHash)         \
     f(newClass)                 \
+    f(release)                  \
     f(CXY__main)
 
 // clang-format on

@@ -11,6 +11,7 @@
 #include "lang/visitor.h"
 
 #include "core/alloc.h"
+#include "lang/builtins.h"
 
 typedef struct {
     Log *L;
@@ -202,6 +203,8 @@ void shakeVariableDecl(AstVisitor *visitor, AstNode *node)
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
     AstNode *names = node->varDecl.names, *init = node->varDecl.init,
             *type = node->varDecl.type, *name = names;
+
+    astVisit(visitor, init);
 
     if (names->next == NULL) {
         node->varDecl.name = names->ident.value;
@@ -534,6 +537,80 @@ static void shakeBlockStmt(AstVisitor *visitor, AstNode *node)
     ctx->block = block;
 }
 
+static AstNode *makeStrExprBuilder(ShakeAstContext *ctx, AstNode *node)
+{
+    AstNode *sb = findBuiltinDecl(S_StringBuilder);
+    csAssert0(sb);
+
+    return makeVarDecl(ctx->pool,
+                       &node->loc,
+                       flgNone,
+                       S_sb,
+                       makeCallExpr(ctx->pool,
+                                    &node->loc,
+                                    makeResolvedPath(ctx->pool,
+                                                     &node->loc,
+                                                     S_StringBuilder,
+                                                     flgNone,
+                                                     sb,
+                                                     NULL,
+                                                     sb->type),
+                                    NULL,
+                                    flgNone,
+                                    NULL,
+                                    NULL),
+                       NULL,
+                       NULL);
+}
+
+static void shakeStringExpr(AstVisitor *visitor, AstNode *node)
+{
+    ShakeAstContext *ctx = getAstVisitorContext(visitor);
+    AstNode *part = node->stringExpr.parts;
+    if (nodeIs(part, StringLit) && part->next == NULL) {
+        node->tag = astStringLit;
+        node->stringLiteral = part->stringLiteral;
+        return;
+    }
+
+    AstNode *var = makeStrExprBuilder(ctx, node),
+            *sb = makeResolvedPath(
+                ctx->pool, &node->loc, S_sb, flgNone, var, NULL, var->type);
+
+    for (; part;) {
+        sb = makeBinaryExpr(
+            ctx->pool, &node->loc, flgNone, sb, opShl, part, NULL, NULL);
+        part = part->next;
+        sb->binaryExpr.rhs->next = NULL;
+    }
+
+    var->next = sb;
+    sb->next = makeCallExpr(
+        ctx->pool,
+        &node->loc,
+        makePathWithElements(
+            ctx->pool,
+            &node->loc,
+            flgNone,
+            makePathElement(
+                ctx->pool,
+                &node->loc,
+                S_sb,
+                flgNone,
+                makePathElement(
+                    ctx->pool, &node->loc, S_release, flgNone, NULL, NULL),
+                NULL),
+            NULL),
+        NULL,
+        flgNone,
+        NULL,
+        NULL);
+
+    node->tag = astStmtExpr;
+    node->stmtExpr.stmt = makeBlockStmt(ctx->pool, &node->loc, var, NULL, NULL);
+    node->stmtExpr.stmt->flags |= flgBlockReturns;
+}
+
 AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
 {
     ShakeAstContext context = {
@@ -549,7 +626,8 @@ AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
         [astGenericDecl] = shakeGenericDecl,
         [astStructDecl] = shakeClassOrStructDecl,
         [astClassDecl] = shakeClassOrStructDecl,
-        [astBlockStmt] = shakeBlockStmt
+        [astBlockStmt] = shakeBlockStmt,
+        [astStringExpr] = shakeStringExpr
     }, .fallback = astVisitFallbackVisitAll);
     // clang-format on
 

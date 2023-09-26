@@ -729,6 +729,15 @@ AstNode *makeVarDecl(MemPool *pool,
                      AstNode *next,
                      const Type *type);
 
+AstNode *makeBinaryExpr(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        AstNode *lhs,
+                        Operator op,
+                        AstNode *rhs,
+                        AstNode *next,
+                        const Type *type);
+
 AstNode *makeAstNop(MemPool *pool, const FileLoc *loc);
 
 AstNode *copyAstNode(MemPool *pool, const AstNode *node);

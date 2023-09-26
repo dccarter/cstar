@@ -544,6 +544,25 @@ AstNode *makeVarDecl(MemPool *pool,
                         .init = init}});
 }
 
+AstNode *makeBinaryExpr(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        AstNode *lhs,
+                        Operator op,
+                        AstNode *rhs,
+                        AstNode *next,
+                        const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astBinaryExpr,
+                   .flags = flags,
+                   .type = type,
+                   .next = next,
+                   .binaryExpr = {.lhs = lhs, .op = op, .rhs = rhs}});
+}
+
 AstNode *makeAstNop(MemPool *pool, const FileLoc *loc)
 {
     return makeAstNode(pool, loc, &(AstNode){.tag = astNop});
@@ -667,6 +686,7 @@ bool isTypeExpr(const AstNode *node)
     case astUnionDecl:
     case astFuncDecl:
     case astTypeRef:
+    case astGenericParam:
         return true;
     case astRef:
         return isTypeExpr(node->reference.target);

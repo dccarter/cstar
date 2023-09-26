@@ -7,6 +7,10 @@ class User {
         this.name = name
         this.age = age
     }
+
+    const func `str`(sb: StringBuilder) {
+        sb << "User(" << name << ", " << age << ")"
+    }
 }
 
 struct Goodbye {
@@ -17,6 +21,13 @@ struct Hello {
     - goodbye: Goodbye
 }
 
+pub native func puts(s: &const char): i32;
+
 func main(args:[string]) {
     var hello = Hello{goodbye: Goodbye{user: User("Carter", 34)}};
+    var sb = StringBuilder();
+    const nums = [10, 30, 40, 50];
+    sb << (10, hello, nums)
+    var str = f"${hello} - ${nums}";
+    puts(str: &const char)
 }

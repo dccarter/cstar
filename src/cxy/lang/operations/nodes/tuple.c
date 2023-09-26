@@ -16,7 +16,7 @@ static void generateTupleDelete(CodegenContext *context, const Type *type)
     FormatState *state = context->state;
     format(state, "attr(always_inline)\nstatic void ", NULL);
     writeTypename(context, type);
-    format(state, "__builtin_destructor(void *ptr) {{{>}\n", NULL);
+    format(state, "__op__destructor(void *ptr) {{{>}\n", NULL);
     writeTypename(context, type);
     format(state, " *this = ptr;\n", NULL);
 
@@ -38,7 +38,7 @@ static void generateTupleDelete(CodegenContext *context, const Type *type)
                  typeIs(stripped, Tuple)) {
             writeTypename(context, stripped);
             format(state,
-                   "__builtin_destructor(&this->_{u64});",
+                   "__op__destructor(&this->_{u64});",
                    (FormatArg[]){{.u64 = i}});
         }
     }
@@ -131,7 +131,7 @@ static void buildStringFormatForMember(CodegenContext *context,
     case typTuple:
         writeTypename(context, stripped);
         format(state,
-               "__toString({cl}this->_{u64}, sb);\n",
+               "__op__str({cl}this->_{u64}, sb);\n",
                (FormatArg[]){{.c = deref ? '*' : '&'},
                              {.len = deref ? deref - 1 : 1},
                              {.u64 = index}});
@@ -166,7 +166,7 @@ static void generateTupleToString(CodegenContext *context, const Type *type)
     FormatState *state = context->state;
     format(state, "static void ", NULL);
     writeTypename(context, type);
-    format(state, "__toString(", NULL);
+    format(state, "__op__str(", NULL);
     writeTypename(context, type);
     format(state, " *this, StringBuilder* sb) {{{>}\n", NULL);
     format(

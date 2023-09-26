@@ -200,6 +200,12 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
             if (isSliceType(param) && !isSliceType(arg->type)) {
                 generateArrayToSlice(visitor, param, arg);
             }
+            else if (nodeIs(arg, ArrayExpr)) {
+                format(ctx->state, "(", NULL);
+                writeTypename(ctx, arg->type->array.elementType);
+                format(ctx->state, "[])", NULL);
+                astConstVisit(visitor, arg);
+            }
             else {
                 astConstVisit(visitor, arg);
             }

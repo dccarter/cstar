@@ -145,18 +145,18 @@
 
 ## pub (
     CXY__alloc
-) : func(size: u64) -> &void
+) : func(size: u64, dctor: func(ptr: &const void) -> void) -> &void
 
 ## pub (
     CXY__realloc
-) : func(ptr: &void, size: u64) -> &void
+) : func(ptr: &void, size: u64, dctor: func(ptr: &const void) -> void) -> &void
 
 ## pub (
     CXY__free
 ) : func(ptr: &void) -> void
 
 @inline
-pub func newClass[T]() => CXY__alloc(sizeof!(#T)) : T
+pub func newClass[T]() => CXY__alloc(sizeof!(#T), null) : T
 
 ## pub(
     strlen
@@ -327,22 +327,38 @@ class StringBuilder {
 
     @inline
     func `<<`[U](val: U) : StringBuilder {
-        #if ((#U).isString)
+        #if (U.isString)
             appendString(val)
-        else #if ((#U).isInteger)
+        else #if (U.isInteger)
             appendInt(<i64>val)
-        else #if ((#U).isFloat)
+        else #if (U.isFloat)
             appendFloat(val)
-        else #if ((#U).isBoolean)
+        else #if (U.isBoolean)
             appendBool(val)
-        else #if ((#U) == #wchar)
+        else #if (#U == #wchar)
              appendChar(val)
-        else #if ((#U).isEnum)
+        else #if (U.isEnum)
             appendInt(<i64>val)
-        else #if ((#U).isStruct)
+        else #if (U.isStruct || U.isClass)
             val.op__str(this)
-
-
+        else #if (U.isTuple) {
+            this.appendChar('(')
+            #for (const i: 0..U.membersCount) {
+                #if (i != 0)
+                    this.appendString(", ")
+                this << val.#{i}
+            }
+            this.appendChar(')')
+        }
+        else #if (U.isArray || U.isSlice) {
+            this.appendChar('[')
+            for (const i: 0..len!(val)) {
+                if (i != 0)
+                    this.appendString(", ")
+                this << val.[i]
+            }
+            this.appendChar(']')
+        }
         return this
     }
 
@@ -350,7 +366,13 @@ class StringBuilder {
         appendPointer[void](sb: &const void)
     }
 
+    @inline
     const func `hash`() => hashPointer(hashInit(), this: &const void)
+
+    @inline
+    func release() {
+        return CXY__builtins_string_builder_release(sb) : string
+    }
 }
 
 /**
@@ -440,4 +462,3 @@ func classToString[T](it: const T, sb: StringBuilder) {
 func computeClassHash[T](it: const T) {
     return hashPointer(hashInit(), it : &void)
 }
-
