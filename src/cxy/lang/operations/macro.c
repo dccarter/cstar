@@ -309,27 +309,11 @@ static AstNode *makeLenNode(AstVisitor *visitor,
         }
 
         // sizeof(a)/sizeof(a[0])
-        return makeAstNode(
-            ctx->pool,
-            &node->loc,
-            &(AstNode){
-                .tag = astGroupExpr,
-                .type = getPrimitiveType(ctx->types, prtU64),
-                .groupExpr.expr = makeAstNode(
-                    ctx->pool,
-                    &node->loc,
-                    &(AstNode){
-                        .tag = astBinaryExpr,
-                        .type = getPrimitiveType(ctx->types, prtU64),
-                        .binaryExpr = {
-                            .op = opDiv,
-                            .lhs = makeSizeofNode(visitor, node, args),
-                            .rhs = makeSizeofNode(
-                                visitor,
-                                node,
-                                makeTypeinfoNode(visitor,
-                                                 &node->loc,
-                                                 raw->array.elementType))}})});
+        args->tag = astIntegerLit;
+        args->type = getPrimitiveType(ctx->types, prtU64);
+        clearAstBody(args);
+        args->intLiteral.value = (i64)raw->array.len;
+        return args;
 
     case typStruct: {
         const NamedTypeMember *symbol = findStructMember(raw, S_len);

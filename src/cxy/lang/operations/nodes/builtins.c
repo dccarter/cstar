@@ -120,7 +120,7 @@ static void implementStructCopyFunction(AstVisitor *visitor,
                 NULL);
             refMembers = true;
         }
-        else if (typeIs(type, Class) || typeIs(type, Pointer)) {
+        else if (typeIs(type, Class)) {
             expr = makeFieldExpr(ctx->pool,
                                  &copy->loc,
                                  member->structField.name,
@@ -193,7 +193,7 @@ static void implementDestructorFunction(AstVisitor *visitor,
             csAssert0(deinit_);
             call = implementCallStructDeinitMember(ctx, member, &deinit->loc);
         }
-        else if (typeIs(type, Class) || typeIs(type, Pointer)) {
+        else if (typeIs(type, Class)) {
             call = makeDropReferenceCall(ctx, member, &deinit->loc);
         }
         else {

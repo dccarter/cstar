@@ -144,6 +144,10 @@
 ) : func(typ: auto) -> u64
 
 ## pub (
+    CXY__builtins_assert
+) : func(cond: bool, file: string, line: u64, pos: u64) -> void
+
+## pub (
     CXY__alloc
 ) : func(size: u64, dctor: func(ptr: &const void) -> void) -> &void
 
@@ -207,7 +211,7 @@ pub func hashStringSize(
     len: u64
 ) => hashBytes(init, str !: &const char, len)
 
-pub func hash[T](val: T, init: HashCode = 0) {
+pub func hash[T](val: T, init: HashCode = 0) : HashCode {
     #if (#T == #string) {
         return hashString(hashInit(), val)
     }
@@ -222,6 +226,21 @@ pub func hash[T](val: T, init: HashCode = 0) {
     }
     else #if (#T == #i64 || #T == #u64) {
         return hashUint64(hashInit(), <u64>val)
+    }
+    else #if (T.isTuple) {
+        var z;
+        var codeXXX = hashInit();
+        #for (const i: 0..T.membersCount) {
+            codeXXX = hash(val.#{i}, codeXXX)
+        }
+        return codeXXX
+    }
+    else #if (T.isArray || T.isSlice) {
+        var code = hashInit();
+        for (const x: val) {
+            code = hash(x, code)
+        }
+        return code
     }
     else {
         // this will fail if T does not implement hash function
@@ -412,7 +431,11 @@ struct Optional[T] {
             sb << "null"
     }
 
-    const func `hash`() => hash(this)
+    const func `hash`() {
+        if (this.valid)
+            return hash(this.value)
+        return hashInit()
+    }
 }
 
 /* Creates a valid optional value */
@@ -422,6 +445,61 @@ func Some[T](value: T) => Optional[T](value)
 /* Creates an invalid optional value */
 @inline
 func None[T]() => Optional[T]()
+
+pub struct Slice[T] {
+    - data: &T
+    - count: u64
+
+    func `init`(data: &T, count: u64) {
+        this.data = data
+        this.count = count
+    }
+
+    @inline
+    func `[]=`(index:  i64, data: T) {
+        CXY__builtins_assert(index < count, file!, line!, column!)
+        this.data.[index] = data
+    }
+
+    @inline
+    func `[]`(index:  i64) {
+        CXY__builtins_assert(index < count, file!, line!, column!)
+        return this.data.[index]
+    }
+
+    @inline
+    const func `[]`(index:  i64) {
+        CXY__builtins_assert(index < count, file!, line!, column!)
+        return this.data.[index]
+    }
+
+    const func `..`() {
+        var i = 0;
+        return () : (T, i)? => {
+            if (i < count)
+                return (data.[i], i++)
+            return null
+        }
+    }
+
+    const func `hash`() : HashCode {
+        var code = hashInit();
+        for (const i: 0..count) {
+            code = hash(data.[i], code)
+        }
+        return code
+    }
+
+    const func `str`(sb: StringBuilder) {
+        sb.appendChar('[')
+        for (const i: 0..count) {
+            if (i != 0)
+                sb.appendString(", ")
+            sb << data.[i]
+        }
+        sb.appendChar(']')
+    }
+}
 
 @inline
 func structToString[T](it: &const T, sb: StringBuilder) {

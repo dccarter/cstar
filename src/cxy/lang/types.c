@@ -862,5 +862,5 @@ const Type *getOptionalTargetType(const Type *type)
     if (!hasFlag(type, Optional))
         return NULL;
 
-    return type->tStruct.members->members[0].type;
+    return type->tStruct.members->members[1].type;
 }

@@ -178,45 +178,6 @@ static void buildStringFormatForIndex(CodegenContext *context,
     }
 }
 
-static void generateArrayToString(CodegenContext *context, const Type *type)
-{
-    FormatState *state = context->state;
-    format(state, "\nstatic void ", NULL);
-    writeTypename(context, type);
-    format(state, "__op__str(const ", NULL);
-    writeTypename(context, type);
-    format(state, " this, StringBuilder* sb) {{{>}\n", NULL);
-
-    format(state,
-           "CXY__builtins_string_builder_append_char(sb->sb, '[');\n",
-           NULL);
-
-    format(state, "for (u64 i = 0; i < ", NULL);
-    if (isSliceType(type))
-        format(state, "this->len", NULL);
-    else
-        format(state, "{u64}", (FormatArg[]){{.u64 = type->array.len}});
-    format(state, "; i++) {{{>}\n", NULL);
-
-    format(
-        state,
-        "if (i) {>}\nCXY__builtins_string_builder_append_cstr0(sb->sb, \", \", "
-        "2);{<}\n",
-        NULL);
-    if (isSliceType(type))
-        buildStringFormatForIndex(
-            context, type->array.elementType, "->data", 0);
-    else
-        buildStringFormatForIndex(context, type->array.elementType, "", 0);
-
-    format(state, "{<}\n}\n", NULL);
-
-    format(
-        state, "CXY__builtins_string_builder_append_char(sb->sb, ']');", NULL);
-
-    format(state, "{<}\n}\n", NULL);
-}
-
 void generateArrayToSlice(ConstAstVisitor *visitor,
                           const Type *slice,
                           const AstNode *value)
@@ -325,9 +286,6 @@ void generateArrayDeclaration(CodegenContext *context, const Type *type)
         format(state, "[{u64}]", (FormatArg[]){{.u64 = type->array.len}});
         format(state, ";\n", NULL);
     }
-
-    generateArrayDelete(context, type);
-    generateArrayToString(context, type);
 }
 
 void checkArrayType(AstVisitor *visitor, AstNode *node)

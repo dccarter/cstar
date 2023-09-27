@@ -1,33 +1,20 @@
-
-class User {
-    - name: string
-    - age: i64
-
-    func `init`(name: string, age: i64) {
-        this.name = name
-        this.age = age
-    }
-
-    const func `str`(sb: StringBuilder) {
-        sb << "User(" << name << ", " << age << ")"
-    }
-}
-
-struct Goodbye {
-    - user: User
-}
-
-struct Hello {
-    - goodbye: Goodbye
-}
-
 pub native func puts(s: &const char): i32;
+class User {
+    id: i32
+    func `init`(id: i32) {
+        this.id = id
+    }
+
+    func `str`(sb: StringBuilder) {
+        sb << "(id: " << id << ")"
+    }
+}
 
 func main(args:[string]) {
-    var hello = Hello{goodbye: Goodbye{user: User("Carter", 34)}};
-    var sb = StringBuilder();
-    const nums = [10, 30, 40, 50];
-    sb << (10, hello, nums)
-    var str = f"${hello} - ${nums}";
-    puts(str: &const char)
+    var x: [User, 20];
+    var slice = Slice[User](x, 20);
+    for (const i: 0..len!(x)) {
+        slice.[i] = User(i:i32)
+    }
+    puts(f"${slice}": &const char)
 }

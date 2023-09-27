@@ -159,7 +159,8 @@ void checkIndexExpr(AstVisitor *visitor, AstNode *node)
     }
 
     node->flags |= node->indexExpr.target->flags;
-    const Type *unwrapped = unwrapType(target, NULL);
+    const Type *unwrapped = unwrapType(target, NULL),
+               *stripped = stripAll(target);
     if (typeIs(unwrapped, Array)) {
         if (!isIntegerType(index)) {
             logError(ctx->L,
@@ -184,8 +185,21 @@ void checkIndexExpr(AstVisitor *visitor, AstNode *node)
         else
             node->type = unwrapped->map.value;
     }
-    else if (typeIs(unwrapped, Struct) || typeIs(unwrapped, Union)) {
+    else if (typeIs(stripped, Struct) || typeIs(unwrapped, Class)) {
         checkIndexOperator(visitor, node);
+    }
+    else if (typeIs(unwrapped, Pointer)) {
+        if (!isIntegerType(index)) {
+            logError(
+                ctx->L,
+                &node->indexExpr.index->loc,
+                "unexpected pointer offset expression index type, expecting an "
+                "integer, got '{t}'",
+                (FormatArg[]){{.t = index}});
+            node->type = ERROR_TYPE(ctx);
+        }
+        else
+            node->type = unwrapped->pointer.pointed;
     }
     else if (typeIs(unwrapped, String)) {
         if (!isIntegerType(index)) {

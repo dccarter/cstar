@@ -15,15 +15,15 @@ typedef struct {
 
 AstNode *cloneManyAstNodes(CloneAstConfig *config, const AstNode *nodes)
 {
-    AstNode *first = NULL, *node = NULL;
+    AstNode *first = NULL, *prev = NULL;
     while (nodes) {
         if (!first) {
             first = cloneAstNode(config, nodes);
-            node = first;
+            prev = first;
         }
         else {
-            node->next = cloneAstNode(config, nodes);
-            node = node->next;
+            prev->next = cloneAstNode(config, nodes);
+            prev = prev->next;
         }
         nodes = nodes->next;
     }
@@ -86,10 +86,12 @@ static void postCloneAstNode(CloneAstConfig *config,
     case astTypeDecl:
     case astGenericParam:
     case astDefine:
-    case astVarDecl:
     case astGenericDecl:
     case astEnumDecl:
     case astEnumOption:
+        mapAstNode(&config->mapping, from, to);
+        break;
+    case astVarDecl:
         mapAstNode(&config->mapping, from, to);
         break;
     case astIdentifier:
@@ -130,8 +132,6 @@ static void postCloneAstNode(CloneAstConfig *config,
         to->parentScope = from->parentScope;
         replaceWithCorrespondingNode(&config->mapping, &to->parentScope);
     }
-    if (nodeIs(to, FuncDecl))
-        replaceWithCorrespondingNode(&config->mapping, &to->list.first);
 }
 
 static void unmapAstNode(HashTable *mapping, const AstNode *node)
