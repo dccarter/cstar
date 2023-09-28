@@ -573,6 +573,24 @@ struct AstNode {
 void clearAstBody(AstNode *node);
 AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *node);
 
+AstNode *makeVoidAstNode(MemPool *pool,
+                         const FileLoc *loc,
+                         u64 flags,
+                         AstNode *next,
+                         const Type *type);
+
+AstNode *makePointerAstNode(MemPool *pool,
+                            const FileLoc *loc,
+                            u64 flags,
+                            AstNode *pointed,
+                            AstNode *next,
+                            const Type *type);
+
+AstNode *makeVoidPointerAstNode(MemPool *pool,
+                                const FileLoc *loc,
+                                u64 flags,
+                                AstNode *next);
+
 AstNode *makePath(MemPool *pool,
                   const FileLoc *loc,
                   cstring name,
@@ -624,6 +642,28 @@ AstNode *makeFieldExpr(MemPool *pool,
                        u64 flags,
                        AstNode *value,
                        AstNode *next);
+
+AstNode *makeGroupExpr(MemPool *pool,
+                       const FileLoc *loc,
+                       u64 flags,
+                       AstNode *exprs,
+                       AstNode *next);
+
+AstNode *makeCastExpr(MemPool *pool,
+                      const FileLoc *loc,
+                      u64 flags,
+                      AstNode *expr,
+                      AstNode *target,
+                      AstNode *next,
+                      const Type *type);
+
+AstNode *makeTypedExpr(MemPool *pool,
+                       const FileLoc *loc,
+                       u64 flags,
+                       AstNode *expr,
+                       AstNode *target,
+                       AstNode *next,
+                       const Type *type);
 
 attr(always_inline) static AstNode *makePathElement(MemPool *pool,
                                                     const FileLoc *loc,

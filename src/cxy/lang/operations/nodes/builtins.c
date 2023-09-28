@@ -222,6 +222,55 @@ static void implementDestructorFunction(AstVisitor *visitor,
     }
 }
 
+static void implementDestructorForwardFunction(AstVisitor *visitor,
+                                               AstNode *node,
+                                               AstNode *fwd)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    csAssert0(nodeIs(node, StructDecl) || nodeIs(node, ClassDecl));
+    csAssert0(nodeIs(fwd, FuncDecl) && fwd->funcDecl.name == S_DestructorFwd &&
+              fwd->funcDecl.body == NULL);
+
+    if (!hasFlag(node, ReferenceMembers)) {
+        fwd->funcDecl.body =
+            makeBlockStmt(ctx->pool, &fwd->loc, NULL, NULL, NULL);
+        return;
+    }
+
+    AstNode *destructorForward = findBuiltinDecl(S_destructorForward);
+    csAssert0(destructorForward);
+
+    AstNode *call = makeCallExpr(
+        ctx->pool,
+        &fwd->loc,
+        makeResolvedPathWithArgs(ctx->pool,
+                                 &fwd->loc,
+                                 getDeclarationName(destructorForward),
+                                 flgNone,
+                                 destructorForward,
+                                 makeResolvedPath(ctx->pool,
+                                                  &fwd->loc,
+                                                  node->structDecl.name,
+                                                  flgNone,
+                                                  node,
+                                                  NULL,
+                                                  node->type),
+                                 NULL),
+        makeResolvedPath(ctx->pool,
+                         &fwd->loc,
+                         S_ptr,
+                         fwd->flags,
+                         fwd->funcDecl.signature->params,
+                         NULL,
+                         NULL),
+        flgNone,
+        NULL,
+        NULL);
+
+    fwd->funcDecl.body =
+        makeExprStmt(ctx->pool, &fwd->loc, call, flgNone, NULL, NULL);
+}
+
 static void implementHashFunction(AstVisitor *visitor,
                                   AstNode *node,
                                   AstNode *hash)
@@ -377,6 +426,25 @@ AstNode *createClassOrStructBuiltins(MemPool *pool, AstNode *node)
                 NULL));
     }
 
+    insertAstNode(
+        &funcs,
+        makeOperatorOverload(
+            pool,
+            &loc,
+            opDestructorFwd,
+            makeFunctionParam(pool,
+                              &loc,
+                              S_ptr,
+                              makeVoidPointerAstNode(pool, &loc, flgNone, NULL),
+                              NULL,
+                              flgNone,
+                              NULL),
+            makeVoidAstNode(pool, &loc, flgNone, NULL, NULL),
+            NULL,
+            flgStatic,
+            NULL,
+            NULL));
+
     return funcs.first;
 }
 
@@ -400,6 +468,9 @@ void implementClassOrStructBuiltins(AstVisitor *visitor, AstNode *node)
             break;
         case opStringOverload:
             implementStringFunction(visitor, node, member);
+            break;
+        case opDestructorFwd:
+            implementDestructorForwardFunction(visitor, node, member);
             break;
         default:
             break;

@@ -198,6 +198,32 @@ static AstNode *shakeVariableInitializer(ShakeAstContext *ctx, AstNode *init)
                                .init = init}});
 }
 
+static AstNode *makeStrExprBuilder(ShakeAstContext *ctx, AstNode *node)
+{
+    AstNode *sb = findBuiltinDecl(S_StringBuilder);
+    csAssert0(sb);
+
+    return makeVarDecl(ctx->pool,
+                       &node->loc,
+                       flgNone,
+                       S_sb,
+                       makeCallExpr(ctx->pool,
+                                    &node->loc,
+                                    makeResolvedPath(ctx->pool,
+                                                     &node->loc,
+                                                     S_StringBuilder,
+                                                     flgNone,
+                                                     sb,
+                                                     NULL,
+                                                     sb->type),
+                                    NULL,
+                                    flgNone,
+                                    NULL,
+                                    NULL),
+                       NULL,
+                       NULL);
+}
+
 void shakeVariableDecl(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
@@ -535,32 +561,6 @@ static void shakeBlockStmt(AstVisitor *visitor, AstNode *node)
     }
 
     ctx->block = block;
-}
-
-static AstNode *makeStrExprBuilder(ShakeAstContext *ctx, AstNode *node)
-{
-    AstNode *sb = findBuiltinDecl(S_StringBuilder);
-    csAssert0(sb);
-
-    return makeVarDecl(ctx->pool,
-                       &node->loc,
-                       flgNone,
-                       S_sb,
-                       makeCallExpr(ctx->pool,
-                                    &node->loc,
-                                    makeResolvedPath(ctx->pool,
-                                                     &node->loc,
-                                                     S_StringBuilder,
-                                                     flgNone,
-                                                     sb,
-                                                     NULL,
-                                                     sb->type),
-                                    NULL,
-                                    flgNone,
-                                    NULL,
-                                    NULL),
-                       NULL,
-                       NULL);
 }
 
 static void shakeStringExpr(AstVisitor *visitor, AstNode *node)

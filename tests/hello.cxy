@@ -1,9 +1,15 @@
 pub native func puts(s: &const char): i32;
 
+class Address{
+    func `init`() {}
+}
+
 class User {
     id: i32
+    address: Address
     func `init`(id: i32) {
         this.id = id
+        this.address = Address()
     }
 
     func `str`(sb: StringBuilder) {
@@ -17,5 +23,5 @@ func main(args:[string]) {
     for (const i: 0..len!(x)) {
         slice.[i] = User(i:i32)
     }
-    puts(f"${ref}": &const char)
+    puts(f"${slice}": &const char)
 }

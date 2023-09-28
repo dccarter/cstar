@@ -5,6 +5,7 @@
 #include "flag.h"
 #include "scope.h"
 #include "strings.h"
+#include "ttable.h"
 
 #include <memory.h>
 
@@ -172,6 +173,48 @@ AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *init)
     return node;
 }
 
+AstNode *makePointerAstNode(MemPool *pool,
+                            const FileLoc *loc,
+                            u64 flags,
+                            AstNode *pointed,
+                            AstNode *next,
+                            const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astPointerType,
+                                  .flags = flags,
+                                  .next = next,
+                                  .type = type,
+                                  .pointerType = {.pointed = pointed}});
+}
+
+AstNode *makeVoidAstNode(MemPool *pool,
+                         const FileLoc *loc,
+                         u64 flags,
+                         AstNode *next,
+                         const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){
+            .tag = astVoidType, .flags = flags, .next = next, .type = type});
+}
+
+AstNode *makeVoidPointerAstNode(MemPool *pool,
+                                const FileLoc *loc,
+                                u64 flags,
+                                AstNode *next)
+{
+    return makePointerAstNode(pool,
+                              loc,
+                              flags,
+                              makeVoidAstNode(pool, loc, flgNone, NULL, NULL),
+                              next,
+                              NULL);
+}
+
 AstNode *makePath(MemPool *pool,
                   const FileLoc *loc,
                   cstring name,
@@ -330,6 +373,52 @@ AstNode *makeFieldExpr(MemPool *pool,
                                   .type = value->type,
                                   .next = next,
                                   .fieldExpr = {.name = name, .value = value}});
+}
+
+AstNode *makeGroupExpr(
+    MemPool *pool, const FileLoc *loc, u64 flags, AstNode *exprs, AstNode *next)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astGroupExpr,
+                                  .flags = flags,
+                                  .type = exprs->type,
+                                  .next = next,
+                                  .groupExpr = {.expr = exprs}});
+}
+
+AstNode *makeCastExpr(MemPool *pool,
+                      const FileLoc *loc,
+                      u64 flags,
+                      AstNode *expr,
+                      AstNode *target,
+                      AstNode *next,
+                      const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astCastExpr,
+                                  .flags = flags,
+                                  .type = type,
+                                  .next = next,
+                                  .castExpr = {.expr = expr, .to = target}});
+}
+
+AstNode *makeTypedExpr(MemPool *pool,
+                       const FileLoc *loc,
+                       u64 flags,
+                       AstNode *expr,
+                       AstNode *target,
+                       AstNode *next,
+                       const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astTypedExpr,
+                                  .flags = flags,
+                                  .type = type,
+                                  .next = next,
+                                  .typedExpr = {.expr = expr, .type = target}});
 }
 
 AstNode *makeCallExpr(MemPool *pool,

@@ -51,8 +51,9 @@
     f(BlockReturns,         39)                 \
     f(BuiltinsModule,       40)                 \
     f(Optional,             41)                 \
-    f(ImportedModule,       43)                 \
-    f(ReferenceMembers,     44)
+    f(ImportedModule,       42)                 \
+    f(ReferenceMembers,     43)                 \
+    f(Static,               44)
 
 // clang-format on
 static const u64 flgNone = 0;

@@ -135,7 +135,7 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         format(
             ctx->state, "_{u32}", (FormatArg[]){{.u32 = node->funcDecl.index}});
 
-    if (isMember) {
+    if (isMember && !hasFlag(node, Static)) {
         format(ctx->state, "(", NULL);
         if (hasFlag(node->type, Const))
             format(ctx->state, "const ", NULL);
@@ -179,7 +179,7 @@ void generateFuncDeclaration(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
     const AstNode *parent = type->func.decl->parentScope;
-    const Type *ret = type->func.retType;
+    bool isStatic = hasFlag(type->func.decl, Static);
     u32 index = type->func.decl->funcDecl.index;
     if (hasFlag(type->func.decl, BuiltinMember))
         return;
@@ -193,13 +193,16 @@ void generateFuncDeclaration(CodegenContext *context, const Type *type)
         format(state, "_{u32}", (FormatArg[]){{.u32 = index}});
 
     format(state, "(", NULL);
-    if (hasFlag(type, Const))
-        format(state, "const ", NULL);
-    writeTypename(context, parent->type);
-    format(state, " *", NULL);
+    if (!isStatic) {
+        if (hasFlag(type, Const))
+            format(state, "const ", NULL);
+        writeTypename(context, parent->type);
+        format(state, " *", NULL);
+    }
 
     for (u64 i = 0; i < type->func.paramsCount; i++) {
-        format(state, ", ", NULL);
+        if (!isStatic || i != 0)
+            format(state, ", ", NULL);
         generateTypeUsage(context, type->func.params[i]);
     }
     format(state, ");\n", NULL);

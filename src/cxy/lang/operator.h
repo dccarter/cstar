@@ -77,7 +77,8 @@
     f(DeinitOverload,           "deinit", "deinit")            \
     f(CopyOverload,             "copy",  "copy")               \
     f(DestructorOverload,       "destructor", "destructor")    \
-    f(HashOverload,             "hash",       "hash")
+    f(HashOverload,             "hash",       "hash")          \
+    f(DestructorFwd,            "destructor_fwd",  "destructor__fwd")       \
 
 typedef enum {
     opInvalid,

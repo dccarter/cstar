@@ -160,7 +160,7 @@
 ) : func(ptr: &void) -> void
 
 @inline
-pub func newClass[T]() => CXY__alloc(sizeof!(#T), null) : T
+pub func newClass[T]() => CXY__alloc(sizeof!(#T), T.op__destructor_fwd) : T
 
 ## pub(
     strlen
@@ -539,4 +539,13 @@ func classToString[T](it: const T, sb: StringBuilder) {
 @inline
 func computeClassHash[T](it: const T) {
     return hashPointer(hashInit(), it : &void)
+}
+
+@inline
+func destructorForward[T](ptr: &void)
+{
+    #if (T.isStruct)
+        (<&T>ptr).op__destructor()
+    else
+        (<T>ptr).op__destructor()
 }

@@ -42,6 +42,7 @@
     ff(_assert, "assert")       \
     f(base_of)                  \
     f(column)                   \
+    f(ptr)                      \
     f(cstr)                     \
     f(data)                     \
     f(init)                     \
@@ -68,6 +69,7 @@
     f(classToString)            \
     f(computeStructHash)        \
     f(computeClassHash)         \
+    f(destructorForward)        \
     f(newClass)                 \
     f(release)                  \
     f(CXY__main)
