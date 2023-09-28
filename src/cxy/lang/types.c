@@ -306,9 +306,14 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
             return unwrappedTo->primitive.id == unwrappedFrom->primitive.id;
         }
     case typPointer:
-        if (isVoidPointer(unwrappedFrom) && typeIs(unwrappedTo, Class))
+        if (isVoidPointer(unwrappedFrom) && isClassType(unwrappedTo))
             return true;
         return isTypeAssignableFrom(to, from);
+    case typThis:
+        if (isClassType(unwrappedFrom) && isVoidPointer(unwrappedTo))
+            return true;
+        else
+            return isTypeAssignableFrom(to, from);
     case typClass:
         if (isVoidPointer(unwrappedTo))
             return true;

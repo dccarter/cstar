@@ -275,6 +275,12 @@ static inline bool isClassOrStructType(const Type *type)
     return typeIs(type, Class) || typeIs(type, Struct);
 }
 
+static inline bool isClassType(const Type *type)
+{
+    return typeIs(type, Class) ||
+           (typeIs(type, This) && typeIs(type->this.that, Class));
+}
+
 const char *getPrimitiveTypeName(PrtId tag);
 u64 getPrimitiveTypeSize(PrtId tag);
 

@@ -1,4 +1,5 @@
 pub native func puts(s: &const char): i32;
+
 class User {
     id: i32
     func `init`(id: i32) {
@@ -16,5 +17,5 @@ func main(args:[string]) {
     for (const i: 0..len!(x)) {
         slice.[i] = User(i:i32)
     }
-    puts(f"${slice}": &const char)
+    puts(f"${ref}": &const char)
 }

@@ -410,7 +410,15 @@ void checkFunctionParam(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *type = node->funcParam.type, *def = node->funcParam.def;
     const Type *type_ = checkType(visitor, type), *def_ = NULL;
-    if (typeIs(type_, Error) || def == NULL) {
+    if (typeIs(type_, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    if (hasFlag(type, Const) && !hasFlag(type_, Const))
+        type_ = makeWrappedType(ctx->types, type_, flgConst);
+
+    if (def == NULL) {
         node->type = type_;
         return;
     }

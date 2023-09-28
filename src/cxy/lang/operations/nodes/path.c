@@ -179,7 +179,7 @@ void checkPath(AstVisitor *visitor, AstNode *node)
     }
 
     node->type = type;
-    node->flags = flags;
+    node->flags |= flags;
 }
 
 void evalPath(AstVisitor *visitor, AstNode *node)
