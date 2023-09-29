@@ -74,9 +74,7 @@ static inline bool shouldCaptureSymbol(const AstNode *closure,
                        nodeIs(symbol, Field));
 }
 
-static void captureSymbol(AstNode *closure,
-                          AstNode *node,
-                          const AstNode *symbol)
+static void captureSymbol(AstNode *closure, AstNode *node, AstNode *symbol)
 {
     if (!shouldCaptureSymbol(closure, symbol))
         return;
@@ -530,8 +528,8 @@ void bindClosureExpr(AstVisitor *visitor, AstNode *node)
     ctx->currentClosure = NULL;
     popScope(ctx->env);
 
-    const Capture **capture = allocFromMemPool(
-        ctx->pool, sizeof(Capture *) * node->closureExpr.captureSet.index);
+    Capture *capture = allocFromMemPool(
+        ctx->pool, sizeof(Capture) * node->closureExpr.captureSet.index);
 
     node->closureExpr.captureCount =
         getOrderedCapture(&node->closureExpr.captureSet,
@@ -648,7 +646,6 @@ void bindMemberExpr(AstVisitor *visitor, AstNode *node)
 
 void bindProgram(AstVisitor *visitor, AstNode *node)
 {
-    BindContext *ctx = getAstVisitorContext(visitor);
     AstNode *decl = node->program.decls;
 
     astVisitManyNodes(visitor, node->program.top);

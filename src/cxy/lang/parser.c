@@ -1352,8 +1352,15 @@ static OperatorOverload operatorOverload(Parser *P)
             op = (OperatorOverload){.f = opDeinitOverload,
                                     .s = S_DeinitOverload};
         }
+        else if (name == S_DestructorOverload_) {
+            op = (OperatorOverload){.f = opDestructorOverload,
+                                    .s = S_DestructorOverload};
+        }
         else if (name == S_HashOverload_) {
             op = (OperatorOverload){.f = opHashOverload, .s = S_HashOverload};
+        }
+        else if (name == S_Deref_) {
+            op = (OperatorOverload){.f = opHashOverload, .s = S_Deref};
         }
         else {
             parserError(P,

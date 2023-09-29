@@ -171,6 +171,6 @@ const Type *getIntegerTypeForLiteral(TypeTable *table, i64 literal);
 bool isIntegerTypeInRange(const Type *type, i64 min, i64 max);
 int findTypeInArray(const Type **types, u64 count, const Type *type);
 u64 pointerLevels(const Type *type);
-void removeFromTypeTable(TypeTable *table, const Type *type);
+const Type *removeFromTypeTable(TypeTable *table, const Type *type);
 
 AstNode *getTypeDecl(const Type *type);

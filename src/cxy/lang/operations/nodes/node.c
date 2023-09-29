@@ -72,6 +72,7 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
                                    &callee->loc,
                                    flags | flgImmediatelyReturned,
                                    name,
+                                   NULL,
                                    structExpr,
                                    NULL,
                                    NULL);
@@ -95,9 +96,9 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
     AstNode *ret = makeExprStmt(
         ctx->pool,
         &node->loc,
+        node->flags,
         makeResolvedPath(
             ctx->pool, &node->loc, name, flgNone, varDecl, NULL, NULL),
-        node->flags,
         NULL,
         NULL);
 
@@ -206,5 +207,24 @@ bool transformOptionalType(AstVisitor *visitor, AstNode *node, const Type *type)
         NULL);
     type = checkType(visitor, node);
 
+    return !typeIs(type, Error);
+}
+
+bool transformToDerefOperator(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    const Type *type =
+        node->type ?: checkType(visitor, node->unaryExpr.operand);
+    if (!isClassOrStructType(type))
+        return false;
+
+    type = stripAll(type);
+    if (findMemberInType(type, S_Deref) == NULL)
+        return false;
+
+    transformToMemberCallExpr(
+        visitor, node, node->unaryExpr.operand, S_Deref, NULL);
+
+    type = checkType(visitor, node);
     return !typeIs(type, Error);
 }

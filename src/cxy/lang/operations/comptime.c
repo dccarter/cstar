@@ -185,9 +185,17 @@ static AstNode *getElementType(EvalContext *ctx,
     return makeTypeReferenceNode(ctx->pool, type->array.elementType, loc);
 }
 
-static AstNode *getPointedType(EvalContext *ctx,
+static AstNode *getStripedType(EvalContext *ctx,
                                const FileLoc *loc,
                                AstNode *node)
+{
+    const Type *type = stripAll(node->type ?: evalType(ctx, node));
+    return makeTypeReferenceNode(ctx->pool, type, loc);
+}
+
+static AstNode *makePointedTypeAstNode(EvalContext *ctx,
+                                       const FileLoc *loc,
+                                       AstNode *node)
 {
     const Type *type = actualType(node->type ?: evalType(ctx, node));
     if (!isPointerType(type))
@@ -199,7 +207,7 @@ static AstNode *getPointedType(EvalContext *ctx,
 static AstNode *isString(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 {
     const Type *type = node->type ?: evalType(ctx, node);
-    type = resolveType(type);
+    type = resolveType(unwrapType(type, NULL));
 
     return makeAstNode(ctx->pool,
                        loc,
@@ -354,7 +362,7 @@ static AstNode *isClass(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 static AstNode *isTupleType(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 {
     const Type *type = node->type ?: evalType(ctx, node);
-    type = resolveType(type);
+    type = unwrapType(resolveType(type), NULL);
 
     return makeAstNode(ctx->pool,
                        loc,
@@ -370,6 +378,23 @@ static AstNode *isEnum(EvalContext *ctx, const FileLoc *loc, AstNode *node)
         loc,
         &(AstNode){.tag = astBoolLit,
                    .boolLiteral.value = typeIs(node->type, Enum)});
+}
+
+static AstNode *isDestructible(EvalContext *ctx,
+                               const FileLoc *loc,
+                               AstNode *node)
+{
+
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = unwrapType(type, NULL);
+    AstNode *decl = getTypeDecl(type);
+
+    return makeAstNode(
+        ctx->pool,
+        loc,
+        &(AstNode){.tag = astBoolLit,
+                   .boolLiteral.value = isClassOrStructType(type) &&
+                                        hasFlag(decl, ImplementsDeinit)});
 }
 
 static AstNode *isField(EvalContext *ctx, const FileLoc *loc, AstNode *node)
@@ -390,7 +415,8 @@ static void initDefaultMembers(EvalContext *ctx)
     ADD_MEMBER("members", getMembers);
     ADD_MEMBER("Tinfo", getTypeInfo);
     ADD_MEMBER("elementType", getElementType);
-    ADD_MEMBER("pointedType", getPointedType);
+    ADD_MEMBER("pointedType", makePointedTypeAstNode);
+    ADD_MEMBER("strippedType", getStripedType);
     ADD_MEMBER("membersCount", getMembersCount);
     ADD_MEMBER("isInteger", isInteger);
     ADD_MEMBER("isSigned", isSigned);
@@ -409,6 +435,7 @@ static void initDefaultMembers(EvalContext *ctx)
     ADD_MEMBER("isArray", isArray);
     ADD_MEMBER("isSlice", isSlice);
     ADD_MEMBER("isEnum", isEnum);
+    ADD_MEMBER("isDestructible", isDestructible);
 
 #undef ADD_MEMBER
 }

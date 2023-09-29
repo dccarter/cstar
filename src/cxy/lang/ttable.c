@@ -67,6 +67,8 @@ static HashCode hashType(HashCode hash, const Type *type)
         hash = hashTypes(hash, type->tuple.members, type->tuple.count);
         break;
     case typFunc:
+        if (type->name)
+            hash = hashStr(hash, type->name);
         hash = hashTypes(hash, type->func.params, type->func.paramsCount);
         hash = hashType(hash, type->func.retType);
         break;
@@ -149,7 +151,7 @@ static bool compareTypes(const Type *lhs, const Type *rhs)
                                 right->tUnion.members,
                                 left->tUnion.count);
     case typFunc:
-        if (left->name && right->name && left->name != right->name)
+        if (left->name != right->name)
             return false;
 
         if (left->func.decl && right->func.decl &&
@@ -222,6 +224,38 @@ static GetOrInset getOrInsertTypeScoped(TypeTable *table, const Type *type)
         csAssert0("failing to insert in type table");
 
     newType->index = table->typeCount++;
+    return (GetOrInset){false, newType};
+}
+
+static GetOrInset replaceTypeScoped(TypeTable *table,
+                                    const Type *type,
+                                    const Type *with)
+{
+    u32 hash = hashType(hashInit(), type);
+    Type **found = findInHashTable(&table->types, //
+                                   &type,
+                                   hash,
+                                   sizeof(Type *),
+                                   compareTypesWrapper);
+    Type *newType = NULL;
+    if (found) {
+        newType = *found;
+        removeFromTypeTable(table, *found);
+    }
+    else {
+        newType = New(table->memPool, Type);
+        newType->index = table->typeCount++;
+    }
+
+    memcpy(newType, with, sizeof(Type));
+
+    if (!insertInHashTable(&table->types,
+                           &newType,
+                           hashType(hashInit(), newType),
+                           sizeof(Type *),
+                           compareTypesWrapper))
+        csAssert0("failing to insert in type table");
+
     return (GetOrInset){false, newType};
 }
 
@@ -301,7 +335,7 @@ void freeTypeTable(TypeTable *table)
     free(table);
 }
 
-void removeFromTypeTable(TypeTable *table, const Type *type)
+const Type *removeFromTypeTable(TypeTable *table, const Type *type)
 {
     u32 hash = hashType(hashInit(), type);
     const Type **found = findInHashTable(&table->types, //
@@ -309,8 +343,11 @@ void removeFromTypeTable(TypeTable *table, const Type *type)
                                          hash,
                                          sizeof(Type *),
                                          compareTypesWrapper);
-    if (found)
+    if (found) {
         removeFromHashTable(&table->types, found, sizeof(Type *));
+        return *found;
+    }
+    return NULL;
 }
 
 const Type *resolveType(const Type *type)
@@ -546,8 +583,7 @@ const Type *changeFunctionRetType(TypeTable *table,
 {
     Type type = *func;
     type.func.retType = ret;
-    GetOrInset goi = getOrInsertType(table, &type);
-    removeFromTypeTable(table, func);
+    GetOrInset goi = replaceTypeScoped(table, func, &type);
     return goi.s;
 }
 
@@ -884,6 +920,9 @@ const Type *findMemberInType(const Type *type, cstring name)
         break;
     case typModule:
         found = findModuleMemberType(type, name);
+        break;
+    case typWrapped:
+        found = findMemberInType(unwrapType(type, NULL), name);
         break;
     default:
         break;

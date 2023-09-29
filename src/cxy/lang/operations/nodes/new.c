@@ -50,6 +50,7 @@ static const Type *checkNewInitializerOverload(AstVisitor *visitor,
                                    &callee->loc,
                                    callee->flags | flgImmediatelyReturned,
                                    name,
+                                   NULL,
                                    newExpr,
                                    NULL,
                                    NULL);
@@ -76,9 +77,9 @@ static const Type *checkNewInitializerOverload(AstVisitor *visitor,
     AstNode *ret = makeExprStmt(
         ctx->pool,
         &init->loc,
+        init->flags,
         makeResolvedPath(
             ctx->pool, &init->loc, name, flgNone, varDecl, NULL, NULL),
-        init->flags,
         NULL,
         NULL);
 

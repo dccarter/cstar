@@ -1,27 +1,13 @@
-pub native func puts(s: &const char): i32;
-
-class Address{
-    func `init`() {}
-}
+import { println } from "stdlib/io.cxy"
+import { Vector } from "stdlib/vector.cxy"
 
 class User {
-    id: i32
-    address: Address
-    func `init`(id: i32) {
-        this.id = id
-        this.address = Address()
-    }
-
-    func `str`(sb: StringBuilder) {
-        sb << "(id: " << id << ")"
-    }
+    - name: string
+    - age: u32
+    func `deinit`() {}
 }
 
-func main(args:[string]) {
-    var x: [User, 20];
-    var slice = Slice[User](x, 20);
-    for (const i: 0..len!(x)) {
-        slice.[i] = User(i:i32)
-    }
-    puts(f"${slice}": &const char)
+func main(args: const [string]) {
+    const nums = Vector[User]();
+    println(nums)
 }

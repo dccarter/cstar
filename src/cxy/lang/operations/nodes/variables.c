@@ -50,6 +50,22 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
         type ? checkType(visitor, type) : makeAutoType(ctx->types);
     const Type *init_ = checkType(visitor, init);
 
+    if (isSliceType(type_) && nodeIs(init, ArrayExpr)) {
+        AstNode *newVar = transformArrayExprToSliceCall(ctx, type_, init);
+        init_ = checkType(visitor, newVar);
+        if (typeIs(init_, Error)) {
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+
+        addBlockLevelDeclaration(ctx, newVar);
+        node->varDecl.init = makeSliceConstructor(ctx, type_, newVar);
+        type_ = checkType(visitor, node);
+        if (typeIs(type_, Error))
+            node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
     if (typeIs(type_, Error) || typeIs(init_, Error)) {
         node->type = ERROR_TYPE(ctx);
         return;

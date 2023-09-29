@@ -45,7 +45,7 @@ void checkIfStmt(AstVisitor *visitor, AstNode *node)
     }
 
     cond_ = unwrapType(cond_, NULL);
-    if (typeIs(cond_, Struct)) {
+    if (isClassOrStructType(cond_)) {
         if (!transformToTruthyOperator(visitor, cond)) {
             if (!typeIs(cond->type, Error))
                 logError(ctx->L,

@@ -118,10 +118,9 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
 
     const Type *type = resolveType(node->callExpr.callee->type);
-    const AstNode *parent =
-        type->func.decl ? getParentScope(type->func.decl) : NULL;
-    u32 index =
-        nodeIs(type->func.decl, FuncDecl) ? type->func.decl->funcDecl.index : 0;
+    AstNode *func = type->func.decl,
+            *parent = func ? getParentScope(func) : NULL;
+    u32 index = nodeIs(func, FuncDecl) ? func->funcDecl.index : 0;
 
     if (nodeIs(parent, StructDecl) || nodeIs(parent, ClassDecl)) {
         writeTypename(ctx, parent->type);
@@ -139,12 +138,15 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     if (index)
         format(ctx->state, "_{u32}", (FormatArg[]){{.u32 = index}});
 
-    bool isMember = nodeIs(parent, StructDecl) || nodeIs(parent, ClassDecl);
+    bool isMember = (nodeIs(parent, StructDecl) || nodeIs(parent, ClassDecl)) &&
+                    !hasFlag(func, Pure);
+
     if (isMember) {
         const AstNode *callee = node->callExpr.callee;
         bool needsThis =
-            (hasFlag(callee, Member) && !hasFlag(callee, ClosureStyle)) ||
-            (nodeIs(callee, Path) && callee->path.elements->next == NULL);
+            (hasFlag(callee, Member) ||
+             (nodeIs(callee, Path) && callee->path.elements->next == NULL)) &&
+            !hasFlag(callee, ClosureStyle);
 
         if (needsThis) {
             if (hasFlag(node->callExpr.callee, AddSuper))
@@ -163,15 +165,17 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
                     target = target->next;
                 }
 
-                if (!typeIs(target->type, Pointer) &&
-                    !typeIs(target->type, Class))
+                if (nodeIs(parent, StructDecl) &&
+                    !isStructPointer(target->type)) //
+                {
                     format(ctx->state, "&", NULL);
+                }
 
                 for (;; elem = elem->next) {
                     astConstVisit(visitor, elem);
                     if (elem == target)
                         break;
-                    if (typeIs(elem->type, Pointer))
+                    if (typeIs(elem->type, Pointer) || isClassType(elem->type))
                         format(ctx->state, "->", NULL);
                     else
                         format(ctx->state, ".", NULL);
@@ -179,8 +183,9 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
             }
             else {
                 target = callee->memberExpr.target;
-                if (!typeIs(target->type, Class) &&
-                    !typeIs(target->type, Pointer)) {
+                if (nodeIs(parent, StructDecl) &&
+                    !isStructPointer(target->type)) //
+                {
                     format(ctx->state, "&", NULL);
                 }
                 astConstVisit(visitor, target);

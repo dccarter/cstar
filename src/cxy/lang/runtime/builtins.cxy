@@ -224,16 +224,16 @@ pub func hash[T](val: T, init: HashCode = 0) : HashCode {
     else #if (#T == #i32 || #T == #u32) {
         return hashUint32(hashInit(), <u32>val)
     }
-    else #if (#T == #i64 || #T == #u64) {
+    else #if (T.isFloat || #T == #i64 || #T == #u64) {
         return hashUint64(hashInit(), <u64>val)
     }
     else #if (T.isTuple) {
         var z;
-        var codeXXX = hashInit();
+        var code = hashInit();
         #for (const i: 0..T.membersCount) {
-            codeXXX = hash(val.#{i}, codeXXX)
+            code = hash(val.#{i}, code)
         }
-        return codeXXX
+        return code
     }
     else #if (T.isArray || T.isSlice) {
         var code = hashInit();
@@ -319,6 +319,9 @@ class StringBuilder {
 
     @inline
     func `deinit`() => CXY__builtins_string_builder_delete(sb)
+
+    @inline
+    func `destructor`() => op__deinit()
 
     @inline
     func appendString(str: string) =>
@@ -419,7 +422,7 @@ struct Optional[T] {
     const func `!!`() => valid
 
     @inline
-    const func read() {
+    const func `deref`() {
         assert!(valid)
         return value
     }
@@ -544,7 +547,7 @@ func computeClassHash[T](it: const T) {
 @inline
 func destructorForward[T](ptr: &void)
 {
-    #if (T.isStruct)
+    #if (T.strippedType.isStruct)
         (<&T>ptr).op__destructor()
     else
         (<T>ptr).op__destructor()

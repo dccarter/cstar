@@ -89,6 +89,31 @@ static AstNode *implementCallStructDeinitMember(TypingContext *ctx,
                         deinit_->type->func.retType);
 }
 
+static AstNode *implementCallClassDeinit(TypingContext *ctx,
+                                         AstNode *node,
+                                         const FileLoc *loc)
+{
+    const Type *type = node->type;
+    const NamedTypeMember *deinit_ = findClassMember(type, S_DeinitOverload);
+    if (deinit_ == NULL) {
+        return NULL;
+    }
+
+    return makeCallExpr(ctx->pool,
+                        loc,
+                        makeResolvedPath(ctx->pool,
+                                         loc,
+                                         S_DeinitOverload,
+                                         flgNone,
+                                         (AstNode *)deinit_->decl,
+                                         NULL,
+                                         deinit_->type),
+                        NULL,
+                        flgNone,
+                        NULL,
+                        deinit_->type->func.retType);
+}
+
 static void implementStructCopyFunction(AstVisitor *visitor,
                                         AstNode *node,
                                         AstNode *copy)
@@ -157,9 +182,9 @@ static void implementStructCopyFunction(AstVisitor *visitor,
         copy->funcDecl.body = makeExprStmt(
             ctx->pool,
             &copy->loc,
+            flgNone,
             makeStructExprFromType(
                 ctx->pool, &copy->loc, flgNone, stmts.first, NULL, node->type),
-            flgNone,
             NULL,
             node->type);
     }
@@ -181,6 +206,14 @@ static void implementDestructorFunction(AstVisitor *visitor,
 
     AstNode *member = node->structDecl.members;
     AstNodeList stmts = {NULL};
+    if (nodeIs(node, ClassDecl)) {
+        AstNode *callDeinit = implementCallClassDeinit(ctx, node, &deinit->loc);
+        if (callDeinit) {
+            node->flags |= flgImplementsDeinit;
+            insertAstNode(&stmts, callDeinit);
+        }
+    }
+
     for (; member; member = member->next) {
         if (!nodeIs(member, Field))
             continue;
@@ -268,7 +301,7 @@ static void implementDestructorForwardFunction(AstVisitor *visitor,
         NULL);
 
     fwd->funcDecl.body =
-        makeExprStmt(ctx->pool, &fwd->loc, call, flgNone, NULL, NULL);
+        makeExprStmt(ctx->pool, &fwd->loc, flgNone, call, NULL, NULL);
 }
 
 static void implementHashFunction(AstVisitor *visitor,
@@ -307,7 +340,7 @@ static void implementHashFunction(AstVisitor *visitor,
         NULL);
 
     hash->funcDecl.body =
-        makeExprStmt(ctx->pool, &hash->loc, call, flgNone, NULL, NULL);
+        makeExprStmt(ctx->pool, &hash->loc, flgNone, call, NULL, NULL);
 }
 
 static void implementStringFunction(AstVisitor *visitor,
@@ -358,7 +391,39 @@ static void implementStringFunction(AstVisitor *visitor,
         NULL);
 
     str->funcDecl.body =
-        makeExprStmt(ctx->pool, &str->loc, call, flgNone, NULL, NULL);
+        makeExprStmt(ctx->pool, &str->loc, flgNone, call, NULL, NULL);
+}
+
+AstNode *makeSliceConstructor(TypingContext *ctx,
+                              const Type *slice,
+                              AstNode *init)
+{
+    return makeCallExpr(
+        ctx->pool,
+        &init->loc,
+        makeResolvedPath(ctx->pool,
+                         &init->loc,
+                         slice->name,
+                         flgNone,
+                         slice->tStruct.decl,
+                         NULL,
+                         slice),
+        makeResolvedPath(
+            ctx->pool,
+            &init->loc,
+            init->varDecl.name,
+            init->flags,
+            init,
+            makeIntegerLiteral(ctx->pool,
+                               &init->loc,
+                               (i64)init->type->array.len,
+                               NULL,
+                               getPrimitiveType(ctx->types, prtU64)),
+            makePointerType(
+                ctx->types, init->type->array.elementType, flgNone)),
+        flgNone,
+        NULL,
+        NULL);
 }
 
 AstNode *createClassOrStructBuiltins(MemPool *pool, AstNode *node)
@@ -380,16 +445,19 @@ AstNode *createClassOrStructBuiltins(MemPool *pool, AstNode *node)
                                            NULL));
     }
 
-    insertAstNode(&funcs,
-                  makeOperatorOverload(pool,
-                                       &loc,
-                                       opDestructorOverload,
-                                       NULL,
-                                       NULL,
-                                       NULL,
-                                       flgNone,
-                                       NULL,
-                                       NULL));
+    if (isBuiltinsInitialized() ||
+        findMemberByName(node, S_DestructorOverload) == NULL) {
+        insertAstNode(&funcs,
+                      makeOperatorOverload(pool,
+                                           &loc,
+                                           opDestructorOverload,
+                                           NULL,
+                                           NULL,
+                                           NULL,
+                                           flgNone,
+                                           NULL,
+                                           NULL));
+    }
 
     if (findMemberByName(node, S_HashOverload) == NULL) {
         insertAstNode(&funcs,
@@ -441,7 +509,7 @@ AstNode *createClassOrStructBuiltins(MemPool *pool, AstNode *node)
                               NULL),
             makeVoidAstNode(pool, &loc, flgNone, NULL, NULL),
             NULL,
-            flgStatic,
+            flgPure,
             NULL,
             NULL));
 

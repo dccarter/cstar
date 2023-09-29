@@ -185,7 +185,7 @@ void checkIndexExpr(AstVisitor *visitor, AstNode *node)
         else
             node->type = unwrapped->map.value;
     }
-    else if (typeIs(stripped, Struct) || typeIs(unwrapped, Class)) {
+    else if (typeIs(unwrapped, Struct) || typeIs(unwrapped, Class)) {
         checkIndexOperator(visitor, node);
     }
     else if (typeIs(unwrapped, Pointer)) {

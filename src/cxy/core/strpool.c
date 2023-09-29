@@ -71,7 +71,7 @@ const char *makeAnonymousVariable(StrPool *pool, const char *prefix)
 
     csAssert0(len < +MAX_ANONYMOUS_PREFIX_SIZE);
     memcpy(variable, prefix, len);
-    sprintf(&variable[len], "_%llu", postfix++);
+    sprintf(&variable[len], "%llu", postfix++);
 
     return makeString(pool, variable);
 }

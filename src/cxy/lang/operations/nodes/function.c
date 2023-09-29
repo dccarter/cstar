@@ -96,7 +96,7 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         ctx->namespace = node->type->namespace;
 
     if (!isMember && hasFlag(node, Main)) {
-        format(ctx->state, "typedef struct _", NULL);
+        format(ctx->state, "typedef ", NULL);
         writeTypename(ctx, node->type->func.params[0]);
         format(ctx->state, " CXY__Main_Args_t;\n", NULL);
         if (isIntegerType(node->type->func.retType)) {
@@ -118,7 +118,7 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         writeTypename(ctx, parent->type);
         format(ctx->state, "__{s}", (FormatArg[]){{.s = node->funcDecl.name}});
     }
-    else if (node->flags & flgMain) {
+    else if (hasFlag(node, Main)) {
         format(ctx->state, " CXY__main", NULL);
     }
     else {
@@ -135,13 +135,16 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         format(
             ctx->state, "_{u32}", (FormatArg[]){{.u32 = node->funcDecl.index}});
 
-    if (isMember && !hasFlag(node, Static)) {
+    if (isMember && !hasFlag(node, Pure)) {
         format(ctx->state, "(", NULL);
         if (hasFlag(node->type, Const))
             format(ctx->state, "const ", NULL);
 
-        writeTypename(ctx, parent->type);
-        format(ctx->state, " *this", NULL);
+        generateTypeUsage(ctx, parent->type);
+        if (typeIs(parent->type, Struct))
+            format(ctx->state, "* this", NULL);
+        else
+            format(ctx->state, " this", NULL);
 
         if (node->funcDecl.signature->params)
             format(ctx->state, ", ", NULL);
@@ -179,7 +182,7 @@ void generateFuncDeclaration(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
     const AstNode *parent = type->func.decl->parentScope;
-    bool isStatic = hasFlag(type->func.decl, Static);
+    bool isPure = hasFlag(type->func.decl, Pure);
     u32 index = type->func.decl->funcDecl.index;
     if (hasFlag(type->func.decl, BuiltinMember))
         return;
@@ -193,15 +196,16 @@ void generateFuncDeclaration(CodegenContext *context, const Type *type)
         format(state, "_{u32}", (FormatArg[]){{.u32 = index}});
 
     format(state, "(", NULL);
-    if (!isStatic) {
+    if (!isPure) {
         if (hasFlag(type, Const))
             format(state, "const ", NULL);
-        writeTypename(context, parent->type);
-        format(state, " *", NULL);
+        generateTypeUsage(context, parent->type);
+        if (typeIs(parent->type, Struct))
+            format(state, " *", NULL);
     }
 
     for (u64 i = 0; i < type->func.paramsCount; i++) {
-        if (!isStatic || i != 0)
+        if (!isPure || i != 0)
             format(state, ", ", NULL);
         generateTypeUsage(context, type->func.params[i]);
     }

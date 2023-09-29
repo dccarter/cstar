@@ -56,6 +56,39 @@ static void replaceWithCorrespondingNode(HashTable *mapping, AstNode **node)
     }
 }
 
+static void recordClonedAstNode(CloneAstConfig *config,
+                                const AstNode *from,
+                                AstNode *to)
+{
+    switch (from->tag) {
+    case astFuncDecl:
+    case astFuncParam:
+    case astStructDecl:
+    case astClassDecl:
+    case astField:
+    case astInterfaceDecl:
+    case astUnionDecl:
+    case astTypeDecl:
+    case astGenericParam:
+    case astDefine:
+    case astGenericDecl:
+    case astEnumDecl:
+    case astEnumOption:
+    case astVarDecl:
+    case astIdentifier:
+    case astClosureExpr:
+        mapAstNode(&config->mapping, from, to);
+        break;
+    default:
+        break;
+    }
+
+    if (from->parentScope) {
+        to->parentScope = from->parentScope;
+        replaceWithCorrespondingNode(&config->mapping, &to->parentScope);
+    }
+}
+
 static void postCloneAstNode(CloneAstConfig *config,
                              const AstNode *from,
                              AstNode *to)
@@ -79,29 +112,9 @@ static void postCloneAstNode(CloneAstConfig *config,
                 }
             }
         }
-    case astFuncParam:
-    case astStructDecl:
-    case astField:
-    case astInterfaceDecl:
-    case astUnionDecl:
-    case astTypeDecl:
-    case astGenericParam:
-    case astDefine:
-    case astGenericDecl:
-    case astEnumDecl:
-    case astEnumOption:
-        mapAstNode(&config->mapping, from, to);
-        break;
-    case astVarDecl:
-        mapAstNode(&config->mapping, from, to);
         break;
     case astIdentifier:
-        if (nodeIs(from->parentScope, Define))
-            mapAstNode(&config->mapping, from, to);
-        else {
-            replaceWithCorrespondingNode(&config->mapping,
-                                         &to->ident.resolvesTo);
-        }
+        replaceWithCorrespondingNode(&config->mapping, &to->ident.resolvesTo);
         break;
     case astPathElem:
         replaceWithCorrespondingNode(&config->mapping,
@@ -111,27 +124,20 @@ static void postCloneAstNode(CloneAstConfig *config,
         replaceWithCorrespondingNode(&config->mapping, &to->returnStmt.func);
         break;
     case astClosureExpr:
-        mapAstNode(&config->mapping, from, to);
         if (from->closureExpr.capture == NULL)
             break;
         to->closureExpr.capture = allocFromMemPool(
-            config->pool, sizeof(Capture *) * from->closureExpr.captureCount);
+            config->pool, sizeof(Capture) * from->closureExpr.captureCount);
         memcpy(to->closureExpr.capture,
                from->closureExpr.capture,
-               sizeof(Capture *) * from->closureExpr.captureCount);
+               sizeof(Capture) * from->closureExpr.captureCount);
         for (u64 i = 0; i < from->closureExpr.captureCount; i++) {
-            AstNode *capture = (AstNode *)from->closureExpr.capture[i]->node;
-            replaceWithCorrespondingNode(&config->mapping, &capture);
-            ((Capture *)to->closureExpr.capture[i])->node = capture;
+            replaceWithCorrespondingNode(&config->mapping,
+                                         &to->closureExpr.capture[i].node);
         }
         break;
     default:
         break;
-    }
-
-    if (from->parentScope) {
-        to->parentScope = from->parentScope;
-        replaceWithCorrespondingNode(&config->mapping, &to->parentScope);
     }
 }
 
@@ -171,6 +177,22 @@ AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *init)
     memcpy(node, init, sizeof(AstNode));
     node->loc = *loc;
     return node;
+}
+
+AstNode *makeIntegerLiteral(MemPool *pool,
+                            const FileLoc *loc,
+                            i64 value,
+                            AstNode *next,
+                            const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astIntegerLit,
+                   .flags = flgNone,
+                   .next = next,
+                   .type = type,
+                   .intLiteral = {.value = value, .hasMinus = value < 0}});
 }
 
 AstNode *makePointerAstNode(MemPool *pool,
@@ -439,10 +461,28 @@ AstNode *makeCallExpr(MemPool *pool,
                    .callExpr = {.callee = callee, .args = args}});
 }
 
+AstNode *makeMemberExpr(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        AstNode *target,
+                        AstNode *member,
+                        AstNode *next,
+                        const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astMemberExpr,
+                   .flags = flags,
+                   .type = type,
+                   .next = next,
+                   .memberExpr = {.target = target, .member = member}});
+}
+
 AstNode *makeExprStmt(MemPool *pool,
                       const FileLoc *loc,
-                      AstNode *expr,
                       u64 flags,
+                      AstNode *expr,
                       AstNode *next,
                       const Type *type)
 {
@@ -457,8 +497,8 @@ AstNode *makeExprStmt(MemPool *pool,
 
 AstNode *makeStmtExpr(MemPool *pool,
                       const FileLoc *loc,
-                      AstNode *stmt,
                       u64 flags,
+                      AstNode *stmt,
                       AstNode *next,
                       const Type *type)
 {
@@ -469,6 +509,26 @@ AstNode *makeStmtExpr(MemPool *pool,
                                   .type = type,
                                   .next = next,
                                   .stmtExpr.stmt = stmt});
+}
+
+AstNode *makeUnaryExpr(MemPool *pool,
+                       const FileLoc *loc,
+                       u64 flags,
+                       bool isPrefix,
+                       Operator op,
+                       AstNode *operand,
+                       AstNode *next,
+                       const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){
+            .tag = astUnaryExpr,
+            .flags = flags,
+            .type = type,
+            .next = next,
+            .unaryExpr = {.isPrefix = isPrefix, .op = op, .operand = operand}});
 }
 
 AstNode *makeBlockStmt(MemPool *pool,
@@ -613,6 +673,7 @@ AstNode *makeVarDecl(MemPool *pool,
                      const FileLoc *loc,
                      u64 flags,
                      cstring name,
+                     AstNode *varType,
                      AstNode *init,
                      AstNode *next,
                      const Type *type)
@@ -626,11 +687,32 @@ AstNode *makeVarDecl(MemPool *pool,
             .type = type,
             .next = next,
             .varDecl = {.name = name,
+                        .type = varType,
                         .names = makeAstNode(pool,
                                              loc,
                                              &(AstNode){.tag = astIdentifier,
                                                         .ident.value = name}),
                         .init = init}});
+}
+
+AstNode *makeArrayTypeAstNode(MemPool *pool,
+                              const FileLoc *loc,
+                              u64 flags,
+                              AstNode *elementType,
+                              u64 len,
+                              AstNode *next,
+                              const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astArrayType,
+                   .flags = flags,
+                   .type = type,
+                   .next = next,
+                   .arrayType = {.elementType = elementType,
+                                 .dim = makeIntegerLiteral(
+                                     pool, loc, (i64)len, NULL, NULL)}});
 }
 
 AstNode *makeBinaryExpr(MemPool *pool,
@@ -650,6 +732,25 @@ AstNode *makeBinaryExpr(MemPool *pool,
                    .type = type,
                    .next = next,
                    .binaryExpr = {.lhs = lhs, .op = op, .rhs = rhs}});
+}
+
+AstNode *makeAssignExpr(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        AstNode *lhs,
+                        Operator op,
+                        AstNode *rhs,
+                        AstNode *next,
+                        const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astAssignExpr,
+                   .flags = flags,
+                   .type = type,
+                   .next = next,
+                   .assignExpr = {.lhs = lhs, .op = op, .rhs = rhs}});
 }
 
 AstNode *makeAstNop(MemPool *pool, const FileLoc *loc)
@@ -965,7 +1066,7 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
 
     AstNode *clone = copyAstNode(config->pool, node);
     if (config->createMapping)
-        postCloneAstNode(config, node, clone);
+        recordClonedAstNode(config, node, clone);
 
 #define CLONE_MANY(AST, MEMBER)                                                \
     clone->AST.MEMBER = cloneManyAstNodes(config, node->AST.MEMBER);
@@ -1191,6 +1292,9 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
     default:
         break;
     }
+
+    if (config->createMapping)
+        postCloneAstNode(config, node, clone);
 
     return clone;
 }

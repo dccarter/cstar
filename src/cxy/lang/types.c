@@ -55,29 +55,37 @@ static void printNamedType(FormatState *state, const Type *type)
 }
 static void printGenericType(FormatState *state, const Type *type)
 {
-    if (nodeIs(type->generic.decl, StructDecl)) {
+    if (nodeIs(type->generic.decl, StructDecl) ||
+        nodeIs(type->generic.decl, ClassDecl)) {
         printKeyword(state, "struct");
-        format(state,
-               " {s}[",
-               (FormatArg[]){{.s = type->generic.decl->structDecl.name}});
+        format(
+            state,
+            " {s}[",
+            (FormatArg[]){
+                {.s = type->generic.decl->genericDecl.decl->structDecl.name}});
     }
     else if (nodeIs(type->generic.decl, TypeDecl)) {
         printKeyword(state, "type");
         format(state,
                " {s}[",
-               (FormatArg[]){{.s = type->generic.decl->typeDecl.name}});
+               (FormatArg[]){
+                   {.s = type->generic.decl->genericDecl.decl->typeDecl.name}});
     }
     else {
         printKeyword(state, "func ");
         format(state,
                " {s}[",
-               (FormatArg[]){{.s = type->generic.decl->funcDecl.name}});
+               (FormatArg[]){
+                   {.s = type->generic.decl->genericDecl.decl->funcDecl.name}});
     }
 
     for (u64 i = 0; i < type->generic.paramsCount; i++) {
         if (i != 0)
             format(state, ", ", NULL);
-        format(state, type->generic.params[i].name, NULL);
+        if (type->generic.params)
+            format(state, type->generic.params[i].name, NULL);
+        else
+            format(state, "NULL", NULL);
     }
     format(state, "]", NULL);
 }
@@ -243,11 +251,10 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
         return typeIs(from, Enum) &&
                isTypeAssignableFrom(to->tEnum.base, from->tEnum.base);
     case typStruct:
-        return typeIs(from, This) && to == from->this.that;
     case typClass:
         if (typeIs(from, This))
             return to == from->this.that;
-        return typeIs(from, Null);
+        return typeIs(from, Pointer) && typeIs(from->pointer.pointed, Null);
     case typInfo:
         return typeIs(from, Info) &&
                isTypeAssignableFrom(to->info.target, from->info.target);
@@ -306,7 +313,8 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
             return unwrappedTo->primitive.id == unwrappedFrom->primitive.id;
         }
     case typPointer:
-        if (isVoidPointer(unwrappedFrom) && isClassType(unwrappedTo))
+        if (isVoidPointer(unwrappedFrom) &&
+            (isClassType(unwrappedTo) || isStructPointer(unwrappedTo)))
             return true;
         return isTypeAssignableFrom(to, from);
     case typThis:
@@ -498,6 +506,11 @@ bool isArrayType(const Type *type)
     return typeIs(type, Array);
 }
 
+bool isSliceType(const Type *type)
+{
+    return typeIs(type, Struct) && hasFlag(type, Slice);
+}
+
 bool isPointerType(const Type *type)
 {
     type = resolveType(type);
@@ -519,6 +532,20 @@ bool isVoidPointer(const Type *type)
         return isVoidPointer(type->wrapped.target);
 
     return typeIs(type, Pointer) && typeIs(type->pointer.pointed, Void);
+}
+
+bool isClassType(const Type *type)
+{
+    type = unwrapType(type, NULL);
+    return typeIs(type, Class) ||
+           (typeIs(type, This) && typeIs(type->this.that, Class));
+}
+
+bool isStructType(const Type *type)
+{
+    type = unwrapType(type, NULL);
+    return typeIs(type, Struct) ||
+           (typeIs(type, This) && typeIs(type->this.that, Struct));
 }
 
 bool isBuiltinType(const Type *type)
@@ -850,8 +877,15 @@ bool isTruthyType(const Type *type)
 {
     return isIntegralType(type) || isFloatType(type) || typeIs(type, Pointer) ||
            typeIs(type, Optional) ||
-           (typeIs(type, Struct) &&
+           (isClassOrStructType(type) &&
             findStructMemberType(type, S_Truthy) != NULL);
+}
+
+const Type *getPointedType(const Type *type)
+{
+    csAssert0(typeIs(type, Pointer));
+    const Type *pointed = type->pointer.pointed;
+    return typeIs(pointed, This) ? pointed->this.that : pointed;
 }
 
 const Type *getOptionalType()
@@ -868,4 +902,13 @@ const Type *getOptionalTargetType(const Type *type)
         return NULL;
 
     return type->tStruct.members->members[1].type;
+}
+
+const Type *getSliceTargetType(const Type *type)
+{
+    if (!hasFlag(type, Slice))
+        return NULL;
+    const Type *target = type->tStruct.members->members[0].type;
+    csAssert0(typeIs(target, Pointer));
+    return target->pointer.pointed;
 }

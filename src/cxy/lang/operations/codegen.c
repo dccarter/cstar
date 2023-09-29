@@ -3,6 +3,7 @@
 //
 
 #include "codegen.h"
+#include <string.h>
 
 #include "lang/flag.h"
 #include "lang/strings.h"
@@ -89,6 +90,11 @@ static void generateAllTypes(CodegenContext *ctx)
     for (u64 i = 0; i < sorted; i++) {
         if (types[i] == NULL)
             continue;
+        if (types[i]->name &&
+            strcmp(types[i]->name, "destructorForward_32") == 0) {
+            printf("it");
+            continue;
+        }
 
         if (!hasFlag(types[i], CodeGenerated)) {
             generateType(ctx, types[i]);
@@ -450,7 +456,7 @@ void generateTypeUsage(CodegenContext *ctx, const Type *type)
     case typPointer:
         if (hasFlag(type, Const))
             format(state, "const ", NULL);
-        generateTypeUsage(ctx, type->pointer.pointed);
+        generateTypeUsage(ctx, getPointedType(type));
         format(state, "*", NULL);
         break;
     case typWrapped: {

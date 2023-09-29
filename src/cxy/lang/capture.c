@@ -21,7 +21,7 @@ static void initClosureCapture(ClosureCapture *set)
     *set->table = newHashTable(sizeof(Capture));
 }
 
-Capture *addClosureCapture(ClosureCapture *set, const AstNode *node)
+Capture *addClosureCapture(ClosureCapture *set, AstNode *node)
 {
     HashCode hash = hashStr(hashInit(), getCapturedNodeName(node));
     Capture cap = {.node = node, .id = set->index};
@@ -47,7 +47,7 @@ Capture *addClosureCapture(ClosureCapture *set, const AstNode *node)
 }
 
 typedef struct {
-    const Capture **captures;
+    Capture *captures;
     u64 count;
 } OrderedCaptureCtx;
 
@@ -56,18 +56,21 @@ static bool populateOrderedCapture(void *ctx, const void *elem)
     OrderedCaptureCtx *dst = ctx;
     const Capture *cap = elem;
     if (cap->id < dst->count) {
-        dst->captures[cap->id] = cap;
+        dst->captures[cap->id] = *cap;
     }
     return true;
 }
 
-u64 getOrderedCapture(ClosureCapture *set, const Capture **capture, u64 count)
+u64 getOrderedCapture(ClosureCapture *set, Capture *capture, u64 count)
 {
     if (set->table) {
         OrderedCaptureCtx ctx = {.captures = capture,
                                  .count = MIN(set->index, count)};
         enumerateHashTable(
             set->table, &ctx, populateOrderedCapture, sizeof(Capture));
+
+        freeHashTable(set->table);
+        free(set->table);
         return ctx.count;
     }
 

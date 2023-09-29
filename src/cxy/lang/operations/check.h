@@ -93,6 +93,14 @@ AstNode *makeGetReferenceCall(TypingContext *ctx,
                               AstNode *member,
                               const FileLoc *loc);
 
+AstNode *makeSliceConstructor(TypingContext *ctx,
+                              const Type *slice,
+                              AstNode *init);
+
+AstNode *transformArrayExprToSliceCall(TypingContext *ctx,
+                                       const Type *slice,
+                                       AstNode *expr);
+
 void transformToMemberCallExpr(AstVisitor *visitor,
                                AstNode *node,
                                AstNode *target,

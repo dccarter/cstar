@@ -17,6 +17,7 @@ f(Truthy);
     cstring S_##name##_ = NULL;
 AST_OVERLOAD_ONLY_OPS(f)
 #undef f
+cstring S_Deref_;
 
 #define f(name, ...) cstring S_##name##_eq = NULL;
 AST_ASSIGN_EXPR_LIST(f)
@@ -47,5 +48,6 @@ void internCommonStrings(StrPool *pool)
     S_##name##_ = makeString(pool, str);
     AST_OVERLOAD_ONLY_OPS(f)
 #undef f
+    S_Deref_ = makeString(pool, "deref");
     S_Truthy = makeString(pool, "op__truthy");
 }

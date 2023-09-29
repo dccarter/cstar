@@ -5,6 +5,7 @@
 #include "../codegen.h"
 #include "../eval.h"
 
+#include "lang/builtins.h"
 #include "lang/capture.h"
 #include "lang/flag.h"
 #include "lang/operations.h"
@@ -178,6 +179,29 @@ static void buildStringFormatForIndex(CodegenContext *context,
     }
 }
 
+AstNode *transformArrayExprToSliceCall(TypingContext *ctx,
+                                       const Type *slice,
+                                       AstNode *expr)
+{
+    return makeVarDecl(
+        ctx->pool,
+        &expr->loc,
+        flgNone,
+        makeAnonymousVariable(ctx->strings, "arr"),
+        makeArrayTypeAstNode(ctx->pool,
+                             &expr->loc,
+                             flgNone,
+                             makeTypeReferenceNode(ctx->pool,
+                                                   getSliceTargetType(slice),
+                                                   &expr->loc),
+                             expr->type->array.len,
+                             NULL,
+                             NULL),
+        expr,
+        NULL,
+        NULL);
+}
+
 void generateArrayToSlice(ConstAstVisitor *visitor,
                           const Type *slice,
                           const AstNode *value)
@@ -292,15 +316,28 @@ void checkArrayType(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     const Type *element = checkType(visitor, node->arrayType.elementType);
-
-    u64 size = UINT64_MAX;
-    if (node->arrayType.dim) {
-        // TODO evaluate len
-        // evalType(visitor, node->arrayType.dim);
-        csAssert0(node->arrayType.dim->tag == astIntegerLit);
-        size = node->arrayType.dim->intLiteral.value;
+    if (typeIs(element, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
     }
 
+    u64 size = UINT64_MAX;
+    const Type *dim = checkType(visitor, node->arrayType.dim);
+    if (typeIs(dim, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    if (nodeIs(node, IntegerLit)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "expecting array dimension to be constant integral type "
+                 "at compile time",
+                 NULL);
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+    size = node->arrayType.dim->intLiteral.value;
     node->type = makeArrayType(ctx->types, element, size);
 }
 

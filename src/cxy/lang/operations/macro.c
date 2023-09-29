@@ -289,25 +289,6 @@ static AstNode *makeLenNode(AstVisitor *visitor,
         }
     }
     case typArray:
-        if (raw->array.len == UINT64_MAX) {
-            return makeAstNode(
-                ctx->pool,
-                &node->loc,
-                &(AstNode){
-                    .tag = astMemberExpr,
-                    .flags = flgVisited,
-                    .type = getPrimitiveType(ctx->types, prtU64),
-                    .memberExpr = {.target = args,
-                                   .member = makeAstNode(
-                                       ctx->pool,
-                                       &node->loc,
-                                       &(AstNode){.tag = astIdentifier,
-                                                  .flags = flgConst,
-                                                  .type = getPrimitiveType(
-                                                      ctx->types, prtU64),
-                                                  .ident.value = S_len})}});
-        }
-
         // sizeof(a)/sizeof(a[0])
         args->tag = astIntegerLit;
         args->type = getPrimitiveType(ctx->types, prtU64);

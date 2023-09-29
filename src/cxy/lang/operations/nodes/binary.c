@@ -471,7 +471,7 @@ static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
     const Type *left = node->binaryExpr.lhs->type;
     cstring name = getOpOverloadName(node->binaryExpr.op);
     const Type *target = stripPointer(left);
-    const NamedTypeMember *overload = findStructMember(target, name);
+    const NamedTypeMember *overload = findStructMember(stripAll(target), name);
 
     if (overload == NULL) {
         logError(ctx->L,

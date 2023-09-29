@@ -53,14 +53,17 @@
     f(Optional,             41)                 \
     f(ImportedModule,       42)                 \
     f(ReferenceMembers,     43)                 \
-    f(Static,               44)
+    f(Pure,                 44)                 \
+    f(Slice,                45)
 
 // clang-format on
 static const u64 flgNone = 0;
 #define f(name, bit) static const u64 flg##name = BIT(bit);
 CXY_LANG_FLAGS(f)
 #undef f
-static const u64 flgTypeApplicable = (flgConst | flgOptional | flgClosure);
+static const u64 flgTypeApplicable =
+    (flgConst | flgOptional | flgClosure | flgSlice);
+
 typedef u64 Flags;
 
 char *flagsToString(u64 flags);

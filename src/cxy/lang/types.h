@@ -269,16 +269,25 @@ bool isCharacterType(const Type *type);
 bool isArrayType(const Type *type);
 bool isPointerType(const Type *type);
 bool isVoidPointer(const Type *type);
+bool isClassType(const Type *type);
+bool isStructType(const Type *type);
 
 static inline bool isClassOrStructType(const Type *type)
 {
-    return typeIs(type, Class) || typeIs(type, Struct);
+    return isClassType(type) || isStructType(type);
 }
 
-static inline bool isClassType(const Type *type)
+static inline bool isStructPointer(const Type *type)
 {
-    return typeIs(type, Class) ||
-           (typeIs(type, This) && typeIs(type->this.that, Class));
+    switch (type->tag) {
+    case typPointer:
+        return typeIs(type->pointer.pointed, Struct) ||
+               isStructPointer(type->pointer.pointed);
+    case typThis:
+        return typeIs(type->this.that, Struct);
+    default:
+        return false;
+    }
 }
 
 const char *getPrimitiveTypeName(PrtId tag);
@@ -286,12 +295,14 @@ u64 getPrimitiveTypeSize(PrtId tag);
 
 void printType(FormatState *state, const Type *type);
 
-static inline bool isSliceType(const Type *type)
-{
-    return typeIs(type, Array) && type->array.len == UINT64_MAX;
-}
+bool isSliceType(const Type *type);
 
 IntMinMax getIntegerTypeMinMax(const Type *id);
+
+static inline const Type *unThisType(const Type *this)
+{
+    return typeIs(this, This) ? this->this.that : this;
+}
 
 const NamedTypeMember *findNamedTypeMemberInContainer(
     const TypeMembersContainer *container, cstring member);
@@ -299,7 +310,8 @@ const NamedTypeMember *findNamedTypeMemberInContainer(
 static inline const NamedTypeMember *findStructMember(const Type *type,
                                                       cstring member)
 {
-    return findNamedTypeMemberInContainer(type->tStruct.members, member);
+    return findNamedTypeMemberInContainer(unThisType(type)->tStruct.members,
+                                          member);
 }
 
 static inline const Type *findStructMemberType(const Type *type, cstring member)
@@ -311,7 +323,8 @@ static inline const Type *findStructMemberType(const Type *type, cstring member)
 static inline const NamedTypeMember *findClassMember(const Type *type,
                                                      cstring member)
 {
-    return findNamedTypeMemberInContainer(type->tClass.members, member);
+    return findNamedTypeMemberInContainer(unThisType(type)->tClass.members,
+                                          member);
 }
 
 static inline const Type *findClassMemberType(const Type *type, cstring member)
@@ -367,6 +380,8 @@ TypeInheritance *makeTypeInheritance(TypeTable *types,
                                      const Type **interfaces,
                                      u64 interfaceCount);
 
+const Type *getPointedType(const Type *type);
 bool isTruthyType(const Type *type);
 const Type *getOptionalType();
 const Type *getOptionalTargetType(const Type *type);
+const Type *getSliceTargetType(const Type *type);

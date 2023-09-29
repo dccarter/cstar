@@ -55,6 +55,7 @@
     f(PreInc, PlusPlus, "++", "pre_inc")            \
     f(Minus,  Minus, "-", "pre_minus")              \
     f(Plus,   Plus, "+",  "pre_plus")               \
+    f(Deref,  Mult, "*",  "deref")                  \
     f(Not,    LNot, "!",  "lnot")                   \
     f(Compl,  BNot, "~",  "bnot")                   \
     f(Spread, Elipsis, "...", "spread")             \
@@ -78,7 +79,7 @@
     f(CopyOverload,             "copy",  "copy")               \
     f(DestructorOverload,       "destructor", "destructor")    \
     f(HashOverload,             "hash",       "hash")          \
-    f(DestructorFwd,            "destructor_fwd",  "destructor__fwd")       \
+    f(DestructorFwd,            "destructor_fwd",  "destructor__fwd") \
 
 typedef enum {
     opInvalid,

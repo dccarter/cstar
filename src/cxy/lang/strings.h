@@ -38,6 +38,7 @@
     f(sb)                       \
     f(StringBuilder)            \
     f(Optional)                 \
+    f(Slice)                    \
     f(Iterator)                 \
     ff(_assert, "assert")       \
     f(base_of)                  \
@@ -88,6 +89,7 @@ f(Truthy);
     extern cstring S_##name##_;
 AST_OVERLOAD_ONLY_OPS(f)
 #undef f
+extern cstring S_Deref_;
 
 #define f(name, ...) extern cstring S_##name##_eq;
 AST_ASSIGN_EXPR_LIST(f)

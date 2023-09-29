@@ -117,7 +117,9 @@ void generatePath(ConstAstVisitor *visitor, const AstNode *node)
         generateManyAstsWithDelim(
             visitor, "_", "_", "", node->path.elements->next);
     }
-    else if (hasFlag(node, BuiltinMember) || nodeIs(parent, StructDecl)) {
+    else if (hasFlag(node, BuiltinMember) || nodeIs(parent, StructDecl) ||
+             (typeIs(node->type, Func) &&
+              hasFlag(node->type->func.decl, Pure))) {
         const Type *scope = parent->type;
         const AstNode *func = node->type->func.decl;
         writeTypename(ctx, scope);
@@ -137,7 +139,8 @@ void generatePath(ConstAstVisitor *visitor, const AstNode *node)
             astConstVisit(visitor, elem);
             if (elem->next) {
                 cstring name = elem->pathElement.name;
-                if (typeIs(elem->type, Module))
+                if (typeIs(elem->type, Module) ||
+                    typeIs(elem->next->type, Func))
                     format(ctx->state, "__", NULL);
                 else if (elem->type &&
                          ((name == S_this) || typeIs(elem->type, Pointer) ||

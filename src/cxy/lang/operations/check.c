@@ -333,6 +333,22 @@ static void checkWhileStmt(AstVisitor *visitor, AstNode *node)
         return;
     }
 
+    cond_ = unwrapType(cond_, NULL);
+    if (isClassOrStructType(cond_)) {
+        if (!transformToTruthyOperator(visitor, cond)) {
+            if (!typeIs(cond->type, Error))
+                logError(ctx->L,
+                         &cond->loc,
+                         "expecting a struct that overloads the truthy `!!` in "
+                         "an if statement condition, "
+                         "got '{t}'",
+                         (FormatArg[]){{.t = cond_}});
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+        cond_ = cond->type;
+    }
+
     const Type *body_ = checkType(visitor, body);
     if (typeIs(body_, Error)) {
         node->type = ERROR_TYPE(ctx);

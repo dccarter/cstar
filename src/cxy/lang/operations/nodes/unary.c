@@ -109,11 +109,46 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
         operand = node->type;
         break;
     case opNot:
-        if (operand != getPrimitiveType(ctx->types, prtBool)) {
+        if (isClassOrStructType(operand)) {
+            if (transformToTruthyOperator(visitor, node->unaryExpr.operand)) {
+                operand = node->unaryExpr.operand->type;
+            }
+            else {
+                logError(ctx->L,
+                         &node->unaryExpr.operand->loc,
+                         "struct '{t}' does not overload dereference "
+                         "`deref` operator",
+                         (FormatArg[]){{.t = operand}});
+                operand = ERROR_TYPE(ctx);
+            }
+        }
+        else if (operand != getPrimitiveType(ctx->types, prtBool)) {
             logError(ctx->L,
                      &node->unaryExpr.operand->loc,
                      "logical '!' operator no supported on type '{t}', "
                      "expecting bool type",
+                     (FormatArg[]){{.t = operand}});
+            operand = ERROR_TYPE(ctx);
+        }
+        break;
+    case opDeref:
+        if (isClassOrStructType(operand)) {
+            if (transformToDerefOperator(visitor, node)) {
+                operand = node->type;
+            }
+            else {
+                logError(ctx->L,
+                         &node->unaryExpr.operand->loc,
+                         "struct '{t}' does not overload dereference "
+                         "`deref` operator",
+                         (FormatArg[]){{.t = operand}});
+                operand = ERROR_TYPE(ctx);
+            }
+        }
+        else {
+            logError(ctx->L,
+                     &node->unaryExpr.operand->loc,
+                     "cannot not dereference an non-pointer type '{t}'",
                      (FormatArg[]){{.t = operand}});
             operand = ERROR_TYPE(ctx);
         }

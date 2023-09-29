@@ -481,7 +481,7 @@ struct AstNode {
             union {
                 ClosureCapture captureSet;
                 struct {
-                    const Capture **capture;
+                    Capture *capture;
                     u64 captureCount;
                 };
             };
@@ -578,6 +578,12 @@ AstNode *makeVoidAstNode(MemPool *pool,
                          u64 flags,
                          AstNode *next,
                          const Type *type);
+
+AstNode *makeIntegerLiteral(MemPool *pool,
+                            const FileLoc *loc,
+                            i64 value,
+                            AstNode *next,
+                            const Type *type);
 
 AstNode *makePointerAstNode(MemPool *pool,
                             const FileLoc *loc,
@@ -683,6 +689,14 @@ AstNode *makeCallExpr(MemPool *pool,
                       AstNode *next,
                       const Type *type);
 
+AstNode *makeMemberExpr(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        AstNode *target,
+                        AstNode *member,
+                        AstNode *next,
+                        const Type *type);
+
 AstNode *makePathFromIdent(MemPool *pool, const AstNode *ident);
 
 AstNode *makeGenIdent(MemPool *pool,
@@ -692,17 +706,26 @@ AstNode *makeGenIdent(MemPool *pool,
 
 AstNode *makeExprStmt(MemPool *pool,
                       const FileLoc *loc,
-                      AstNode *expr,
                       u64 flags,
+                      AstNode *expr,
                       AstNode *next,
                       const Type *type);
 
 AstNode *makeStmtExpr(MemPool *pool,
                       const FileLoc *loc,
-                      AstNode *stmt,
                       u64 flags,
+                      AstNode *stmt,
                       AstNode *next,
                       const Type *type);
+
+AstNode *makeUnaryExpr(MemPool *pool,
+                       const FileLoc *loc,
+                       u64 flags,
+                       bool isPrefix,
+                       Operator op,
+                       AstNode *operand,
+                       AstNode *next,
+                       const Type *type);
 
 AstNode *makeBlockStmt(MemPool *pool,
                        const FileLoc *loc,
@@ -765,11 +788,29 @@ AstNode *makeVarDecl(MemPool *pool,
                      const FileLoc *loc,
                      u64 flags,
                      cstring name,
+                     AstNode *varType,
                      AstNode *init,
                      AstNode *next,
                      const Type *type);
 
+AstNode *makeArrayTypeAstNode(MemPool *pool,
+                              const FileLoc *loc,
+                              u64 flags,
+                              AstNode *elementType,
+                              u64 len,
+                              AstNode *next,
+                              const Type *type);
+
 AstNode *makeBinaryExpr(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        AstNode *lhs,
+                        Operator op,
+                        AstNode *rhs,
+                        AstNode *next,
+                        const Type *type);
+
+AstNode *makeAssignExpr(MemPool *pool,
                         const FileLoc *loc,
                         u64 flags,
                         AstNode *lhs,
