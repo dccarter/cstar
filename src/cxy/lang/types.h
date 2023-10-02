@@ -271,6 +271,10 @@ bool isPointerType(const Type *type);
 bool isVoidPointer(const Type *type);
 bool isClassType(const Type *type);
 bool isStructType(const Type *type);
+bool isTupleType(const Type *type);
+bool isConstType(const Type *type);
+
+bool hasReferenceMembers(const Type *type);
 
 static inline bool isClassOrStructType(const Type *type)
 {

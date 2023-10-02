@@ -417,8 +417,10 @@ attr(always_inline) void CXY__builtins_string_builder_deinit(
 attr(always_inline) void CXY__builtins_string_builder_delete(
     CXY__builtins_string_builder_t *sb)
 {
-    if (sb)
-        CXY__free(sb);
+    if (sb->data) {
+        CXY__free(sb->data);
+        *sb = (CXY__builtins_string_builder_t){0, 0, NULL};
+    }
 }
 
 static void CXY__builtins_string_builder_delete_fwd(void *sb)
@@ -483,6 +485,12 @@ attr(always_inline) static char *CXY__builtins_string_builder_release(
     sb->data = NULL;
     CXY__builtins_string_builder_deinit(sb);
     return data;
+}
+
+attr(always_inline) static u64
+    CXY__builtins_string_builder_size(CXY__builtins_string_builder_t *sb)
+{
+    return sb->size;
 }
 
 int CXY__builtins_binary_search(const void *arr,

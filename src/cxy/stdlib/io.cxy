@@ -22,18 +22,20 @@ pub native func close(fd: i32) : i32;
 pub native func C__fcntl_GETFL(fd: i32): i32;
 pub native func C__fcntl_SETFL(fd: i32, flags: i32): i32;
 
-pub func print[T](it: T) {
+pub func print[T](it: const T) {
     @flatten
     #if (T.isString) {
         C_write(STDOUT, it: string, len!(it))
     }
     else {
-        print[string](f"${it}")
+        var x;
+        var str = f"${it}";
+        print[string](*str)
     }
 }
 
 @inline
-pub func println(...args: auto) {
+pub func println(@transient ...args: const auto) {
     #const i = 0;
 
     @flatten

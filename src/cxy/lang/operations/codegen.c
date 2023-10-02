@@ -17,12 +17,12 @@
 #include "epilogue.h"
 #include "prologue.h"
 
-#define CXY_ANONYMOUS_FUNC "CXY__Anon_Func"
-#define CXY_ANONYMOUS_TUPLE "CXY__Anon_Tuple"
-#define CXY_ANONYMOUS_STRUCT "CXY__Anon_Struct"
-#define CXY_ANONYMOUS_ARRAY "CXY__Anon_Array"
-#define CXY_ANONYMOUS_SLICE "CXY__Anon_Slice"
-#define CXY_ANONYMOUS_ENUM "CXT__Anon_Enum"
+#define CXY_ANONYMOUS_FUNC "AnonymousFunc"
+#define CXY_ANONYMOUS_TUPLE "AnonymousTuple"
+#define CXY_ANONYMOUS_STRUCT "AnonymousStruct"
+#define CXY_ANONYMOUS_ARRAY "AnonymousArray"
+#define CXY_ANONYMOUS_SLICE "AnonymousSlice"
+#define CXY_ANONYMOUS_ENUM "AnonymousEnum"
 
 static void generateType(CodegenContext *context, const Type *type)
 {

@@ -30,6 +30,7 @@
     f(transient)                \
     f(inline)                   \
     f(explicit)                 \
+    f(pure)                     \
     f(strlen)                   \
     f(char)                     \
     f(wputc)                    \
@@ -39,6 +40,7 @@
     f(StringBuilder)            \
     f(Optional)                 \
     f(Slice)                    \
+    f(String)                   \
     f(Iterator)                 \
     ff(_assert, "assert")       \
     f(base_of)                  \

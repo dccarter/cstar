@@ -418,7 +418,7 @@ static bool evalExprForStmtVariadic(AstVisitor *visitor,
     EvalContext *ctx = getAstVisitorContext(visitor);
     AstNode *range = node->forStmt.range, *variable = node->forStmt.var;
 
-    const Type *tuple = range->type;
+    const Type *tuple = unwrapType(range->type, NULL);
     u64 count = tuple->tuple.count;
     for (u64 i = 0; i < count; i++) {
         AstNode *body = shallowCloneAstNode(ctx->pool, node->forStmt.body);
@@ -588,7 +588,7 @@ void checkForStmt(AstVisitor *visitor, AstNode *node)
         if (variable->next)
             variable->next->type = getPrimitiveType(ctx->types, prtI64);
     }
-    else if (typeIs(range_, Struct)) {
+    else if (isStructType(range_) || isClassType(range_)) {
         if (!checkForStmtCustomRange(ctx, node, numVariables, range_)) {
             node->type = ERROR_TYPE(ctx);
             return;

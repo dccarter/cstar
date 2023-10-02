@@ -227,9 +227,9 @@ static GetOrInset getOrInsertTypeScoped(TypeTable *table, const Type *type)
     return (GetOrInset){false, newType};
 }
 
-static GetOrInset replaceTypeScoped(TypeTable *table,
-                                    const Type *type,
-                                    const Type *with)
+static Type *replaceTypeScoped(TypeTable *table,
+                               const Type *type,
+                               const Type *with)
 {
     u32 hash = hashType(hashInit(), type);
     Type **found = findInHashTable(&table->types, //
@@ -256,7 +256,7 @@ static GetOrInset replaceTypeScoped(TypeTable *table,
                            compareTypesWrapper))
         csAssert0("failing to insert in type table");
 
-    return (GetOrInset){false, newType};
+    return newType;
 }
 
 static GetOrInset getOrInsertType(TypeTable *table, const Type *type)
@@ -583,8 +583,7 @@ const Type *changeFunctionRetType(TypeTable *table,
 {
     Type type = *func;
     type.func.retType = ret;
-    GetOrInset goi = replaceTypeScoped(table, func, &type);
-    return goi.s;
+    return replaceTypeScoped(table, func, &type);
 }
 
 const Type *makeEnum(TypeTable *table, const Type *init)

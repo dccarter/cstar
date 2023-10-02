@@ -4,6 +4,7 @@
 
 #include "parser.h"
 #include "ast.h"
+#include "builtins.h"
 #include "flag.h"
 #include "lexer.h"
 #include "strings.h"
@@ -1322,7 +1323,7 @@ typedef Pair(Operator, cstring) OperatorOverload;
 
 static OperatorOverload operatorOverload(Parser *P)
 {
-    OperatorOverload op = {};
+    OperatorOverload op = {.f = opInvalid};
     consume0(P, tokQuote);
     if (match(P, tokLBracket)) {
         consume0(P, tokRBracket);
@@ -1362,7 +1363,16 @@ static OperatorOverload operatorOverload(Parser *P)
         else if (name == S_Deref_) {
             op = (OperatorOverload){.f = opHashOverload, .s = S_Deref};
         }
-        else {
+        else if (!isBuiltinsInitialized()) {
+            if (name == S_DestructorFwd_)
+                op = (OperatorOverload){.f = opHashOverload,
+                                        .s = S_DestructorFwd};
+            else if (name == S_CopyOverload_)
+                op = (OperatorOverload){.f = opCopyOverload,
+                                        .s = S_CopyOverload};
+        }
+
+        if (op.f == opInvalid) {
             parserError(P,
                         &ident.fileLoc,
                         "unexpected operator overload `{s}`",

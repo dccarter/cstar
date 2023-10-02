@@ -548,6 +548,19 @@ bool isStructType(const Type *type)
            (typeIs(type, This) && typeIs(type->this.that, Struct));
 }
 
+bool isTupleType(const Type *type)
+{
+    type = unwrapType(type, NULL);
+    return typeIs(type, Tuple);
+}
+
+bool isConstType(const Type *type)
+{
+    u64 flags = flgNone;
+    type = unwrapType(type, &flags);
+    return flags & flgConst;
+}
+
 bool isBuiltinType(const Type *type)
 {
     if (type == NULL)
@@ -911,4 +924,14 @@ const Type *getSliceTargetType(const Type *type)
     const Type *target = type->tStruct.members->members[0].type;
     csAssert0(typeIs(target, Pointer));
     return target->pointer.pointed;
+}
+
+bool hasReferenceMembers(const Type *type)
+{
+    if (hasFlag(type, ReferenceMembers))
+        return true;
+    return (isClassType(type) &&
+            hasFlag(type->tClass.decl, ReferenceMembers)) ||
+           (isStructType(type) &&
+            hasFlag(type->tStruct.decl, ReferenceMembers));
 }

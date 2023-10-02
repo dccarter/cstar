@@ -236,14 +236,19 @@
 
 void astVisitManyNodes(AstVisitor *visitor, AstNode *node)
 {
-    for (AstNode *it = node; it; it = it->next)
-        astVisit(visitor, it);
+    AstNode *curr = NULL, *next = node;
+    for (; next;) {
+        curr = next;
+        next = next->next;
+        astVisit(visitor, curr);
+    }
 }
 
 void astConstVisitManyNodes(ConstAstVisitor *visitor, const AstNode *node)
 {
-    for (const AstNode *it = node; it; it = it->next)
+    for (const AstNode *it = node; it; it = it->next) {
         astConstVisit(visitor, it);
+    }
 }
 
 void astVisit(AstVisitor *visitor, AstNode *node)

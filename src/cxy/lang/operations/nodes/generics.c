@@ -57,7 +57,8 @@ static bool inferGenericFunctionTypes(AstVisitor *visitor,
     for (; param; param = param->next, index++) {
         if (param->genericParam.inferIndex > argsCount) {
             csAssert0(hasFlag(param, Variadic));
-            paramTypes[index] = makeTupleType(ctx->types, NULL, 0, flgNone);
+            paramTypes[index] =
+                makeTupleType(ctx->types, NULL, 0, param->flags);
             continue;
         }
 
@@ -69,7 +70,8 @@ static bool inferGenericFunctionTypes(AstVisitor *visitor,
 }
 
 static bool transformVariadicFunctionCallArgs(AstVisitor *visitor,
-                                              const AstNode *func)
+                                              const AstNode *func,
+                                              u64 flags)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *args = ctx->currentCall->callExpr.args;
@@ -113,7 +115,7 @@ static bool transformVariadicFunctionCallArgs(AstVisitor *visitor,
             else {
                 *ctx->currentCall->callExpr.args = (AstNode){
                     .tag = astTupleExpr,
-                    .flags = flgVariadic,
+                    .flags = flgVariadic | flags,
                     .loc = *manyNodesLoc(args),
                     .tupleExpr = {.elements = duplicateAstNode(ctx->pool, args),
                                   .len = 1 + (argsCount - totalParams)}};
@@ -131,7 +133,7 @@ static bool transformVariadicFunctionCallArgs(AstVisitor *visitor,
                     manyNodesLoc(args),
                     &(AstNode){
                         .tag = astTupleExpr,
-                        .flags = flgVariadic,
+                        .flags = flgVariadic | flags,
                         .tupleExpr = {.elements = args,
                                       .len = 1 + (argsCount - totalParams)}});
             }
@@ -166,7 +168,9 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
     if (hasFlag(generic, Variadic)) {
         const AstNode *decl = generic->genericDecl.decl;
         // transform function call params
-        if (!transformVariadicFunctionCallArgs(visitor, decl)) {
+        if (!transformVariadicFunctionCallArgs(
+                visitor, decl, generic->flags & flgTransient)) //
+        {
             return node->type = ERROR_TYPE(ctx);
         }
     }

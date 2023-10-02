@@ -196,14 +196,18 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, "(", NULL);
     }
     {
+        AstNode *decl = type->func.decl;
         const AstNode *arg = node->callExpr.args;
+        const AstNode *param = nodeIs(decl, FuncDecl)
+                                   ? decl->funcDecl.signature->params
+                                   : decl->funcType.params;
         for (u64 i = 0; arg; arg = arg->next, i++) {
-            const Type *param = type->func.params[i];
+            const Type *paramType = type->func.params[i];
             if (isMember || i != 0)
                 format(ctx->state, ", ", NULL);
 
-            if (isSliceType(param) && !isSliceType(arg->type)) {
-                generateArrayToSlice(visitor, param, arg);
+            if (isSliceType(paramType) && !isSliceType(arg->type)) {
+                generateArrayToSlice(visitor, paramType, arg);
             }
             else if (nodeIs(arg, ArrayExpr)) {
                 format(ctx->state, "(", NULL);
@@ -212,8 +216,12 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
                 astConstVisit(visitor, arg);
             }
             else {
-                astConstVisit(visitor, arg);
+                if (!isConstType(paramType) && !hasFlag(param, Transient))
+                    generateExpressionWithMemoryManagement(visitor, arg);
+                else
+                    astConstVisit(visitor, arg);
             }
+            param = param->next;
         }
     }
 

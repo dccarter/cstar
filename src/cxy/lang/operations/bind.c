@@ -4,6 +4,7 @@
 
 #include "lang/operations.h"
 
+#include "lang/builtins.h"
 #include "lang/capture.h"
 #include "lang/flag.h"
 #include "lang/scope.h"
@@ -235,6 +236,7 @@ void bindPath(AstVisitor *visitor, AstNode *node)
     base->flags |= base->pathElement.resolvesTo->flags;
     for (AstNode *elem = base; elem; elem = elem->next)
         astVisitManyNodes(visitor, elem->pathElement.args);
+    node->flags |= base->pathElement.resolvesTo->flags;
 }
 
 void bindIdentifier(AstVisitor *visitor, AstNode *node)
@@ -316,6 +318,7 @@ void bindImportDecl(AstVisitor *visitor, AstNode *node)
 void bindFuncParam(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
+    node->flags |= findAttribute(node, S_transient) ? flgTransient : flgNone;
     astVisit(visitor, node->funcParam.type);
     astVisit(visitor, node->funcParam.def);
     node->flags |= (node->funcParam.type->flags & flgConst);
@@ -454,7 +457,7 @@ void bindStructOrClassDecl(AstVisitor *visitor, AstNode *node)
     astVisitManyNodes(visitor, node->structDecl.implements);
 
     pushScope(ctx->env, node);
-    if (nodeIs(node, ClassDecl))
+    if (nodeIs(node, ClassDecl) || (!isBuiltinsInitialized()))
         defineSymbol(ctx->env, ctx->L, S_This, node);
 
     for (; member; member = member->next) {
@@ -473,7 +476,7 @@ void bindStructOrClassDecl(AstVisitor *visitor, AstNode *node)
             astVisit(visitor, member);
     }
 
-    if (nodeIs(node, ClassDecl))
+    if (nodeIs(node, ClassDecl) || (!isBuiltinsInitialized()))
         defineDeclaration(ctx, node->structDecl.name, node);
     member = node->structDecl.members;
     for (; member; member = member->next) {
@@ -581,7 +584,7 @@ void bindForStmt(AstVisitor *visitor, AstNode *node)
     pushScope(ctx->env, node);
 
     astVisit(visitor, node->forStmt.range);
-    astVisit(visitor, node->forStmt.var);
+    astVisitManyNodes(visitor, node->forStmt.var);
     astVisit(visitor, node->forStmt.body);
 
     popScope(ctx->env);

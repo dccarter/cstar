@@ -90,3 +90,6 @@ void generateVariableDecl(ConstAstVisitor *visitor, const AstNode *node);
 void generateTypeDecl(ConstAstVisitor *visitor, const AstNode *node);
 void generateStructDecl(ConstAstVisitor *visitor, const AstNode *node);
 void generateClassDecl(ConstAstVisitor *visitor, const AstNode *node);
+
+void generateExpressionWithMemoryManagement(ConstAstVisitor *visitor,
+                                            const AstNode *node);

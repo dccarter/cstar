@@ -4,6 +4,7 @@
 
 #include "eval.h"
 
+#include "lang/builtins.h"
 #include "lang/flag.h"
 #include "lang/ttable.h"
 
@@ -212,7 +213,8 @@ static AstNode *isString(EvalContext *ctx, const FileLoc *loc, AstNode *node)
     return makeAstNode(ctx->pool,
                        loc,
                        &(AstNode){.tag = astBoolLit,
-                                  .boolLiteral.value = typeIs(type, String)});
+                                  .boolLiteral.value = typeIs(type, String) ||
+                                                       isBuiltinString(type)});
 }
 
 static AstNode *isChar(EvalContext *ctx, const FileLoc *loc, AstNode *node)
@@ -351,7 +353,7 @@ static AstNode *isStruct(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 static AstNode *isClass(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 {
     const Type *type = node->type ?: evalType(ctx, node);
-    type = resolveType(type);
+    type = unwrapType(resolveType(type), NULL);
 
     return makeAstNode(ctx->pool,
                        loc,
@@ -359,7 +361,9 @@ static AstNode *isClass(EvalContext *ctx, const FileLoc *loc, AstNode *node)
                                   .boolLiteral.value = typeIs(type, Class)});
 }
 
-static AstNode *isTupleType(EvalContext *ctx, const FileLoc *loc, AstNode *node)
+static AstNode *evalIsTupleType(EvalContext *ctx,
+                                const FileLoc *loc,
+                                AstNode *node)
 {
     const Type *type = node->type ?: evalType(ctx, node);
     type = unwrapType(resolveType(type), NULL);
@@ -427,7 +431,7 @@ static void initDefaultMembers(EvalContext *ctx)
     ADD_MEMBER("isPointer", isPointer);
     ADD_MEMBER("isStruct", isStruct);
     ADD_MEMBER("isClass", isClass);
-    ADD_MEMBER("isTuple", isTupleType);
+    ADD_MEMBER("isTuple", evalIsTupleType);
     ADD_MEMBER("isField", isField);
     ADD_MEMBER("isString", isString);
     ADD_MEMBER("isBoolean", isBoolean);

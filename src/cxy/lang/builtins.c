@@ -3,6 +3,7 @@
 //
 
 #include "builtins.h"
+#include "strings.h"
 
 static struct {
     const Type *module;
@@ -40,4 +41,9 @@ const Type *findBuiltinType(cstring name)
         return member ? member->type : NULL;
     }
     return NULL;
+}
+
+bool isBuiltinString(const Type *type)
+{
+    return findBuiltinType(S_String) == type;
 }

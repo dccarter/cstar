@@ -173,7 +173,7 @@ static SortedNodes *copySortedNodes(CloneAstConfig *config,
 
 AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *init)
 {
-    AstNode *node = allocFromMemPool(pool, sizeof(AstNode));
+    AstNode *node = allocFromCacheOrPool(pool, memAstNode, sizeof(AstNode));
     memcpy(node, init, sizeof(AstNode));
     node->loc = *loc;
     return node;
@@ -786,7 +786,7 @@ AstNode *copyAstNode(MemPool *pool, const AstNode *node)
     if (node == NULL)
         return NULL;
 
-    AstNode *copy = allocFromMemPool(pool, sizeof(AstNode));
+    AstNode *copy = allocFromCacheOrPool(pool, memAstNode, sizeof(AstNode));
     memcpy(copy, node, sizeof(AstNode));
     copy->next = NULL;
     copy->parentScope = NULL;
@@ -798,7 +798,7 @@ AstNode *duplicateAstNode(MemPool *pool, const AstNode *node)
     if (node == NULL)
         return NULL;
 
-    AstNode *copy = allocFromMemPool(pool, sizeof(AstNode));
+    AstNode *copy = allocFromCacheOrPool(pool, memAstNode, sizeof(AstNode));
     memcpy(copy, node, sizeof(AstNode));
     return copy;
 }

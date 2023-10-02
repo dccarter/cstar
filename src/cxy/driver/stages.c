@@ -215,6 +215,26 @@ static AstNode *executeTargetCompile(CompilerDriver *driver, AstNode *node)
     return node;
 }
 
+static AstNode *executeCollect(CompilerDriver *driver, AstNode *node)
+{
+    csAssert0(nodeIs(node, Metadata));
+    if (!(node->metadata.stages & BIT(ccsCodegen))) {
+        logError(driver->L,
+                 builtinLoc(),
+                 "cannot collect an AST before code generation",
+                 NULL);
+        return NULL;
+    }
+
+    node->metadata.node = collectAst(driver, node->metadata.node);
+
+    if (hasErrors(driver->L))
+        return NULL;
+
+    node->metadata.stages |= BIT(ccsCollect);
+    return node;
+}
+
 const char *getCompilerStageName(CompilerStage stage)
 {
     switch (stage) {
@@ -287,6 +307,7 @@ static CompilerStageExecutor compilerStageExecutors[ccsCOUNT] = {
     [ccsTypeCheck] = executeTypeCheckAst,
     [ccsFinalize] = executeFinalizeAst,
     [ccsCodegen] = executeGenerateCode,
+    [ccsCollect] = executeCollect,
     [ccsCompile] = executeTargetCompile};
 
 AstNode *executeCompilerStage(CompilerDriver *driver,

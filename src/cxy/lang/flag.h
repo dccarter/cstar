@@ -54,7 +54,8 @@
     f(ImportedModule,       42)                 \
     f(ReferenceMembers,     43)                 \
     f(Pure,                 44)                 \
-    f(Slice,                45)
+    f(Slice,                45)                 \
+    f(Transient,            46)
 
 // clang-format on
 static const u64 flgNone = 0;

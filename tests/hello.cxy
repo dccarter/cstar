@@ -1,13 +1,7 @@
 import { println } from "stdlib/io.cxy"
-import { Vector } from "stdlib/vector.cxy"
-
-class User {
-    - name: string
-    - age: u32
-    func `deinit`() {}
-}
 
 func main(args: const [string]) {
-    const nums = Vector[User]();
-    println(nums)
+    for (const arg: args) {
+        println(arg)
+    }
 }

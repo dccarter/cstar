@@ -211,7 +211,7 @@ pub func hashStringSize(
     len: u64
 ) => hashBytes(init, str !: &const char, len)
 
-pub func hash[T](val: T, init: HashCode = 0) : HashCode {
+pub func hash[T](val: const T, init: HashCode = 0) : HashCode {
     #if (#T == #string) {
         return hashString(hashInit(), val)
     }
@@ -263,6 +263,10 @@ pub native func CXY__builtins_string_builder_release(
     self: CXY__builtins_string_builder_t
 ) : &char;
 
+pub native func CXY__builtins_string_builder_size(
+    self: CXY__builtins_string_builder_t
+) : u64;
+
 pub native func CXY__builtins_string_builder_append_cstr0(
     self: CXY__builtins_string_builder_t,
     str:  &const char,
@@ -303,13 +307,49 @@ pub native func CXY__builtins_get_ref(ptr: &void): void;
 pub native func CXY__builtins_drop(ptr: &void): void;
 
 @inline
-pub func getref[T](obj: T) {
+pub func getref[T](@transient obj: T) {
     CXY__builtins_get_ref(obj: &void)
     return obj
 }
 
 @inline
-pub func dropref[T](obj: T) => CXY__free(obj: &void)
+pub func dropref[T](@transient obj: T) => CXY__free(obj: &void)
+
+pub struct String {
+    - str: string
+    - count: u64
+
+    func `init`(str: string) {
+        this.str = str
+        count = strlen(str: &const char)
+    }
+
+    func `init`(str: string, count: u64) {
+        this.str = str
+        this.count = count
+    }
+
+    @inline
+    func `deref`() => str
+
+    @inline
+    func `deinit`() {
+        CXY__free(this.str : &void)
+        str = null
+        count = 0
+    }
+
+    @inline
+    func `hash`() => hashString(hashInit(), str)
+
+    @inline
+    func `copy`() => String{str: getref(str), count: count}
+
+    @[pure]
+    func `destructor_fwd`(ptr: &void) {
+        (<&String>ptr).op__deinit()
+    }
+}
 
 class StringBuilder {
     - sb: CXY__builtins_string_builder_t
@@ -320,12 +360,18 @@ class StringBuilder {
     @inline
     func `deinit`() => CXY__builtins_string_builder_delete(sb)
 
-    @inline
-    func `destructor`() => op__deinit()
+    @[pure]
+    func `destructor_fwd`(ptr: &void) {
+        (<StringBuilder>ptr).op__deinit()
+    }
 
     @inline
     func appendString(str: string) =>
         CXY__builtins_string_builder_append_cstr1(sb, str !: &const char)
+
+    @inline
+    func appendString(str: String) =>
+        CXY__builtins_string_builder_append_cstr1(sb, str.str !: &const char)
 
     @inline
     func appendInt(num: i64) =>
@@ -348,7 +394,7 @@ class StringBuilder {
         CXY__builtins_string_builder_append_ptr(sb, ptr: &const void)
 
     @inline
-    func `<<`[U](val: U) : StringBuilder {
+    func `<<`[U](val: const U) : StringBuilder {
         #if (U.isString)
             appendString(val)
         else #if (U.isInteger)
@@ -393,7 +439,10 @@ class StringBuilder {
 
     @inline
     func release() {
-        return CXY__builtins_string_builder_release(sb) : string
+        const count = CXY__builtins_string_builder_size(sb);
+        return String(
+            CXY__builtins_string_builder_release(sb) : string,
+            count)
     }
 }
 
@@ -443,7 +492,7 @@ struct Optional[T] {
 
 /* Creates a valid optional value */
 @inline
-func Some[T](value: T) => Optional[T](value)
+func Some[T](@transient value: T) => Optional[T](value)
 
 /* Creates an invalid optional value */
 @inline

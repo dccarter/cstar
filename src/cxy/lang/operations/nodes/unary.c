@@ -133,12 +133,13 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
         break;
     case opDeref:
         if (isClassOrStructType(operand)) {
+            FileLoc loc = node->unaryExpr.operand->loc;
             if (transformToDerefOperator(visitor, node)) {
                 operand = node->type;
             }
             else {
                 logError(ctx->L,
-                         &node->unaryExpr.operand->loc,
+                         &loc,
                          "struct '{t}' does not overload dereference "
                          "`deref` operator",
                          (FormatArg[]){{.t = operand}});

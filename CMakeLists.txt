@@ -120,6 +120,7 @@ set(CXY_OPERATIONS_SOURCES
         src/cxy/lang/operations/check.c
         src/cxy/lang/operations/codegen.c
         src/cxy/lang/operations/comptime.c
+        src/cxy/lang/operations/collect.c
         src/cxy/lang/operations/eval.c
         src/cxy/lang/operations/finalize.c
         src/cxy/lang/operations/json.c

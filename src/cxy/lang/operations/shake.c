@@ -77,6 +77,7 @@ static void transformVariadicFunction(ShakeAstContext *ctx,
                                       AstNode *param)
 {
     node->flags |= flgVariadic;
+    bool isTransient = findAttribute(param, S_transient);
     AstNode *genericParam = makeAstNode(
         ctx->pool,
         &param->funcParam.type->loc,
@@ -94,7 +95,8 @@ static void transformVariadicFunction(ShakeAstContext *ctx,
 
     *node = (AstNode){.tag = astGenericDecl,
                       .loc = node->loc,
-                      .flags = node->flags | flgVariadic,
+                      .flags = node->flags | flgVariadic |
+                               (isTransient ? flgTransient : flgNone),
                       .next = node->next,
                       .genericDecl = {.decl = copyAstNode(ctx->pool, node),
                                       .params = genericParam,
@@ -387,6 +389,7 @@ void shakeFuncDecl(AstVisitor *visitor, AstNode *node)
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
     AstNode *params = node->funcDecl.signature->params, *param = params;
     u16 required = 0, total = 0;
+    node->flags |= findAttribute(node, S_pure) == NULL ? flgNone : flgPure;
 
     bool hasDefaultParams = false, isVariadic = false;
 

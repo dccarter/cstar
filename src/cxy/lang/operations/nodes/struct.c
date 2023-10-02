@@ -29,7 +29,9 @@ static void preCheckStructMembers(AstVisitor *visitor,
         const Type *type;
         if (nodeIs(member, FuncDecl)) {
             type = checkFunctionSignature(visitor, member);
-            if (member->funcDecl.operatorOverload == opDeinitOverload) {
+            if (isBuiltinsInitialized() &&
+                member->funcDecl.operatorOverload == opDeinitOverload) //
+            {
                 logError(ctx->L,
                          &member->loc,
                          "struct should not implement `deinit` operator, "
@@ -226,7 +228,7 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    if (!typeIs(target, Struct)) {
+    if (!isStructType(target)) {
         logError(ctx->L,
                  &node->structExpr.left->loc,
                  "unsupported type used with struct initializer, '{t}' is not "
@@ -237,8 +239,9 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
     }
 
     AstNode *field = node->structExpr.fields, *prev = node->structExpr.fields;
+    const Type *striped = stripAll(target);
     bool *initialized =
-        callocOrDie(1, sizeof(bool) * target->tStruct.members->count);
+        callocOrDie(1, sizeof(bool) * striped->tStruct.members->count);
 
     for (; field; field = field->next) {
         prev = field;
@@ -281,8 +284,8 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
     if (node->type == ERROR_TYPE(ctx))
         return;
 
-    for (u64 i = 0; i < target->tStruct.members->count; i++) {
-        const AstNode *targetField = target->tStruct.members->members[i].decl;
+    for (u64 i = 0; i < striped->tStruct.members->count; i++) {
+        const AstNode *targetField = striped->tStruct.members->members[i].decl;
         if (initialized[i] || !nodeIs(targetField, Field))
             continue;
 

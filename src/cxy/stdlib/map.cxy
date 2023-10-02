@@ -15,28 +15,29 @@ struct HashMapNode[K, V] {
     key: K
     value: V
 
-    func `new`() {}
+    func `init`() {}
 }
 
-pub struct HashMap[K, V] {
-    - data: [HashMapNode[K, V]]
-    - hashes: [u32]
-    - size: u64 = 0
+pub class HashMap[K, V] {
+    - data: &HashMapNode[K, V]
+    - hashes: &u32
+    - size: u64 = 0;
+    - capacity: u64 = 0;
 
     @inline
-    - func needsRehash() => size * 100 >= len!(data) * MAX_LOAD_FACTOR
+    - func needsRehash() => size * 100 >= capacity * MAX_LOAD_FACTOR
 
     @inline
     - func isBucketOccupied(bucket: u64) => isOccupiedHash(hashes.[bucket])
 
     - func rehash() {
-        var newCapacity = CXY__hash_next_prime(len!(data));
-        if (newCapacity <= len!(data))
-            newCapacity = len!(data) * 2 + 1;
-        var newData = allocSlice[HashMapNode[K,V]](newCapacity);
-        var newHashes = allocSlice[u32](newCapacity);
+        var newCapacity = CXY__hash_next_prime(capacity);
+        if (newCapacity <= capacity)
+            newCapacity = capacity * 2 + 1;
+        var newData = <&HashMapNode[K,V]> CXY__alloc(sizeof!(#HashMapNode[K,V]) * newCapacity, null);
+        var newHashes = <&u32> CXY__alloc(sizeof!(#u32) * newCapacity, null);
 
-        var n = len!(data);
+        var n = capacity;
         for (const i: 0..n) {
             const hashCode = hashes.[i];
             if (!isOccupiedHash(hashCode))
@@ -46,30 +47,31 @@ pub struct HashMap[K, V] {
                 index = incrementWrap(newCapacity, index);
 
             newData.[index] = data.[i]
-            data.[i] = HashMapNode[K, V]();
+            //data.[i] = null
             newHashes.[index] = hashCode;
         }
 
-        delete hashes
-        delete data
+        CXY__free(hashes: &void)
+        CXY__free(data: &void)
         hashes = newHashes;
         data = newData
+        capacity = newCapacity
     }
 
     @inline
     - func removeAt(key: K, index: u64) {
         var removed: V? = data.[index].value;
 
-        var next = incrementWrap(len!(data), index);
+        var next = incrementWrap(capacity, index);
         while (isBucketOccupied(next)) {
             const nextHash = hashes.[next];
-            const desired = CXY__hash_mod_prime(nextHash, len!(data));
+            const desired = CXY__hash_mod_prime(nextHash, capacity);
             if (desired <= index || desired > next) {
                 data.[index] = data.[next]
                 hashes.[index] = nextHash
                index = next
             }
-            next = incrementWrap(len!(data), next)
+            next = incrementWrap(capacity, next)
         }
         hashes.[index] = 0
         size--
@@ -77,22 +79,39 @@ pub struct HashMap[K, V] {
         return removed
     }
 
-    func `new`(capacity: u64 = DEFAULT_HASH_TABLE_CAPACITY) {
+    func `init`(capacity: u64 = DEFAULT_HASH_TABLE_CAPACITY) {
         capacity = CXY__hash_next_prime(capacity)
-        hashes = allocSlice[u32](capacity)
-        data = allocSlice[HashMapNode[K, V]](capacity)
+        data = <&HashMapNode[K,V]> CXY__alloc(sizeof!(#HashMapNode[K,V]) * capacity, null)
+        hashes = <&u32> CXY__alloc(sizeof!(#u32) * capacity, null)
+        this.capacity = capacity
+    }
+
+    func `deinit`() {
+        if (capacity) {
+            for (const i : 0..capacity) {
+                if (isBucketOccupied(i))
+                {
+                }
+                    //data.[i] = null
+            }
+
+            CXY__free(data: &void)
+            CXY__free(hashes: &void)
+            size = 0
+            capacity = 0
+        }
     }
 
     func insert(key: K, value: V, replace: bool = true) {
         var hashCode = hash[K](key) | OCCUPIED_MASK;
-        var index = CXY__hash_mod_prime(hashCode, len!(data));
+        var index = CXY__hash_mod_prime(hashCode, capacity);
         while (isBucketOccupied(index)) {
             if (hashes.[index] == hashCode && key == data.[index].key){
                 if (replace)
                     data.[index].value = value
                 return false;
             }
-            index = incrementWrap(len!(data), index)
+            index = incrementWrap(capacity, index)
         }
 
         data.[index] = HashMapNode[K, V]{key: key, value: value}
@@ -107,24 +126,24 @@ pub struct HashMap[K, V] {
 
     func get(key: K) : V? {
         const hashCode = hash[K](key) | OCCUPIED_MASK;
-        var index = CXY__hash_mod_prime(hashCode, len!(data));
+        var index = CXY__hash_mod_prime(hashCode, capacity);
         while (isBucketOccupied(index)) {
             if (hashes.[index] == hashCode && key == data.[index].key)
                 return data.[index].value;
-            index = incrementWrap(len!(data), index)
+            index = incrementWrap(capacity, index)
         }
         return null
     }
 
     func remove(key: K) : V? {
         const hashCode = hash[K](key) | OCCUPIED_MASK;
-        var index = CXY__hash_mod_prime(hashCode, len!(data));
+        var index = CXY__hash_mod_prime(hashCode, capacity);
         var found = false;
         while (isBucketOccupied(index)) {
             if (hashes.[index] == hashCode && key == data.[index].key) {
                 return removeAt(key, index)
             }
-            index = incrementWrap(len!(data), index)
+            index = incrementWrap(capacity, index)
         }
 
         return null
@@ -134,12 +153,13 @@ pub struct HashMap[K, V] {
         if (size == 0)
             return;
 
-        for (const i : 0..len!(data)) {
-            if (isBucketOccupied(i))
-                delete &data.[i]
+        for (const i : 0..capacity) {
+            if (isBucketOccupied(i)) {
+                //data.[i] = null
+            }
         }
 
-        CXY__builtins_memset_slice(#[u32], hashes, 0)
+        memset(hashes: &void, 0, sizeof!(#u32)*capacity)
         size = 0
     }
 
@@ -151,34 +171,22 @@ pub struct HashMap[K, V] {
 
     func `..`() {
         var i = 0;
-        return () : (&const K, &V)? => {
-            while (i < len!(data)) {
+        return () : (K, V)? => {
+            while (i < capacity) {
                 if (isOccupiedHash(hashes.[i]))
-                    return (&data.[i].key, &data.[i].value)
+                    return (data.[i].key, data.[i++].value)
                 i++
             }
             return null
         }
     }
 
-    const func `..`() {
-        var i = 0;
-        return () : (&const K, &const V)? => {
-            while (i < len!(data)) {
-                if (isOccupiedHash(hashes.[i]))
-                    return (&data.[i].key, &data.[i].value)
-                i++
-            }
-            return null
-        }
-    }
-
-    func toString(sb: &StringBuilder) {
+    const func `str`(sb: StringBuilder) {
         sb << "{"
         var i = 0;
         var first = true;
 
-        while (i < len!(data)) {
+        while (i < capacity) {
             if (isOccupiedHash(hashes.[i])) {
                 if (!first)
                     sb << ", "

@@ -15,7 +15,12 @@ typedef struct MemBlock {
 
 #define MIN_MEM_BLOCK_CAPACITY 1024
 
-MemPool newMemPool(void) { return (MemPool){NULL, NULL}; }
+MemPool newMemPool(void)
+{
+    MemPool pool = {NULL, NULL};
+    memset(&pool, 0, sizeof(pool));
+    return pool;
+}
 
 static size_t remainingMem(MemBlock *block)
 {
@@ -68,6 +73,68 @@ void *allocFromMemPool(MemPool *mem_pool, size_t size)
     return ptr;
 }
 
+void *allocTrackedMem(MemPool *pool, size_t size)
+{
+    TrackedMemoryItem *item = mallocOrDie(size + sizeof(TrackedMemoryItem));
+    item->next = item->prev = NULL;
+    item->size = size;
+    if (pool->trackedAllocations.first == NULL) {
+        pool->trackedAllocations.first = item;
+    }
+    else {
+        item->prev = pool->trackedAllocations.last;
+        pool->trackedAllocations.last->next = item;
+    }
+    pool->trackedAllocations.last = item;
+    pool->trackedAllocations.allocated += size;
+    return item + 1;
+}
+
+void *reallocTrackedMem(MemPool *pool, void *ptr, size_t size)
+{
+    TrackedMemoryItem *item = ((TrackedMemoryItem *)ptr) - 1;
+    pool->trackedAllocations.allocated -= item->size;
+    item = reallocOrDie(item, size);
+    item->size = size;
+    pool->trackedAllocations.allocated += size;
+
+    if (item->prev)
+        item->prev->next = item;
+    return item + 1;
+}
+
+void *allocFromCacheOrPool(MemPool *pool, MemPoolCacheId cache, size_t size)
+{
+    MemPoolCache *poolCache = &pool->caches[cache];
+    poolCache->allocs++;
+    if (poolCache->first == NULL)
+        return allocFromMemPool(pool, size);
+    void *ptr = poolCache->first;
+    poolCache->first = poolCache->first->next;
+    poolCache->count--;
+    return ptr;
+}
+
+void freeMemToPoolCache(MemPool *pool,
+                        MemPoolCacheId cache,
+                        void *ptr,
+                        size_t size)
+{
+    MemPoolCache *poolCache = &pool->caches[cache];
+    poolCache->returns++;
+    MemPoolCacheItem *item = ptr;
+    memset(ptr, 0, size);
+    item->size = size;
+    if (poolCache->first == NULL) {
+        poolCache->first = item;
+    }
+    else {
+        poolCache->last->next = item;
+    }
+    poolCache->last = item;
+    poolCache->count++;
+}
+
 void resetMemPool(MemPool *mem_pool)
 {
     MemBlock *block = mem_pool->first;
@@ -87,6 +154,16 @@ void freeMemPool(MemPool *mem_pool)
         block = next;
     }
     mem_pool->first = mem_pool->cur = NULL;
+    memset(mem_pool->caches, 0, sizeof(mem_pool->caches));
+    TrackedMemoryItem *item = mem_pool->trackedAllocations.first;
+    for (; item;) {
+        TrackedMemoryItem *cur = item;
+        item = item->next;
+        free(cur);
+    }
+    mem_pool->trackedAllocations.first = mem_pool->trackedAllocations.last =
+        NULL;
+    mem_pool->trackedAllocations.allocated = 0;
 }
 
 void getMemPoolStats(const MemPool *pool, MemPoolStats *stats)
@@ -99,4 +176,6 @@ void getMemPoolStats(const MemPool *pool, MemPoolStats *stats)
         stats->totalUsed += block->size;
         block = block->next;
     }
+
+    stats->totalUsed += pool->trackedAllocations.allocated;
 }

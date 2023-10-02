@@ -416,6 +416,7 @@ void checkFunctionParam(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *type = node->funcParam.type, *def = node->funcParam.def;
+
     const Type *type_ = checkType(visitor, type), *def_ = NULL;
     if (typeIs(type_, Error)) {
         node->type = ERROR_TYPE(ctx);
@@ -464,7 +465,7 @@ const Type *checkFunctionSignature(AstVisitor *visitor, AstNode *node)
         params_[i] = param->type ?: checkType(visitor, param);
         if (typeIs(params_[i], Error))
             type = params_[i];
-
+        
         defaultValues += (param->funcParam.def != NULL);
     }
 

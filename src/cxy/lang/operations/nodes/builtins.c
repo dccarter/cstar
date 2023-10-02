@@ -18,6 +18,11 @@
 
 #include <string.h>
 
+static inline bool hasMember(AstNode *node, cstring name)
+{
+    return findMemberByName(node, name) != NULL;
+}
+
 static AstNode *implementCallStructCopyMember(TypingContext *ctx,
                                               AstNode *member,
                                               const FileLoc *loc)
@@ -162,7 +167,7 @@ static void implementStructCopyFunction(AstVisitor *visitor,
                                  makeResolvedPath(ctx->pool,
                                                   &copy->loc,
                                                   member->fieldExpr.name,
-                                                  member->flags,
+                                                  member->flags | flgMember,
                                                   member,
                                                   NULL,
                                                   member->type),
@@ -264,7 +269,9 @@ static void implementDestructorForwardFunction(AstVisitor *visitor,
     csAssert0(nodeIs(fwd, FuncDecl) && fwd->funcDecl.name == S_DestructorFwd &&
               fwd->funcDecl.body == NULL);
 
-    if (!hasFlag(node, ReferenceMembers)) {
+    if (!hasFlag(node, ReferenceMembers) &&
+        findMemberInType(node->type, S_DeinitOverload) == NULL) //
+    {
         fwd->funcDecl.body =
             makeBlockStmt(ctx->pool, &fwd->loc, NULL, NULL, NULL);
         return;
@@ -431,8 +438,11 @@ AstNode *createClassOrStructBuiltins(MemPool *pool, AstNode *node)
     FileLoc loc = node->loc;
     loc.begin = loc.end;
     AstNodeList funcs = {NULL};
+    bool builtinsModule = !isBuiltinsInitialized();
 
-    if (nodeIs(node, StructDecl)) {
+    if (nodeIs(node, StructDecl) &&
+        (!builtinsModule || !hasMember(node, S_CopyOverload))) //
+    {
         insertAstNode(&funcs,
                       makeOperatorOverload(pool,
                                            &loc,
@@ -445,8 +455,7 @@ AstNode *createClassOrStructBuiltins(MemPool *pool, AstNode *node)
                                            NULL));
     }
 
-    if (isBuiltinsInitialized() ||
-        findMemberByName(node, S_DestructorOverload) == NULL) {
+    if (!builtinsModule || !hasMember(node, S_DestructorOverload)) {
         insertAstNode(&funcs,
                       makeOperatorOverload(pool,
                                            &loc,
@@ -459,7 +468,7 @@ AstNode *createClassOrStructBuiltins(MemPool *pool, AstNode *node)
                                            NULL));
     }
 
-    if (findMemberByName(node, S_HashOverload) == NULL) {
+    if (!hasMember(node, S_HashOverload)) {
         insertAstNode(&funcs,
                       makeOperatorOverload(pool,
                                            &loc,
@@ -472,7 +481,7 @@ AstNode *createClassOrStructBuiltins(MemPool *pool, AstNode *node)
                                            NULL));
     }
 
-    if (findMemberByName(node, S_StringOverload) == NULL) {
+    if (!builtinsModule && !hasMember(node, S_StringOverload)) {
         insertAstNode(
             &funcs,
             makeOperatorOverload(
@@ -494,24 +503,26 @@ AstNode *createClassOrStructBuiltins(MemPool *pool, AstNode *node)
                 NULL));
     }
 
-    insertAstNode(
-        &funcs,
-        makeOperatorOverload(
-            pool,
-            &loc,
-            opDestructorFwd,
-            makeFunctionParam(pool,
+    if (!hasMember(node, S_DestructorFwd)) {
+        insertAstNode(&funcs,
+                      makeOperatorOverload(
+                          pool,
+                          &loc,
+                          opDestructorFwd,
+                          makeFunctionParam(
+                              pool,
                               &loc,
                               S_ptr,
                               makeVoidPointerAstNode(pool, &loc, flgNone, NULL),
                               NULL,
                               flgNone,
                               NULL),
-            makeVoidAstNode(pool, &loc, flgNone, NULL, NULL),
-            NULL,
-            flgPure,
-            NULL,
-            NULL));
+                          makeVoidAstNode(pool, &loc, flgNone, NULL, NULL),
+                          NULL,
+                          flgPure,
+                          NULL,
+                          NULL));
+    }
 
     return funcs.first;
 }

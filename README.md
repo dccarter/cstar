@@ -7,8 +7,10 @@ project and reference code from different languages in the www
 ```c
 import { println } from "stdlib/io.cxy"
 
-func main(args: [string]) {
-    println("Hello Wold!")
+func main(args: const [string]) {
+    for (const arg: args) {
+        println(arg)
+    }
 }
 ```
 

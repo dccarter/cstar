@@ -41,7 +41,7 @@ pub struct String {
 
     func append(other: const This) unsafe {
         var newLen = len + other.len;
-        var str = CXY__builtins_alloc(#i8, newLen + 1, null) : &i8;
+        var str = CXY__builtins_alloc(#char, newLen + 1, null) : &char;
         memcpy(str, s: &const char, len)
         memcpy(ptroff!(str + len), other.s: &const char, other.len);
         *(ptroff!(str + newLen)) = <i8>'\0';
