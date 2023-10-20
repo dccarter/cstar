@@ -420,6 +420,9 @@ void writeTypename(CodegenContext *ctx, const Type *type)
         case typInfo:
             writeTypename(ctx, type->info.target);
             break;
+        case typString:
+            format(state, "string", NULL);
+            break;
         case typWrapped: {
             u64 flags = flgNone;
             type = unwrapType(type, &flags);

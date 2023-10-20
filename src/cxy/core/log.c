@@ -10,8 +10,6 @@
 #define LINE_SEARCH_RANGE 64
 #define LINE_BUF_CAPACITY 64
 
-typedef enum { LOG_ERROR, LOG_WARNING, LOG_NOTE } LogMsgType;
-
 typedef struct {
     const char *fileName;
     FILE *file;

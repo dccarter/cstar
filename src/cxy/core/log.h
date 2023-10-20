@@ -56,6 +56,8 @@ typedef struct Log {
     bool showDiagnostics;
 } Log;
 
+typedef enum { LOG_ERROR, LOG_WARNING, LOG_NOTE } LogMsgType;
+
 Log newLog(FormatState *);
 void freeLog(Log *);
 

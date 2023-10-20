@@ -27,6 +27,4 @@ func main(args: [string]) {
     // Tuple references
     var f :&(i32, string) = &z;
     var k : (string, i32) = (f.1, f.0);
-    // dereference
-    var g = *f;
 }

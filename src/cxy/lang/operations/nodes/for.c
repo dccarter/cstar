@@ -358,7 +358,7 @@ static bool evalExprForStmtIterable(AstVisitor *visitor,
 
     AstNode *it = nodeIs(range, ComptimeOnly) ? range->next : range;
     while (it) {
-        AstNode *body = shallowCloneAstNode(ctx->pool, node->forStmt.body);
+        AstNode *body = deepCloneAstNode(ctx->pool, node->forStmt.body);
         variable->varDecl.init = it;
 
         const Type *type = evalType(ctx, body);
@@ -390,7 +390,7 @@ static bool evalExprForStmtArray(AstVisitor *visitor,
             *variable = node->forStmt.var;
 
     for (; elem; elem = elem->next) {
-        AstNode *body = shallowCloneAstNode(ctx->pool, node->forStmt.body);
+        AstNode *body = deepCloneAstNode(ctx->pool, node->forStmt.body);
         variable->varDecl.init = elem;
 
         const Type *type = evalType(ctx, body);
@@ -421,7 +421,7 @@ static bool evalExprForStmtVariadic(AstVisitor *visitor,
     const Type *tuple = unwrapType(range->type, NULL);
     u64 count = tuple->tuple.count;
     for (u64 i = 0; i < count; i++) {
-        AstNode *body = shallowCloneAstNode(ctx->pool, node->forStmt.body);
+        AstNode *body = deepCloneAstNode(ctx->pool, node->forStmt.body);
         variable->varDecl.init = makeTypeReferenceNode(
             ctx->pool, tuple->tuple.members[i], &range->loc);
 
@@ -452,7 +452,7 @@ static bool evalForStmtWithString(AstVisitor *visitor,
 
     u64 count = strlen(range->stringLiteral.value);
     for (u64 i = 0; i < count; i++) {
-        AstNode *body = shallowCloneAstNode(ctx->pool, node->forStmt.body);
+        AstNode *body = deepCloneAstNode(ctx->pool, node->forStmt.body);
         variable->varDecl.init = makeAstNode(
             ctx->pool,
             &range->loc,
@@ -493,7 +493,7 @@ static bool evalForStmtWithRange(AstVisitor *visitor,
                    : 1;
 
     for (; i < count; i += step) {
-        AstNode *body = shallowCloneAstNode(ctx->pool, node->forStmt.body);
+        AstNode *body = deepCloneAstNode(ctx->pool, node->forStmt.body);
         variable->varDecl.init = makeAstNode(
             ctx->pool,
             &range->loc,

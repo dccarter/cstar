@@ -1,60 +1,61 @@
 module json
 
-pub func toJson[T](sb: &StringBuilder, it: const T)
-{
-    #const isPointer = #{(#T).isPointer};
-
-    #if ((#T).isNumber || (#T).isBoolean || (#T).isChar) {
-        #if (isPointer)
-            sb << *it;
-        else
-            sb << it
+pub func toJson[T](@transient sb: StringBuilder, it: const T) : void {
+    #if (T.isNumber || T.isBoolean || T.isChar) {
+        sb << it
     }
-    else #if ((#T).isString) {
-        #if (isPointer)
-            sb << '"' << *it << '"'
-        else
-            sb << '"' << *it << '"'
+    else #if (T.isString) {
+        sb << '"' << it << '"'
     }
-    else #if ((#T).isOptional) {
-        #if (typeof!(*it).isPointer) {
-            toJson[#{typeof!(*it).pointedType}](sb, *it)
-        }
-        else {
-            toJson[#{U}](sb, *it)
+    else #if (T.isOptional) {
+        if (it) {
+            const value = *it;
+            toJson[#{typeof!(value)}](sb, value)
         }
     }
-    else #if ((#T).isStruct) {
+    else #if (T.isStruct) {
         sb << "{";
         #const first = true;
         #for (const member: T.members) {
-            #if (first == false) {
-                sb << ", ";
-            }
-
             #if (member.isField) {
+                #if (first == false) {
+                    sb << ", "
+                }
+
                 sb << '"' << #{member.name} << "\": ";
-                #if (member.isPointer)
-                    toJson[#{member.Tinfo.pointedType}](sb, it.#{mkIdent!(member.name)})
-                else
-                    toJson[#{member.Tinfo}](sb, &it.#{mkIdent!(member.name)})
+                toJson[#{member.Tinfo}](sb, it.#{mkIdent!(member.name)})
                 #{first = false}
             }
         }
-        sb << "}";
+        sb << "}"
     }
-    else #if (Tinfo.isArray) {
+    else #if (T.isTuple) {
+        sb << "["
+        @consistent
+        #for (const i: 0..T.membersCount) {
+            #if (i != 0) {
+                sb << ", ";
+            }
+
+            var member = it.#{i};
+            toJson(sb, member)
+        }
+        sb << "]"
+    }
+    else #if (T.isSlice) {
         sb << '[';
         var first = true;
-        for (const member: *it) {
+        for (const member, _: it) {
             if (!first) sb << ", "
-            #if (Tinfo.elementType.isPointer)
-                toJson[#{T.elementType.pointedType}](sb, member)
-            else
-                toJson[#{T.elementType}](sb, &member)
+
+            toJson[#{T.elementType}](sb, member)
 
             first = false
         }
         sb << ']'
+    }
+    else {
+        // give up here
+        error!("type `{t}` is not a JSON-able type", T)
     }
 }

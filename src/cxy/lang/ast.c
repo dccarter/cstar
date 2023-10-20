@@ -1214,6 +1214,9 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
         CLONE_ONE(typedExpr, type);
         break;
     case astCallExpr:
+        CLONE_ONE(callExpr, callee);
+        CLONE_MANY(callExpr, args);
+        break;
     case astMacroCallExpr:
         CLONE_ONE(callExpr, callee);
         CLONE_MANY(callExpr, args);
@@ -1322,6 +1325,15 @@ AstNode *cloneGenericDeclaration(MemPool *pool, const AstNode *node)
     decl->parentScope = node->parentScope;
     deinitCloneAstNodeConfig(&config);
     return decl;
+}
+
+AstNode *deepCloneAstNode(MemPool *pool, const AstNode *node)
+{
+    CloneAstConfig config = {.pool = pool, .createMapping = true};
+    initCloneAstNodeMapping(&config);
+    AstNode *cloned = cloneAstNode(&config, node);
+    deinitCloneAstNodeConfig(&config);
+    return cloned;
 }
 
 void insertAstNodeAfter(AstNode *before, AstNode *after)

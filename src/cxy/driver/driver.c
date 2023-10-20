@@ -180,9 +180,12 @@ void makeDirectoryForPath(CompilerDriver *driver, cstring path)
     system(dir);
 }
 
-static inline bool hasDumpEnable(const Options *opts)
+static inline bool hasDumpEnable(const Options *opts, const AstNode *node)
 {
-    return opts->cmd == cmdDev && opts->dev.printAst;
+    if (opts->cmd == cmdDev) {
+        return !hasFlag(node, BuiltinsModule) && opts->dev.printAst;
+    }
+    return false;
 }
 
 static bool compileProgram(CompilerDriver *driver,
@@ -212,7 +215,7 @@ static bool compileProgram(CompilerDriver *driver,
         }
     }
 
-    if (hasDumpEnable(options)) {
+    if (hasDumpEnable(options, metadata)) {
         metadata = executeCompilerStage(driver, ccs_Dump, metadata);
         if (metadata == NULL)
             status = false;
@@ -255,11 +258,14 @@ bool initCompilerDriver(CompilerDriver *compiler, Log *log)
     compiler->moduleCache = newHashTable(sizeof(CachedModule));
     compiler->L = log;
     internCommonStrings(&compiler->strPool);
+    const Options *options = &compiler->options;
 
-    if (compiler->options.cmd == cmdBuild) {
+    if (options->cmd != cmdDev) {
         if (!generateAllBuiltinSources(compiler))
             return false;
+    }
 
+    if (options->cmd == cmdBuild || !options->withoutBuiltins) {
         return compileBuiltin(compiler,
                               CXY_BUILTINS_SOURCE,
                               CXY_BUILTINS_SOURCE_SIZE,

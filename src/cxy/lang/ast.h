@@ -836,6 +836,8 @@ static inline AstNode *shallowCloneAstNode(MemPool *pool, const AstNode *node)
                         node);
 }
 
+AstNode *deepCloneAstNode(MemPool *pool, const AstNode *node);
+
 AstNode *cloneGenericDeclaration(MemPool *pool, const AstNode *node);
 
 AstNode *replaceAstNode(AstNode *node, const AstNode *with);

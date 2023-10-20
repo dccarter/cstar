@@ -25,10 +25,15 @@ pub native func C__fcntl_SETFL(fd: i32, flags: i32): i32;
 pub func print[T](it: const T) {
     @flatten
     #if (T.isString) {
-        C_write(STDOUT, it: string, len!(it))
+        @flatten
+        #if (T.isStruct) {
+            C_write(STDOUT, it.str: string, it.count)
+        }
+        else {
+            C_write(STDOUT, it: string, len!(it))
+        }
     }
     else {
-        var x;
         var str = f"${it}";
         print[string](*str)
     }

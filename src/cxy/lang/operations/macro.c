@@ -19,6 +19,7 @@
 #include "lang/ttable.h"
 #include "lang/types.h"
 
+#include "core/alloc.h"
 #include "core/sb.h"
 
 #include <string.h>
@@ -43,6 +44,101 @@ static inline bool validateMacroArgumentCount(EvalContext *ctx,
         return false;
     }
     return true;
+}
+
+static void staticLog(AstVisitor *visitor,
+                      LogMsgType lvl,
+                      attr(unused) const AstNode *node,
+                      attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (args == NULL || !nodeIs(args, StringLit)) {
+        logError(ctx->L, &node->loc, "missing a message to log!", NULL);
+        unreachable("ABORT COMPILE");
+    }
+
+    FormatArg *params = mallocOrDie(countAstNodes(args->next));
+    int i = 0;
+    for (AstNode *arg = args->next; arg; i++) {
+        AstNode *it = arg;
+        arg = arg->next;
+
+        if (!evaluate(visitor, it)) {
+            unreachable("ABORT COMPILE");
+            continue;
+        }
+
+        switch (it->tag) {
+        case astStringLit:
+            params[i] = (FormatArg){.s = it->stringLiteral.value};
+            break;
+        case astIntegerLit:
+            params[i] = (FormatArg){.i64 = it->intLiteral.hasMinus
+                                               ? -it->intLiteral.value
+                                               : it->intLiteral.value};
+            break;
+        case astFloatLit:
+            params[i] = (FormatArg){.f64 = it->floatLiteral.value};
+            break;
+        case astCharLit:
+            params[i] = (FormatArg){.c = it->charLiteral.value};
+            break;
+        case astBoolLit:
+            params[i] = (FormatArg){.b = it->boolLiteral.value};
+            break;
+        case astTypeRef:
+            params[i] = (FormatArg){.t = it->type};
+            break;
+        default:
+            if (isTypeExpr(it))
+                params[i] = (FormatArg){.t = it->type ?: evalType(ctx, it)};
+            else
+                unreachable("ABORT COMPILE");
+            break;
+        }
+    }
+
+    switch (lvl) {
+    case LOG_NOTE:
+        logNote(ctx->L, &node->loc, args->stringLiteral.value, params);
+        break;
+    case LOG_ERROR:
+        logError(ctx->L, &node->loc, args->stringLiteral.value, params);
+        break;
+    case LOG_WARNING:
+        logWarning(ctx->L, &node->loc, args->stringLiteral.value, params);
+        break;
+    default:
+        break;
+    }
+
+    free(params);
+}
+
+static AstNode *makeAstLogErrorNode(AstVisitor *visitor,
+                                    attr(unused) const AstNode *node,
+                                    attr(unused) AstNode *args)
+{
+    staticLog(visitor, LOG_ERROR, node, args);
+    return NULL;
+}
+
+static AstNode *makeAstLogWarningNode(AstVisitor *visitor,
+                                      attr(unused) const AstNode *node,
+                                      attr(unused) AstNode *args)
+{
+    staticLog(visitor, LOG_WARNING, node, args);
+    args->tag = astNop;
+    return args;
+}
+
+static AstNode *makeAstLogNoteNode(AstVisitor *visitor,
+                                   attr(unused) const AstNode *node,
+                                   attr(unused) AstNode *args)
+{
+    staticLog(visitor, LOG_NOTE, node, args);
+    args->tag = astNop;
+    return args;
 }
 
 static AstNode *makeFilenameNode(AstVisitor *visitor,
@@ -633,7 +729,9 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "cstr", makeCstrNode},
     {.name = "data", makeDataNode},
     {.name = "destructor", makeDestructorNode},
+    {.name = "error", makeAstLogErrorNode},
     {.name = "file", makeFilenameNode},
+    {.name = "info", makeAstLogNoteNode},
     {.name = "is_enum", makeIsEnumNode},
     {.name = "is_pointer", makeIsPointerNode},
     {.name = "is_struct", makeIsStructNode},
@@ -645,6 +743,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "sizeof", makeSizeofNode},
     {.name = "typeof", makeTypeofNode},
     {.name = "unchecked", makeUncheckedNode},
+    {.name = "warn", makeAstLogWarningNode},
 };
 
 #define CXY_BUILTIN_MACROS_COUNT sizeof__(builtinMacros)

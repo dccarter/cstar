@@ -496,11 +496,11 @@ static void shakeGenericDecl(AstVisitor *visitor, AstNode *node)
     int index = -1;
     for (u16 i = 0; gparam; gparam = gparam->next, i++) {
         AstNode *fparam = decl->funcDecl.signature->params;
-        for (; fparam; fparam = fparam->next) {
+        for (u16 j = 0; fparam; fparam = fparam->next, j++) {
             AstNode *type = fparam->funcParam.type;
             if (hasFlag(fparam, Variadic))
                 break;
-            inferrable[i] = inferGenericParamFromFuncParam(gparam, type, i);
+            inferrable[i] = inferGenericParamFromFuncParam(gparam, type, j);
             if (inferrable[i]) {
                 index = index == -1 ? i : index;
                 break;

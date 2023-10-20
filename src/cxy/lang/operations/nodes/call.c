@@ -98,7 +98,8 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
         csAssert0(param);
 
         if (node->callExpr.args == NULL) {
-            node->callExpr.args = copyAstNode(ctx->pool, param->funcParam.def);
+            node->callExpr.args =
+                shallowCloneAstNode(ctx->pool, param->funcParam.def);
             arg = node->callExpr.args;
             param = param->next;
         }
