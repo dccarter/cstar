@@ -155,9 +155,11 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
 
     if (isMember) {
         const AstNode *callee = node->callExpr.callee;
+        AstNode *resolvesTo =
+            nodeIs(callee, Path) ? callee->path.elements->pathElement.resolvesTo
+                                 : NULL;
         bool needsThis =
-            (hasFlag(callee, Member) ||
-             (nodeIs(callee, Path) && callee->path.elements->next == NULL)) &&
+            (hasFlag(callee, Member) || nodeIs(resolvesTo, FuncDecl)) &&
             !hasFlag(callee, ClosureStyle);
 
         if (needsThis) {
@@ -270,6 +272,36 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
         const Type *overload = findStructMemberType(callee_, S_CallOverload);
         if (overload)
             callee_ = overload;
+    }
+    else if (typeIs(callee_, Tuple) && hasFlag(callee_, FuncTypeParam)) {
+        node->callExpr.callee = makeMemberExpr(
+            ctx->pool,
+            &callee->loc,
+            callee->flags,
+            deepCloneAstNode(ctx->pool, callee),
+            makeIntegerLiteral(ctx->pool,
+                               &callee->loc,
+                               1,
+                               NULL,
+                               getPrimitiveType(ctx->types, prtI64)),
+            NULL,
+            callee_->tuple.members[1]);
+
+        node->callExpr.args = makeMemberExpr(
+            ctx->pool,
+            &callee->loc,
+            callee->flags,
+            callee,
+            makeIntegerLiteral(ctx->pool,
+                               &callee->loc,
+                               0,
+                               NULL,
+                               getPrimitiveType(ctx->types, prtI64)),
+            node->callExpr.args,
+            callee_->tuple.members[0]);
+
+        node->type = checkType(visitor, node);
+        return;
     }
 
     if (!typeIs(callee_, Func)) {

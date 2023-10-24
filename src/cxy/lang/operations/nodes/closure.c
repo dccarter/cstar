@@ -116,6 +116,90 @@ static void transformClosureToStructExpr(AstVisitor *visitor,
         makePath(ctx->pool, &node->loc, type->name, flgNone, type);
 }
 
+void makeClosureForward(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    AstNode *call = findMemberByName(node, S_CallOverload);
+    csAssert0(call);
+    AstNode *ptrParam = makeFunctionParam(
+        ctx->pool,
+        &node->loc,
+        S_ptr,
+        makeTypeReferenceNode(
+            ctx->pool, makeVoidPointerType(ctx->types, flgNone), &node->loc),
+        NULL,
+        flgNone,
+        deepCloneAstNode(ctx->pool, call->funcDecl.signature->params));
+
+    AstNode *forward = makeFunctionDecl(
+        ctx->pool,
+        &node->loc,
+        makeStringConcat(ctx->strings, node->structDecl.name, "__forward"),
+        ptrParam,
+        makeTypeReferenceNode(ctx->pool, call->type->func.retType, &node->loc),
+        makeExprStmt(ctx->pool,
+                     &node->loc,
+                     flgNone,
+                     NULL,
+                     NULL,
+                     call->type->func.retType),
+        flgNone,
+        NULL,
+        NULL);
+
+    AstNodeList argList = {NULL};
+    AstNode *param = forward->funcDecl.signature->params->next;
+    for (; param; param = param->next) {
+        insertAstNode(&argList,
+                      makeResolvedPath(ctx->pool,
+                                       &param->loc,
+                                       param->funcParam.name,
+                                       param->flags,
+                                       param,
+                                       NULL,
+                                       param->type));
+    }
+
+    AstNode *body = forward->funcDecl.body;
+    body->exprStmt.expr = makeCallExpr(
+        ctx->pool,
+        &node->loc,
+        makeMemberExpr(ctx->pool,
+                       &node->loc,
+                       flgNone,
+                       makeCastExpr(ctx->pool,
+                                    &node->loc,
+                                    flgNone,
+                                    makeResolvedPath(ctx->pool,
+                                                     &node->loc,
+                                                     S_ptr,
+                                                     flgNone,
+                                                     ptrParam,
+                                                     NULL,
+                                                     ptrParam->type),
+                                    makeTypeReferenceNode(
+                                        ctx->pool, node->type, &node->loc),
+                                    NULL,
+                                    node->type),
+                       makeResolvedPath(ctx->pool,
+                                        &node->loc,
+                                        S_CallOverload,
+                                        call->flags,
+                                        call,
+                                        NULL,
+                                        call->type),
+                       NULL,
+                       call->type),
+        argList.first,
+        flgNone,
+        NULL,
+        call->type->func.retType);
+
+    const Type *type = checkType(visitor, forward);
+    if (typeIs(type, Error))
+        node->type = ERROR_TYPE(ctx);
+}
+
 void checkClosureExpr(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);

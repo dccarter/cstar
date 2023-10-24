@@ -62,8 +62,8 @@ static const u64 flgNone = 0;
 #define f(name, bit) static const u64 flg##name = BIT(bit);
 CXY_LANG_FLAGS(f)
 #undef f
-static const u64 flgTypeApplicable =
-    (flgNative | flgConst | flgOptional | flgClosure | flgSlice);
+static const u64 flgTypeApplicable = (flgNative | flgConst | flgOptional |
+                                      flgClosure | flgSlice | flgFuncTypeParam);
 
 typedef u64 Flags;
 

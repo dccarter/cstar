@@ -476,6 +476,24 @@ AstNode *makeTupleExpr(MemPool *pool,
             .tupleExpr = {.elements = members, .len = countAstNodes(members)}});
 }
 
+AstNode *makeTupleTypeAst(MemPool *pool,
+                          const FileLoc *loc,
+                          u64 flags,
+                          AstNode *members,
+                          AstNode *next,
+                          const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){
+            .tag = astTupleType,
+            .flags = flags,
+            .type = type,
+            .next = next,
+            .tupleType = {.elements = members, .len = countAstNodes(members)}});
+}
+
 AstNode *makeCallExpr(MemPool *pool,
                       const FileLoc *loc,
                       AstNode *callee,

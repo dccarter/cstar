@@ -219,7 +219,6 @@ void generateFuncGeneratedDeclaration(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
     u32 index = type->func.decl->funcDecl.index;
-    const Type *ret = type->func.retType;
     if (hasFlag(type->func.decl, BuiltinMember))
         return;
 
@@ -422,6 +421,7 @@ void checkFunctionParam(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *type = node->funcParam.type, *def = node->funcParam.def;
+    AstNode *parent = node->parentScope;
 
     const Type *type_ = checkType(visitor, type), *def_ = NULL;
     if (typeIs(type_, Error)) {
@@ -431,6 +431,43 @@ void checkFunctionParam(AstVisitor *visitor, AstNode *node)
 
     if (hasFlag(type, Const) && !hasFlag(type_, Const))
         type_ = makeWrappedType(ctx->types, type_, flgConst);
+
+    if (typeIs(type_, Func) && !hasFlag(parent, Pure) &&
+        !hasFlag(parent, Native)) //
+    {
+        type->funcType.params = makeFunctionParam(
+            ctx->pool,
+            &type->loc,
+            makeString(ctx->strings, "_"),
+            makeTypeReferenceNode(ctx->pool,
+                                  makeVoidPointerType(ctx->types, flgNone),
+                                  &type->loc),
+            NULL,
+            flgNone,
+            type->funcType.params);
+        type->type = NULL;
+        type_ = checkType(visitor, type);
+        if (typeIs(type_, Error))
+            return;
+
+        type = node->funcParam.type = makeTupleTypeAst(
+            ctx->pool,
+            &type->loc,
+            flgNone,
+            makeTypeReferenceNode2(ctx->pool,
+                                   makeVoidPointerType(ctx->types, flgNone),
+                                   &type->loc,
+                                   type),
+            NULL,
+            makeTupleType(ctx->types,
+                          (const Type *[]){
+                              makeVoidPointerType(ctx->types, flgNone), type_},
+                          2,
+                          flgFuncTypeParam));
+        node->type = type->type;
+        node->flags |= flgFuncTypeParam;
+        return;
+    }
 
     if (def == NULL) {
         node->type = type_;

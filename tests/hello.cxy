@@ -1,6 +1,10 @@
 import { println } from "stdlib/io.cxy"
-import { add } from "./add.cxy"
+
+
+func say(name: string, fn: func(msg: String) -> void) {
+    fn(f"Hello ${name}")
+}
 
 func main(args: const [string]) {
-    println("Hello ", add(10, 32))
+    var x = (msg: String) => println(msg);
 }

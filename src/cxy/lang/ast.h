@@ -685,6 +685,13 @@ AstNode *makeTupleExpr(MemPool *pool,
                        AstNode *next,
                        const Type *type);
 
+AstNode *makeTupleTypeAst(MemPool *pool,
+                          const FileLoc *loc,
+                          u64 flags,
+                          AstNode *members,
+                          AstNode *next,
+                          const Type *type);
+
 attr(always_inline) static AstNode *makePathElement(MemPool *pool,
                                                     const FileLoc *loc,
                                                     cstring name,
