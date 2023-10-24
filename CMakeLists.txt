@@ -205,6 +205,7 @@ add_custom_target(
 )
 
 add_dependencies(cxy cxy-stdlib)
+target_link_libraries(cxy m)
 
 
 

@@ -34,16 +34,16 @@ static bool compareCachedModules(const void *lhs, const void *rhs)
 
 static int compareModifiedTime(const struct stat *lhs, const struct stat *rhs)
 {
-    if (lhs->st_mtimespec.tv_sec < rhs->st_mtimespec.tv_sec) {
+    if (lhs->st_mtim.tv_sec < rhs->st_mtim.tv_sec) {
         return -1;
     }
-    else if (lhs->st_mtimespec.tv_sec > rhs->st_mtimespec.tv_sec) {
+    else if (lhs->st_mtim.tv_sec > rhs->st_mtim.tv_sec) {
         return 1;
     }
-    else if (lhs->st_mtimespec.tv_nsec < rhs->st_mtimespec.tv_nsec) {
+    else if (lhs->st_mtim.tv_nsec < rhs->st_mtim.tv_nsec) {
         return -1;
     }
-    else if (lhs->st_mtimespec.tv_nsec > rhs->st_mtimespec.tv_nsec) {
+    else if (lhs->st_mtim.tv_nsec > rhs->st_mtim.tv_nsec) {
         return 1;
     }
     else {

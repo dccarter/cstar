@@ -7,6 +7,12 @@
 #include <stdlib.h>
 #include <time.h>
 
+#ifdef __APPLE__
+#ifndef st_mtim
+#define st_mtim st_mtimespec
+#endif
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

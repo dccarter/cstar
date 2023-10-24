@@ -982,7 +982,7 @@ static inline AstNode *underlyingDeclaration(AstNode *decl)
     return nodeIs(decl, GenericDecl) ? decl->genericDecl.decl : decl;
 }
 
-attr(always_inline) static bool isStructDeclaration(AstNode *node)
+static bool isStructDeclaration(AstNode *node)
 {
     return nodeIs(node, StructDecl) ||
            nodeIs(node, GenericDecl) &&

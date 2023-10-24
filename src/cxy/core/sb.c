@@ -12,6 +12,8 @@
 
 #include "alloc.h"
 
+#include <inttypes.h>
+
 Stack_str_8 wcharToStr(wchar chr)
 {
     if (chr < 0x80) {
@@ -82,7 +84,7 @@ void stringBuilderAppendCstr0(StringBuilder *sb, const char *cstr, u64 len)
 void stringBuilderAppendInt(StringBuilder *sb, i64 num)
 {
     char data[32];
-    i64 len = sprintf(data, "%lld", num);
+    i64 len = sprintf(data, "%" PRId64, num);
     stringBuilderAppendCstr0(sb, data, len);
 }
 

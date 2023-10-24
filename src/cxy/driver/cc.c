@@ -69,7 +69,7 @@ static bool generateEmbeddedSources(CompilerDriver *driver,
 
         struct stat st;
         if (stat(fname, &st) == 0) {
-            u64 mtime = timespecToMicroSeconds(&st.st_mtimespec);
+            u64 mtime = timespecToMicroSeconds(&st.st_mtim);
             if (mtime > sources[i].mtime) {
                 free(fname);
                 continue;

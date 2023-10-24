@@ -12,6 +12,7 @@
 #include "core/format.h"
 
 #include <errno.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -86,7 +87,7 @@ int main(int argc, char *argv[])
         }
         struct stat st;
         stat(argv[j], &st);
-        u64 mtime = timespecToMicroSeconds(&st.st_mtimespec);
+        u64 mtime = timespecToMicroSeconds(&st.st_mtim);
         modified = MAX(modified, mtime);
 
         size += bytes;
@@ -116,7 +117,7 @@ int main(int argc, char *argv[])
             argv[AMALGAMATE_VARNAME],
             size);
     fprintf(output,
-            "unsigned long CXY_%s_SOURCE_MTIME = %llu;\n",
+            "unsigned long CXY_%s_SOURCE_MTIME = %" PRIu64 ";\n",
             argv[AMALGAMATE_VARNAME],
             modified);
     fclose(output);

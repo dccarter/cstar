@@ -6,6 +6,8 @@
 
 #include "driver.h"
 
+#include <inttypes.h>
+
 #define BYTES_TO_GB(B) (((double)(B)) / 1000000000)
 #define BYTES_TO_MB(B) (((double)(B)) / 1000000)
 #define BYTES_TO_KB(B) (((double)(B)) / 1000)
@@ -65,7 +67,7 @@ void compilerStatsPrint(const struct CompilerDriver *driver)
         // clang-format off
         printf("|---------------+---------------+-------------+----------------+----------------|\n");
         // clang-format on
-        printf("| %-14s|%14llu |%12zu |%15g |%15g |\n",
+        printf("| %-14s|%14" PRIu64 " |%12zu |%15g |%15g |\n",
                getCompilerStageDescription(stage),
                stats->duration,
                stats->pool.numberOfBlocks,
@@ -78,7 +80,7 @@ void compilerStatsPrint(const struct CompilerDriver *driver)
     printf("+---------------+---------------+-------------+----------------+----------------+\n");
     // clang-format on
 
-    printf("| Total         |%14llu |%12zu |%15g |%15g |\n",
+    printf("| Total         |%14" PRIu64 " |%12zu |%15g |%15g |\n",
            driver->stats.duration,
            driver->stats.snapshot.poolStats.numberOfBlocks,
            BYTES_TO_KB(driver->stats.snapshot.poolStats.totalAllocated),

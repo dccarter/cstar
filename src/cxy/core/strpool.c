@@ -4,6 +4,7 @@
 #include "core/utils.h"
 
 #include <assert.h>
+#include <inttypes.h>
 #include <stdarg.h>
 #include <string.h>
 
@@ -71,7 +72,7 @@ const char *makeAnonymousVariable(StrPool *pool, const char *prefix)
 
     csAssert0(len < +MAX_ANONYMOUS_PREFIX_SIZE);
     memcpy(variable, prefix, len);
-    sprintf(&variable[len], "%llu", postfix++);
+    sprintf(&variable[len], "%" PRIu64, postfix++);
 
     return makeString(pool, variable);
 }

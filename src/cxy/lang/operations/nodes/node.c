@@ -10,6 +10,7 @@
 #include "lang/strings.h"
 #include "lang/ttable.h"
 
+#include <string.h>
 #include <strings.h>
 
 void transformToMemberCallExpr(AstVisitor *visitor,

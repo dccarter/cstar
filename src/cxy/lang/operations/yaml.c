@@ -18,6 +18,8 @@
 
 #include "lang/ast.h"
 
+#include <inttypes.h>
+
 typedef struct {
     yaml_emitter_t *emitter;
     Log *L;
@@ -142,7 +144,7 @@ static void emitInteger(YamlDumpContext *ctx, const AstNode *node, i64 value)
 {
     char str[64];
     yaml_event_t event;
-    int num = snprintf(str, sizeof(str), "%lli", value);
+    int num = snprintf(str, sizeof(str), "%" PRId64, value);
     csAssert0(num >= 0);
 
     yaml_scalar_event_initialize(&event,
@@ -161,7 +163,7 @@ static void emitUInteger(YamlDumpContext *ctx, const AstNode *node, u64 value)
 {
     char str[64];
     yaml_event_t event;
-    int num = snprintf(str, sizeof(str), "%llu", value);
+    int num = snprintf(str, sizeof(str), "%" PRIu64, value);
     csAssert0(num >= 0);
 
     yaml_scalar_event_initialize(&event,
