@@ -19,6 +19,7 @@
 #include "lang/ttable.h"
 #include "lang/types.h"
 
+#include "core/alloc.h"
 #include "core/sb.h"
 
 #include <string.h>
@@ -43,6 +44,101 @@ static inline bool validateMacroArgumentCount(EvalContext *ctx,
         return false;
     }
     return true;
+}
+
+static void staticLog(AstVisitor *visitor,
+                      LogMsgType lvl,
+                      attr(unused) const AstNode *node,
+                      attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (args == NULL || !nodeIs(args, StringLit)) {
+        logError(ctx->L, &node->loc, "missing a message to log!", NULL);
+        unreachable("ABORT COMPILE");
+    }
+
+    FormatArg *params = mallocOrDie(countAstNodes(args->next));
+    int i = 0;
+    for (AstNode *arg = args->next; arg; i++) {
+        AstNode *it = arg;
+        arg = arg->next;
+
+        if (!evaluate(visitor, it)) {
+            unreachable("ABORT COMPILE");
+            continue;
+        }
+
+        switch (it->tag) {
+        case astStringLit:
+            params[i] = (FormatArg){.s = it->stringLiteral.value};
+            break;
+        case astIntegerLit:
+            params[i] = (FormatArg){.i64 = it->intLiteral.hasMinus
+                                               ? -it->intLiteral.value
+                                               : it->intLiteral.value};
+            break;
+        case astFloatLit:
+            params[i] = (FormatArg){.f64 = it->floatLiteral.value};
+            break;
+        case astCharLit:
+            params[i] = (FormatArg){.c = it->charLiteral.value};
+            break;
+        case astBoolLit:
+            params[i] = (FormatArg){.b = it->boolLiteral.value};
+            break;
+        case astTypeRef:
+            params[i] = (FormatArg){.t = it->type};
+            break;
+        default:
+            if (isTypeExpr(it))
+                params[i] = (FormatArg){.t = it->type ?: evalType(ctx, it)};
+            else
+                unreachable("ABORT COMPILE");
+            break;
+        }
+    }
+
+    switch (lvl) {
+    case LOG_NOTE:
+        logNote(ctx->L, &node->loc, args->stringLiteral.value, params);
+        break;
+    case LOG_ERROR:
+        logError(ctx->L, &node->loc, args->stringLiteral.value, params);
+        break;
+    case LOG_WARNING:
+        logWarning(ctx->L, &node->loc, args->stringLiteral.value, params);
+        break;
+    default:
+        break;
+    }
+
+    free(params);
+}
+
+static AstNode *makeAstLogErrorNode(AstVisitor *visitor,
+                                    attr(unused) const AstNode *node,
+                                    attr(unused) AstNode *args)
+{
+    staticLog(visitor, LOG_ERROR, node, args);
+    return NULL;
+}
+
+static AstNode *makeAstLogWarningNode(AstVisitor *visitor,
+                                      attr(unused) const AstNode *node,
+                                      attr(unused) AstNode *args)
+{
+    staticLog(visitor, LOG_WARNING, node, args);
+    args->tag = astNop;
+    return args;
+}
+
+static AstNode *makeAstLogNoteNode(AstVisitor *visitor,
+                                   attr(unused) const AstNode *node,
+                                   attr(unused) AstNode *args)
+{
+    staticLog(visitor, LOG_NOTE, node, args);
+    args->tag = astNop;
+    return args;
 }
 
 static AstNode *makeFilenameNode(AstVisitor *visitor,
@@ -104,6 +200,10 @@ static AstNode *makeSizeofNode(AstVisitor *visitor,
 
     AstNode *sizeOf = findBuiltinDecl(S_CXY__builtins_sizeof);
     csAssert0(sizeOf);
+    const Type *type = args->type ?: evalType(ctx, args);
+    csAssert0(type);
+    args->tag = astTypeRef;
+    args->type = type;
 
     return makeCallExpr(ctx->pool,
                         &node->loc,
@@ -112,6 +212,7 @@ static AstNode *makeSizeofNode(AstVisitor *visitor,
                                          S_CXY__builtins_sizeof,
                                          node->callExpr.callee->flags,
                                          sizeOf,
+                                         NULL,
                                          sizeOf->type),
                         args,
                         node->flags,
@@ -275,6 +376,7 @@ static AstNode *makeLenNode(AstVisitor *visitor,
                                                  S_strlen,
                                                  strLen->flags | node->flags,
                                                  strLen,
+                                                 NULL,
                                                  strLen->type),
                                 args,
                                 node->flags,
@@ -283,51 +385,16 @@ static AstNode *makeLenNode(AstVisitor *visitor,
         }
     }
     case typArray:
-        if (raw->array.len == UINT64_MAX) {
-            return makeAstNode(
-                ctx->pool,
-                &node->loc,
-                &(AstNode){
-                    .tag = astMemberExpr,
-                    .flags = flgVisited,
-                    .type = getPrimitiveType(ctx->types, prtU64),
-                    .memberExpr = {.target = args,
-                                   .member = makeAstNode(
-                                       ctx->pool,
-                                       &node->loc,
-                                       &(AstNode){.tag = astIdentifier,
-                                                  .flags = flgConst,
-                                                  .type = getPrimitiveType(
-                                                      ctx->types, prtU64),
-                                                  .ident.value = S_len})}});
-        }
-
         // sizeof(a)/sizeof(a[0])
-        return makeAstNode(
-            ctx->pool,
-            &node->loc,
-            &(AstNode){
-                .tag = astGroupExpr,
-                .type = getPrimitiveType(ctx->types, prtU64),
-                .groupExpr.expr = makeAstNode(
-                    ctx->pool,
-                    &node->loc,
-                    &(AstNode){
-                        .tag = astBinaryExpr,
-                        .type = getPrimitiveType(ctx->types, prtU64),
-                        .binaryExpr = {
-                            .op = opDiv,
-                            .lhs = makeSizeofNode(visitor, node, args),
-                            .rhs = makeSizeofNode(
-                                visitor,
-                                node,
-                                makeTypeinfoNode(visitor,
-                                                 &node->loc,
-                                                 raw->array.elementType))}})});
+        args->tag = astIntegerLit;
+        args->type = getPrimitiveType(ctx->types, prtU64);
+        clearAstBody(args);
+        args->intLiteral.value = (i64)raw->array.len;
+        return args;
 
     case typStruct: {
-        const StructMember *symbol = findStructMember(raw, S_len);
-        if (symbol && nodeIs(symbol->decl, StructField) &&
+        const NamedTypeMember *symbol = findStructMember(raw, S_len);
+        if (symbol && nodeIs(symbol->decl, Field) &&
             isUnsignedType(symbol->type)) {
             return makeAstNode(
                 ctx->pool,
@@ -587,19 +654,16 @@ static AstNode *makeBaseOfNode(AstVisitor *visitor,
     }
 
     type = type->info.target;
-    if (!typeIs(type, Enum) && !typeIs(type, Struct)) {
+    if (!typeIs(type, Enum) && !typeIs(type, Class)) {
         logError(ctx->L,
                  &node->loc,
                  "invalid `typeof!` macro argument, unexpected type '{t}', "
-                 "expecting a struct or enum type",
+                 "expecting a class or enum type",
                  (FormatArg[]){{.t = type}});
         return NULL;
     }
 
-    type = typeIs(type, Enum)
-               ? type->tEnum.base
-               : (type->tStruct.base ?: makeVoidType(ctx->types));
-
+    type = getTypeBase(type) ?: makeVoidType(ctx->types);
     args->type = makeTypeInfo(ctx->types, type);
     return args;
 }
@@ -665,7 +729,9 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "cstr", makeCstrNode},
     {.name = "data", makeDataNode},
     {.name = "destructor", makeDestructorNode},
+    {.name = "error", makeAstLogErrorNode},
     {.name = "file", makeFilenameNode},
+    {.name = "info", makeAstLogNoteNode},
     {.name = "is_enum", makeIsEnumNode},
     {.name = "is_pointer", makeIsPointerNode},
     {.name = "is_struct", makeIsStructNode},
@@ -677,6 +743,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "sizeof", makeSizeofNode},
     {.name = "typeof", makeTypeofNode},
     {.name = "unchecked", makeUncheckedNode},
+    {.name = "warn", makeAstLogWarningNode},
 };
 
 #define CXY_BUILTIN_MACROS_COUNT sizeof__(builtinMacros)

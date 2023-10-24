@@ -12,6 +12,8 @@ typedef struct CompilerDriver {
     MemPool pool;
     StrPool strPool;
     HashTable moduleCache;
+    HashTable nativeSources;
+    HashTable linkLibraries;
     CompilerStats stats;
     Log *L;
     TypeTable *typeTable;
@@ -30,6 +32,9 @@ char *getGeneratedPath(const Options *options,
                        cstring filePath,
                        cstring ext);
 void makeDirectoryForPath(CompilerDriver *driver, cstring path);
+cstring getFilePathAsRelativeToCxySource(StrPool *strings,
+                                         cstring cxySource,
+                                         cstring file);
 bool initCompilerDriver(CompilerDriver *compiler, Log *log);
 bool compileFile(const char *fileName, CompilerDriver *driver);
 bool generateBuiltinSources(CompilerDriver *driver);

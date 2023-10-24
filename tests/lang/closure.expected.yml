@@ -1,18 +1,1923 @@
 Program:
+flags: (Main)
 decls:
 - StructDecl:
+  flags: (Public|Generated|Slice)
+  name: Slice3
+  members:
+  - Field:
+    flags: (Private)
+    name: data
+    type:
+      PointerType:
+      flags: (TypeAst)
+      pointed:
+        Path:
+        flags: (TypeAst)
+        elements:
+        - PathElem:
+          name: T
+        isType: true
+    index: 0
+  - Field:
+    flags: (Private)
+    name: count
+    type:
+      PrimitiveType:
+      flags: (TypeAst)
+      name: u64
+    index: 1
+  - FuncDecl:
+    flags: (Public)
+    overload: op__init
+    name: op__init
+    params:
+    - FuncParam:
+      name: data
+      index: 0
+      paramType:
+        PointerType:
+        flags: (TypeAst)
+        pointed:
+          Path:
+          flags: (TypeAst)
+          elements:
+          - PathElem:
+            name: T
+          isType: true
+    - FuncParam:
+      name: count
+      index: 0
+      paramType:
+        PrimitiveType:
+        flags: (TypeAst)
+        name: u64
+    body:
+      BlockStmt:
+      stmts:
+      - ExprStmt:
+        expr:
+          AssignExpr:
+          op: =
+          lhs:
+            Path:
+            flags: (Public)
+            elements:
+            - PathElem:
+              flags: (Public)
+              name: this
+            - PathElem:
+              name: data
+            isType: false
+          rhs:
+            Path:
+            elements:
+            - PathElem:
+              name: data
+            isType: false
+      - ExprStmt:
+        expr:
+          AssignExpr:
+          op: =
+          lhs:
+            Path:
+            flags: (Public)
+            elements:
+            - PathElem:
+              flags: (Public)
+              name: this
+            - PathElem:
+              name: count
+            isType: false
+          rhs:
+            Path:
+            elements:
+            - PathElem:
+              name: count
+            isType: false
+  - FuncDecl:
+    flags: (Public)
+    loc:
+    - Attr:
+      name: inline
+    overload: op__idx_assign
+    name: op__idx_assign
+    params:
+    - FuncParam:
+      name: index
+      index: 0
+      paramType:
+        PrimitiveType:
+        flags: (TypeAst)
+        name: i64
+    - FuncParam:
+      name: data
+      index: 0
+      paramType:
+        Path:
+        flags: (TypeAst)
+        elements:
+        - PathElem:
+          name: T
+        isType: true
+    body:
+      BlockStmt:
+      stmts:
+      - ExprStmt:
+        expr:
+          CallExpr:
+          callee:
+            Path:
+            flags: (Builtin|Define)
+            elements:
+            - PathElem:
+              flags: (Define)
+              name: CXY__builtins_assert
+            isType: false
+          args:
+          - BinaryExpr:
+            op: <
+            lhs:
+              Path:
+              elements:
+              - PathElem:
+                name: index
+              isType: false
+            rhs:
+              Path:
+              flags: (Private|Member)
+              elements:
+              - PathElem:
+                flags: (Private|Member)
+                name: count
+              isType: false
+          - StringLit:
+            value: "__builtins.cxy"
+          - IntegerLit:
+            value: 539
+          - IntegerLit:
+            value: 59
+      - ExprStmt:
+        expr:
+          AssignExpr:
+          op: =
+          lhs:
+            IndexExpr:
+            target:
+              Path:
+              flags: (Public)
+              elements:
+              - PathElem:
+                flags: (Public)
+                name: this
+              - PathElem:
+                name: data
+              isType: false
+            index:
+              Path:
+              elements:
+              - PathElem:
+                name: index
+              isType: false
+          rhs:
+            Path:
+            elements:
+            - PathElem:
+              name: data
+            isType: false
+  - FuncDecl:
+    flags: (Public)
+    loc:
+    - Attr:
+      name: inline
+    overload: op__idx
+    name: op__idx
+    params:
+    - FuncParam:
+      name: index
+      index: 0
+      paramType:
+        PrimitiveType:
+        flags: (TypeAst)
+        name: i64
+    ret:
+      TypeRef:
+    body:
+      BlockStmt:
+      stmts:
+      - ExprStmt:
+        expr:
+          CallExpr:
+          callee:
+            Path:
+            flags: (Builtin|Define)
+            elements:
+            - PathElem:
+              flags: (Define)
+              name: CXY__builtins_assert
+            isType: false
+          args:
+          - BinaryExpr:
+            op: <
+            lhs:
+              Path:
+              elements:
+              - PathElem:
+                name: index
+              isType: false
+            rhs:
+              Path:
+              flags: (Private|Member)
+              elements:
+              - PathElem:
+                flags: (Private|Member)
+                name: count
+              isType: false
+          - StringLit:
+            value: "__builtins.cxy"
+          - IntegerLit:
+            value: 545
+          - IntegerLit:
+            value: 59
+      - ReturnStmt:
+        expr:
+          IndexExpr:
+          flags: (Public)
+          target:
+            Path:
+            flags: (Public)
+            elements:
+            - PathElem:
+              flags: (Public)
+              name: this
+            - PathElem:
+              name: data
+            isType: false
+          index:
+            Path:
+            elements:
+            - PathElem:
+              name: index
+            isType: false
+  - FuncDecl:
+    flags: (Public|Const)
+    loc:
+    - Attr:
+      name: inline
+    overload: op__idx
+    index: 1
+    name: op__idx
+    params:
+    - FuncParam:
+      name: index
+      index: 0
+      paramType:
+        PrimitiveType:
+        flags: (TypeAst)
+        name: i64
+    ret:
+      TypeRef:
+    body:
+      BlockStmt:
+      stmts:
+      - ExprStmt:
+        expr:
+          CallExpr:
+          callee:
+            Path:
+            flags: (Builtin|Define)
+            elements:
+            - PathElem:
+              flags: (Define)
+              name: CXY__builtins_assert
+            isType: false
+          args:
+          - BinaryExpr:
+            op: <
+            lhs:
+              Path:
+              elements:
+              - PathElem:
+                name: index
+              isType: false
+            rhs:
+              Path:
+              flags: (Private|Member)
+              elements:
+              - PathElem:
+                flags: (Private|Member)
+                name: count
+              isType: false
+          - StringLit:
+            value: "__builtins.cxy"
+          - IntegerLit:
+            value: 551
+          - IntegerLit:
+            value: 59
+      - ReturnStmt:
+        expr:
+          IndexExpr:
+          flags: (Public|Const)
+          target:
+            Path:
+            flags: (Public|Const)
+            elements:
+            - PathElem:
+              flags: (Public|Const)
+              name: this
+            - PathElem:
+              name: data
+            isType: false
+          index:
+            Path:
+            elements:
+            - PathElem:
+              name: index
+            isType: false
+  - FuncDecl:
+    flags: (Public|Const)
+    overload: op__range
+    name: op__range
+    ret:
+      TypeRef:
+      flags: (Closure)
+    body:
+      BlockStmt:
+      stmts:
+      - VarDecl:
+        names:
+        - Identifier:
+          value: i
+        init:
+          IntegerLit:
+          value: 0
+      - ReturnStmt:
+        expr:
+          StructExpr:
+          left:
+            Path:
+            elements:
+            - PathElem:
+              name: CXY__closure16
+            isType: false
+          members:
+          - FieldExpr:
+            flags: (Private)
+            name: i
+            value:
+              Path:
+              elements:
+              - PathElem:
+                name: i
+              isType: false
+          - FieldExpr:
+            flags: (Private)
+            name: count
+            value:
+              Path:
+              flags: (Private|Member)
+              elements:
+              - PathElem:
+                flags: (Private|Member)
+                name: count
+              isType: false
+          - FieldExpr:
+            flags: (Private)
+            name: data
+            value:
+              Path:
+              flags: (Private|Member)
+              elements:
+              - PathElem:
+                flags: (Private|Member)
+                name: data
+              isType: false
+  - FuncDecl:
+    flags: (Public|Const)
+    overload: op__hash
+    name: op__hash
+    ret:
+      Path:
+      flags: (Builtin|TypeAst|TopLevelDecl)
+      elements:
+      - PathElem:
+        flags: (TopLevelDecl)
+        name: HashCode
+      isType: true
+    body:
+      BlockStmt:
+      stmts:
+      - VarDecl:
+        names:
+        - Identifier:
+          value: code
+        init:
+          CallExpr:
+          callee:
+            Path:
+            flags: (Builtin|Define)
+            elements:
+            - PathElem:
+              flags: (Define)
+              name: hashInit
+            isType: false
+      - ForStmt:
+        stmts:
+          VarDecl:
+          flags: (Const)
+          names:
+          - Identifier:
+            value: i
+        range:
+          RangeExpr:
+          start:
+            IntegerLit:
+            value: 0
+          end:
+            Path:
+            flags: (Private|Member)
+            elements:
+            - PathElem:
+              flags: (Private|Member)
+              name: count
+            isType: false
+        body:
+          BlockStmt:
+          stmts:
+          - ExprStmt:
+            expr:
+              AssignExpr:
+              op: =
+              lhs:
+                Path:
+                elements:
+                - PathElem:
+                  name: code
+                isType: false
+              rhs:
+                CallExpr:
+                callee:
+                  Path:
+                  flags: (Public|TopLevelDecl|Generated)
+                  elements:
+                  - PathElem:
+                    flags: (Public|TopLevelDecl)
+                    name: hash10
+                  isType: false
+                args:
+                - IndexExpr:
+                  flags: (Private|Member)
+                  target:
+                    Path:
+                    flags: (Private|Member)
+                    elements:
+                    - PathElem:
+                      flags: (Private|Member)
+                      name: data
+                    isType: false
+                  index:
+                    Path:
+                    flags: (Const)
+                    elements:
+                    - PathElem:
+                      flags: (Const)
+                      name: i
+                    isType: false
+                - Path:
+                  elements:
+                  - PathElem:
+                    name: code
+                  isType: false
+      - ReturnStmt:
+        expr:
+          Path:
+          elements:
+          - PathElem:
+            name: code
+          isType: false
+  - FuncDecl:
+    flags: (Public|Const)
+    overload: op__str
+    name: op__str
+    params:
+    - FuncParam:
+      name: sb
+      index: 0
+      paramType:
+        Path:
+        flags: (Builtin|TypeAst|TopLevelDecl|ImplementsDeinit|ReferenceMembers)
+        elements:
+        - PathElem:
+          flags: (TopLevelDecl)
+          name: StringBuilder
+        isType: true
+    body:
+      BlockStmt:
+      stmts:
+      - ExprStmt:
+        expr:
+          CallExpr:
+          callee:
+            Path:
+            elements:
+            - PathElem:
+              name: sb
+            - PathElem:
+              name: appendChar
+            isType: false
+          args:
+          - CharLit:
+            value: '['
+      - ForStmt:
+        stmts:
+          VarDecl:
+          flags: (Const)
+          names:
+          - Identifier:
+            value: i
+        range:
+          RangeExpr:
+          start:
+            IntegerLit:
+            value: 0
+          end:
+            Path:
+            flags: (Private|Member)
+            elements:
+            - PathElem:
+              flags: (Private|Member)
+              name: count
+            isType: false
+        body:
+          BlockStmt:
+          stmts:
+          - IfStmt:
+            cond:
+              BinaryExpr:
+              op: '!='
+              lhs:
+                Path:
+                flags: (Const)
+                elements:
+                - PathElem:
+                  flags: (Const)
+                  name: i
+                isType: false
+              rhs:
+                IntegerLit:
+                value: 0
+            body:
+              BlockStmt:
+              stmts:
+              - ExprStmt:
+                expr:
+                  CallExpr:
+                  callee:
+                    Path:
+                    elements:
+                    - PathElem:
+                      name: sb
+                    - PathElem:
+                      name: appendString
+                    isType: false
+                  args:
+                  - StringLit:
+                    value: ", "
+          - ExprStmt:
+            expr:
+              CallExpr:
+              callee:
+                MemberExpr:
+                target:
+                  Path:
+                  elements:
+                  - PathElem:
+                    name: sb
+                  isType: false
+                member:
+                  Path:
+                  elements:
+                  - PathElem:
+                    name: op__lshift6
+                  isType: false
+              args:
+              - IndexExpr:
+                flags: (Private|Member)
+                target:
+                  Path:
+                  flags: (Private|Member)
+                  elements:
+                  - PathElem:
+                    flags: (Private|Member)
+                    name: data
+                  isType: false
+                index:
+                  Path:
+                  flags: (Const)
+                  elements:
+                  - PathElem:
+                    flags: (Const)
+                    name: i
+                  isType: false
+      - ExprStmt:
+        expr:
+          CallExpr:
+          callee:
+            Path:
+            elements:
+            - PathElem:
+              name: sb
+            - PathElem:
+              name: appendChar
+            isType: false
+          args:
+          - CharLit:
+            value: ']'
+  - FuncDecl:
+    overload: op__copy
+    name: op__copy
+    body:
+      BlockStmt:
+  - FuncDecl:
+    overload: op__destructor
+    name: op__destructor
+    body:
+      BlockStmt:
+  - FuncDecl:
+    flags: (Pure)
+    overload: op__destructor_fwd
+    name: op__destructor_fwd
+    params:
+    - FuncParam:
+      name: ptr
+      index: 0
+      paramType:
+        PointerType:
+        pointed:
+          VoidType:
+    ret:
+      VoidType:
+    body:
+      BlockStmt:
+- StructDecl:
+  flags: (Generated|Optional)
+  name: Optional4
+  members:
+  - Field:
+    flags: (Private)
+    name: valid
+    type:
+      PrimitiveType:
+      flags: (TypeAst)
+      name: bool
+    value:
+      BoolLit:
+      value: false
+    index: 0
+  - Field:
+    flags: (Private)
+    name: value
+    type:
+      Path:
+      flags: (TypeAst)
+      elements:
+      - PathElem:
+        name: T
+      isType: true
+    index: 1
+  - FuncDecl:
+    flags: (Public)
+    loc:
+    - Attr:
+      name: inline
+    overload: op__init
+    name: op__init
+    body:
+      BlockStmt:
+      stmts:
+      - ExprStmt:
+        expr:
+          AssignExpr:
+          op: =
+          lhs:
+            Path:
+            flags: (Private|Member)
+            elements:
+            - PathElem:
+              flags: (Private|Member)
+              name: valid
+            isType: false
+          rhs:
+            BoolLit:
+            value: false
+  - FuncDecl:
+    flags: (Public)
+    loc:
+    - Attr:
+      name: inline
+    overload: op__init
+    index: 1
+    name: op__init
+    params:
+    - FuncParam:
+      name: value
+      index: 0
+      paramType:
+        Path:
+        flags: (TypeAst)
+        elements:
+        - PathElem:
+          name: T
+        isType: true
+    body:
+      BlockStmt:
+      stmts:
+      - ExprStmt:
+        expr:
+          AssignExpr:
+          op: =
+          lhs:
+            Path:
+            flags: (Public)
+            elements:
+            - PathElem:
+              flags: (Public)
+              name: this
+            - PathElem:
+              name: value
+            isType: false
+          rhs:
+            Path:
+            elements:
+            - PathElem:
+              name: value
+            isType: false
+      - ExprStmt:
+        expr:
+          AssignExpr:
+          op: =
+          lhs:
+            Path:
+            flags: (Private|Member)
+            elements:
+            - PathElem:
+              flags: (Private|Member)
+              name: valid
+            isType: false
+          rhs:
+            BoolLit:
+            value: true
+  - FuncDecl:
+    flags: (Public|Const)
+    loc:
+    - Attr:
+      name: inline
+    overload: op__truthy
+    name: op__truthy
+    ret:
+      TypeRef:
+    body:
+      BlockStmt:
+      stmts:
+      - ReturnStmt:
+        expr:
+          Path:
+          flags: (Private|Member)
+          elements:
+          - PathElem:
+            flags: (Private|Member)
+            name: valid
+          isType: false
+  - FuncDecl:
+    flags: (Public|Const)
+    loc:
+    - Attr:
+      name: inline
+    overload: op__hash
+    name: op__deref
+    ret:
+      TypeRef:
+    body:
+      BlockStmt:
+      stmts:
+      - ExprStmt:
+        expr:
+          CallExpr:
+          callee:
+            Identifier:
+            value: CXY__builtins_assert
+          args:
+          - Path:
+            flags: (Private|Member)
+            elements:
+            - PathElem:
+              flags: (Private|Member)
+              name: valid
+            isType: false
+          - StringLit:
+            value: "__builtins.cxy"
+          - IntegerLit:
+            value: 502
+          - IntegerLit:
+            value: 9
+      - ReturnStmt:
+        expr:
+          Path:
+          flags: (Private|Member)
+          elements:
+          - PathElem:
+            flags: (Private|Member)
+            name: value
+          isType: false
+  - FuncDecl:
+    flags: (Public|Const)
+    overload: op__str
+    name: op__str
+    params:
+    - FuncParam:
+      name: sb
+      index: 0
+      paramType:
+        Path:
+        flags: (Builtin|TypeAst|TopLevelDecl|ImplementsDeinit|ReferenceMembers)
+        elements:
+        - PathElem:
+          flags: (TopLevelDecl)
+          name: StringBuilder
+        isType: true
+    body:
+      BlockStmt:
+      stmts:
+      - IfStmt:
+        cond:
+          Path:
+          flags: (Private|Member)
+          elements:
+          - PathElem:
+            flags: (Private|Member)
+            name: valid
+          isType: false
+        body:
+          BlockStmt:
+          stmts:
+          - ExprStmt:
+            expr:
+              CallExpr:
+              callee:
+                MemberExpr:
+                target:
+                  Path:
+                  elements:
+                  - PathElem:
+                    name: sb
+                  isType: false
+                member:
+                  Path:
+                  elements:
+                  - PathElem:
+                    name: op__lshift5
+                  isType: false
+              args:
+              - Path:
+                flags: (Private|Member)
+                elements:
+                - PathElem:
+                  flags: (Private|Member)
+                  name: value
+                isType: false
+        otherwise:
+          BlockStmt:
+          stmts:
+          - ExprStmt:
+            expr:
+              CallExpr:
+              callee:
+                MemberExpr:
+                target:
+                  Path:
+                  elements:
+                  - PathElem:
+                    name: sb
+                  isType: false
+                member:
+                  Path:
+                  elements:
+                  - PathElem:
+                    name: op__lshift6
+                  isType: false
+              args:
+              - StringLit:
+                value: "null"
+  - FuncDecl:
+    flags: (Public|Const)
+    overload: op__hash
+    name: op__hash
+    ret:
+      TypeRef:
+    body:
+      BlockStmt:
+      stmts:
+      - IfStmt:
+        cond:
+          Path:
+          flags: (Public|Const)
+          elements:
+          - PathElem:
+            flags: (Public|Const)
+            name: this
+          - PathElem:
+            name: valid
+          isType: false
+        body:
+          ReturnStmt:
+          expr:
+            CallExpr:
+            callee:
+              Path:
+              flags: (Public|TopLevelDecl|Generated)
+              elements:
+              - PathElem:
+                flags: (Public|TopLevelDecl)
+                name: hash9
+              isType: false
+            args:
+            - Path:
+              flags: (Public|Const)
+              elements:
+              - PathElem:
+                flags: (Public|Const)
+                name: this
+              - PathElem:
+                name: value
+              isType: false
+            - IntegerLit:
+              value: 0
+      - ReturnStmt:
+        expr:
+          CallExpr:
+          callee:
+            Path:
+            flags: (Builtin|Define)
+            elements:
+            - PathElem:
+              flags: (Define)
+              name: hashInit
+            isType: false
+  - FuncDecl:
+    overload: op__copy
+    name: op__copy
+    body:
+      BlockStmt:
+  - FuncDecl:
+    overload: op__destructor
+    name: op__destructor
+    body:
+      BlockStmt:
+  - FuncDecl:
+    flags: (Pure)
+    overload: op__destructor_fwd
+    name: op__destructor_fwd
+    params:
+    - FuncParam:
+      name: ptr
+      index: 0
+      paramType:
+        PointerType:
+        pointed:
+          VoidType:
+    ret:
+      VoidType:
+    body:
+      BlockStmt:
+- FuncDecl:
+  flags: (Public|Generated)
+  loc:
+  - Attr:
+    name: inline
+  overload: op__lshift
+  name: op__lshift5
+  params:
+  - FuncParam:
+    flags: (Const)
+    name: val
+    index: 0
+    paramType:
+      Path:
+      flags: (TypeAst|Const)
+      elements:
+      - PathElem:
+        name: U
+      isType: true
+  ret:
+    Path:
+    flags: (Builtin|TypeAst|TopLevelDecl|ImplementsDeinit|ReferenceMembers)
+    elements:
+    - PathElem:
+      flags: (TopLevelDecl)
+      name: StringBuilder
+    isType: true
+  body:
+    BlockStmt:
+    stmts:
+    - Nop:
+    - Nop:
+    - Nop:
+    - Nop:
+    - Nop:
+    - Nop:
+    - Nop:
+    - Nop:
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          Path:
+          flags: (Public)
+          elements:
+          - PathElem:
+            flags: (Public)
+            name: this
+          - PathElem:
+            name: appendChar
+          isType: false
+        args:
+        - CharLit:
+          value: '('
+    - Nop:
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          MemberExpr:
+          flags: (Public|Generated)
+          target:
+            Path:
+            flags: (Public|Generated)
+            elements:
+            - PathElem:
+              flags: (Public)
+              name: this
+            isType: false
+          member:
+            Path:
+            flags: (Public|Generated)
+            elements:
+            - PathElem:
+              name: op__lshift6
+            isType: false
+        args:
+        - MemberExpr:
+          target:
+            Path:
+            flags: (Const)
+            elements:
+            - PathElem:
+              flags: (Const)
+              name: val
+            isType: false
+          member:
+            IntegerLit:
+            flags: (Const)
+            value: 0
+    - Nop:
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          Path:
+          flags: (Public)
+          elements:
+          - PathElem:
+            flags: (Public)
+            name: this
+          - PathElem:
+            name: appendString
+          isType: false
+        args:
+        - StringLit:
+          value: ", "
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          MemberExpr:
+          flags: (Public|Generated)
+          target:
+            Path:
+            flags: (Public|Generated)
+            elements:
+            - PathElem:
+              flags: (Public)
+              name: this
+            isType: false
+          member:
+            Path:
+            flags: (Public|Generated)
+            elements:
+            - PathElem:
+              name: op__lshift8
+            isType: false
+        args:
+        - MemberExpr:
+          target:
+            Path:
+            flags: (Const)
+            elements:
+            - PathElem:
+              flags: (Const)
+              name: val
+            isType: false
+          member:
+            IntegerLit:
+            flags: (Const)
+            value: 1
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          Path:
+          flags: (Public)
+          elements:
+          - PathElem:
+            flags: (Public)
+            name: this
+          - PathElem:
+            name: appendChar
+          isType: false
+        args:
+        - CharLit:
+          value: ')'
+    - ReturnStmt:
+      expr:
+        Path:
+        flags: (Public|Generated)
+        elements:
+        - PathElem:
+          flags: (Public)
+          name: this
+        isType: false
+- FuncDecl:
+  flags: (Public|Generated)
+  loc:
+  - Attr:
+    name: inline
+  overload: op__lshift
+  name: op__lshift6
+  params:
+  - FuncParam:
+    flags: (Const)
+    name: val
+    index: 0
+    paramType:
+      Path:
+      flags: (TypeAst|Const)
+      elements:
+      - PathElem:
+        name: U
+      isType: true
+  ret:
+    Path:
+    flags: (Builtin|TypeAst|TopLevelDecl|ImplementsDeinit|ReferenceMembers)
+    elements:
+    - PathElem:
+      flags: (TopLevelDecl)
+      name: StringBuilder
+    isType: true
+  body:
+    BlockStmt:
+    stmts:
+    - Nop:
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          Path:
+          flags: (Public)
+          elements:
+          - PathElem:
+            flags: (Public)
+            name: appendString
+          isType: false
+        args:
+        - StmtExpr:
+          stmt:
+            BlockStmt:
+            flags: (BlockReturns)
+            stmts:
+            - VarDecl:
+              flags: (ImmediatelyReturned)
+              names:
+              - Identifier:
+                value: _new_tmp7
+              init:
+                StructExpr:
+                left:
+                  Path:
+                  elements:
+                  - PathElem:
+                    name: String
+                  isType: false
+            - CallExpr:
+              callee:
+                Path:
+                elements:
+                - PathElem:
+                  name: _new_tmp7
+                - PathElem:
+                  name: op__init
+                isType: false
+              args:
+              - Path:
+                flags: (Const)
+                elements:
+                - PathElem:
+                  flags: (Const)
+                  name: val
+                isType: false
+            - ExprStmt:
+              expr:
+                Path:
+                flags: (ImmediatelyReturned)
+                elements:
+                - PathElem:
+                  name: _new_tmp7
+                isType: false
+    - ReturnStmt:
+      expr:
+        Path:
+        flags: (Public|Generated)
+        elements:
+        - PathElem:
+          flags: (Public)
+          name: this
+        isType: false
+- FuncDecl:
+  flags: (Public|Generated)
+  loc:
+  - Attr:
+    name: inline
+  overload: op__lshift
+  name: op__lshift8
+  params:
+  - FuncParam:
+    flags: (Const)
+    name: val
+    index: 0
+    paramType:
+      Path:
+      flags: (TypeAst|Const)
+      elements:
+      - PathElem:
+        name: U
+      isType: true
+  ret:
+    Path:
+    flags: (Builtin|TypeAst|TopLevelDecl|ImplementsDeinit|ReferenceMembers)
+    elements:
+    - PathElem:
+      flags: (TopLevelDecl)
+      name: StringBuilder
+    isType: true
+  body:
+    BlockStmt:
+    stmts:
+    - Nop:
+    - Nop:
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          Path:
+          flags: (Public)
+          elements:
+          - PathElem:
+            flags: (Public)
+            name: appendInt
+          isType: false
+        args:
+        - CastExpr:
+          to:
+            PrimitiveType:
+            flags: (TypeAst)
+            name: i64
+          exp:
+            Path:
+            flags: (Const)
+            elements:
+            - PathElem:
+              flags: (Const)
+              name: val
+            isType: false
+    - ReturnStmt:
+      expr:
+        Path:
+        flags: (Public|Generated)
+        elements:
+        - PathElem:
+          flags: (Public)
+          name: this
+        isType: false
+- FuncDecl:
+  flags: (Public|Generated)
+  name: hash9
+  params:
+  - FuncParam:
+    flags: (Const)
+    name: val
+    index: 0
+    paramType:
+      Path:
+      flags: (TypeAst|Const)
+      elements:
+      - PathElem:
+        name: T
+      isType: true
+  - FuncParam:
+    name: init
+    index: 0
+    paramType:
+      Path:
+      flags: (Builtin|TypeAst|TopLevelDecl)
+      elements:
+      - PathElem:
+        flags: (TopLevelDecl)
+        name: HashCode
+      isType: true
+    default:
+      IntegerLit:
+      value: 0
+  ret:
+    Path:
+    flags: (Builtin|TypeAst|TopLevelDecl)
+    elements:
+    - PathElem:
+      flags: (TopLevelDecl)
+      name: HashCode
+    isType: true
+  body:
+    BlockStmt:
+    stmts:
+    - Nop:
+    - Nop:
+    - Nop:
+    - Nop:
+    - Nop:
+    - Nop:
+    - Nop:
+    - VarDecl:
+      names:
+      - Identifier:
+        value: code
+      init:
+        CallExpr:
+        callee:
+          Path:
+          flags: (Builtin|Define)
+          elements:
+          - PathElem:
+            flags: (Define)
+            name: hashInit
+          isType: false
+    - ExprStmt:
+      expr:
+        AssignExpr:
+        op: =
+        lhs:
+          Path:
+          elements:
+          - PathElem:
+            name: code
+          isType: false
+        rhs:
+          CallExpr:
+          callee:
+            Path:
+            flags: (Public|TopLevelDecl|Generated)
+            elements:
+            - PathElem:
+              flags: (Public|TopLevelDecl)
+              name: hash10
+            isType: false
+          args:
+          - MemberExpr:
+            target:
+              Path:
+              flags: (Const)
+              elements:
+              - PathElem:
+                flags: (Const)
+                name: val
+              isType: false
+            member:
+              IntegerLit:
+              flags: (Const)
+              value: 0
+          - Path:
+            elements:
+            - PathElem:
+              name: code
+            isType: false
+    - ExprStmt:
+      expr:
+        AssignExpr:
+        op: =
+        lhs:
+          Path:
+          elements:
+          - PathElem:
+            name: code
+          isType: false
+        rhs:
+          CallExpr:
+          callee:
+            Path:
+            flags: (Public|TopLevelDecl|Generated)
+            elements:
+            - PathElem:
+              flags: (Public|TopLevelDecl)
+              name: hash11
+            isType: false
+          args:
+          - MemberExpr:
+            target:
+              Path:
+              flags: (Const)
+              elements:
+              - PathElem:
+                flags: (Const)
+                name: val
+              isType: false
+            member:
+              IntegerLit:
+              flags: (Const)
+              value: 1
+          - Path:
+            elements:
+            - PathElem:
+              name: code
+            isType: false
+    - ReturnStmt:
+      expr:
+        Path:
+        elements:
+        - PathElem:
+          name: code
+        isType: false
+- FuncDecl:
+  flags: (Public|Generated)
+  name: hash10
+  params:
+  - FuncParam:
+    flags: (Const)
+    name: val
+    index: 0
+    paramType:
+      Path:
+      flags: (TypeAst|Const)
+      elements:
+      - PathElem:
+        name: T
+      isType: true
+  - FuncParam:
+    name: init
+    index: 0
+    paramType:
+      Path:
+      flags: (Builtin|TypeAst|TopLevelDecl)
+      elements:
+      - PathElem:
+        flags: (TopLevelDecl)
+        name: HashCode
+      isType: true
+    default:
+      IntegerLit:
+      value: 0
+  ret:
+    Path:
+    flags: (Builtin|TypeAst|TopLevelDecl)
+    elements:
+    - PathElem:
+      flags: (TopLevelDecl)
+      name: HashCode
+    isType: true
+  body:
+    BlockStmt:
+    stmts:
+    - Nop:
+    - ReturnStmt:
+      expr:
+        CallExpr:
+        callee:
+          Path:
+          flags: (Builtin|Public|TopLevelDecl)
+          elements:
+          - PathElem:
+            flags: (Public|TopLevelDecl)
+            name: hashString
+          isType: false
+        args:
+        - CallExpr:
+          callee:
+            Path:
+            flags: (Builtin|Define)
+            elements:
+            - PathElem:
+              flags: (Define)
+              name: hashInit
+            isType: false
+        - Path:
+          flags: (Const)
+          elements:
+          - PathElem:
+            flags: (Const)
+            name: val
+          isType: false
+- FuncDecl:
+  flags: (Public|Generated)
+  name: hash11
+  params:
+  - FuncParam:
+    flags: (Const)
+    name: val
+    index: 0
+    paramType:
+      Path:
+      flags: (TypeAst|Const)
+      elements:
+      - PathElem:
+        name: T
+      isType: true
+  - FuncParam:
+    name: init
+    index: 0
+    paramType:
+      Path:
+      flags: (Builtin|TypeAst|TopLevelDecl)
+      elements:
+      - PathElem:
+        flags: (TopLevelDecl)
+        name: HashCode
+      isType: true
+    default:
+      IntegerLit:
+      value: 0
+  ret:
+    Path:
+    flags: (Builtin|TypeAst|TopLevelDecl)
+    elements:
+    - PathElem:
+      flags: (TopLevelDecl)
+      name: HashCode
+    isType: true
+  body:
+    BlockStmt:
+    stmts:
+    - Nop:
+    - Nop:
+    - ReturnStmt:
+      expr:
+        CallExpr:
+        callee:
+          Path:
+          flags: (Builtin|Define)
+          elements:
+          - PathElem:
+            flags: (Define)
+            name: hashUint8
+          isType: false
+        args:
+        - CallExpr:
+          callee:
+            Path:
+            flags: (Builtin|Define)
+            elements:
+            - PathElem:
+              flags: (Define)
+              name: hashInit
+            isType: false
+        - CastExpr:
+          to:
+            PrimitiveType:
+            flags: (TypeAst)
+            name: u8
+          exp:
+            Path:
+            flags: (Const)
+            elements:
+            - PathElem:
+              flags: (Const)
+              name: val
+            isType: false
+- FuncDecl:
+  flags: (Generated)
+  loc:
+  - Attr:
+    name: inline
+  name: Some12
+  params:
+  - FuncParam:
+    flags: (Transient)
+    loc:
+    - Attr:
+      name: transient
+    name: value
+    index: 0
+    paramType:
+      Path:
+      flags: (TypeAst)
+      elements:
+      - PathElem:
+        name: T
+      isType: true
+  ret:
+    TypeRef:
+    flags: (Optional)
+  body:
+    BlockStmt:
+    stmts:
+    - ReturnStmt:
+      expr:
+        StmtExpr:
+        stmt:
+          BlockStmt:
+          flags: (BlockReturns)
+          stmts:
+          - VarDecl:
+            flags: (Generated|ImmediatelyReturned|Optional)
+            names:
+            - Identifier:
+              value: _new_tmp13
+            init:
+              StructExpr:
+              flags: (Generated|Optional)
+              left:
+                Path:
+                flags: (TopLevelDecl|Generated|Optional)
+                elements:
+                - PathElem:
+                  flags: (TopLevelDecl)
+                  name: Optional4
+                isType: false
+          - CallExpr:
+            callee:
+              Path:
+              flags: (Generated|Optional)
+              elements:
+              - PathElem:
+                flags: (Generated|Optional)
+                name: _new_tmp13
+              - PathElem:
+                name: op__init
+              isType: false
+            args:
+            - Path:
+              flags: (Transient)
+              elements:
+              - PathElem:
+                flags: (Transient)
+                name: value
+              isType: false
+          - ExprStmt:
+            expr:
+              Path:
+              flags: (Generated|ImmediatelyReturned|Optional)
+              elements:
+              - PathElem:
+                name: _new_tmp13
+              isType: false
+- FuncDecl:
+  flags: (Generated)
+  loc:
+  - Attr:
+    name: inline
+  name: None14
+  ret:
+    TypeRef:
+    flags: (Optional)
+  body:
+    BlockStmt:
+    stmts:
+    - ReturnStmt:
+      expr:
+        StmtExpr:
+        stmt:
+          BlockStmt:
+          flags: (BlockReturns)
+          stmts:
+          - VarDecl:
+            flags: (Generated|ImmediatelyReturned|Optional)
+            names:
+            - Identifier:
+              value: _new_tmp15
+            init:
+              StructExpr:
+              flags: (Generated|Optional)
+              left:
+                Path:
+                flags: (TopLevelDecl|Generated|Optional)
+                elements:
+                - PathElem:
+                  flags: (TopLevelDecl)
+                  name: Optional4
+                isType: false
+          - CallExpr:
+            callee:
+              Path:
+              flags: (Generated|Optional)
+              elements:
+              - PathElem:
+                flags: (Generated|Optional)
+                name: _new_tmp15
+              - PathElem:
+                name: op__init
+              isType: false
+          - ExprStmt:
+            expr:
+              Path:
+              flags: (Generated|ImmediatelyReturned|Optional)
+              elements:
+              - PathElem:
+                name: _new_tmp15
+              isType: false
+- StructDecl:
   flags: (Closure)
-  name: closure_0
+  name: CXY__closure16
+  members:
+  - Field:
+    flags: (Private|Member)
+    name: i
+    type:
+      TypeRef:
+    index: 0
+  - Field:
+    flags: (Private|Member)
+    name: count
+    type:
+      TypeRef:
+    index: 1
+  - Field:
+    flags: (Private|Member)
+    name: data
+    type:
+      TypeRef:
+    index: 2
+  - FuncDecl:
+    overload: op__call
+    name: op__call
+    ret:
+      Path:
+      flags: (Generated|Optional)
+      elements:
+      - PathElem:
+        name: Optional4
+      isType: false
+    body:
+      BlockStmt:
+      stmts:
+      - IfStmt:
+        cond:
+          BinaryExpr:
+          op: <
+          lhs:
+            Path:
+            flags: (Member)
+            elements:
+            - PathElem:
+              flags: (Member)
+              name: i
+            isType: false
+          rhs:
+            Path:
+            flags: (Private|Member)
+            elements:
+            - PathElem:
+              flags: (Private|Member)
+              name: count
+            isType: false
+        body:
+          BlockStmt:
+          stmts:
+          - ReturnStmt:
+            expr:
+              CallExpr:
+              callee:
+                Path:
+                flags: (Generated)
+                elements:
+                - PathElem:
+                  name: Some12
+                isType: false
+              args:
+              - TupleExpr:
+                members:
+                - IndexExpr:
+                  flags: (Private|Member)
+                  target:
+                    Path:
+                    flags: (Private|Member)
+                    elements:
+                    - PathElem:
+                      flags: (Private|Member)
+                      name: data
+                    isType: false
+                  index:
+                    Path:
+                    flags: (Member)
+                    elements:
+                    - PathElem:
+                      flags: (Member)
+                      name: i
+                    isType: false
+                - UnaryExpr:
+                  flags: (Member)
+                  op: 21
+                  isPrefix: false
+                  lhs:
+                    Path:
+                    flags: (Member)
+                    elements:
+                    - PathElem:
+                      flags: (Member)
+                      name: i
+                    isType: false
+      - ReturnStmt:
+        expr:
+          CallExpr:
+          callee:
+            Path:
+            flags: (Generated)
+            elements:
+            - PathElem:
+              name: None14
+            isType: false
+- StructDecl:
+  flags: (Closure)
+  name: CXY__closure17
   members:
   - FuncDecl:
     overload: op__call
     name: op__call
+    ret:
+      TypeRef:
     body:
-      IntegerLit:
-      value: 1
+      BlockStmt:
+      stmts:
+      - ReturnStmt:
+        expr:
+          IntegerLit:
+          value: 1
+- FuncDecl:
+  flags: (Public|Generated)
+  loc:
+  - Attr:
+    name: inline
+  name: newClass19
+  ret:
+    TypeRef:
+  body:
+    BlockStmt:
+    stmts:
+    - ReturnStmt:
+      expr:
+        TypedExpr:
+        teType:
+          Path:
+          flags: (TypeAst)
+          elements:
+          - PathElem:
+            name: T
+          isType: true
+        expr:
+          CallExpr:
+          callee:
+            Path:
+            flags: (Builtin|Define)
+            elements:
+            - PathElem:
+              flags: (Define)
+              name: CXY__alloc
+            isType: false
+          args:
+          - CallExpr:
+            callee:
+              Path:
+              elements:
+              - PathElem:
+                name: CXY__builtins_sizeof
+              isType: false
+            args:
+            - TypeRef:
+              flags: (Typeinfo)
+          - Path:
+            elements:
+            - PathElem:
+              name: T
+            - PathElem:
+              name: op__destructor_fwd
+            isType: false
 - StructDecl:
   flags: (Closure)
-  name: closure_1
+  name: CXY__closure20
   members:
   - FuncDecl:
     overload: op__call
@@ -31,29 +1936,383 @@ decls:
       stmts:
       - ReturnStmt:
         expr:
-          StringExpr:
-          parts:
-          - StringLit:
-            value: "Hello "
-          - Path:
-            elements:
-            - PathElem:
-              name: name
-            isType: false
-          - StringLit:
-            value: ""
+          StmtExpr:
+          stmt:
+            BlockStmt:
+            flags: (BlockReturns)
+            stmts:
+            - VarDecl:
+              names:
+              - Identifier:
+                value: sb
+              init:
+                StmtExpr:
+                stmt:
+                  BlockStmt:
+                  flags: (BlockReturns)
+                  stmts:
+                  - VarDecl:
+                    flags: (Builtin|ImplementsDeinit|ImmediatelyReturned|ReferenceMembers)
+                    names:
+                    - Identifier:
+                      value: _new_tmp18
+                    init:
+                      CallExpr:
+                      callee:
+                        Path:
+                        flags: (Public|Generated)
+                        elements:
+                        - PathElem:
+                          name: newClass19
+                        isType: false
+                  - CallExpr:
+                    callee:
+                      Path:
+                      flags: (Builtin|ImplementsDeinit|ReferenceMembers)
+                      elements:
+                      - PathElem:
+                        flags: (Builtin|ImplementsDeinit|ReferenceMembers)
+                        name: _new_tmp18
+                      - PathElem:
+                        name: op__init
+                      isType: false
+                  - ExprStmt:
+                    expr:
+                      Path:
+                      flags: (Builtin|ImplementsDeinit|ImmediatelyReturned|ReferenceMembers)
+                      elements:
+                      - PathElem:
+                        name: _new_tmp18
+                      isType: false
+            - CallExpr:
+              callee:
+                MemberExpr:
+                target:
+                  CallExpr:
+                  callee:
+                    MemberExpr:
+                    target:
+                      Path:
+                      elements:
+                      - PathElem:
+                        name: sb
+                      isType: false
+                    member:
+                      Path:
+                      elements:
+                      - PathElem:
+                        name: op__lshift6
+                      isType: false
+                  args:
+                  - StringLit:
+                    value: "Hello "
+                member:
+                  Path:
+                  elements:
+                  - PathElem:
+                    name: op__lshift6
+                  isType: false
+              args:
+              - Path:
+                elements:
+                - PathElem:
+                  name: name
+                isType: false
+            - CallExpr:
+              callee:
+                Path:
+                elements:
+                - PathElem:
+                  name: sb
+                - PathElem:
+                  name: release
+                isType: false
 - StructDecl:
   flags: (Closure)
-  name: closure_2
+  name: CXY__closure22
   members:
-  - StructField:
-    flags: (Private)
+  - Field:
+    flags: (Private|Member)
     name: b
     type:
       TypeRef:
     index: 0
-  - StructField:
-    flags: (Private)
+  - Field:
+    flags: (Private|Member)
+    name: x
+    type:
+      TypeRef:
+    index: 1
+  - FuncDecl:
+    overload: op__call
+    name: op__call
+    ret:
+      TypeRef:
+    body:
+      BlockStmt:
+      stmts:
+      - ReturnStmt:
+        expr:
+          StmtExpr:
+          stmt:
+            BlockStmt:
+            flags: (BlockReturns)
+            stmts:
+            - VarDecl:
+              names:
+              - Identifier:
+                value: sb
+              init:
+                StmtExpr:
+                stmt:
+                  BlockStmt:
+                  flags: (BlockReturns)
+                  stmts:
+                  - VarDecl:
+                    flags: (Builtin|ImplementsDeinit|ImmediatelyReturned|ReferenceMembers)
+                    names:
+                    - Identifier:
+                      value: _new_tmp21
+                    init:
+                      CallExpr:
+                      callee:
+                        Path:
+                        flags: (Public|Generated)
+                        elements:
+                        - PathElem:
+                          name: newClass19
+                        isType: false
+                  - CallExpr:
+                    callee:
+                      Path:
+                      flags: (Builtin|ImplementsDeinit|ReferenceMembers)
+                      elements:
+                      - PathElem:
+                        flags: (Builtin|ImplementsDeinit|ReferenceMembers)
+                        name: _new_tmp21
+                      - PathElem:
+                        name: op__init
+                      isType: false
+                  - ExprStmt:
+                    expr:
+                      Path:
+                      flags: (Builtin|ImplementsDeinit|ImmediatelyReturned|ReferenceMembers)
+                      elements:
+                      - PathElem:
+                        name: _new_tmp21
+                      isType: false
+            - CallExpr:
+              callee:
+                MemberExpr:
+                target:
+                  CallExpr:
+                  callee:
+                    MemberExpr:
+                    target:
+                      CallExpr:
+                      callee:
+                        MemberExpr:
+                        target:
+                          Path:
+                          elements:
+                          - PathElem:
+                            name: sb
+                          isType: false
+                        member:
+                          Path:
+                          elements:
+                          - PathElem:
+                            name: op__lshift6
+                          isType: false
+                      args:
+                      - Path:
+                        flags: (Member)
+                        elements:
+                        - PathElem:
+                          flags: (Member)
+                          name: b
+                        isType: false
+                    member:
+                      Path:
+                      elements:
+                      - PathElem:
+                        name: op__lshift6
+                      isType: false
+                  args:
+                  - StringLit:
+                    value: " -> "
+                member:
+                  Path:
+                  elements:
+                  - PathElem:
+                    name: op__lshift8
+                  isType: false
+              args:
+              - Path:
+                flags: (Member)
+                elements:
+                - PathElem:
+                  flags: (Member)
+                  name: x
+                isType: false
+            - CallExpr:
+              callee:
+                Path:
+                elements:
+                - PathElem:
+                  name: sb
+                - PathElem:
+                  name: release
+                isType: false
+- StructDecl:
+  flags: (Closure)
+  name: CXY__closure24
+  members:
+  - Field:
+    flags: (Private|Member)
+    name: b
+    type:
+      TypeRef:
+    index: 0
+  - Field:
+    flags: (Private|Member)
+    name: x
+    type:
+      TypeRef:
+    index: 1
+  - FuncDecl:
+    overload: op__call
+    name: op__call
+    ret:
+      TypeRef:
+    body:
+      BlockStmt:
+      stmts:
+      - ReturnStmt:
+        expr:
+          StmtExpr:
+          stmt:
+            BlockStmt:
+            flags: (BlockReturns)
+            stmts:
+            - VarDecl:
+              names:
+              - Identifier:
+                value: sb
+              init:
+                StmtExpr:
+                stmt:
+                  BlockStmt:
+                  flags: (BlockReturns)
+                  stmts:
+                  - VarDecl:
+                    flags: (Builtin|ImplementsDeinit|ImmediatelyReturned|ReferenceMembers)
+                    names:
+                    - Identifier:
+                      value: _new_tmp23
+                    init:
+                      CallExpr:
+                      callee:
+                        Path:
+                        flags: (Public|Generated)
+                        elements:
+                        - PathElem:
+                          name: newClass19
+                        isType: false
+                  - CallExpr:
+                    callee:
+                      Path:
+                      flags: (Builtin|ImplementsDeinit|ReferenceMembers)
+                      elements:
+                      - PathElem:
+                        flags: (Builtin|ImplementsDeinit|ReferenceMembers)
+                        name: _new_tmp23
+                      - PathElem:
+                        name: op__init
+                      isType: false
+                  - ExprStmt:
+                    expr:
+                      Path:
+                      flags: (Builtin|ImplementsDeinit|ImmediatelyReturned|ReferenceMembers)
+                      elements:
+                      - PathElem:
+                        name: _new_tmp23
+                      isType: false
+            - CallExpr:
+              callee:
+                MemberExpr:
+                target:
+                  CallExpr:
+                  callee:
+                    MemberExpr:
+                    target:
+                      CallExpr:
+                      callee:
+                        MemberExpr:
+                        target:
+                          Path:
+                          elements:
+                          - PathElem:
+                            name: sb
+                          isType: false
+                        member:
+                          Path:
+                          elements:
+                          - PathElem:
+                            name: op__lshift6
+                          isType: false
+                      args:
+                      - Path:
+                        flags: (Member)
+                        elements:
+                        - PathElem:
+                          flags: (Member)
+                          name: b
+                        isType: false
+                    member:
+                      Path:
+                      elements:
+                      - PathElem:
+                        name: op__lshift6
+                      isType: false
+                  args:
+                  - StringLit:
+                    value: " -> "
+                member:
+                  Path:
+                  elements:
+                  - PathElem:
+                    name: op__lshift8
+                  isType: false
+              args:
+              - Path:
+                flags: (Member)
+                elements:
+                - PathElem:
+                  flags: (Member)
+                  name: x
+                isType: false
+            - CallExpr:
+              callee:
+                Path:
+                elements:
+                - PathElem:
+                  name: sb
+                - PathElem:
+                  name: release
+                isType: false
+- StructDecl:
+  flags: (Closure)
+  name: CXY__closure25
+  members:
+  - Field:
+    flags: (Private|Member)
+    name: b
+    type:
+      TypeRef:
+    index: 0
+  - Field:
+    flags: (Private|Member)
     name: x
     type:
       TypeRef:
@@ -62,37 +2321,59 @@ decls:
     overload: op__call
     name: op__call
     body:
-      StringExpr:
-      parts:
-      - StringLit:
-        value: ""
-      - Path:
-        elements:
-        - PathElem:
-          name: b
-        isType: false
-      - StringLit:
-        value: " -> "
-      - Path:
-        elements:
-        - PathElem:
-          name: x
-        isType: false
-      - StringLit:
-        value: ""
+      BlockStmt:
+      stmts:
+      - VarDecl:
+        flags: (Const)
+        names:
+        - Identifier:
+          value: g
+        init:
+          StructExpr:
+          left:
+            Path:
+            elements:
+            - PathElem:
+              name: CXY__closure24
+            isType: false
+          members:
+          - FieldExpr:
+            flags: (Private)
+            name: b
+            value:
+              Path:
+              flags: (Member)
+              elements:
+              - PathElem:
+                flags: (Member)
+                name: b
+              isType: false
+          - FieldExpr:
+            flags: (Private)
+            name: x
+            value:
+              Path:
+              flags: (Member)
+              elements:
+              - PathElem:
+                flags: (Member)
+                name: x
+              isType: false
 - FuncDecl:
-  flags: (TopLevelDecl)
-  name: main
+  flags: (Main|TopLevelDecl)
+  name: CXY__main
   params:
   - FuncParam:
     name: args
     index: 0
     paramType:
-      ArrayType:
-      flags: (TypeAst)
-      element:
-        StringType:
-        flags: (TypeAst)
+      Path:
+      flags: (Builtin|Public|TypeAst|TopLevelDecl|Generated|Slice)
+      elements:
+      - PathElem:
+        flags: (Builtin|Public|TopLevelDecl)
+        name: Slice3
+      isType: false
   body:
     BlockStmt:
     stmts:
@@ -107,7 +2388,7 @@ decls:
           Path:
           elements:
           - PathElem:
-            name: closure_0
+            name: CXY__closure17
           isType: false
     - ExprStmt:
       expr:
@@ -117,6 +2398,7 @@ decls:
           flags: (Const)
           elements:
           - PathElem:
+            flags: (Const)
             name: one
           isType: false
     - ExprStmt:
@@ -130,7 +2412,7 @@ decls:
               Path:
               elements:
               - PathElem:
-                name: closure_1
+                name: CXY__closure20
               isType: false
         args:
         - StringLit:
@@ -160,7 +2442,7 @@ decls:
               Path:
               elements:
               - PathElem:
-                name: closure_2
+                name: CXY__closure22
               isType: false
             members:
             - FieldExpr:
@@ -181,3 +2463,35 @@ decls:
                 - PathElem:
                   name: x
                 isType: false
+    - VarDecl:
+      flags: (Const)
+      names:
+      - Identifier:
+        value: f
+      init:
+        StructExpr:
+        left:
+          Path:
+          elements:
+          - PathElem:
+            name: CXY__closure25
+          isType: false
+        members:
+        - FieldExpr:
+          flags: (Private)
+          name: b
+          value:
+            Path:
+            elements:
+            - PathElem:
+              name: b
+            isType: false
+        - FieldExpr:
+          flags: (Private)
+          name: x
+          value:
+            Path:
+            elements:
+            - PathElem:
+              name: x
+            isType: false

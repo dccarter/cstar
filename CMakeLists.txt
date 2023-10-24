@@ -73,12 +73,18 @@ CxyAmalgamate(epilogue
 CxyAmalgamate(prologue
         OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/generated
         FILES
-            src/cxy/lang/runtime/prologue.h)
+            src/cxy/lang/runtime/prologue.h
+            src/cxy/lang/runtime/coro/tina.h
+            src/cxy/lang/runtime/evloop/ae.h
+            src/cxy/lang/runtime/async.h)
 
 CxyAmalgamate(runtime
         OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/generated
         FILES
-        src/cxy/lang/runtime/runtime.c)
+        src/cxy/lang/runtime/runtime.c
+        src/cxy/lang/runtime/coro/tina.c
+        src/cxy/lang/runtime/evloop/ae.c
+        src/cxy/lang/runtime/async.c)
 
 set(CXY_3RD_PARTY_SOURCES
         src/cxy/3rdparty/cJSON.c)
@@ -120,6 +126,8 @@ set(CXY_OPERATIONS_SOURCES
         src/cxy/lang/operations/check.c
         src/cxy/lang/operations/codegen.c
         src/cxy/lang/operations/comptime.c
+        src/cxy/lang/operations/collect.c
+        src/cxy/lang/operations/coroutine.c
         src/cxy/lang/operations/eval.c
         src/cxy/lang/operations/finalize.c
         src/cxy/lang/operations/json.c
@@ -130,13 +138,17 @@ set(CXY_OPERATIONS_SOURCES
         src/cxy/lang/operations/nodes/assign.c
         src/cxy/lang/operations/nodes/binary.c
         src/cxy/lang/operations/nodes/call.c
+        src/cxy/lang/operations/nodes/class.c
         src/cxy/lang/operations/nodes/closure.c
+        src/cxy/lang/operations/nodes/builtins.c
         src/cxy/lang/operations/nodes/enum.c
+        src/cxy/lang/operations/nodes/field.c
         src/cxy/lang/operations/nodes/for.c
         src/cxy/lang/operations/nodes/function.c
         src/cxy/lang/operations/nodes/generics.c
         src/cxy/lang/operations/nodes/if.c
         src/cxy/lang/operations/nodes/index.c
+        src/cxy/lang/operations/nodes/interface.c
         src/cxy/lang/operations/nodes/literal.c
         src/cxy/lang/operations/nodes/member.c
         src/cxy/lang/operations/nodes/new.c
@@ -178,9 +190,11 @@ target_compile_definitions(cxy PRIVATE
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/stdlib)
 set(CXY_STD_LIB_SOURCES
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/dns
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/io.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/json.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/map.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/net.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/str.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/vector.cxy)
 

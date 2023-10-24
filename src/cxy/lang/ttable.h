@@ -37,12 +37,9 @@ void freeTypeTable(TypeTable *table);
 const Type *resolveType(const Type *type);
 const Type *stripPointer(const Type *type);
 const Type *stripAll(const Type *type);
-u64 pointerLevels(const Type *type);
 const Type *arrayToPointer(TypeTable *table, const Type *type);
 const Type *getPrimitiveType(TypeTable *table, PrtId id);
 const Type *getAnySliceType(TypeTable *table);
-
-void removeFromTypeTable(TypeTable *table, const Type *type);
 const Type *makeErrorType(TypeTable *table);
 const Type *makeAutoType(TypeTable *table);
 const Type *makeVoidType(TypeTable *table);
@@ -87,23 +84,60 @@ const Type *changeFunctionRetType(TypeTable *table,
                                   const Type *func,
                                   const Type *ret);
 
-const Type *makeStruct(TypeTable *table, const Type *init);
+const Type *makeStructType(TypeTable *table,
+                           cstring name,
+                           NamedTypeMember *members,
+                           u64 memberCount,
+                           AstNode *decl,
+                           const Type **interfaces,
+                           u64 interfacesCount,
+                           u64 flags);
+
+const Type *makeClassType(TypeTable *table,
+                          cstring name,
+                          NamedTypeMember *members,
+                          u64 memberCount,
+                          AstNode *decl,
+                          const Type *base,
+                          const Type **interfaces,
+                          u64 interfacesCount,
+                          u64 flags);
 
 const Type *replaceStructType(TypeTable *table,
                               const Type *og,
-                              const Type *with);
+                              NamedTypeMember *members,
+                              u64 membersCount,
+                              AstNode *decl,
+                              const Type **interfaces,
+                              u64 interfacesCount,
+                              u64 flags);
 
-const Type *makeInterfaceType(TypeTable *table, const Type *init);
+const Type *replaceClassType(TypeTable *table,
+                             const Type *og,
+                             NamedTypeMember *members,
+                             u64 membersCount,
+                             AstNode *decl,
+                             const Type *base,
+                             const Type **interfaces,
+                             u64 interfacesCount,
+                             u64 flags);
+
+const Type *makeInterfaceType(TypeTable *table,
+                              cstring name,
+                              NamedTypeMember *members,
+                              u64 memberCount,
+                              AstNode *decl,
+                              u64 flags);
 
 const Type *makeModuleType(TypeTable *table,
                            cstring name,
                            cstring path,
-                           ModuleMember *members,
-                           u64 count);
+                           NamedTypeMember *members,
+                           u64 memberCount);
 
 const Type *makeEnum(TypeTable *table, const Type *init);
 
-const Type *makeGenericType(TypeTable *table, AstNode *decl, bool inferrable);
+const Type *makeGenericType(TypeTable *table, AstNode *decl);
 
 const Type *makeWrappedType(TypeTable *table, const Type *target, u64 flags);
 const Type *unwrapType(const Type *type, u64 *flags);
@@ -125,7 +159,7 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right);
 
 const Type *getBuiltinOptionalType(Log *L);
 
-const Type *findInType(TypeTable *table, const Type *type, cstring name);
+const Type *findMemberInType(const Type *type, cstring name);
 
 const Type *expectInType(TypeTable *table,
                          const Type *type,
@@ -136,3 +170,7 @@ const Type *expectInType(TypeTable *table,
 const Type *getIntegerTypeForLiteral(TypeTable *table, i64 literal);
 bool isIntegerTypeInRange(const Type *type, i64 min, i64 max);
 int findTypeInArray(const Type **types, u64 count, const Type *type);
+u64 pointerLevels(const Type *type);
+const Type *removeFromTypeTable(TypeTable *table, const Type *type);
+
+AstNode *getTypeDecl(const Type *type);

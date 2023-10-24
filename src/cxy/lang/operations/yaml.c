@@ -778,15 +778,16 @@ static void visitStructField(ConstAstVisitor *visitor, const AstNode *node)
     emitUInteger(ctx, node, node->structField.index);
 }
 
-static void visitStructDecl(ConstAstVisitor *visitor, const AstNode *node)
+static void visitClassOrStructDecl(ConstAstVisitor *visitor,
+                                   const AstNode *node)
 {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
     emitMapKey(ctx, node, "name");
     emitMapKey(ctx, node, node->structDecl.name);
-
-    nodeToYaml(visitor, "base", node->structDecl.base);
+    if (nodeIs(node, ClassDecl))
+        nodeToYaml(visitor, "base", node->classDecl.base);
     manyNodesToYaml(visitor, "implements", node->structDecl.implements);
     manyNodesToYaml(visitor, "members", node->structDecl.members);
 }
@@ -1064,8 +1065,9 @@ AstNode *dumpAstToYaml(CompilerDriver *driver, AstNode *node, FILE *file)
         [astUnionDecl] = visitUnionDecl,
         [astEnumOption] = visitEnumOption,
         [astEnumDecl] = visitEnumDecl,
-        [astStructField] = visitStructField,
-        [astStructDecl] = visitStructDecl,
+        [astField] = visitStructField,
+        [astStructDecl] = visitClassOrStructDecl,
+        [astClassDecl] = visitClassOrStructDecl,
         [astInterfaceDecl] = visitInterfaceDecl,
         [astAssignExpr] = visitBinaryExpr,
         [astBinaryExpr] = visitBinaryExpr,

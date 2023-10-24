@@ -130,7 +130,7 @@ void checkMemberExpr(AstVisitor *visitor, AstNode *node)
 
     target_ = stripAll(target_);
     if (nodeIs(member, Identifier)) {
-        node->type = findInType(ctx->types, target_, member->ident.value);
+        node->type = findMemberInType(target_, member->ident.value);
         if (node->type == NULL) {
             logError(ctx->L,
                      &member->loc,

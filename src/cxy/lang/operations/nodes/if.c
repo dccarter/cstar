@@ -45,7 +45,7 @@ void checkIfStmt(AstVisitor *visitor, AstNode *node)
     }
 
     cond_ = unwrapType(cond_, NULL);
-    if (typeIs(cond_, Struct)) {
+    if (isClassOrStructType(cond_)) {
         if (!transformToTruthyOperator(visitor, cond)) {
             if (!typeIs(cond->type, Error))
                 logError(ctx->L,
@@ -113,35 +113,51 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
         node->tag = astError;
         return;
     }
+    bool flatten = findAttribute(node, S_consistent) == NULL;
 
     AstNode *next = node->next;
-    AstNode *parent = node->parentScope;
     u64 visited = node->flags & flgVisited;
 
     if (cond->boolLiteral.value) {
         // select then branch & reclaim else branch if any
-        replaceAstNodeWith(node, node->ifStmt.body);
+        AstNode *replacement = node->ifStmt.body;
+        if (flatten && nodeIs(replacement, BlockStmt))
+            replacement = replacement->blockStmt.stmts
+                              ?: makeAstNop(ctx->pool, &replacement->loc);
+        clearAstBody(node);
+        node->tag = astNop;
+        node->flags &= ~flgComptime;
+        node->next = replacement;
+        getLastAstNode(replacement)->next = next;
     }
     else if (node->ifStmt.otherwise) {
         // select otherwise, reclaim if branch
-        replaceAstNodeWith(node, node->ifStmt.otherwise);
-        while (nodeIs(node, IfStmt) && hasFlag(node, Comptime)) {
-            node->flags &= ~flgComptime;
-            if (!evaluate(visitor, node)) {
-                node->tag = astError;
-                return;
-            }
-        }
+        AstNode *replacement = node->ifStmt.otherwise;
+        if (flatten && nodeIs(replacement, BlockStmt))
+            replacement = replacement->blockStmt.stmts
+                              ?: makeAstNop(ctx->pool, &replacement->loc);
+
+        // select next statement, reclaim if branch
+        clearAstBody(node);
+        node->tag = astNop;
+        node->flags &= ~flgComptime;
+        node->next = replacement;
+        getLastAstNode(replacement)->next = next;
     }
     else {
         // select next statement, reclaim if branch
-        if (next)
-            *node = *next;
-        else {
-            clearAstBody(node);
-            node->tag = astNop;
-            node->flags &= ~flgComptime;
+        clearAstBody(node);
+        node->tag = astNop;
+        node->flags &= ~flgComptime;
+    }
+
+    while (nodeIs(node, IfStmt) && hasFlag(node, Comptime)) {
+        node->flags &= ~flgComptime;
+        if (!evaluate(visitor, node)) {
+            node->tag = astError;
+            return;
         }
     }
+
     node->flags |= visited;
 }

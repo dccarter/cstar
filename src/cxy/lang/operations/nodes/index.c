@@ -69,7 +69,7 @@ static bool evalStringIndexExpr(EvalContext *ctx, AstNode *node)
     AstNode *member =
         nodeIs(target, EnumDecl)
             ? findEnumOptionByName(target, index->stringLiteral.value)
-            : findStructMemberByName(target, index->stringLiteral.value);
+            : findMemberByName(target, index->stringLiteral.value);
 
     if (member == NULL)
         node->tag = astNullLit;
@@ -159,20 +159,8 @@ void checkIndexExpr(AstVisitor *visitor, AstNode *node)
     }
 
     node->flags |= node->indexExpr.target->flags;
-    const Type *unwrapped = unwrapType(target, NULL);
-    if (typeIs(unwrapped, Pointer)) {
-        target = stripPointer(target);
-        node->indexExpr.target = makeAstNode(
-            ctx->pool,
-            &node->indexExpr.target->loc,
-            &(AstNode){.tag = astUnaryExpr,
-                       .type = target,
-                       .flags = node->indexExpr.target->flags,
-                       .unaryExpr = {.op = opDeref,
-                                     .operand = node->indexExpr.target,
-                                     .isPrefix = true}});
-    }
-
+    const Type *unwrapped = unwrapType(target, NULL),
+               *stripped = stripAll(target);
     if (typeIs(unwrapped, Array)) {
         if (!isIntegerType(index)) {
             logError(ctx->L,
@@ -197,8 +185,21 @@ void checkIndexExpr(AstVisitor *visitor, AstNode *node)
         else
             node->type = unwrapped->map.value;
     }
-    else if (typeIs(unwrapped, Struct) || typeIs(unwrapped, Union)) {
+    else if (typeIs(unwrapped, Struct) || typeIs(unwrapped, Class)) {
         checkIndexOperator(visitor, node);
+    }
+    else if (typeIs(unwrapped, Pointer)) {
+        if (!isIntegerType(index)) {
+            logError(
+                ctx->L,
+                &node->indexExpr.index->loc,
+                "unexpected pointer offset expression index type, expecting an "
+                "integer, got '{t}'",
+                (FormatArg[]){{.t = index}});
+            node->type = ERROR_TYPE(ctx);
+        }
+        else
+            node->type = unwrapped->pointer.pointed;
     }
     else if (typeIs(unwrapped, String)) {
         if (!isIntegerType(index)) {

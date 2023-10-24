@@ -18,12 +18,12 @@ static const Type *createStructForClosure(AstVisitor *visitor, AstNode *node)
     AstNode *fields = NULL, *it = NULL;
 
     for (u64 i = 0; i < node->closureExpr.captureCount; i++) {
-        const Capture *capture = node->closureExpr.capture[i];
+        Capture *capture = &node->closureExpr.capture[i];
         AstNode *field = makeAstNode(
             ctx->pool,
             &capture->node->loc,
             &(AstNode){
-                .tag = astStructField,
+                .tag = astField,
                 .type = capture->node->type,
                 .flags = flgPrivate | capture->node->flags | flgMember,
                 .structField = {
@@ -85,7 +85,7 @@ static void transformClosureToStructExpr(AstVisitor *visitor,
     AstNode *fields = NULL, *it = NULL;
 
     for (u64 i = 0; i < node->closureExpr.captureCount; i++) {
-        const Capture *capture = node->closureExpr.capture[i];
+        Capture *capture = &node->closureExpr.capture[i];
         cstring name = getCapturedNodeName(capture->node);
         AstNode *field = makeAstNode(
             ctx->pool,

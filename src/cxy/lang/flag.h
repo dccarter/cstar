@@ -38,7 +38,7 @@
     f(EnumLiteral,          26)                 \
     f(Comptime,             27)                 \
     f(Visited,              28)                 \
-    f(ImplementsDelete,     29)                 \
+    f(ImplementsDeinit,     29)                 \
     f(ImmediatelyReturned,  30)                 \
     f(Unsafe,               31)                 \
     f(FunctionPtr,          32)                 \
@@ -51,14 +51,20 @@
     f(BlockReturns,         39)                 \
     f(BuiltinsModule,       40)                 \
     f(Optional,             41)                 \
-    f(ImportedModule,       43)
+    f(ImportedModule,       42)                 \
+    f(ReferenceMembers,     43)                 \
+    f(Pure,                 44)                 \
+    f(Slice,                45)                 \
+    f(Transient,            46)
 
 // clang-format on
 static const u64 flgNone = 0;
 #define f(name, bit) static const u64 flg##name = BIT(bit);
 CXY_LANG_FLAGS(f)
 #undef f
-static const u64 flgTypeApplicable = (flgConst | flgOptional | flgClosure);
+static const u64 flgTypeApplicable =
+    (flgNative | flgConst | flgOptional | flgClosure | flgSlice);
+
 typedef u64 Flags;
 
 char *flagsToString(u64 flags);

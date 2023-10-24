@@ -29,7 +29,8 @@ typedef enum {
 static inline bool isSupportedBinaryOperand(AstNode *node)
 {
     node = nodeIs(node, Ref) ? node->reference.target : node;
-    return isLiteralExpr(node) || isTypeExpr(node);
+    return isLiteralExpr(node) || isTypeExpr(node) ||
+           nodeIs(node, GenericParam);
 }
 
 static inline bool isArgumentTypeThis(const AstNode *node)
@@ -470,7 +471,7 @@ static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
     const Type *left = node->binaryExpr.lhs->type;
     cstring name = getOpOverloadName(node->binaryExpr.op);
     const Type *target = stripPointer(left);
-    const StructMember *overload = findStructMember(target, name);
+    const NamedTypeMember *overload = findStructMember(stripAll(target), name);
 
     if (overload == NULL) {
         logError(ctx->L,
@@ -485,16 +486,6 @@ static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
     if (typeIs(right, Error)) {
         node->type = ERROR_TYPE(ctx);
         return;
-    }
-
-    const AstNode *argument =
-        (nodeIs(overload->decl, GenericDecl) ? overload->decl->genericDecl.decl
-                                             : overload->decl)
-            ->funcDecl.signature->params->funcParam.type;
-
-    if (isArgumentTypeThis(argument) &&
-        !typeIs(unwrapType(right, NULL), Pointer)) {
-        node->binaryExpr.rhs = makeAddressOf(ctx, node->binaryExpr.rhs);
     }
 
     transformToMemberCallExpr(
@@ -516,11 +507,11 @@ void generateBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
 void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    const Type *left = checkType(visitor, node->binaryExpr.lhs);
-    if (typeIs(left, This))
-        left = left->this.that;
+    const Type *left = checkType(visitor, node->binaryExpr.lhs),
+               *left_ = stripAll(left);
 
-    if (stripAll(left)->tag == typStruct) {
+    if ((typeIs(left_, Struct) && !hasFlag(left_->tStruct.decl, Native)) ||
+        typeIs(left_, Class)) {
         checkBinaryOperatorOverload(visitor, node);
         return;
     }
@@ -597,7 +588,8 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
 
     case optEquality:
         if (!typeIs(type, Primitive) && !typeIs(type, Pointer) &&
-            !typeIs(type, String) && !typeIs(type, Enum)) {
+            !typeIs(type, String) && !typeIs(type, Enum) &&
+            !typeIs(type, Opaque)) {
             logError(ctx->L,
                      &node->loc,
                      "cannot perform equality binary operation '{s}' on "

@@ -2,87 +2,90 @@ module vector
 
 const DEFAULT_VECTOR_CAPACITY : u64 = 16;
 
-pub struct Vector[T] {
-    - data: [T]
-    - len: u64
+pub class Vector[T] {
+    - data: &T
+    - count: u64
+    - capacity: u64
 
     - func grow() {
-        var capacity = len!(data);
-        if (len >= capacity) {
+        if (count >= capacity) {
             capacity += (capacity / 2)
-            data = reallocSlice[T](data, capacity)
+            data = <&T> CXY__alloc(sizeof!(#T) * capacity, null)
         }
     }
 
-    func `new`(initialSize: u64 = DEFAULT_VECTOR_CAPACITY) {
-        data = allocSlice[T](initialSize)
+    func `init`(initialSize: u64 = DEFAULT_VECTOR_CAPACITY) {
+        capacity = initialSize
+        data = <&T> CXY__alloc(sizeof!(#T) * capacity, null)
+    }
+
+    @inline
+    func `deinit`() {
+        #if (T.isDestructible) {
+            for (const i: 0..count) {
+                data.[i] = null
+            }
+        }
+        CXY__free(data: &void)
     }
 
     func push(item: T) {
         grow()
-        data.[len++] = item
+        data.[count++] = item
     }
 
     func pop() {
-        assert!(len > 0)
-        len--;
-        return data.[len]
+        assert!(count > 0)
+        count--
+        return data.[count]
     }
 
     func shift() {
-        assert!(len > 0)
-        const item = data.[0];
+        assert!(count > 0)
+        var item = data.[0];
         var tmp = data;
-        len -= 1
-        memmove(data!(tmp),
-                      ptroff!(data!(tmp) + 1),
-                      sizeof!(item) * len)
+        count--
+        memmove(tmp, ptroff!(tmp + 1), sizeof!(#T) * count)
         return item
     }
 
     func resize(newSize: u64) {
-        data = reallocSlice[T](data, newSize)
-        if (newSize < len)
-            len = newSize
+        data = <&T>CXY__realloc(data: &void, sizeof!(#T) * newSize, null)
+        if (newSize < count)
+            count = newSize
+       capacity = newSize;
     }
 
     @inline
-    func shrink() => resize(len)
+    func shrink() => resize(count)
 
     func `[]`(index: i32) {
-        assert!(index < len)
+        assert!(index < count)
         return data.[index]
     }
 
     func `[]=`(index: i32, value: T) {
-        assert!(index < len!(data))
+        assert!(index < count)
         data.[index] = value
     }
 
     func `..`() {
         var i : i64 = 0;
-        return () : (&T, i64)? => {
-            if (i < len)
-                return (&data.[i], i++)
+        return () : (T, i64)? => {
+            if (i < count)
+                return (data.[i], i++)
             else
                 return null
         }
     }
 
-    const func toString(sb: &StringBuilder) {
-        var i = 0;
+    const func `str`(sb: StringBuilder) {
         sb << '['
-        while (i < len) {
+        for (var i: 0..count) {
             if (i != 0)
                 sb << ", "
-            sb << data.[i++]
+            sb << data.[i]
         }
         sb << ']'
-    }
-
-    const func `str`() {
-        var sb = StringBuilder();
-        toString(&sb);
-        return sb.toString()
     }
 }

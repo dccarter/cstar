@@ -50,6 +50,7 @@ static const Type *checkNewInitializerOverload(AstVisitor *visitor,
                                    &callee->loc,
                                    callee->flags | flgImmediatelyReturned,
                                    name,
+                                   NULL,
                                    newExpr,
                                    NULL,
                                    NULL);
@@ -58,23 +59,27 @@ static const Type *checkNewInitializerOverload(AstVisitor *visitor,
         ctx->pool,
         &callee->loc,
         callee->flags,
-        makeResolvedPathElement(
-            ctx->pool,
-            &callee->loc,
-            name,
-            callee->flags,
-            varDecl,
-            makePathElement(
-                ctx->pool, &callee->loc, S_New, callee->flags, NULL, NULL),
-            NULL),
+        makeResolvedPathElement(ctx->pool,
+                                &callee->loc,
+                                name,
+                                callee->flags,
+                                varDecl,
+                                makePathElement(ctx->pool,
+                                                &callee->loc,
+                                                S_InitOverload,
+                                                callee->flags,
+                                                NULL,
+                                                NULL),
+                                NULL),
         NULL);
 
     // tmp;
     AstNode *ret = makeExprStmt(
         ctx->pool,
         &init->loc,
-        makeResolvedPath(ctx->pool, &init->loc, name, flgNone, varDecl, NULL),
         init->flags,
+        makeResolvedPath(
+            ctx->pool, &init->loc, name, flgNone, varDecl, NULL, NULL),
         NULL,
         NULL);
 
@@ -125,7 +130,7 @@ static const Type *checkNewInitializerExpr(AstVisitor *visitor, AstNode *node)
             return NULL;
         }
         else if (typeIs(callee, Struct)) {
-            if (!findStructMemberType(callee, S_New)) {
+            if (!findStructMemberType(callee, S_InitOverload)) {
                 logError(ctx->L,
                          &init->callExpr.callee->loc,
                          "cannot use `new` constructor expression on type "

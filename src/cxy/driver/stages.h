@@ -22,6 +22,7 @@ struct CompilerDriver;
     f(MemoryMgmt,       "Memory Management")           \
     f(Finalize,         "Finalize")                    \
     f(Codegen,          "Code Gen")                    \
+    f(Collect,          "Collect")                     \
     f(Compile,          "Compile")                     \
 
 typedef enum {

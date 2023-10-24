@@ -18,6 +18,19 @@ static inline bool isInlineFunction(const AstNode *node)
     return findAttribute(node, S_inline) != NULL;
 }
 
+static inline bool isIteratorFunction(const Type *type)
+{
+    if (!typeIs(type, Struct) || !hasFlag(type, Closure))
+        return false;
+
+    const Type *iter = findStructMemberType(type, S_CallOverload);
+    if (iter == NULL)
+        return false;
+
+    const Type *ret = iter->func.retType;
+    return typeIs(ret, Struct) && hasFlag(ret, Optional);
+}
+
 void generateFuncParam(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -40,7 +53,8 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
     TypeTable *table = (ctx)->types;
 
     const AstNode *parent = node->parentScope;
-    bool isMember = parent && parent->tag == astStructDecl;
+    bool isMember =
+        parent && (nodeIs(parent, StructDecl) || nodeIs(parent, ClassDecl));
 
     format(ctx->state, "\n", NULL);
 
@@ -82,7 +96,7 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         ctx->namespace = node->type->namespace;
 
     if (!isMember && hasFlag(node, Main)) {
-        format(ctx->state, "typedef struct _", NULL);
+        format(ctx->state, "typedef ", NULL);
         writeTypename(ctx, node->type->func.params[0]);
         format(ctx->state, " CXY__Main_Args_t;\n", NULL);
         if (isIntegerType(node->type->func.retType)) {
@@ -94,18 +108,17 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
     }
 
     if (isInlineFunction(node))
-        format(ctx->state, "attr(always_inline)\n", NULL);
+        format(ctx->state, "static attr(always_inline)\n", NULL);
 
-    generateTypeUsage(ctx, node->type->func.retType);
-    if (typeIs(node->type->func.retType, This))
-        format(ctx->state, "*", NULL);
+    const Type *ret = node->type->func.retType;
+    generateTypeUsage(ctx, ret);
 
     if (isMember) {
         format(ctx->state, " ", NULL);
         writeTypename(ctx, parent->type);
         format(ctx->state, "__{s}", (FormatArg[]){{.s = node->funcDecl.name}});
     }
-    else if (node->flags & flgMain) {
+    else if (hasFlag(node, Main)) {
         format(ctx->state, " CXY__main", NULL);
     }
     else {
@@ -122,13 +135,16 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         format(
             ctx->state, "_{u32}", (FormatArg[]){{.u32 = node->funcDecl.index}});
 
-    if (isMember) {
+    if (isMember && !hasFlag(node, Pure)) {
         format(ctx->state, "(", NULL);
         if (hasFlag(node->type, Const))
             format(ctx->state, "const ", NULL);
 
-        writeTypename(ctx, parent->type);
-        format(ctx->state, " *this", NULL);
+        generateTypeUsage(ctx, parent->type);
+        if (typeIs(parent->type, Struct))
+            format(ctx->state, "* this", NULL);
+        else
+            format(ctx->state, " this", NULL);
 
         if (node->funcDecl.signature->params)
             format(ctx->state, ", ", NULL);
@@ -166,28 +182,34 @@ void generateFuncDeclaration(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
     const AstNode *parent = type->func.decl->parentScope;
+    bool isPure = hasFlag(type->func.decl, Pure);
     u32 index = type->func.decl->funcDecl.index;
     if (hasFlag(type->func.decl, BuiltinMember))
         return;
 
+    if (isInlineFunction(type->func.decl))
+        format(state, "static ", NULL);
+
     generateTypeUsage(context, type->func.retType);
-    if (typeIs(type->func.retType, This))
-        format(context->state, " *", NULL);
-    else
-        format(state, " ", NULL);
+    format(state, " ", NULL);
+
     writeTypename(context, parent->type);
     format(state, "__{s}", (FormatArg[]){{.s = type->name}});
     if (index)
         format(state, "_{u32}", (FormatArg[]){{.u32 = index}});
 
     format(state, "(", NULL);
-    if (hasFlag(type, Const))
-        format(state, "const ", NULL);
-    writeTypename(context, parent->type);
-    format(state, " *", NULL);
+    if (!isPure) {
+        if (hasFlag(type, Const))
+            format(state, "const ", NULL);
+        generateTypeUsage(context, parent->type);
+        if (typeIs(parent->type, Struct))
+            format(state, " *", NULL);
+    }
 
     for (u64 i = 0; i < type->func.paramsCount; i++) {
-        format(state, ", ", NULL);
+        if (!isPure || i != 0)
+            format(state, ", ", NULL);
         generateTypeUsage(context, type->func.params[i]);
     }
     format(state, ");\n", NULL);
@@ -197,14 +219,16 @@ void generateFuncGeneratedDeclaration(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
     u32 index = type->func.decl->funcDecl.index;
+    const Type *ret = type->func.retType;
     if (hasFlag(type->func.decl, BuiltinMember))
         return;
 
+    if (isInlineFunction(type->func.decl))
+        format(state, "static ", NULL);
+
     generateTypeUsage(context, type->func.retType);
-    if (typeIs(type->func.retType, This))
-        format(context->state, " *", NULL);
-    else
-        format(state, " ", NULL);
+    format(state, " ", NULL);
+
     if (hasFlag(type->func.decl, Generated))
         writeDeclNamespace(context, type->namespace, NULL);
     else
@@ -227,7 +251,8 @@ void generateFunctionTypedef(CodegenContext *context, const Type *type)
     FormatState *state = context->state;
     const AstNode *decl = type->func.decl,
                   *parent = decl ? type->func.decl->parentScope : NULL;
-    bool isMember = parent && parent->tag == astStructDecl;
+    bool isMember =
+        parent && (nodeIs(parent, StructDecl) || nodeIs(parent, ClassDecl));
 
     format(state, "typedef ", NULL);
     generateTypeUsage(context, type->func.retType);
@@ -357,12 +382,57 @@ const Type *matchOverloadedFunction(TypingContext *ctx,
     return NULL;
 }
 
+bool checkMemberFunctions(AstVisitor *visitor,
+                          AstNode *node,
+                          NamedTypeMember *members)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    AstNode *member = node->structDecl.members;
+
+    bool retype = false;
+    for (u64 i = 0; member; member = member->next, i++) {
+        if (nodeIs(member, FuncDecl)) {
+            const Type *type = checkFunctionBody(visitor, member);
+            if (typeIs(type, Error)) {
+                node->type = ERROR_TYPE(ctx);
+                return false;
+            }
+
+            if (member->funcDecl.operatorOverload == opRange &&
+                !isIteratorFunction(type->func.retType)) //
+            {
+                logError(ctx->L,
+                         &member->loc,
+                         "expecting an iterator function overload to return an "
+                         "iterator, got '{t}'",
+                         (FormatArg[]){{.t = type->func.retType}});
+                node->type = ERROR_TYPE(ctx);
+                return false;
+            }
+
+            retype = members[i].type != type;
+            members[i].type = type;
+        }
+    }
+
+    return retype;
+}
+
 void checkFunctionParam(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *type = node->funcParam.type, *def = node->funcParam.def;
+
     const Type *type_ = checkType(visitor, type), *def_ = NULL;
-    if (typeIs(type_, Error) || def == NULL) {
+    if (typeIs(type_, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    if (hasFlag(type, Const) && !hasFlag(type_, Const))
+        type_ = makeWrappedType(ctx->types, type_, flgConst);
+
+    if (def == NULL) {
         node->type = type_;
         return;
     }
@@ -527,6 +597,16 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
     }
 
     const Type *type = checkFunctionSignature(visitor, node);
-    if (!typeIs(type, Error) && node->funcDecl.body)
+    if (typeIs(type, Error))
+        return;
+
+    if (node->funcDecl.body)
         checkFunctionBody(visitor, node);
+
+    if (typeIs(node->type, Error))
+        return;
+
+    if (hasFlag(node, Async)) {
+        makeCoroutineEntry(visitor, node);
+    }
 }

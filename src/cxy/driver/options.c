@@ -98,7 +98,9 @@ bool parseCommandLineOptions(int *argc, char **argv, Options *options, Log *log)
             Def("None")),
         Opt(Name("warnings-all"), Help("enables all compiler warnings")),
         Opt(Name("no-color"),
-            Help("disable colored output when formatting outputs")));
+            Help("disable colored output when formatting outputs")),
+        Opt(Name("without-builtins"),
+            Help("Disable building builtins (does not for build command)")));
 
     int selected = argparse(argc, &argv, parser);
 
@@ -125,6 +127,7 @@ bool parseCommandLineOptions(int *argc, char **argv, Options *options, Log *log)
     if (log->enabledWarnings.num & wrn_Error)
         return false;
 
+    options->withoutBuiltins = getGlobalOption(cmd, 4);
     if (cmd->id == CMD_dev) {
         UnloadCmd(cmd, options, DEV_CMD_LAYOUT);
         options->dev.lastStage.num =

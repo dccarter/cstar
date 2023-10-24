@@ -187,6 +187,7 @@ static void *CXY__default_calloc(u64 n, u64 size, void (*destructor)(void *))
 
 void *CXY__default_realloc(void *ptr, u64 size, void (*destructor)(void *));
 void CXY__default_dealloc(void *ptr);
+
 attr(always_inline) void *CXY__default_get_ref(void *ptr)
 {
     if (ptr) {
@@ -337,6 +338,11 @@ attr(always_inline) static u64 wputc(wchar c)
     return fwrite(s.str, 1, s.str[5], stdout);
 }
 
+attr(always_inline) static i32 CXY__itoa(i32 value, char *buffer)
+{
+    return sprintf(buffer, "%d", value);
+}
+
 typedef struct {
     u64 size;
     char *data;
@@ -416,8 +422,10 @@ attr(always_inline) void CXY__builtins_string_builder_deinit(
 attr(always_inline) void CXY__builtins_string_builder_delete(
     CXY__builtins_string_builder_t *sb)
 {
-    if (sb)
-        CXY__free(sb);
+    if (sb->data) {
+        CXY__free(sb->data);
+        *sb = (CXY__builtins_string_builder_t){0, 0, NULL};
+    }
 }
 
 static void CXY__builtins_string_builder_delete_fwd(void *sb)
@@ -451,6 +459,14 @@ attr(always_inline) static void CXY__builtins_string_builder_append_float(
     CXY__builtins_string_builder_append_cstr0(sb, data, len);
 }
 
+attr(always_inline) static void CXY__builtins_string_builder_append_ptr(
+    CXY__builtins_string_builder_t *sb, const void *ptr)
+{
+    char data[32];
+    i64 len = sprintf(data, "%p", ptr);
+    CXY__builtins_string_builder_append_cstr0(sb, data, len);
+}
+
 attr(always_inline) static void CXY__builtins_string_builder_append_char(
     CXY__builtins_string_builder_t *sb, wchar c)
 {
@@ -474,6 +490,12 @@ attr(always_inline) static char *CXY__builtins_string_builder_release(
     sb->data = NULL;
     CXY__builtins_string_builder_deinit(sb);
     return data;
+}
+
+attr(always_inline) static u64
+    CXY__builtins_string_builder_size(CXY__builtins_string_builder_t *sb)
+{
+    return sb->size;
 }
 
 int CXY__builtins_binary_search(const void *arr,

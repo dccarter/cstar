@@ -3,6 +3,7 @@
 //
 
 #include "codegen.h"
+#include <string.h>
 
 #include "lang/flag.h"
 #include "lang/strings.h"
@@ -13,15 +14,16 @@
 
 #include "driver/driver.h"
 
+#include "driver/cc.h"
 #include "epilogue.h"
 #include "prologue.h"
 
-#define CXY_ANONYMOUS_FUNC "CXY__Anon_Func"
-#define CXY_ANONYMOUS_TUPLE "CXY__Anon_Tuple"
-#define CXY_ANONYMOUS_STRUCT "CXY__Anon_Struct"
-#define CXY_ANONYMOUS_ARRAY "CXY__Anon_Array"
-#define CXY_ANONYMOUS_SLICE "CXY__Anon_Slice"
-#define CXY_ANONYMOUS_ENUM "CXT__Anon_Enum"
+#define CXY_ANONYMOUS_FUNC "AnonymousFunc"
+#define CXY_ANONYMOUS_TUPLE "AnonymousTuple"
+#define CXY_ANONYMOUS_STRUCT "AnonymousStruct"
+#define CXY_ANONYMOUS_ARRAY "AnonymousArray"
+#define CXY_ANONYMOUS_SLICE "AnonymousSlice"
+#define CXY_ANONYMOUS_ENUM "AnonymousEnum"
 
 static void generateType(CodegenContext *context, const Type *type)
 {
@@ -46,6 +48,9 @@ static void generateType(CodegenContext *context, const Type *type)
         break;
     case typStruct:
         generateStructDefinition(context, type);
+        break;
+    case typClass:
+        generateClassDefinition(context, type);
         break;
     case typOpaque:
         if (type->namespace == NULL)
@@ -72,17 +77,25 @@ static void generateAllTypes(CodegenContext *ctx)
 
     u64 empty = 0;
     for (u64 i = 0; i < sorted; i++) {
-        if (types[i] == NULL)
+        if (types[i] == NULL || hasFlag(types[i], CodeGenerated))
             continue;
 
-        if (typeIs(types[i], Struct) && !hasFlag(types[i], CodeGenerated)) {
+        if (typeIs(types[i], Struct))
             generateStructTypedef(ctx, types[i]);
-        }
+        else if (typeIs(types[i], Class))
+            generateClassTypedef(ctx, types[i]);
     }
+
+    format(ctx->state, "\n", NULL);
 
     for (u64 i = 0; i < sorted; i++) {
         if (types[i] == NULL)
             continue;
+        if (types[i]->name &&
+            strcmp(types[i]->name, "destructorForward_32") == 0) {
+            printf("it");
+            continue;
+        }
 
         if (!hasFlag(types[i], CodeGenerated)) {
             generateType(ctx, types[i]);
@@ -215,10 +228,20 @@ static void generateCCode(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state,
                "#include {s}\n",
                (FormatArg[]){{.s = node->cCode.what->stringLiteral.value}});
-    else
+    else if (node->cCode.kind == cDefine)
         format(ctx->state,
                "#define {s}\n",
                (FormatArg[]){{.s = node->cCode.what->stringLiteral.value}});
+    else {
+        cstring cxySource = node->loc.fileName;
+        AstNode *nativeSource = node->cCode.what;
+        for (; nativeSource; nativeSource = nativeSource->next) {
+            addNativeSourceFile(ctx->nativeSources,
+                                ctx->strPool,
+                                cxySource,
+                                nativeSource->stringLiteral.value);
+        }
+    }
 }
 
 void generateWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
@@ -248,6 +271,12 @@ void generateDestructorRef(ConstAstVisitor *visitor, const AstNode *node)
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     writeTypename(ctx, node->destructorRef.target);
     format(ctx->state, "__builtin_destructor", NULL);
+}
+
+void generateTypeRef(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    writeTypename(ctx, node->type);
 }
 
 static void epilogue(ConstAstVisitor *visitor, const AstNode *node)
@@ -344,12 +373,36 @@ void writeEnumPrefix(CodegenContext *ctx, const Type *type)
     }
 }
 
+void writeEnumWithoutNamespace(CodegenContext *ctx, const Type *type)
+{
+    FormatState *state = ctx->state;
+    csAssert0(type->tag == typEnum);
+
+    if (type->namespace) {
+        format(state, "{s}__", (FormatArg[]){{.s = type->namespace}});
+    }
+
+    if (type->name) {
+        format(state, "{s}", (FormatArg[]){{.s = type->name}});
+    }
+    else {
+        format(state,
+               CXY_ANONYMOUS_ENUM "{u64}",
+               (FormatArg[]){{.u64 = type->index}});
+    }
+}
+
 void writeTypename(CodegenContext *ctx, const Type *type)
 {
     FormatState *state = ctx->state;
 
-    if (!isBuiltinType(type))
+    if (!isBuiltinType(type)) {
+        if (typeIs(type, Module)) {
+            writeDeclNamespace(ctx, type->namespace, "");
+            return;
+        }
         writeDeclNamespace(ctx, type->namespace, NULL);
+    }
 
     if (type->name) {
         if (type->tag == typFunc) {
@@ -399,6 +452,19 @@ void writeTypename(CodegenContext *ctx, const Type *type)
         case typPointer:
             writeTypename(ctx, type->pointer.pointed);
             break;
+        case typInfo:
+            writeTypename(ctx, type->info.target);
+            break;
+        case typString:
+            format(state, "string", NULL);
+            break;
+        case typWrapped: {
+            u64 flags = flgNone;
+            type = unwrapType(type, &flags);
+            if (flags & flgConst)
+                format(ctx->state, "const ", NULL);
+            writeTypename(ctx, type);
+        } break;
         default:
             unreachable();
         }
@@ -428,7 +494,7 @@ void generateTypeUsage(CodegenContext *ctx, const Type *type)
     case typPointer:
         if (hasFlag(type, Const))
             format(state, "const ", NULL);
-        generateTypeUsage(ctx, type->pointer.pointed);
+        generateTypeUsage(ctx, getPointedType(type));
         format(state, "*", NULL);
         break;
     case typWrapped: {
@@ -439,14 +505,21 @@ void generateTypeUsage(CodegenContext *ctx, const Type *type)
         generateTypeUsage(ctx, type);
         break;
     }
+
     case typEnum:
-    case typOpaque:
     case typArray:
     case typTuple:
     case typStruct:
     case typFunc:
-    case typThis:
         writeTypename(ctx, type);
+        break;
+    case typThis:
+        generateTypeUsage(ctx, type->this.that);
+        break;
+    case typOpaque:
+    case typClass:
+        writeTypename(ctx, type);
+        format(ctx->state, " *", NULL);
         break;
     default:
         break;
@@ -523,6 +596,7 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
     CodegenContext context = {.state = node->metadata.state,
                               .types = driver->typeTable,
                               .strPool = &driver->strPool,
+                              .nativeSources = &driver->nativeSources,
                               .program = program,
                               .importedFile = hasFlag(program, ImportedModule),
                               .namespace =
@@ -579,7 +653,9 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
         [astVarDecl] = generateVariableDecl,
         [astTypeDecl] = generateTypeDecl,
         [astStructDecl] = generateStructDecl,
-        [astDestructorRef] = generateDestructorRef
+        [astClassDecl] = generateClassDecl,
+        [astDestructorRef] = generateDestructorRef,
+        [astTypeRef] = generateTypeRef,
     }, .fallback = generateFallback);
 
     // clang-format on

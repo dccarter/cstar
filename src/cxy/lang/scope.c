@@ -300,10 +300,37 @@ AstNode *findEnclosingStruct(Env *env,
         env, L, keyword, "struct", astStructDecl, astStructDecl, astError, loc);
 }
 
-AstNode *findEnclosingBlock(Env *env, Log *L, const FileLoc *loc)
+AstNode *findEnclosingClass(Env *env,
+                            Log *L,
+                            cstring keyword,
+                            const FileLoc *loc)
 {
     return findEnclosingScope(
-        env, L, "defer", "block", astBlockStmt, astBlockStmt, astError, loc);
+        env, L, keyword, "class", astClassDecl, astClassDecl, astError, loc);
+}
+
+AstNode *findEnclosingClassOrStruct(Env *env,
+                                    Log *L,
+                                    cstring keyword,
+                                    const FileLoc *loc)
+{
+    return findEnclosingScope(env,
+                              L,
+                              keyword,
+                              "class or struct",
+                              astStructDecl,
+                              astClassDecl,
+                              astError,
+                              loc);
+}
+
+AstNode *findEnclosingBlock(Env *env,
+                            cstring keyword,
+                            Log *L,
+                            const FileLoc *loc)
+{
+    return findEnclosingScope(
+        env, L, keyword, "block", astBlockStmt, astBlockStmt, astError, loc);
 }
 
 void pushScope(Env *env, AstNode *node)

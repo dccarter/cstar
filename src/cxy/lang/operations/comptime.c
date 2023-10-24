@@ -4,7 +4,9 @@
 
 #include "eval.h"
 
+#include "lang/builtins.h"
 #include "lang/flag.h"
+#include "lang/strings.h"
 #include "lang/ttable.h"
 
 typedef AstNode *(*AstNodeMemberGetter)(EvalContext *,
@@ -77,12 +79,16 @@ static inline const Type *actualType(const Type *type)
 
 static AstNode *getName(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 {
+    if (node == NULL)
+        return NULL;
+
     cstring name = NULL;
     switch (node->tag) {
-    case astStructField:
+    case astField:
         name = node->structField.name;
         break;
     case astStructDecl:
+    case astClassDecl:
         name = node->structDecl.name;
         break;
     case astFuncDecl:
@@ -94,6 +100,8 @@ static AstNode *getName(EvalContext *ctx, const FileLoc *loc, AstNode *node)
     case astPrimitiveType:
         name = getPrimitiveTypeName(node->primitiveType.id);
         break;
+    case astGenericParam:
+        return getName(ctx, loc, getTypeDecl(stripAll(node->type)));
     default:
         return NULL;
     }
@@ -108,10 +116,41 @@ static AstNode *getMembers(EvalContext *ctx,
                            attr(unused) const FileLoc *loc,
                            AstNode *node)
 {
+    if (node == NULL)
+        return NULL;
+
+    const Type *type = stripAll(node->type);
     switch (node->tag) {
     case astTupleType:
         return comptimeWrapped(
             ctx, &node->loc, node->tupleExpr.elements, flgComptimeIterable);
+    case astStructDecl:
+    case astClassDecl:
+        return comptimeWrapped(
+            ctx, &node->loc, node->structDecl.members, flgComptimeIterable);
+    case astGenericParam:
+        return getMembers(ctx, loc, getTypeDecl(type));
+    default:
+        break;
+    }
+    return NULL;
+}
+
+static AstNode *getMembersCount(EvalContext *ctx,
+                                attr(unused) const FileLoc *loc,
+                                AstNode *node)
+{
+    if (node == NULL)
+        return NULL;
+
+    const Type *type = stripAll(node->type);
+    switch (type->tag) {
+    case typTuple:
+        return makeAstNode(
+            ctx->pool,
+            loc,
+            &(AstNode){.tag = astIntegerLit,
+                       .intLiteral.value = (i64)type->tuple.count});
     default:
         break;
     }
@@ -148,9 +187,17 @@ static AstNode *getElementType(EvalContext *ctx,
     return makeTypeReferenceNode(ctx->pool, type->array.elementType, loc);
 }
 
-static AstNode *getPointedType(EvalContext *ctx,
+static AstNode *getStripedType(EvalContext *ctx,
                                const FileLoc *loc,
                                AstNode *node)
+{
+    const Type *type = stripAll(node->type ?: evalType(ctx, node));
+    return makeTypeReferenceNode(ctx->pool, type, loc);
+}
+
+static AstNode *makePointedTypeAstNode(EvalContext *ctx,
+                                       const FileLoc *loc,
+                                       AstNode *node)
 {
     const Type *type = actualType(node->type ?: evalType(ctx, node));
     if (!isPointerType(type))
@@ -162,12 +209,13 @@ static AstNode *getPointedType(EvalContext *ctx,
 static AstNode *isString(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 {
     const Type *type = node->type ?: evalType(ctx, node);
-    type = resolveType(type);
+    type = resolveType(unwrapType(type, NULL));
 
     return makeAstNode(ctx->pool,
                        loc,
                        &(AstNode){.tag = astBoolLit,
-                                  .boolLiteral.value = typeIs(type, String)});
+                                  .boolLiteral.value = typeIs(type, String) ||
+                                                       isBuiltinString(type)});
 }
 
 static AstNode *isChar(EvalContext *ctx, const FileLoc *loc, AstNode *node)
@@ -295,12 +343,36 @@ static AstNode *isPointer(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 static AstNode *isStruct(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 {
     const Type *type = node->type ?: evalType(ctx, node);
-    type = resolveType(type);
+    type = unwrapType(resolveType(type), NULL);
 
     return makeAstNode(ctx->pool,
                        loc,
                        &(AstNode){.tag = astBoolLit,
                                   .boolLiteral.value = typeIs(type, Struct)});
+}
+
+static AstNode *isClass(EvalContext *ctx, const FileLoc *loc, AstNode *node)
+{
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = unwrapType(resolveType(type), NULL);
+
+    return makeAstNode(ctx->pool,
+                       loc,
+                       &(AstNode){.tag = astBoolLit,
+                                  .boolLiteral.value = typeIs(type, Class)});
+}
+
+static AstNode *evalIsTupleType(EvalContext *ctx,
+                                const FileLoc *loc,
+                                AstNode *node)
+{
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = unwrapType(resolveType(type), NULL);
+
+    return makeAstNode(ctx->pool,
+                       loc,
+                       &(AstNode){.tag = astBoolLit,
+                                  .boolLiteral.value = typeIs(type, Tuple)});
 }
 
 static AstNode *isEnum(EvalContext *ctx, const FileLoc *loc, AstNode *node)
@@ -313,13 +385,44 @@ static AstNode *isEnum(EvalContext *ctx, const FileLoc *loc, AstNode *node)
                    .boolLiteral.value = typeIs(node->type, Enum)});
 }
 
-static AstNode *isField(EvalContext *ctx, const FileLoc *loc, AstNode *node)
+static AstNode *isDestructible(EvalContext *ctx,
+                               const FileLoc *loc,
+                               AstNode *node)
 {
+
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = unwrapType(type, NULL);
+    AstNode *decl = getTypeDecl(type);
+
     return makeAstNode(
         ctx->pool,
         loc,
         &(AstNode){.tag = astBoolLit,
-                   .boolLiteral.value = nodeIs(node, StructField)});
+                   .boolLiteral.value = isClassOrStructType(type) &&
+                                        hasFlag(decl, ImplementsDeinit)});
+}
+
+static AstNode *isCover(EvalContext *ctx, const FileLoc *loc, AstNode *node)
+{
+
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = unwrapType(type, NULL);
+    AstNode *decl = getTypeDecl(type);
+
+    return makeAstNode(
+        ctx->pool,
+        loc,
+        &(AstNode){.tag = astBoolLit,
+                   .boolLiteral.value =
+                       isClassOrStructType(type) && hasFlag(decl, Native)});
+}
+
+static AstNode *isField(EvalContext *ctx, const FileLoc *loc, AstNode *node)
+{
+    return makeAstNode(ctx->pool,
+                       loc,
+                       &(AstNode){.tag = astBoolLit,
+                                  .boolLiteral.value = nodeIs(node, Field)});
 }
 
 static void initDefaultMembers(EvalContext *ctx)
@@ -332,7 +435,9 @@ static void initDefaultMembers(EvalContext *ctx)
     ADD_MEMBER("members", getMembers);
     ADD_MEMBER("Tinfo", getTypeInfo);
     ADD_MEMBER("elementType", getElementType);
-    ADD_MEMBER("pointedType", getPointedType);
+    ADD_MEMBER("pointedType", makePointedTypeAstNode);
+    ADD_MEMBER("strippedType", getStripedType);
+    ADD_MEMBER("membersCount", getMembersCount);
     ADD_MEMBER("isInteger", isInteger);
     ADD_MEMBER("isSigned", isSigned);
     ADD_MEMBER("isUnsigned", isUnsigned);
@@ -341,6 +446,8 @@ static void initDefaultMembers(EvalContext *ctx)
     ADD_MEMBER("isNumber", isNumeric);
     ADD_MEMBER("isPointer", isPointer);
     ADD_MEMBER("isStruct", isStruct);
+    ADD_MEMBER("isClass", isClass);
+    ADD_MEMBER("isTuple", evalIsTupleType);
     ADD_MEMBER("isField", isField);
     ADD_MEMBER("isString", isString);
     ADD_MEMBER("isBoolean", isBoolean);
@@ -348,31 +455,33 @@ static void initDefaultMembers(EvalContext *ctx)
     ADD_MEMBER("isArray", isArray);
     ADD_MEMBER("isSlice", isSlice);
     ADD_MEMBER("isEnum", isEnum);
+    ADD_MEMBER("isDestructible", isDestructible);
+    ADD_MEMBER("isCover", isCover);
 
 #undef ADD_MEMBER
 }
 
-static AstNode *getStructMembers(EvalContext *ctx,
-                                 const FileLoc *loc,
-                                 AstNode *node)
+static AstNode *getStructOrClassMembers(EvalContext *ctx,
+                                        const FileLoc *loc,
+                                        AstNode *node)
 {
     return comptimeWrapped(
         ctx, loc, node->structDecl.members, flgComptimeIterable);
 }
 
-static AstNode *getStructBase(EvalContext *ctx,
-                              const FileLoc *loc,
-                              AstNode *node)
+static AstNode *getClassBase(EvalContext *ctx,
+                             const FileLoc *loc,
+                             AstNode *node)
 {
-    if (node->structDecl.base) {
-        return getResolvedPath(node->structDecl.base);
+    if (node->classDecl.base) {
+        return getResolvedPath(node->classDecl.base);
     }
 
     logError(ctx->L,
              loc,
-             "struct '{s}' does not extend any base type",
-             (FormatArg[]){{.s = node->structDecl.name}});
-    logNote(ctx->L, &node->loc, "struct declared here", NULL);
+             "class '{s}' does not extend any base type",
+             (FormatArg[]){{.s = node->classDecl.name}});
+    logNote(ctx->L, &node->loc, "class declared here", NULL);
 
     return NULL;
 }
@@ -383,8 +492,8 @@ static void initStructDeclMembers(EvalContext *ctx)
 #define ADD_MEMBER(name, G)                                                    \
     insertAstNodeGetter(&structDeclMembers, makeString(ctx->strings, name), G)
 
-    ADD_MEMBER("members", getStructMembers);
-    ADD_MEMBER("base", getStructBase);
+    ADD_MEMBER("members", getStructOrClassMembers);
+    ADD_MEMBER("base", getClassBase);
 
 #undef ADD_MEMBER
 }
@@ -428,7 +537,7 @@ AstNode *evalAstNodeMemberAccess(EvalContext *ctx,
     case astStructDecl:
         table = &structDeclMembers;
         break;
-    case astStructField:
+    case astField:
         table = &fieldDeclMembers;
         break;
     default:

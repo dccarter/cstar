@@ -393,14 +393,17 @@ static void visitStructField(ConstAstVisitor *visitor, const AstNode *node)
     nodeToBinary(visitor, node->structField.value);
 }
 
-static void visitStructDecl(ConstAstVisitor *visitor, const AstNode *node)
+static void visitClassOrStructDecl(ConstAstVisitor *visitor,
+                                   const AstNode *node)
 {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     packString(&ctx->packer, node->structDecl.name);
-    nodeToBinary(visitor, node->structDecl.base);
+    if (nodeIs(node, ClassDecl))
+        nodeToBinary(visitor, node->classDecl.base);
     manyNodesToBinary(visitor, node->structDecl.members);
+    manyNodesToBinary(visitor, node->structDecl.implements);
 }
 
 static void visitBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -602,8 +605,9 @@ bool binaryEncodeAstNode(struct msgpack_sbuffer *sbuf,
         [astUnionDecl] = visitUnionDecl,
         [astEnumOption] = visitEnumOption,
         [astEnumDecl] = visitEnumDecl,
-        [astStructField] = visitStructField,
-        [astStructDecl] = visitStructDecl,
+        [astField] = visitStructField,
+        [astStructDecl] = visitClassOrStructDecl,
+        [astClassDecl] = visitClassOrStructDecl,
         [astAssignExpr] = visitBinaryExpr,
         [astBinaryExpr] = visitBinaryExpr,
         [astUnaryExpr] = visitUnaryExpr,

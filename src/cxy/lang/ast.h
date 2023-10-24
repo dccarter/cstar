@@ -56,8 +56,9 @@ struct StrPool;
     f(UnionDecl)            \
     f(EnumOption)           \
     f(EnumDecl)             \
-    f(StructField)          \
+    f(Field)                \
     f(StructDecl)           \
+    f(ClassDecl)            \
     f(InterfaceDecl)        \
     f(ModuleDecl)           \
     f(ImportDecl)           \
@@ -148,7 +149,7 @@ typedef struct {
     struct AstNode *attrs;
 
 typedef enum { iptModule, iptPath } ImportKind;
-typedef enum { cInclude, cDefine } CCodeKind;
+typedef enum { cInclude, cDefine, cSources } CCodeKind;
 
 typedef struct FunctionSignature {
     struct AstNode *params;
@@ -352,6 +353,7 @@ struct AstNode {
             FunctionSignature *signature;
             struct AstNode *opaqueParams;
             struct AstNode *body;
+            struct AstNode *coroEntry;
         } funcDecl;
 
         struct {
@@ -409,15 +411,27 @@ struct AstNode {
             struct AstNode *value;
         } structField;
 
-        struct {
-            cstring name;
-            struct AstNode *base;
-            struct AstNode *implements;
-            struct AstNode *members;
-            struct AstNode *typeParams;
-            const struct Type *thisType;
-            SortedNodes *sortedMembers;
-        } structDecl;
+        union {
+            struct {
+                cstring name;
+                struct AstNode *implements;
+                struct AstNode *members;
+                struct AstNode *typeParams;
+                const struct Type *thisType;
+                SortedNodes *sortedMembers;
+                AstNode *deinit;
+            } structDecl;
+
+            struct {
+                cstring name;
+                struct AstNode *implements;
+                struct AstNode *members;
+                struct AstNode *typeParams;
+                const struct Type *thisType;
+                SortedNodes *sortedMembers;
+                struct AstNode *base;
+            } classDecl;
+        };
 
         struct {
             cstring name;
@@ -468,7 +482,7 @@ struct AstNode {
             union {
                 ClosureCapture captureSet;
                 struct {
-                    const Capture **capture;
+                    Capture *capture;
                     u64 captureCount;
                 };
             };
@@ -560,6 +574,36 @@ struct AstNode {
 void clearAstBody(AstNode *node);
 AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *node);
 
+AstNode *makeVoidAstNode(MemPool *pool,
+                         const FileLoc *loc,
+                         u64 flags,
+                         AstNode *next,
+                         const Type *type);
+
+AstNode *makeIntegerLiteral(MemPool *pool,
+                            const FileLoc *loc,
+                            i64 value,
+                            AstNode *next,
+                            const Type *type);
+
+AstNode *makeStringLiteral(MemPool *pool,
+                           const FileLoc *loc,
+                           cstring value,
+                           AstNode *next,
+                           const Type *type);
+
+AstNode *makePointerAstNode(MemPool *pool,
+                            const FileLoc *loc,
+                            u64 flags,
+                            AstNode *pointed,
+                            AstNode *next,
+                            const Type *type);
+
+AstNode *makeVoidPointerAstNode(MemPool *pool,
+                                const FileLoc *loc,
+                                u64 flags,
+                                AstNode *next);
+
 AstNode *makePath(MemPool *pool,
                   const FileLoc *loc,
                   cstring name,
@@ -577,6 +621,7 @@ AstNode *makeResolvedPath(MemPool *pool,
                           cstring name,
                           u64 flags,
                           AstNode *resolvesTo,
+                          AstNode *next,
                           const Type *type);
 
 AstNode *makeResolvedPathWithArgs(MemPool *pool,
@@ -604,6 +649,42 @@ AstNode *makeResolvedPathElementWithArgs(MemPool *pool,
                                          AstNode *genericArgs,
                                          const Type *type);
 
+AstNode *makeFieldExpr(MemPool *pool,
+                       const FileLoc *loc,
+                       cstring name,
+                       u64 flags,
+                       AstNode *value,
+                       AstNode *next);
+
+AstNode *makeGroupExpr(MemPool *pool,
+                       const FileLoc *loc,
+                       u64 flags,
+                       AstNode *exprs,
+                       AstNode *next);
+
+AstNode *makeCastExpr(MemPool *pool,
+                      const FileLoc *loc,
+                      u64 flags,
+                      AstNode *expr,
+                      AstNode *target,
+                      AstNode *next,
+                      const Type *type);
+
+AstNode *makeTypedExpr(MemPool *pool,
+                       const FileLoc *loc,
+                       u64 flags,
+                       AstNode *expr,
+                       AstNode *target,
+                       AstNode *next,
+                       const Type *type);
+
+AstNode *makeTupleExpr(MemPool *pool,
+                       const FileLoc *loc,
+                       u64 flags,
+                       AstNode *members,
+                       AstNode *next,
+                       const Type *type);
+
 attr(always_inline) static AstNode *makePathElement(MemPool *pool,
                                                     const FileLoc *loc,
                                                     cstring name,
@@ -622,6 +703,21 @@ AstNode *makeCallExpr(MemPool *pool,
                       AstNode *next,
                       const Type *type);
 
+AstNode *makeSpreadExpr(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        AstNode *expr,
+                        AstNode *next,
+                        const Type *type);
+
+AstNode *makeMemberExpr(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        AstNode *target,
+                        AstNode *member,
+                        AstNode *next,
+                        const Type *type);
+
 AstNode *makePathFromIdent(MemPool *pool, const AstNode *ident);
 
 AstNode *makeGenIdent(MemPool *pool,
@@ -631,23 +727,60 @@ AstNode *makeGenIdent(MemPool *pool,
 
 AstNode *makeExprStmt(MemPool *pool,
                       const FileLoc *loc,
-                      AstNode *expr,
                       u64 flags,
+                      AstNode *expr,
                       AstNode *next,
                       const Type *type);
 
 AstNode *makeStmtExpr(MemPool *pool,
                       const FileLoc *loc,
-                      AstNode *stmt,
                       u64 flags,
+                      AstNode *stmt,
                       AstNode *next,
                       const Type *type);
+
+AstNode *makeUnaryExpr(MemPool *pool,
+                       const FileLoc *loc,
+                       u64 flags,
+                       bool isPrefix,
+                       Operator op,
+                       AstNode *operand,
+                       AstNode *next,
+                       const Type *type);
 
 AstNode *makeBlockStmt(MemPool *pool,
                        const FileLoc *loc,
                        AstNode *stmts,
                        AstNode *next,
                        const Type *type);
+
+AstNode *makeFunctionDecl(MemPool *pool,
+                          const FileLoc *loc,
+                          cstring name,
+                          AstNode *params,
+                          AstNode *returnType,
+                          AstNode *body,
+                          u64 flags,
+                          AstNode *next,
+                          const Type *type);
+
+AstNode *makeFunctionParam(MemPool *pool,
+                           const FileLoc *loc,
+                           cstring name,
+                           AstNode *paramType,
+                           AstNode *defaultValue,
+                           u64 flags,
+                           AstNode *next);
+
+AstNode *makeOperatorOverload(MemPool *pool,
+                              const FileLoc *loc,
+                              Operator op,
+                              AstNode *params,
+                              AstNode *returnType,
+                              AstNode *body,
+                              u64 flags,
+                              AstNode *next,
+                              const Type *type);
 
 AstNode *makeNewExpr(MemPool *pool,
                      const FileLoc *loc,
@@ -665,13 +798,49 @@ AstNode *makeStructExpr(MemPool *pool,
                         AstNode *next,
                         const Type *type);
 
+AstNode *makeStructExprFromType(MemPool *pool,
+                                const FileLoc *loc,
+                                u64 flags,
+                                AstNode *fields,
+                                AstNode *next,
+                                const Type *type);
+
 AstNode *makeVarDecl(MemPool *pool,
                      const FileLoc *loc,
                      u64 flags,
                      cstring name,
+                     AstNode *varType,
                      AstNode *init,
                      AstNode *next,
                      const Type *type);
+
+AstNode *makeArrayTypeAstNode(MemPool *pool,
+                              const FileLoc *loc,
+                              u64 flags,
+                              AstNode *elementType,
+                              u64 len,
+                              AstNode *next,
+                              const Type *type);
+
+AstNode *makeBinaryExpr(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        AstNode *lhs,
+                        Operator op,
+                        AstNode *rhs,
+                        AstNode *next,
+                        const Type *type);
+
+AstNode *makeAssignExpr(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        AstNode *lhs,
+                        Operator op,
+                        AstNode *rhs,
+                        AstNode *next,
+                        const Type *type);
+
+AstNode *makeAstNop(MemPool *pool, const FileLoc *loc);
 
 AstNode *copyAstNode(MemPool *pool, const AstNode *node);
 
@@ -688,9 +857,12 @@ static inline AstNode *shallowCloneAstNode(MemPool *pool, const AstNode *node)
                         node);
 }
 
+AstNode *deepCloneAstNode(MemPool *pool, const AstNode *node);
+
 AstNode *cloneGenericDeclaration(MemPool *pool, const AstNode *node);
 
 AstNode *replaceAstNode(AstNode *node, const AstNode *with);
+void replaceAstNodeInList(AstNode **list, const AstNode *node, AstNode *with);
 
 AstNode *replaceAstNodeWith(AstNode *node, const AstNode *with);
 
@@ -719,6 +891,11 @@ bool isBuiltinTypeExpr(const AstNode *node);
 
 bool comptimeCompareTypes(const AstNode *lhs, const AstNode *rhs);
 
+static inline bool isClassOrStructAstNode(const AstNode *node)
+{
+    return nodeIs(node, StructDecl) || nodeIs(node, ClassDecl);
+}
+
 u64 countAstNodes(const AstNode *node);
 u64 countProgramDecls(const AstNode *program);
 
@@ -726,7 +903,7 @@ AstNode *getLastAstNode(AstNode *node);
 
 AstNode *getNodeAtIndex(AstNode *node, u64 index);
 
-AstNode *findStructMemberByName(AstNode *node, cstring name);
+AstNode *findMemberByName(AstNode *node, cstring name);
 
 AstNode *findEnumOptionByName(AstNode *node, cstring name);
 
@@ -765,10 +942,16 @@ FunctionSignature *makeFunctionSignature(MemPool *pool,
                                          const FunctionSignature *from);
 
 AstNode *getParentScope(AstNode *node);
+AstNode *getMemberParentScope(AstNode *node);
 
 AstNode *makeTypeReferenceNode(MemPool *pool,
                                const Type *type,
                                const FileLoc *loc);
+
+AstNode *makeTypeReferenceNode2(MemPool *pool,
+                                const Type *type,
+                                const FileLoc *loc,
+                                AstNode *next);
 
 AstNode *findInAstNode(AstNode *node, cstring name);
 AstNode *resolvePath(const AstNode *path);
@@ -805,3 +988,5 @@ attr(always_inline) static bool isStructDeclaration(AstNode *node)
            nodeIs(node, GenericDecl) &&
                isStructDeclaration(node->genericDecl.decl);
 }
+
+CCodeKind getCCodeKind(TokenTag tag);

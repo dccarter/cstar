@@ -57,7 +57,8 @@ static bool inferGenericFunctionTypes(AstVisitor *visitor,
     for (; param; param = param->next, index++) {
         if (param->genericParam.inferIndex > argsCount) {
             csAssert0(hasFlag(param, Variadic));
-            paramTypes[index] = makeTupleType(ctx->types, NULL, 0, flgNone);
+            paramTypes[index] =
+                makeTupleType(ctx->types, NULL, 0, param->flags);
             continue;
         }
 
@@ -69,7 +70,8 @@ static bool inferGenericFunctionTypes(AstVisitor *visitor,
 }
 
 static bool transformVariadicFunctionCallArgs(AstVisitor *visitor,
-                                              const AstNode *func)
+                                              const AstNode *func,
+                                              u64 flags)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *args = ctx->currentCall->callExpr.args;
@@ -113,7 +115,7 @@ static bool transformVariadicFunctionCallArgs(AstVisitor *visitor,
             else {
                 *ctx->currentCall->callExpr.args = (AstNode){
                     .tag = astTupleExpr,
-                    .flags = flgVariadic,
+                    .flags = flgVariadic | flags,
                     .loc = *manyNodesLoc(args),
                     .tupleExpr = {.elements = duplicateAstNode(ctx->pool, args),
                                   .len = 1 + (argsCount - totalParams)}};
@@ -131,7 +133,7 @@ static bool transformVariadicFunctionCallArgs(AstVisitor *visitor,
                     manyNodesLoc(args),
                     &(AstNode){
                         .tag = astTupleExpr,
-                        .flags = flgVariadic,
+                        .flags = flgVariadic | flags,
                         .tupleExpr = {.elements = args,
                                       .len = 1 + (argsCount - totalParams)}});
             }
@@ -143,9 +145,7 @@ static bool transformVariadicFunctionCallArgs(AstVisitor *visitor,
 
 static void removeEmptyVariadicFunctionParameter(AstNode *node)
 {
-    if (node->funcDecl.signature->params->next == NULL)
-        node->funcDecl.signature->params = NULL;
-    else {
+    if (node->funcDecl.signature->params->next != NULL) {
         AstNode *prev = node->funcDecl.signature->params;
         AstNode *it = prev->next;
         while (it->next) {
@@ -166,7 +166,9 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
     if (hasFlag(generic, Variadic)) {
         const AstNode *decl = generic->genericDecl.decl;
         // transform function call params
-        if (!transformVariadicFunctionCallArgs(visitor, decl)) {
+        if (!transformVariadicFunctionCallArgs(
+                visitor, decl, generic->flags & flgTransient)) //
+        {
             return node->type = ERROR_TYPE(ctx);
         }
     }
@@ -225,7 +227,7 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
     AstNode *substitute = cloneGenericDeclaration(ctx->pool, generic),
             *param = getGenericDeclarationParams(substitute);
     substitute->flags |= flgGenerated;
-    
+
     cstring name =
         makeAnonymousVariable(ctx->strings, getDeclarationName(substitute));
     setDeclarationName(substitute, name);
@@ -241,8 +243,12 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
             typeIs(param->type, Tuple) && param->type->tuple.count == 0;
     }
 
-    if (hasFlag(generic, Builtin) && getDeclarationName(generic) == S_Optional)
-        substitute->flags |= flgOptional;
+    if (nodeIs(substitute, StructDecl) && hasFlag(generic, Builtin)) {
+        if (getDeclarationName(generic) == S_Optional)
+            substitute->flags |= flgOptional;
+        else if (getDeclarationName(generic) == S_Slice)
+            substitute->flags |= flgSlice;
+    }
 
     if (nodeIs(substitute, FuncDecl)) {
         if (hasFlag(substitute, Variadic) && isEmptyTuple)
@@ -261,6 +267,7 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
     node->pathElement.args = NULL;
 
     ctx->types->currentNamespace = namespace;
+    ((Type *)substitute->type)->from = type;
     return substitute->type;
 
 resolveGenericDeclError:

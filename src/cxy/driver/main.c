@@ -17,7 +17,11 @@ int main(int argc, char **argv)
         status = false;
         goto exit;
     }
-    initCompilerDriver(&driver, &log);
+
+    if (!initCompilerDriver(&driver, &log)) {
+        status = false;
+        goto exit;
+    }
 
     for (int i = 1; i < argc && status; ++i)
         status &= compileFile(argv[i], &driver);

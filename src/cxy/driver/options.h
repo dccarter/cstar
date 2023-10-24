@@ -13,6 +13,7 @@ typedef struct Options {
     const char *libDir;
     const char *buildDir;
     const char *rest;
+    bool withoutBuiltins;
     struct {
         bool printAst;
         bool cleanAst;

@@ -1,6 +1,8 @@
 //
 // Created by Carter Mbotho on 2023-07-06.
 //
+#include "shake.h"
+
 #include "lang/operations.h"
 
 #include "lang/ast.h"
@@ -9,6 +11,7 @@
 #include "lang/visitor.h"
 
 #include "core/alloc.h"
+#include "lang/builtins.h"
 
 typedef struct {
     Log *L;
@@ -74,6 +77,7 @@ static void transformVariadicFunction(ShakeAstContext *ctx,
                                       AstNode *param)
 {
     node->flags |= flgVariadic;
+    bool isTransient = findAttribute(param, S_transient);
     AstNode *genericParam = makeAstNode(
         ctx->pool,
         &param->funcParam.type->loc,
@@ -91,7 +95,8 @@ static void transformVariadicFunction(ShakeAstContext *ctx,
 
     *node = (AstNode){.tag = astGenericDecl,
                       .loc = node->loc,
-                      .flags = node->flags | flgVariadic,
+                      .flags = node->flags | flgVariadic |
+                               (isTransient ? flgTransient : flgNone),
                       .next = node->next,
                       .genericDecl = {.decl = copyAstNode(ctx->pool, node),
                                       .params = genericParam,
@@ -132,7 +137,7 @@ static bool validateOperatorOverloadArguments(ShakeAstContext *ctx,
 
 #define f(OP, _0, _1, STR, ...)                                                \
     case op##OP:                                                               \
-        if (op != opNew)                                                       \
+        if (op != opInitOverload)                                              \
             return reportIfUnexpectedNumberOfParameters(                       \
                 ctx, &node->loc, STR, count, 0);                               \
         else                                                                   \
@@ -151,7 +156,7 @@ static bool validateOperatorOverloadArguments(ShakeAstContext *ctx,
 
     case opStringOverload:
         return reportIfUnexpectedNumberOfParameters(
-            ctx, &node->loc, "str", count, 0);
+            ctx, &node->loc, "str", count, 1);
 
     case opTruthy:
         return reportIfUnexpectedNumberOfParameters(
@@ -195,9 +200,40 @@ static AstNode *shakeVariableInitializer(ShakeAstContext *ctx, AstNode *init)
                                .init = init}});
 }
 
+static AstNode *makeStrExprBuilder(ShakeAstContext *ctx, AstNode *node)
+{
+    AstNode *sb = findBuiltinDecl(S_StringBuilder);
+    csAssert0(sb);
+
+    return makeVarDecl(ctx->pool,
+                       &node->loc,
+                       flgNone,
+                       S_sb,
+                       NULL,
+                       makeCallExpr(ctx->pool,
+                                    &node->loc,
+                                    makeResolvedPath(ctx->pool,
+                                                     &node->loc,
+                                                     S_StringBuilder,
+                                                     flgNone,
+                                                     sb,
+                                                     NULL,
+                                                     sb->type),
+                                    NULL,
+                                    flgNone,
+                                    NULL,
+                                    NULL),
+                       NULL,
+                       NULL);
+}
+
 void shakeVariableDecl(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
+
+    astVisit(visitor, node->varDecl.type);
+    astVisit(visitor, node->varDecl.init);
+
     AstNode *names = node->varDecl.names, *init = node->varDecl.init,
             *type = node->varDecl.type, *name = names;
 
@@ -353,11 +389,14 @@ void shakeFuncDecl(AstVisitor *visitor, AstNode *node)
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
     AstNode *params = node->funcDecl.signature->params, *param = params;
     u16 required = 0, total = 0;
+    node->flags |= findAttribute(node, S_pure) == NULL ? flgNone : flgPure;
 
     bool hasDefaultParams = false, isVariadic = false;
 
     for (; param; param = param->next) {
         total++;
+        astVisit(visitor, param);
+
         if (param->funcParam.def) {
             if (!hasDefaultParams) {
                 required = total;
@@ -416,6 +455,28 @@ void shakeFuncDecl(AstVisitor *visitor, AstNode *node)
         transformVariadicFunction(ctx, node, param);
 }
 
+void shakeClosureExpr(AstVisitor *visitor, AstNode *node)
+{
+    ShakeAstContext *ctx = getAstVisitorContext(visitor);
+    astVisitManyNodes(visitor, node->closureExpr.params);
+    astVisit(visitor, node->closureExpr.ret);
+
+    if (node->closureExpr.body && !nodeIs(node->closureExpr.body, BlockStmt)) {
+        node->closureExpr.body = makeAstNode(
+            ctx->pool,
+            &node->closureExpr.body->loc,
+            &(AstNode){
+                .tag = astBlockStmt,
+                .blockStmt = {.stmts = makeAstNode(
+                                  ctx->pool,
+                                  &node->closureExpr.body->loc,
+                                  &(AstNode){.tag = astReturnStmt,
+                                             .returnStmt.expr =
+                                                 node->closureExpr.body})}});
+    }
+    astVisit(visitor, node->closureExpr.body);
+}
+
 static void shakeGenericDecl(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
@@ -435,11 +496,11 @@ static void shakeGenericDecl(AstVisitor *visitor, AstNode *node)
     int index = -1;
     for (u16 i = 0; gparam; gparam = gparam->next, i++) {
         AstNode *fparam = decl->funcDecl.signature->params;
-        for (; fparam; fparam = fparam->next) {
+        for (u16 j = 0; fparam; fparam = fparam->next, j++) {
             AstNode *type = fparam->funcParam.type;
             if (hasFlag(fparam, Variadic))
                 break;
-            inferrable[i] = inferGenericParamFromFuncParam(gparam, type, i);
+            inferrable[i] = inferGenericParamFromFuncParam(gparam, type, j);
             if (inferrable[i]) {
                 index = index == -1 ? i : index;
                 break;
@@ -469,10 +530,25 @@ static void shakeGenericDecl(AstVisitor *visitor, AstNode *node)
     astVisit(visitor, decl);
 }
 
-static void shakeStructDecl(AstVisitor *visitor, AstNode *node)
+static void shakeClassOrStructDecl(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
-    astVisit(visitor, node->structDecl.base);
+
+    if (!hasFlag(node, Native)) {
+        AstNodeList members = {node->structDecl.members,
+                               getLastAstNode(node->structDecl.members)};
+        if (nodeIs(node, ClassDecl)) {
+            astVisit(visitor, node->classDecl.base);
+            insertAstNode(&members,
+                          createClassOrStructBuiltins(ctx->pool, node));
+        }
+        else {
+            insertAstNode(&members,
+                          createClassOrStructBuiltins(ctx->pool, node));
+        }
+        node->structDecl.members = members.first;
+    }
+
     astVisitManyNodes(visitor, node->structDecl.implements);
     astVisitManyNodes(visitor, node->structDecl.members);
 
@@ -492,8 +568,14 @@ static void shakeForStmt(AstVisitor *visitor, AstNode *node)
         variable->loc = name->loc;
         name->next = NULL;
         for (; it;) {
-            variable->next = makeVarDecl(
-                ctx->pool, &it->loc, flags, it->ident.value, NULL, NULL, NULL);
+            variable->next = makeVarDecl(ctx->pool,
+                                         &it->loc,
+                                         flags,
+                                         it->ident.value,
+                                         NULL,
+                                         NULL,
+                                         NULL,
+                                         NULL);
             name = it;
             it = it->next;
             name->next = NULL;
@@ -522,6 +604,79 @@ static void shakeBlockStmt(AstVisitor *visitor, AstNode *node)
     ctx->block = block;
 }
 
+static void shakeStringExpr(AstVisitor *visitor, AstNode *node)
+{
+    ShakeAstContext *ctx = getAstVisitorContext(visitor);
+    AstNode *part = node->stringExpr.parts;
+    if (nodeIs(part, StringLit) && part->next == NULL) {
+        node->tag = astStringLit;
+        node->stringLiteral = part->stringLiteral;
+        return;
+    }
+
+    AstNode *var = makeStrExprBuilder(ctx, node),
+            *sb = makeResolvedPath(
+                ctx->pool, &node->loc, S_sb, flgNone, var, NULL, var->type);
+
+    for (; part;) {
+        if (nodeIs(part, StringLit) && part->stringLiteral.value[0] == '\0') {
+            part = part->next;
+            continue;
+        }
+
+        sb = makeBinaryExpr(
+            ctx->pool, &node->loc, flgNone, sb, opShl, part, NULL, NULL);
+        part = part->next;
+        sb->binaryExpr.rhs->next = NULL;
+    }
+
+    var->next = sb;
+    sb->next = makeCallExpr(
+        ctx->pool,
+        &node->loc,
+        makePathWithElements(
+            ctx->pool,
+            &node->loc,
+            flgNone,
+            makePathElement(
+                ctx->pool,
+                &node->loc,
+                S_sb,
+                flgNone,
+                makePathElement(
+                    ctx->pool, &node->loc, S_release, flgNone, NULL, NULL),
+                NULL),
+            NULL),
+        NULL,
+        flgNone,
+        NULL,
+        NULL);
+
+    node->tag = astStmtExpr;
+    node->stmtExpr.stmt = makeBlockStmt(ctx->pool, &node->loc, var, NULL, NULL);
+    node->stmtExpr.stmt->flags |= flgBlockReturns;
+}
+
+static void shakeArrayType(AstVisitor *visitor, AstNode *node)
+{
+    ShakeAstContext *ctx = getAstVisitorContext(visitor);
+    if (node->arrayType.dim == NULL) {
+        AstNode *slice = findBuiltinDecl(S_Slice);
+        csAssert0(slice);
+        node->tag = astPath;
+        node->type = NULL;
+        node->path.elements =
+            makeResolvedPathElementWithArgs(ctx->pool,
+                                            &node->loc,
+                                            S_Slice,
+                                            flgNone,
+                                            slice,
+                                            NULL,
+                                            node->arrayType.elementType,
+                                            NULL);
+    }
+}
+
 AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
 {
     ShakeAstContext context = {
@@ -535,8 +690,12 @@ AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
         [astForStmt] = shakeForStmt,
         [astFuncDecl] = shakeFuncDecl,
         [astGenericDecl] = shakeGenericDecl,
-        [astStructDecl] = shakeStructDecl,
-        [astBlockStmt] = shakeBlockStmt
+        [astStructDecl] = shakeClassOrStructDecl,
+        [astClassDecl] = shakeClassOrStructDecl,
+        [astBlockStmt] = shakeBlockStmt,
+        [astStringExpr] = shakeStringExpr,
+        [astArrayType] = shakeArrayType,
+        [astClosureExpr] = shakeClosureExpr
     }, .fallback = astVisitFallbackVisitAll);
     // clang-format on
 

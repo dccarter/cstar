@@ -27,6 +27,7 @@ const Type *checkPathElement(AstVisitor *visitor,
     case typContainer:
     case typModule:
     case typEnum:
+    case typClass:
         resolved = expectInType(
             ctx->types, parent, ctx->L, node->pathElement.name, &node->loc);
         break;
@@ -65,13 +66,17 @@ static const Type *checkBasePathElement(AstVisitor *visitor,
         csAssert0(node->pathElement.enclosure);
 
         AstNode *enclosure = node->pathElement.enclosure,
-                *parent = getParentScope(enclosure);
+                *parent = getMemberParentScope(enclosure);
         if (keyword == S_super) {
-            return node->type = parent->type->tStruct.base;
+            return node->type = getTypeBase(parent->type);
         }
         else if (keyword == S_this) {
-            return node->type = makePointerType(
-                       ctx->types, parent->type, enclosure->flags & flgConst);
+            return node->type =
+                       nodeIs(parent, StructDecl)
+                           ? makePointerType(ctx->types,
+                                             parent->type,
+                                             enclosure->flags & flgConst)
+                           : parent->type;
         }
         else if (keyword == S_This) {
             return makePointerType(
@@ -82,8 +87,7 @@ static const Type *checkBasePathElement(AstVisitor *visitor,
     else {
         csAssert0(node->pathElement.resolvesTo);
         node->flags |=
-            (nodeIs(node->pathElement.resolvesTo, StructField) ? flgMember
-                                                               : flgNone);
+            (nodeIs(node->pathElement.resolvesTo, Field) ? flgMember : flgNone);
         return node->type = node->pathElement.resolvesTo->type;
     }
 }
@@ -109,11 +113,23 @@ void generatePath(ConstAstVisitor *visitor, const AstNode *node)
 
     if (typeIs(node->type, Enum) &&
         hasFlag(node->path.elements->next, EnumLiteral)) {
-        writeEnumPrefix(ctx, node->type);
+        //        AstNode *resolved =
+        //        node->path.elements->pathElement.resolvesTo; parent = resolved
+        //        ? resolved->parentScope : NULL; if (nodeIs(parent, Program) &&
+        //        ctx->namespace == NULL) {
+        //            AstNode *module = parent->program.module;
+        //            if (module)
+        //                writeDeclNamespace(ctx, module->moduleDecl.name,
+        //                NULL);
+        //        }
+
+        writeEnumWithoutNamespace(ctx, node->type);
         generateManyAstsWithDelim(
             visitor, "_", "_", "", node->path.elements->next);
     }
-    else if (hasFlag(node, BuiltinMember) || nodeIs(parent, StructDecl)) {
+    else if (hasFlag(node, BuiltinMember) || nodeIs(parent, StructDecl) ||
+             (typeIs(node->type, Func) &&
+              hasFlag(node->type->func.decl, Pure))) {
         const Type *scope = parent->type;
         const AstNode *func = node->type->func.decl;
         writeTypename(ctx, scope);
@@ -133,10 +149,12 @@ void generatePath(ConstAstVisitor *visitor, const AstNode *node)
             astConstVisit(visitor, elem);
             if (elem->next) {
                 cstring name = elem->pathElement.name;
-                if (typeIs(elem->type, Module))
+                if (typeIs(elem->type, Module) ||
+                    typeIs(elem->next->type, Func))
                     format(ctx->state, "__", NULL);
                 else if (elem->type &&
                          ((name == S_this) || typeIs(elem->type, Pointer) ||
+                          typeIs(elem->type, Class) ||
                           typeIs(elem->type, This) || isSliceType(elem->type)))
                     format(ctx->state, "->", NULL);
                 else
@@ -175,7 +193,7 @@ void checkPath(AstVisitor *visitor, AstNode *node)
     }
 
     node->type = type;
-    node->flags = flags;
+    node->flags |= flags;
 }
 
 void evalPath(AstVisitor *visitor, AstNode *node)
@@ -183,6 +201,8 @@ void evalPath(AstVisitor *visitor, AstNode *node)
     EvalContext *ctx = getAstVisitorContext(visitor);
     AstNode *elem = node->path.elements;
     AstNode *symbol = elem->pathElement.resolvesTo;
+    if (nodeIs(symbol, VarDecl))
+        symbol = symbol->varDecl.init;
 
     if (symbol == NULL) {
         logError(ctx->L,
@@ -248,7 +268,8 @@ void evalPath(AstVisitor *visitor, AstNode *node)
             node->tag = astStringType;
             break;
         case typEnum:
-        case typStruct: {
+        case typStruct:
+        case typClass: {
             AstNode *decl =
                 typeIs(type, Enum) ? type->tEnum.decl : type->tStruct.decl;
             if (decl == NULL) {
@@ -284,6 +305,8 @@ void evalPath(AstVisitor *visitor, AstNode *node)
     else {
         replaceAstNodeWith(
             node, nodeIs(symbol, VarDecl) ? symbol->varDecl.init : symbol);
+        if (hasFlag(node, ComptimeIterable))
+            node->next = symbol->next;
         node->flags &= ~flgComptime;
     }
 }

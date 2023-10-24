@@ -20,10 +20,15 @@ void *CXY__default_realloc(void *ptr, u64 size, void (*destructor)(void *))
 
     CXY__memory_hdr_t *hdr = CXY_MEMORY_HEADER(ptr);
     if (hdr->magic == CXY_MEMORY_MAGIC(HEAP)) {
+        destructor = destructor ?: hdr->destructor;
+        CXY__assert(hdr->refs > 0, "possible cyclic reference %p", ptr);
         if (hdr->refs == 1) {
+            hdr->refs = 0;
             if (hdr->destructor)
                 hdr->destructor(ptr);
             hdr = realloc(hdr, size + CXY_MEMORY_HEADER_SIZE);
+            hdr->destructor = destructor;
+            hdr->refs = 1;
             return CXY_MEMORY_POINTER(hdr);
         }
         else {
@@ -39,7 +44,9 @@ void CXY__default_dealloc(void *ptr)
     if (ptr) {
         CXY__memory_hdr_t *hdr = CXY_MEMORY_HEADER(ptr);
         if (hdr->magic == CXY_MEMORY_MAGIC(HEAP) && hdr->refs) {
+            CXY__assert(hdr->refs > 0, "possible cyclic reference %p", ptr);
             if (hdr->refs == 1) {
+                hdr->refs = 0;
                 if (hdr->destructor)
                     hdr->destructor(ptr);
                 memset(hdr, 0, sizeof(*hdr));

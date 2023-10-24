@@ -134,73 +134,56 @@
     memmove
 ) : func(dst: &void, src: &const void, len: u64) -> &void
 
-pub native func memset(
-    dst: &void,
-    ch: i32,
-    len: u64
-) : &void;
+## pub (
+    memset
+) : func(dst: &void, ch: i32, len: u64) -> &void
+
+## pub (
+    free
+) : func(ptr: &void) -> void
+
+
+## pub (
+    CXY__builtins_sizeof
+) : func(typ: auto) -> u64
+
+## pub (
+    CXY__builtins_assert
+) : func(cond: bool, file: string, line: u64, pos: u64) -> void
+
+## pub (
+    CXY__alloc
+) : func(size: u64, dctor: func(ptr: &const void) -> void) -> &void
+
+## pub (
+    CXY__realloc
+) : func(ptr: &void, size: u64, dctor: func(ptr: &const void) -> void) -> &void
+
+## pub (
+    CXY__free
+) : func(ptr: &void) -> void
+
+@inline
+pub func newClass[T]() => CXY__alloc(sizeof!(#T), T.op__destructor_fwd) : T
 
 ## pub(
     strlen
 ): func(str: &const char) -> u64
 
 ## pub(
-    CXY__builtins_sizeof
-): func(it: auto) -> u64
+    strcmp
+): func(s1: &const char, s2: &const char) -> i32
 
 ## pub(
-    CXY__builtins_assert
-): func(cond: bool, fmt: &const char, line: u64, col: u64) -> void
-
-
-## pub CXY__builtins_alloc : func(
-    typ: auto,
-    size: u64,
-    dctor: func(ptr: &void) -> void
-) -> &void
-
-@inline
-pub func alloc[T](count: u64 = 1) => CXY__builtins_alloc(#T, count, destructor!(#T)) : &T
-
-## pub(
-    dealloc => CXY__builtins_dealloc
-) : func(ptr: &void) -> void
-
-pub native func CXY__builtins_alloc_slice(
-    typ: auto,
-    size: u64,
-    dctor: func(ptr: &void) -> void
-) : &void
-
-## pub CXY__builtins_memset_slice: func(
-    typ: auto,
-    ptr: &void,
-    size: u64
-) -> void
-
-@inline
-pub func allocSlice[T](
-    count: u64
-) => CXY__builtins_alloc_slice(#[T], count, destructor!(#[T])) : [T]
-
-pub native func CXY__builtins_realloc_slice(
-    typ: auto,
-    ptr: &void,
-    count: u64,
-    dctor: func(ptr: &void) -> void
-) : &void
-
-@inline
-pub func reallocSlice[T](
-    data: [T], count: u64
-) => CXY__builtins_realloc_slice(#[T], data, count, destructor!(#[T])) : [T];
+    CXY__itoa
+): func(value: i32, str: &char) -> i32
 
 type HashCode = u32
 
 ## pub(hashInit => CXY__hash_fnv1a_init):  func() -> u32
 
 ## pub (
-    hashPointer => CXY__hash_fnv1a_pointer
+    hashPointer => CXY__hash_fnv1a_ptr
 ): func(init: HashCode, ptr: &const void) -> u32
 
 ## pub(
@@ -240,7 +223,7 @@ pub func hashStringSize(
     len: u64
 ) => hashBytes(init, str !: &const char, len)
 
-pub func hash[T](val: T) {
+pub func hash[T](val: const T, init: HashCode = 0) : HashCode {
     #if (#T == #string) {
         return hashString(hashInit(), val)
     }
@@ -253,12 +236,29 @@ pub func hash[T](val: T) {
     else #if (#T == #i32 || #T == #u32) {
         return hashUint32(hashInit(), <u32>val)
     }
-    else #if (#T == #i64 || #T == #u64) {
+    else #if (T.isFloat || #T == #i64 || #T == #u64) {
         return hashUint64(hashInit(), <u64>val)
+    }
+    else #if (T.isEnum) {
+        return hashUint64(hashInit(), <u64>val)
+    }
+    else #if (T.isTuple) {
+        var code = hashInit();
+        #for (const i: 0..T.membersCount) {
+            code = hash(val.#{i}, code)
+        }
+        return code
+    }
+    else #if (T.isArray || T.isSlice) {
+        var code = hashInit();
+        for (const x: val) {
+            code = hash(x, code)
+        }
+        return code
     }
     else {
         // this will fail if T does not implement hash function
-        return val.hash()
+        return val.op__hash()
     }
 }
 
@@ -267,59 +267,136 @@ pub native func CXY__hash_mod_prime(i: u64, p: u64) : u64;
 
 pub native type CXY__builtins_string_builder_t;
 
-pub native func CXY__builtins_string_builder_new(): &CXY__builtins_string_builder_t;
+pub native func CXY__builtins_string_builder_new(): CXY__builtins_string_builder_t;
 
 pub native func CXY__builtins_string_builder_delete(
-    self: &CXY__builtins_string_builder_t
+    self: CXY__builtins_string_builder_t
 ) : void;
 
 pub native func CXY__builtins_string_builder_release(
-    self: &CXY__builtins_string_builder_t
+    self: CXY__builtins_string_builder_t
 ) : &char;
 
+pub native func CXY__builtins_string_builder_size(
+    self: CXY__builtins_string_builder_t
+) : u64;
+
 pub native func CXY__builtins_string_builder_append_cstr0(
-    self: &CXY__builtins_string_builder_t,
+    self: CXY__builtins_string_builder_t,
     str:  &const char,
     len:  u64
 ) : void;
 
 pub native func CXY__builtins_string_builder_append_cstr1(
-    self: &CXY__builtins_string_builder_t,
+    self: CXY__builtins_string_builder_t,
     str:  &const char,
 ) : void;
 
 pub native func CXY__builtins_string_builder_append_int(
-    self: &CXY__builtins_string_builder_t,
+    self: CXY__builtins_string_builder_t,
     num: i64
 ) : void;
 
 pub native func CXY__builtins_string_builder_append_float(
-    self: &CXY__builtins_string_builder_t,
+    self: CXY__builtins_string_builder_t,
     num: f64
 ) : void;
 
 pub native func CXY__builtins_string_builder_append_char(
-    self: &CXY__builtins_string_builder_t,
+    self: CXY__builtins_string_builder_t,
     ch: wchar
 ): void;
 
 pub native func CXY__builtins_string_builder_append_bool(
-    self: &CXY__builtins_string_builder_t,
+    self: CXY__builtins_string_builder_t,
     val: bool
 ): void;
 
-pub struct StringBuilder {
-    - sb: &CXY__builtins_string_builder_t
+pub native func CXY__builtins_string_builder_append_ptr(
+    self: CXY__builtins_string_builder_t,
+    val: &const void
+): void;
+
+pub native func CXY__builtins_get_ref(ptr: &void): void;
+pub native func CXY__builtins_drop(ptr: &void): void;
+
+## (
+    CXY__eventloop_wait_read,
+    CXY__eventloop_wait_write
+): func(fd: i32, timeout: i32) -> i32
+
+## (
+    EV_OK => AE_OK,
+    EV_IN => AE_READABLE,
+    EN_OUT => AE_WRITABLE
+) : i32
+
+@inline
+pub func getref[T](@transient obj: T) {
+    CXY__builtins_get_ref(obj: &void)
+    return obj
+}
+
+@inline
+pub func dropref[T](@transient obj: T) => CXY__free(obj: &void)
+
+pub struct String {
+    - str: string
+    - count: u64
+
+    func `init`(str: string) {
+        this.str = str
+        count = strlen(str: &const char)
+    }
+
+    func `init`(str: string, count: u64) {
+        this.str = str
+        this.count = count
+    }
 
     @inline
-    func `new`() : void {  sb = CXY__builtins_string_builder_new() }
+    func `deref`() => str
 
     @inline
-    func `delete`() => CXY__builtins_string_builder_delete(sb)
+    func `deinit`() {
+        CXY__free(this.str : &void)
+        str = null
+        count = 0
+    }
+
+    @inline
+    func `hash`() => hashString(hashInit(), str)
+
+    @inline
+    func `copy`() => String{str: getref(str), count: count}
+
+    @[pure]
+    func `destructor_fwd`(ptr: &void) {
+        (<&String>ptr).op__deinit()
+    }
+}
+
+class StringBuilder {
+    - sb: CXY__builtins_string_builder_t
+
+    @inline
+    func `init`() : void {  sb = CXY__builtins_string_builder_new() }
+
+    @inline
+    func `deinit`() => CXY__builtins_string_builder_delete(sb)
+
+    @[pure]
+    func `destructor_fwd`(ptr: &void) {
+        (<StringBuilder>ptr).op__deinit()
+    }
 
     @inline
     func appendString(str: string) =>
         CXY__builtins_string_builder_append_cstr1(sb, str !: &const char)
+
+    @inline
+    func appendString(str: String) =>
+        CXY__builtins_string_builder_append_cstr1(sb, str.str !: &const char)
 
     @inline
     func appendInt(num: i64) =>
@@ -338,38 +415,60 @@ pub struct StringBuilder {
     func appendBool(val: bool) =>
         CXY__builtins_string_builder_append_bool(sb, val)
 
+    func appendPointer[T](ptr: &const T) =>
+        CXY__builtins_string_builder_append_ptr(sb, ptr: &const void)
+
     @inline
-    func `<<`[U](val: U) {
-        #if ((#U).isString)
+    func `<<`[U](val: const U) : StringBuilder {
+        #if (U.isString)
             appendString(val)
-        else #if ((#U).isInteger)
+        else #if (U.isInteger)
             appendInt(<i64>val)
-        else #if ((#U).isFloat)
+        else #if (U.isFloat)
             appendFloat(val)
-        else #if ((#U).isBoolean)
+        else #if (U.isBoolean)
             appendBool(val)
-        else #if ((#U) == #wchar)
+        else #if (#U == #wchar)
              appendChar(val)
-        else #if ((#U).isEnum)
+        else #if (U.isEnum)
             appendInt(<i64>val)
-        else #if ((#U).isStruct)
-            val.toString(this)
+        else #if (U.isStruct || U.isClass)
+            val.op__str(this)
+        else #if (U.isTuple) {
+            this.appendChar('(')
+            #for (const i: 0..U.membersCount) {
+                #if (i != 0)
+                    this.appendString(", ")
+                this << val.#{i}
+            }
+            this.appendChar(')')
+        }
+        else #if (U.isArray || U.isSlice) {
+            this.appendChar('[')
+            for (const i: 0..len!(val)) {
+                if (i != 0)
+                    this.appendString(", ")
+                this << val.[i]
+            }
+            this.appendChar(']')
+        }
         return this
     }
 
-    @inline
-    func toString() {
-        var ret = CXY__builtins_string_builder_release(sb);
-        return ret !: string
+    func `str`(sb: StringBuilder) {
+        appendPointer[void](sb: &const void)
     }
 
     @inline
-    func toString(dst: This) {
-         dst.appendString(this.toString())
-    }
+    const func `hash`() => hashPointer(hashInit(), this: &const void)
 
     @inline
-    func `str`() => this.toString()
+    func release() {
+        const count = CXY__builtins_string_builder_size(sb);
+        return String(
+            CXY__builtins_string_builder_release(sb) : string,
+            count)
+    }
 }
 
 /**
@@ -383,11 +482,11 @@ struct Optional[T] {
 
     /* Creates an invalid optional type */
     @inline
-    func `new`() { valid = false }
+    func `init`() { valid = false }
 
     /* Creates a valid optional type */
     @inline
-    func `new`(value: T) {
+    func `init`(value: T) {
         this.value = value
         valid = true
     }
@@ -396,23 +495,258 @@ struct Optional[T] {
     @inline
     const func `!!`() => valid
 
-    /* Dereference an optional, i.e get the underlying value. */
     @inline
-    const func `deref`() => value
+    const func `deref`() {
+        assert!(valid)
+        return value
+    }
 
-    /* Convert optional value to string */
-    const func toString(sb: &StringBuilder) {
+    const func `str`(sb: StringBuilder) {
         if (valid)
             sb << value
         else
             sb << "null"
     }
+
+    const func `hash`() {
+        if (this.valid)
+            return hash(this.value)
+        return hashInit()
+    }
 }
 
 /* Creates a valid optional value */
 @inline
-func Some[T](value: T) => Optional[T](value)
+func Some[T](@transient value: T) => Optional[T](value)
 
 /* Creates an invalid optional value */
 @inline
 func None[T]() => Optional[T]()
+
+pub struct Slice[T] {
+    - data: &T
+    - count: u64
+
+    func `init`(data: &T, count: u64) {
+        this.data = data
+        this.count = count
+    }
+
+    @inline
+    func `[]=`(index:  i64, data: T) {
+        CXY__builtins_assert(index < count, file!, line!, column!)
+        this.data.[index] = data
+    }
+
+    @inline
+    func `[]`(index:  i64) {
+        CXY__builtins_assert(index < count, file!, line!, column!)
+        return this.data.[index]
+    }
+
+    @inline
+    const func `[]`(index:  i64) {
+        CXY__builtins_assert(index < count, file!, line!, column!)
+        return this.data.[index]
+    }
+
+    const func `..`() {
+        var i = 0;
+        return () : (T, i)? => {
+            if (i < count)
+                return (data.[i], i++)
+            return null
+        }
+    }
+
+    const func `hash`() : HashCode {
+        var code = hashInit();
+        for (const i: 0..count) {
+            code = hash(data.[i], code)
+        }
+        return code
+    }
+
+    const func `str`(sb: StringBuilder) {
+        sb.appendChar('[')
+        for (const i: 0..count) {
+            if (i != 0)
+                sb.appendString(", ")
+            sb << data.[i]
+        }
+        sb.appendChar(']')
+    }
+}
+
+@inline
+func structToString[T](it: &const T, sb: StringBuilder) {
+    sb << #{T.name} << '{'
+    #const i = 0;
+    #for (const member: T.members) {
+        #if (member.isField) {
+            #if (i != 0) {
+                sb << ", "
+            }
+
+            sb << #{member.name} << ": " << it.#{mkIdent!(member.name)}
+            #{i += 1}
+        }
+    }
+    sb << '}'
+}
+
+@inline
+func computeStructHash[T](it: &const T) {
+    var code = hashInit();
+    #for (const member: T.members) {
+        #if (member.isField) {
+            code = hash[#{member.Tinfo}](it.#{mkIdent!(member.name)}, code)
+        }
+    }
+    return code
+}
+
+@inline
+func classToString[T](it: const T, sb: StringBuilder) {
+    sb << "<" << #{T.name} << ":"
+    sb.appendPointer[void](it: &const void)
+    sb << '>'
+}
+
+@inline
+func computeClassHash[T](it: const T) {
+    return hashPointer(hashInit(), it : &void)
+}
+
+@inline
+func destructorForward[T](ptr: &void)
+{
+    #if (T.strippedType.isStruct)
+        (<&T>ptr).op__destructor()
+    else
+        (<T>ptr).op__destructor()
+}
+
+## pub (
+    CXY_DEFAULT_CORO_STACK_SIZE
+) : u64
+
+## pub(
+    now => CXY__now_ms
+): func() -> i64
+
+## pub(
+    msleep => CXY__eventloop_sleep
+): func(ms: i64) -> void
+
+@alias(name: "Coro")
+pub native type tina;
+
+## pub(
+    suspendCoroutine => CXY__scheduler_suspend
+): func() -> void
+
+## pub (
+    scheduleCoroutine => CXY__scheduler_schedule
+): func(co: Coro) -> void
+
+## pub (
+    runningCoroutineHandle => tina_running
+): func() -> Coro
+
+
+## pub (
+    CXY__launch_coro
+) : func(entry: func(args: &void) -> void, args: &void, dbg: &const char, ss: u64) -> void
+
+pub enum PromiseState {
+    Pending,
+    Rejected,
+    Resolved
+}
+
+pub class Promise[Ret] {
+    - state: PromiseState = PromiseState.Pending;
+    - pendingCoro: Coro = null
+
+    func `init`() {
+        state = PromiseState.Pending
+        pendingCoro = null
+    }
+
+    #if (#Ret != #void) {
+        - result: Ret
+    }
+
+    @inline
+    - func resumePending() {
+        if (pendingCoro != null) {
+            scheduleCoroutine(pendingCoro)
+        }
+    }
+
+    func reject() {
+        state = PromiseState.Rejected
+        resumePending()
+    }
+
+    #if (#Ret == #void) {
+        func resolve() {
+            state = PromiseState.Resolved
+            resumePending()
+        }
+    }
+    else {
+        func resolve(res: Ret) {
+            this.result = res
+            state = PromiseState.Resolved
+            resumePending()
+        }
+    }
+
+    @inline
+    - func waitPending() {
+        if (state == PromiseState.Pending) {
+            pendingCoro = runningCoroutineHandle()
+            suspendCoroutine()
+            pendingCoro = null
+        }
+    }
+
+    #if (#Ret == #void) {
+        func `await`() {
+            waitPending()
+        }
+    }
+    else {
+        func `await`() {
+            waitPending()
+            return this.result
+        }
+    }
+
+    const func `hash`() => 0
+}
+
+pub class Coroutine[Ret, Args] {
+    args: Args
+    promise: Promise[Ret]
+
+    func `init`(args: Args) {
+        this.args = args
+        promise = Promise[Ret]()
+    }
+
+    @inline
+    func `hash`() => 0
+
+    @inline
+    func getPromise() => getref(promise)
+}
+
+func asyncLaunch[Ret, Args](entry: func(arg: &void) -> void, name: string, args: Args) {
+    var coro = Coroutine[Ret, Args](args);
+    var promise = coro.getPromise();
+    CXY__launch_coro(entry, getref(coro): &void, name: &const char, CXY_DEFAULT_CORO_STACK_SIZE)
+    return getref(promise)
+}

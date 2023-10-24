@@ -13,11 +13,9 @@ typedef void (*Visitor)(struct AstVisitor *, AstNode *);
 typedef struct AstVisitor {
     void *context;
     AstNode *current;
-
+    AstNode **currentList;
     void (*visitors[astCOUNT])(struct AstVisitor *, AstNode *node);
-
     void (*fallback)(struct AstVisitor *, AstNode *);
-
     void (*dispatch)(Visitor, struct AstVisitor *, AstNode *);
 } AstVisitor;
 

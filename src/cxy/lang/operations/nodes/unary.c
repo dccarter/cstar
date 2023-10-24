@@ -108,8 +108,41 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
         spreadTupleExpr(visitor, operand, node);
         operand = node->type;
         break;
+    case opAwait:
+        if (!isClassOrStructType(operand)) {
+            logError(ctx->L,
+                     &node->unaryExpr.operand->loc,
+                     "type '{t}' does not implement the await operator",
+                     (FormatArg[]){{.t = operand}});
+            operand = ERROR_TYPE(ctx);
+            break;
+        }
+        else if (transformToAwaitOperator(visitor, node)) {
+            operand = node->type;
+        }
+        else {
+            logError(ctx->L,
+                     &node->unaryExpr.operand->loc,
+                     "struct '{t}' does not `await` operator",
+                     (FormatArg[]){{.t = operand}});
+            operand = ERROR_TYPE(ctx);
+        }
+        break;
     case opNot:
-        if (operand != getPrimitiveType(ctx->types, prtBool)) {
+        if (isClassOrStructType(operand)) {
+            if (transformToTruthyOperator(visitor, node->unaryExpr.operand)) {
+                operand = node->unaryExpr.operand->type;
+            }
+            else {
+                logError(ctx->L,
+                         &node->unaryExpr.operand->loc,
+                         "struct '{t}' does not overload dereference "
+                         "`deref` operator",
+                         (FormatArg[]){{.t = operand}});
+                operand = ERROR_TYPE(ctx);
+            }
+        }
+        else if (operand != getPrimitiveType(ctx->types, prtBool)) {
             logError(ctx->L,
                      &node->unaryExpr.operand->loc,
                      "logical '!' operator no supported on type '{t}', "
@@ -119,45 +152,34 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
         }
         break;
     case opDeref:
-        if (!typeIs(operand, Pointer)) {
-            if (typeIs(operand, Struct)) {
-                if (transformToDerefOperator(visitor, node)) {
-                    operand = node->type;
-                }
-                else {
-                    logError(ctx->L,
-                             &node->unaryExpr.operand->loc,
-                             "struct '{t}' does not overload dereference "
-                             "`deref` operator",
-                             (FormatArg[]){{.t = operand}});
-                    operand = ERROR_TYPE(ctx);
-                }
+        if (isClassOrStructType(operand)) {
+            FileLoc loc = node->unaryExpr.operand->loc;
+            if (transformToDerefOperator(visitor, node)) {
+                operand = node->type;
             }
             else {
                 logError(ctx->L,
-                         &node->unaryExpr.operand->loc,
-                         "cannot not dereference an non-pointer type '{t}'",
+                         &loc,
+                         "struct '{t}' does not overload dereference "
+                         "`deref` operator",
                          (FormatArg[]){{.t = operand}});
                 operand = ERROR_TYPE(ctx);
             }
         }
         else {
-            node->flags |=
-                (operand->flags | (node->unaryExpr.operand->flags & flgConst));
-            operand = operand->pointer.pointed;
-        }
-        break;
-    case opDelete:
-        if (typeIs(operand, Primitive)) {
-            logError(
-                ctx->L, &node->loc, "cannot delete a primitive value", NULL);
+            logError(ctx->L,
+                     &node->unaryExpr.operand->loc,
+                     "cannot not dereference an non-pointer type '{t}'",
+                     (FormatArg[]){{.t = operand}});
             operand = ERROR_TYPE(ctx);
-        }
-        else {
-            operand = makeVoidType(ctx->types);
         }
         break;
     default:
+        logError(ctx->L,
+                 &node->unaryExpr.operand->loc,
+                 "unsupported unary operator '{s}' on type '{t}'",
+                 (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)},
+                               {.t = operand}});
         operand = ERROR_TYPE(ctx);
         break;
     }
@@ -185,15 +207,6 @@ void generateUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     if (node->unaryExpr.isPrefix) {
         switch (node->unaryExpr.op) {
-        case opDelete:
-            generateDeleteExpr(visitor, node);
-            break;
-        case opDeref:
-            format(ctx->state, "(*", NULL);
-            astConstVisit(visitor, node->unaryExpr.operand);
-            format(ctx->state, ")", NULL);
-            break;
-
         default:
             format(ctx->state,
                    "{s}",

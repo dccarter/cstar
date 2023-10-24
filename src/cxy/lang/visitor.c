@@ -143,14 +143,18 @@
         MODE##Visit(visitor, node->enumDecl.base);                             \
         MODE##VisitManyNodes(visitor, node->enumDecl.options);                 \
         break;                                                                 \
-    case astStructField:                                                       \
+    case astField:                                                             \
         MODE##Visit(visitor, node->structField.type);                          \
         MODE##Visit(visitor, node->structField.value);                         \
         break;                                                                 \
     case astStructDecl:                                                        \
-        MODE##Visit(visitor, node->structDecl.base);                           \
         MODE##VisitManyNodes(visitor, node->structDecl.implements);            \
         MODE##VisitManyNodes(visitor, node->structDecl.members);               \
+        break;                                                                 \
+    case astClassDecl:                                                         \
+        MODE##Visit(visitor, node->classDecl.base);                            \
+        MODE##VisitManyNodes(visitor, node->classDecl.implements);             \
+        MODE##VisitManyNodes(visitor, node->classDecl.members);                \
         break;                                                                 \
     case astInterfaceDecl:                                                     \
         MODE##VisitManyNodes(visitor, node->interfaceDecl.members);            \
@@ -232,14 +236,19 @@
 
 void astVisitManyNodes(AstVisitor *visitor, AstNode *node)
 {
-    for (AstNode *it = node; it; it = it->next)
-        astVisit(visitor, it);
+    AstNode *curr = NULL, *next = node;
+    for (; next;) {
+        curr = next;
+        next = next->next;
+        astVisit(visitor, curr);
+    }
 }
 
 void astConstVisitManyNodes(ConstAstVisitor *visitor, const AstNode *node)
 {
-    for (const AstNode *it = node; it; it = it->next)
+    for (const AstNode *it = node; it; it = it->next) {
         astConstVisit(visitor, it);
+    }
 }
 
 void astVisit(AstVisitor *visitor, AstNode *node)

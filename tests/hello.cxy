@@ -1,15 +1,6 @@
-import { HashMap } from "stdlib/map.cxy"
 import { println } from "stdlib/io.cxy"
-import { String } from "stdlib/str.cxy"
+import { add } from "./add.cxy"
 
-func main(args:[string]) {
-    var names = HashMap[String, i32]();
-    names.["age"] = 19;
-    const age = names.["age"];
-    println(names)
-    println(age)
-    var str = String();
-    str = str.append("hello")
-    str = str.append(" ")
-    println(str)
+func main(args: const [string]) {
+    println("Hello ", add(10, 32))
 }

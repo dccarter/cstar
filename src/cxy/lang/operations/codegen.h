@@ -14,11 +14,13 @@ typedef struct {
     AstNode *program;
     cstring namespace;
     bool importedFile;
+    HashTable *nativeSources;
 } CodegenContext;
 
 void writeNamespace(CodegenContext *ctx, cstring sep);
 void writeDeclNamespace(CodegenContext *ctx, cstring namespace, cstring sep);
 void writeEnumPrefix(CodegenContext *ctx, const Type *type);
+void writeEnumWithoutNamespace(CodegenContext *ctx, const Type *type);
 void generateTypeUsage(CodegenContext *ctx, const Type *type);
 void writeTypename(CodegenContext *ctx, const Type *type);
 cstring getNativeDeclarationAliasName(const AstNode *node);
@@ -42,9 +44,6 @@ void generateManyAstsWithDelim(ConstAstVisitor *visitor,
                                const char *sep,
                                const char *close,
                                const AstNode *nodes);
-
-void generateStructDelete(CodegenContext *context, const Type *type);
-
 void generateArrayToSlice(ConstAstVisitor *visitor,
                           const Type *slice,
                           const AstNode *value);
@@ -57,12 +56,14 @@ void generateBlock(ConstAstVisitor *visitor, const AstNode *node);
 
 void generateTupleDefinition(CodegenContext *context, const Type *type);
 void generateStructDefinition(CodegenContext *context, const Type *type);
+void generateClassTypedef(CodegenContext *ctx, const Type *type);
 void generateEnumDefinition(CodegenContext *context, const Type *type);
 void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node);
 void generateFuncDeclaration(CodegenContext *context, const Type *type);
 void generateArrayDeclaration(CodegenContext *context, const Type *type);
 void generateFunctionTypedef(CodegenContext *context, const Type *type);
 void generateStructTypedef(CodegenContext *ctx, const Type *type);
+void generateClassDefinition(CodegenContext *context, const Type *type);
 
 void generateFallback(ConstAstVisitor *visitor, const AstNode *node);
 void generateArrayExpr(ConstAstVisitor *visitor, const AstNode *node);
@@ -90,3 +91,7 @@ void generateAssignExpr(ConstAstVisitor *visitor, const AstNode *node);
 void generateVariableDecl(ConstAstVisitor *visitor, const AstNode *node);
 void generateTypeDecl(ConstAstVisitor *visitor, const AstNode *node);
 void generateStructDecl(ConstAstVisitor *visitor, const AstNode *node);
+void generateClassDecl(ConstAstVisitor *visitor, const AstNode *node);
+
+void generateExpressionWithMemoryManagement(ConstAstVisitor *visitor,
+                                            const AstNode *node);

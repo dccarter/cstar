@@ -5,6 +5,7 @@
 #include "../codegen.h"
 #include "../eval.h"
 
+#include "lang/builtins.h"
 #include "lang/capture.h"
 #include "lang/flag.h"
 #include "lang/operations.h"
@@ -23,7 +24,7 @@ static void generateArrayDelete(CodegenContext *context, const Type *type)
 
     format(state, "\nattr(always_inline)\nstatic void ", NULL);
     writeTypename(context, type);
-    format(state, "__builtin_destructor(void *ptr) {{{>}\n", NULL);
+    format(state, "__op__destructor(void *ptr) {{{>}\n", NULL);
     if (isSliceType(type)) {
         writeTypename(context, type);
         format(state, " this = ptr;", NULL);
@@ -50,14 +51,14 @@ static void generateArrayDelete(CodegenContext *context, const Type *type)
                 format(state, "CXY__free((void *)this[i]);", NULL);
         }
         else if (typeIs(stripped, Struct) || typeIs(stripped, Array) ||
-                 typeIs(stripped, Tuple)) {
+                 typeIs(stripped, Tuple) || typeIs(stripped, Class)) {
             if (isSliceType(type)) {
                 writeTypename(context, stripped);
-                format(state, "__builtin_destructor(&this->data[i]);", NULL);
+                format(state, "__op__destructor(&this->data[i]);", NULL);
             }
             else {
                 writeTypename(context, stripped);
-                format(state, "__builtin_destructor(&this[i]);", NULL);
+                format(state, "__op__destructor(&this[i]);", NULL);
             }
         }
         format(state, "{<}\n};", NULL);
@@ -150,7 +151,7 @@ static void buildStringFormatForIndex(CodegenContext *context,
     case typTuple:
         writeTypename(context, stripped);
         format(state,
-               "__toString({cl}(&this{s}[i]), sb);",
+               "__op__str({cl}(&this{s}[i]), sb);",
                (FormatArg[]){{.c = '*'}, {.len = deref}, {.s = target}});
         break;
     case typOpaque:
@@ -178,43 +179,27 @@ static void buildStringFormatForIndex(CodegenContext *context,
     }
 }
 
-static void generateArrayToString(CodegenContext *context, const Type *type)
+AstNode *transformArrayExprToSliceCall(TypingContext *ctx,
+                                       const Type *slice,
+                                       AstNode *expr)
 {
-    FormatState *state = context->state;
-    format(state, "\nstatic void ", NULL);
-    writeTypename(context, type);
-    format(state, "__toString(", NULL);
-    writeTypename(context, type);
-    format(state, " this, StringBuilder* sb) {{{>}\n", NULL);
-
-    format(state,
-           "CXY__builtins_string_builder_append_char(sb->sb, '[');\n",
-           NULL);
-
-    format(state, "for (u64 i = 0; i < ", NULL);
-    if (isSliceType(type))
-        format(state, "this->len", NULL);
-    else
-        format(state, "{u64}", (FormatArg[]){{.u64 = type->array.len}});
-    format(state, "; i++) {{{>}\n", NULL);
-
-    format(
-        state,
-        "if (i) {>}\nCXY__builtins_string_builder_append_cstr0(sb->sb, \", \", "
-        "2);{<}\n",
+    return makeVarDecl(
+        ctx->pool,
+        &expr->loc,
+        flgNone,
+        makeAnonymousVariable(ctx->strings, "arr"),
+        makeArrayTypeAstNode(ctx->pool,
+                             &expr->loc,
+                             flgNone,
+                             makeTypeReferenceNode(ctx->pool,
+                                                   getSliceTargetType(slice),
+                                                   &expr->loc),
+                             expr->type->array.len,
+                             NULL,
+                             NULL),
+        expr,
+        NULL,
         NULL);
-    if (isSliceType(type))
-        buildStringFormatForIndex(
-            context, type->array.elementType, "->data", 0);
-    else
-        buildStringFormatForIndex(context, type->array.elementType, "", 0);
-
-    format(state, "{<}\n}\n", NULL);
-
-    format(
-        state, "CXY__builtins_string_builder_append_char(sb->sb, ']');", NULL);
-
-    format(state, "{<}\n}\n", NULL);
 }
 
 void generateArrayToSlice(ConstAstVisitor *visitor,
@@ -299,6 +284,7 @@ void generateForStmtArray(ConstAstVisitor *visitor, const AstNode *node)
 
 void generateArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
     generateManyAstsWithDelim(
         visitor, "{{", ", ", "}", node->arrayExpr.elements);
 }
@@ -324,24 +310,34 @@ void generateArrayDeclaration(CodegenContext *context, const Type *type)
         format(state, "[{u64}]", (FormatArg[]){{.u64 = type->array.len}});
         format(state, ";\n", NULL);
     }
-
-    generateArrayDelete(context, type);
-    generateArrayToString(context, type);
 }
 
 void checkArrayType(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     const Type *element = checkType(visitor, node->arrayType.elementType);
-
-    u64 size = UINT64_MAX;
-    if (node->arrayType.dim) {
-        // TODO evaluate len
-        // evalType(visitor, node->arrayType.dim);
-        csAssert0(node->arrayType.dim->tag == astIntegerLit);
-        size = node->arrayType.dim->intLiteral.value;
+    if (typeIs(element, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
     }
 
+    u64 size = UINT64_MAX;
+    const Type *dim = checkType(visitor, node->arrayType.dim);
+    if (typeIs(dim, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    if (nodeIs(node, IntegerLit)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "expecting array dimension to be constant integral type "
+                 "at compile time",
+                 NULL);
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+    size = node->arrayType.dim->intLiteral.value;
     node->type = makeArrayType(ctx->types, element, size);
 }
 

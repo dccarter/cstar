@@ -25,7 +25,7 @@ static void checkIndexExprAssignment(AstVisitor *visitor, AstNode *node)
     const Type *lhs = left->indexExpr.target->type;
     const Type *target = stripPointer(lhs);
 
-    const Type *func = findStructMemberType(lhs, S_IndexAssignOverload);
+    const Type *func = findMemberInType(lhs, S_IndexAssignOverload);
     if (func == NULL) {
         logError(ctx->L,
                  &node->assignExpr.rhs->loc,
@@ -59,21 +59,50 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *left = node->assignExpr.lhs, *right = node->assignExpr.rhs;
 
+    const Type *lhs = NULL;
     if (nodeIs(left, IndexExpr)) {
         const Type *target = checkType(visitor, left->indexExpr.target);
-        target = stripPointer(target);
-        if (typeIs(target, Struct)) {
+        if (typeIs(target, Error)) {
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+
+        if (isClassOrStructType(target)) {
             checkIndexExprAssignment(visitor, node);
             return;
         }
 
-        if (typeIs(target, Error)) {
-            node->type = target;
+        if (isPointerType(target)) {
+            lhs = stripAll(target);
+            const Type *index = checkType(visitor, left->indexExpr.index);
+            if (typeIs(index, Error)) {
+                node->type = ERROR_TYPE(ctx);
+                return;
+            }
+
+            if (!isIntegerType(index)) {
+                logError(ctx->L,
+                         &left->indexExpr.index->loc,
+                         "unexpected pointer index assignment operatior `[]=` "
+                         "type, expecting an integer, got {t}",
+                         (FormatArg[]){{.t = index}});
+                node->type = ERROR_TYPE(ctx);
+                return;
+            }
+        }
+        else {
+            logError(ctx->L,
+                     &left->loc,
+                     "index assignment not support on type `{t}`",
+                     (FormatArg[]){{.t = target}});
+            node->type = ERROR_TYPE(ctx);
             return;
         }
     }
+    else {
+        lhs = checkType(visitor, left);
+    }
 
-    const Type *lhs = checkType(visitor, left);
     if (typeIs(lhs, Error)) {
         node->type = ERROR_TYPE(ctx);
         return;

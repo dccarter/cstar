@@ -33,19 +33,17 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
     AstNode *callee = node->callExpr.callee, *args = node->callExpr.args;
     const Type *callee_ = NULL;
 
-    u64 argsCount = countAstNodes(args);
-    const Type **argTypes = mallocOrDie(sizeof(Type *) * argsCount);
     AstNode *arg = args;
     for (u64 i = 0; arg; arg = arg->next, i++) {
-        argTypes[i] = arg->type ?: checkType(visitor, arg);
-        if (typeIs(argTypes[i], Error)) {
+        const Type *type = arg->type ?: checkType(visitor, arg);
+        if (typeIs(type, Error)) {
             node->type = ERROR_TYPE(ctx);
             continue;
         }
 
-        if (hasFlag(argTypes[i], Closure)) {
-            argTypes[i] = findStructMemberType(argTypes[i], S_CallOverload);
-            if (argTypes[i] == NULL) {
+        if (hasFlag(type, Closure)) {
+            arg->type = findStructMemberType(type, S_CallOverload);
+            if (type == NULL) {
                 node->type = ERROR_TYPE(ctx);
                 logError(ctx->L,
                          &arg->loc,
@@ -55,10 +53,17 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
             }
         }
     }
-
-    if (typeIs(node->type, Error)) {
-        free(argTypes);
+    if (typeIs(node->type, Error))
         return;
+
+    if (nodeIs(node->callExpr.args, Nop))
+        node->callExpr.args = args->next;
+    args = node->callExpr.args;
+    u64 argsCount = countAstNodes(args);
+    const Type **argTypes = mallocOrDie(sizeof(Type *) * argsCount);
+    arg = args;
+    for (u64 i = 0; arg; arg = arg->next, i++) {
+        argTypes[i] = arg->type;
     }
 
     callee_ = matchOverloadedFunction(
@@ -98,7 +103,8 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
         csAssert0(param);
 
         if (node->callExpr.args == NULL) {
-            node->callExpr.args = copyAstNode(ctx->pool, param->funcParam.def);
+            node->callExpr.args =
+                shallowCloneAstNode(ctx->pool, param->funcParam.def);
             arg = node->callExpr.args;
             param = param->next;
         }
@@ -111,6 +117,12 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
             arg = arg->next;
         }
     }
+
+    if (hasFlag(callee_->func.decl, Async)) {
+        bool callSync = findAttribute(node, S_sync) != NULL;
+        if (!callSync && callee_->func.decl->funcDecl.coroEntry != NULL)
+            makeAsyncLaunchCall(visitor, callee_, node);
+    }
 }
 
 void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -118,18 +130,16 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
 
     const Type *type = resolveType(node->callExpr.callee->type);
-    const AstNode *parent =
-        type->func.decl ? getParentScope(type->func.decl) : NULL;
-    u32 index =
-        nodeIs(type->func.decl, FuncDecl) ? type->func.decl->funcDecl.index : 0;
+    AstNode *func = type->func.decl,
+            *parent = func ? getParentScope(func) : NULL;
+    u32 index = nodeIs(func, FuncDecl) ? func->funcDecl.index : 0;
 
-    if (nodeIs(parent, StructDecl)) {
+    if (nodeIs(parent, StructDecl) || nodeIs(parent, ClassDecl)) {
         writeTypename(ctx, parent->type);
         format(ctx->state, "__", NULL);
     }
-    else if (hasFlag(type->func.decl, Generated))
-        writeDeclNamespace(ctx, type->namespace, NULL);
-    else if (!hasFlag(node->callExpr.callee, Define))
+    else if (hasFlag(type->func.decl, Generated) ||
+             !hasFlag(node->callExpr.callee, Define))
         writeDeclNamespace(ctx, type->namespace, NULL);
 
     if (type->name)
@@ -140,12 +150,15 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     if (index)
         format(ctx->state, "_{u32}", (FormatArg[]){{.u32 = index}});
 
-    bool isMember = nodeIs(parent, StructDecl);
+    bool isMember = (nodeIs(parent, StructDecl) || nodeIs(parent, ClassDecl)) &&
+                    !hasFlag(func, Pure);
+
     if (isMember) {
         const AstNode *callee = node->callExpr.callee;
         bool needsThis =
-            (hasFlag(callee, Member) && !hasFlag(callee, ClosureStyle)) ||
-            (nodeIs(callee, Path) && callee->path.elements->next == NULL);
+            (hasFlag(callee, Member) ||
+             (nodeIs(callee, Path) && callee->path.elements->next == NULL)) &&
+            !hasFlag(callee, ClosureStyle);
 
         if (needsThis) {
             if (hasFlag(node->callExpr.callee, AddSuper))
@@ -164,14 +177,17 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
                     target = target->next;
                 }
 
-                if (!typeIs(target->type, Pointer))
+                if (nodeIs(parent, StructDecl) &&
+                    !isStructPointer(target->type)) //
+                {
                     format(ctx->state, "&", NULL);
+                }
 
                 for (;; elem = elem->next) {
                     astConstVisit(visitor, elem);
                     if (elem == target)
                         break;
-                    if (typeIs(elem->type, Pointer))
+                    if (typeIs(elem->type, Pointer) || isClassType(elem->type))
                         format(ctx->state, "->", NULL);
                     else
                         format(ctx->state, ".", NULL);
@@ -179,8 +195,11 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
             }
             else {
                 target = callee->memberExpr.target;
-                if (!typeIs(target->type, Pointer))
+                if (nodeIs(parent, StructDecl) &&
+                    !isStructPointer(target->type)) //
+                {
                     format(ctx->state, "&", NULL);
+                }
                 astConstVisit(visitor, target);
             }
         }
@@ -189,18 +208,32 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, "(", NULL);
     }
     {
+        AstNode *decl = type->func.decl;
         const AstNode *arg = node->callExpr.args;
+        const AstNode *param = nodeIs(decl, FuncDecl)
+                                   ? decl->funcDecl.signature->params
+                                   : decl->funcType.params;
         for (u64 i = 0; arg; arg = arg->next, i++) {
-            const Type *param = type->func.params[i];
+            const Type *paramType = type->func.params[i];
             if (isMember || i != 0)
                 format(ctx->state, ", ", NULL);
 
-            if (isSliceType(param) && !isSliceType(arg->type)) {
-                generateArrayToSlice(visitor, param, arg);
+            if (isSliceType(paramType) && !isSliceType(arg->type)) {
+                generateArrayToSlice(visitor, paramType, arg);
             }
-            else {
+            else if (nodeIs(arg, ArrayExpr)) {
+                format(ctx->state, "(", NULL);
+                writeTypename(ctx, arg->type->array.elementType);
+                format(ctx->state, "[])", NULL);
                 astConstVisit(visitor, arg);
             }
+            else {
+                if (!isConstType(paramType) && !hasFlag(param, Transient))
+                    generateExpressionWithMemoryManagement(visitor, arg);
+                else
+                    astConstVisit(visitor, arg);
+            }
+            param = param->next;
         }
     }
 
@@ -226,9 +259,9 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
     }
 
     callee_ = flattenWrappedType(callee_, &flags);
-    if (typeIs(callee_, Struct)) {
+    if (isClassOrStructType(callee_)) {
         AstNode *symbol = callee->path.elements->pathElement.resolvesTo;
-        if (nodeIs(symbol, StructDecl)) {
+        if (isClassOrStructAstNode(symbol)) {
             node->type = transformToConstructCallExpr(visitor, node);
             return;
         }

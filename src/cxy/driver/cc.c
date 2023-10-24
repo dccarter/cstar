@@ -25,6 +25,11 @@
 static EmbeddedSource sGeneratedFiles[] = {};
 static EmbeddedSource sRuntimeSources[2];
 
+static bool stringCompare(const void *lhs, const void *rhs)
+{
+    return strcmp(*((cstring *)lhs), *((cstring *)rhs)) == 0;
+}
+
 static EmbeddedSource *getRuntimeSources()
 {
     static bool initialized = false;
@@ -92,6 +97,64 @@ static bool generateEmbeddedSources(CompilerDriver *driver,
     return true;
 }
 
+typedef struct {
+    FormatState *state;
+    cstring flag;
+} AppendCommandLineComponentCtx;
+
+static bool appendCommandLineComponents(void *ctx, const void *value)
+{
+    AppendCommandLineComponentCtx *context = ctx;
+    cstring *component = (cstring *)value;
+    if (context->flag) {
+        format(context->state,
+               " {s} {s}",
+               (FormatArg[]){{.s = context->flag}, {.s = *component}});
+    }
+    else {
+        format(context->state, " {s}", (FormatArg[]){{.s = *component}});
+    }
+    return true;
+}
+
+static inline void appendNativeSourcesToCompilerCommand(CompilerDriver *driver,
+                                                        FormatState *state)
+{
+    enumerateHashTable(
+        &driver->nativeSources,
+        &(AppendCommandLineComponentCtx){.state = state, .flag = NULL},
+        appendCommandLineComponents,
+        sizeof(cstring));
+}
+
+static inline void appendLinkLibrariesToCompilerCommand(CompilerDriver *driver,
+                                                        FormatState *state)
+{
+    enumerateHashTable(
+        &driver->linkLibraries,
+        &(AppendCommandLineComponentCtx){.state = state, .flag = "-l"},
+        appendCommandLineComponents,
+        sizeof(cstring));
+}
+
+cstring getFilePathAsRelativeToCxySource(StrPool *strings,
+                                         cstring relativeTo,
+                                         cstring file)
+{
+    csAssert0(file && relativeTo);
+    if (file[0] == '/')
+        return file;
+    cstring relativeToFilename = strchr(relativeTo, '/');
+    if (relativeToFilename == NULL)
+        return file;
+    size_t len = (relativeToFilename - relativeTo) + 1, fileLen = strlen(file);
+    char path[1024];
+    memcpy(path, relativeTo, len);
+    memcpy(&path[len], file, fileLen);
+
+    return makeStringSized(strings, path, len + fileLen);
+}
+
 bool generateAllBuiltinSources(CompilerDriver *driver)
 {
     if (!generateEmbeddedSources(
@@ -111,13 +174,17 @@ void compileCSourceFile(CompilerDriver *driver, const char *sourceFile)
         makeDirectoryForPath(driver, options->output);
 
     format(&state,
-           "cc {s}/c/runtime/runtime.c {s} -g -o {s} -I{s}/c -I{s}/c/imports "
-           "-D__CXY_BUILD__ -Wno-c2x-extensions",
+           "cc {s}/c/runtime/runtime.c {s} -g -o {s} -I{s}/c "
+           "-I{s}/c/imports -I{s} -D__CXY_BUILD__ -Wno-c2x-extensions",
            (FormatArg[]){{.s = options->buildDir},
                          {.s = sourceFile},
                          {.s = driver->options.output ?: "app"},
                          {.s = options->buildDir},
-                         {.s = options->buildDir}});
+                         {.s = options->buildDir},
+                         {.s = options->libDir ?: "./stdlib"}});
+
+    appendNativeSourcesToCompilerCommand(driver, &state);
+    appendLinkLibrariesToCompilerCommand(driver, &state);
 
     if (options->rest) {
         format(&state, " {s}", (FormatArg[]){{.s = options->rest}});
@@ -160,4 +227,29 @@ bool createSourceFile(CompilerDriver *driver,
         free(sourceFile);
 
     return true;
+}
+
+void addNativeSourceFile(HashTable *nativeSources,
+                         StrPool *strings,
+                         cstring cxySource,
+                         cstring source)
+{
+    source = getFilePathAsRelativeToCxySource(strings, cxySource, source);
+    insertInHashTable(nativeSources,
+                      &source,
+                      hashStr(hashInit(), source),
+                      sizeof(source),
+                      stringCompare);
+}
+
+void addLinkLibrary(HashTable *linkedLibraries,
+                    StrPool *strings,
+                    cstring cxySource,
+                    cstring lib)
+{
+    insertInHashTable(linkedLibraries,
+                      &lib,
+                      hashStr(hashInit(), lib),
+                      sizeof(lib),
+                      stringCompare);
 }

@@ -33,11 +33,13 @@ typedef struct {
         struct {
             AstNode *currentCall;
             AstNode *currentStruct;
+            AstNode *currentClass;
         } stack;
 
         struct {
             AstNode *currentCall;
             AstNode *currentStruct;
+            AstNode *currentClass;
         };
     };
 } TypingContext;
@@ -52,6 +54,7 @@ const FileLoc *lastNodeLoc_(FileLoc *dst, AstNode *nodes);
 #define lastNodeLoc(nodes) lastNodeLoc_(&(FileLoc){}, (nodes))
 
 bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node);
+bool transformToAwaitOperator(AstVisitor *visitor, AstNode *node);
 bool transformToDerefOperator(AstVisitor *visitor, AstNode *node);
 bool transformOptionalType(AstVisitor *visitor,
                            AstNode *node,
@@ -68,7 +71,36 @@ bool evalExplicitConstruction(AstVisitor *visitor,
                               const Type *type,
                               AstNode *node);
 
-AstNode *makeAddressOf(TypingContext *ctx, AstNode *node);
+bool checkTypeImplementsAllMembers(TypingContext *ctx, AstNode *node);
+
+bool checkMemberFunctions(AstVisitor *visitor,
+                          AstNode *node,
+                          NamedTypeMember *members);
+
+void implementClassOrStructBuiltins(AstVisitor *visitor, AstNode *node);
+
+void checkImplements(AstVisitor *visitor,
+                     AstNode *node,
+                     const Type **implements,
+                     u64 count);
+
+AstNode *makeDropReferenceCall(TypingContext *ctx,
+                               AstNode *member,
+                               const FileLoc *loc);
+
+AstNode *makeNewClassCall(TypingContext *ctx, AstNode *node);
+
+AstNode *makeGetReferenceCall(TypingContext *ctx,
+                              AstNode *member,
+                              const FileLoc *loc);
+
+AstNode *makeSliceConstructor(TypingContext *ctx,
+                              const Type *slice,
+                              AstNode *init);
+
+AstNode *transformArrayExprToSliceCall(TypingContext *ctx,
+                                       const Type *slice,
+                                       AstNode *expr);
 
 void transformToMemberCallExpr(AstVisitor *visitor,
                                AstNode *node,
@@ -89,6 +121,11 @@ const Type *matchOverloadedFunction(TypingContext *ctx,
                                     const FileLoc *loc,
                                     u64 flags);
 
+const Type *makeCoroutineEntry(AstVisitor *visitor, AstNode *node);
+const Type *makeAsyncLaunchCall(AstVisitor *visitor,
+                                const Type *callee,
+                                AstNode *node);
+
 const Type *checkPathElement(AstVisitor *visitor,
                              const Type *parent,
                              AstNode *node);
@@ -102,8 +139,9 @@ void checkLiteral(AstVisitor *visitor, AstNode *node);
 void checkVarDecl(AstVisitor *visitor, AstNode *node);
 void checkPath(AstVisitor *visitor, AstNode *node);
 void checkFunctionParam(AstVisitor *visitor, AstNode *node);
-void checkStructField(AstVisitor *visitor, AstNode *node);
+void checkField(AstVisitor *visitor, AstNode *node);
 void checkStructDecl(AstVisitor *visitor, AstNode *node);
+void checkClassDecl(AstVisitor *visitor, AstNode *node);
 void checkFunctionDecl(AstVisitor *visitor, AstNode *node);
 void checkEnumDecl(AstVisitor *visitor, AstNode *node);
 void checkTypeDecl(AstVisitor *visitor, AstNode *node);
