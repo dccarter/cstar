@@ -27,15 +27,16 @@ pub func print[T](it: const T) {
     #if (T.isString) {
         @flatten
         #if (T.isStruct) {
-            C_write(STDOUT, it.str: string, it.count)
+            C_write(STDOUT, it.str, it.count)
         }
         else {
             C_write(STDOUT, it: string, len!(it))
         }
     }
     else {
+        var j;
         var str = f"${it}";
-        print[string](*str)
+        C_write(STDOUT, str.str, str.count)
     }
 }
 

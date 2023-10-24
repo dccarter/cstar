@@ -108,6 +108,26 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
         spreadTupleExpr(visitor, operand, node);
         operand = node->type;
         break;
+    case opAwait:
+        if (!isClassOrStructType(operand)) {
+            logError(ctx->L,
+                     &node->unaryExpr.operand->loc,
+                     "type '{t}' does not implement the await operator",
+                     (FormatArg[]){{.t = operand}});
+            operand = ERROR_TYPE(ctx);
+            break;
+        }
+        else if (transformToAwaitOperator(visitor, node)) {
+            operand = node->type;
+        }
+        else {
+            logError(ctx->L,
+                     &node->unaryExpr.operand->loc,
+                     "struct '{t}' does not `await` operator",
+                     (FormatArg[]){{.t = operand}});
+            operand = ERROR_TYPE(ctx);
+        }
+        break;
     case opNot:
         if (isClassOrStructType(operand)) {
             if (transformToTruthyOperator(visitor, node->unaryExpr.operand)) {
@@ -155,6 +175,11 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
         }
         break;
     default:
+        logError(ctx->L,
+                 &node->unaryExpr.operand->loc,
+                 "unsupported unary operator '{s}' on type '{t}'",
+                 (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)},
+                               {.t = operand}});
         operand = ERROR_TYPE(ctx);
         break;
     }

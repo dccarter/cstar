@@ -33,19 +33,17 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
     AstNode *callee = node->callExpr.callee, *args = node->callExpr.args;
     const Type *callee_ = NULL;
 
-    u64 argsCount = countAstNodes(args);
-    const Type **argTypes = mallocOrDie(sizeof(Type *) * argsCount);
     AstNode *arg = args;
     for (u64 i = 0; arg; arg = arg->next, i++) {
-        argTypes[i] = arg->type ?: checkType(visitor, arg);
-        if (typeIs(argTypes[i], Error)) {
+        const Type *type = arg->type ?: checkType(visitor, arg);
+        if (typeIs(type, Error)) {
             node->type = ERROR_TYPE(ctx);
             continue;
         }
 
-        if (hasFlag(argTypes[i], Closure)) {
-            argTypes[i] = findStructMemberType(argTypes[i], S_CallOverload);
-            if (argTypes[i] == NULL) {
+        if (hasFlag(type, Closure)) {
+            arg->type = findStructMemberType(type, S_CallOverload);
+            if (type == NULL) {
                 node->type = ERROR_TYPE(ctx);
                 logError(ctx->L,
                          &arg->loc,
@@ -55,10 +53,17 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
             }
         }
     }
-
-    if (typeIs(node->type, Error)) {
-        free(argTypes);
+    if (typeIs(node->type, Error))
         return;
+
+    if (nodeIs(node->callExpr.args, Nop))
+        node->callExpr.args = args->next;
+    args = node->callExpr.args;
+    u64 argsCount = countAstNodes(args);
+    const Type **argTypes = mallocOrDie(sizeof(Type *) * argsCount);
+    arg = args;
+    for (u64 i = 0; arg; arg = arg->next, i++) {
+        argTypes[i] = arg->type;
     }
 
     callee_ = matchOverloadedFunction(
@@ -111,6 +116,12 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
             arg->next = copyAstNode(ctx->pool, param->funcParam.def);
             arg = arg->next;
         }
+    }
+
+    if (hasFlag(callee_->func.decl, Async)) {
+        bool callSync = findAttribute(node, S_sync) != NULL;
+        if (!callSync && callee_->func.decl->funcDecl.coroEntry != NULL)
+            makeAsyncLaunchCall(visitor, callee_, node);
     }
 }
 

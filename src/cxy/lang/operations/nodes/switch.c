@@ -189,7 +189,9 @@ void generateCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
     astConstVisit(visitor, node->caseStmt.body);
 
     if (!nodeIs(node->caseStmt.body, BlockStmt))
-        format(ctx->state, "{<}", NULL);
+        format(ctx->state, "break;\n{<}", NULL);
+    else if (node->caseStmt.body)
+        format(ctx->state, "\nbreak;", NULL);
 }
 
 void generateSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)

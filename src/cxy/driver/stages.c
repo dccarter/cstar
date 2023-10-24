@@ -307,7 +307,8 @@ static CompilerStageExecutor compilerStageExecutors[ccsCOUNT] = {
     [ccsTypeCheck] = executeTypeCheckAst,
     [ccsFinalize] = executeFinalizeAst,
     [ccsCodegen] = executeGenerateCode,
-    [ccsCollect] = executeCollect,
+    // TODO causing issues
+    // [ccsCollect] = executeCollect,
     [ccsCompile] = executeTargetCompile};
 
 AstNode *executeCompilerStage(CompilerDriver *driver,

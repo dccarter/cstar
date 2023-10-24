@@ -154,7 +154,7 @@ decls:
           - StringLit:
             value: "__builtins.cxy"
           - IntegerLit:
-            value: 514
+            value: 539
           - IntegerLit:
             value: 59
       - ExprStmt:
@@ -236,7 +236,7 @@ decls:
           - StringLit:
             value: "__builtins.cxy"
           - IntegerLit:
-            value: 520
+            value: 545
           - IntegerLit:
             value: 59
       - ReturnStmt:
@@ -311,7 +311,7 @@ decls:
           - StringLit:
             value: "__builtins.cxy"
           - IntegerLit:
-            value: 526
+            value: 551
           - IntegerLit:
             value: 59
       - ReturnStmt:
@@ -817,7 +817,7 @@ decls:
           - StringLit:
             value: "__builtins.cxy"
           - IntegerLit:
-            value: 477
+            value: 502
           - IntegerLit:
             value: 9
       - ReturnStmt:
@@ -1019,6 +1019,14 @@ decls:
   body:
     BlockStmt:
     stmts:
+    - Nop:
+    - Nop:
+    - Nop:
+    - Nop:
+    - Nop:
+    - Nop:
+    - Nop:
+    - Nop:
     - ExprStmt:
       expr:
         CallExpr:
@@ -1035,6 +1043,7 @@ decls:
         args:
         - CharLit:
           value: '('
+    - Nop:
     - ExprStmt:
       expr:
         CallExpr:
@@ -1070,6 +1079,7 @@ decls:
             IntegerLit:
             flags: (Const)
             value: 0
+    - Nop:
     - ExprStmt:
       expr:
         CallExpr:
@@ -1176,6 +1186,7 @@ decls:
   body:
     BlockStmt:
     stmts:
+    - Nop:
     - ExprStmt:
       expr:
         CallExpr:
@@ -1270,6 +1281,8 @@ decls:
   body:
     BlockStmt:
     stmts:
+    - Nop:
+    - Nop:
     - ExprStmt:
       expr:
         CallExpr:
@@ -1344,10 +1357,13 @@ decls:
   body:
     BlockStmt:
     stmts:
-    - VarDecl:
-      names:
-      - Identifier:
-        value: z
+    - Nop:
+    - Nop:
+    - Nop:
+    - Nop:
+    - Nop:
+    - Nop:
+    - Nop:
     - VarDecl:
       names:
       - Identifier:
@@ -1487,6 +1503,7 @@ decls:
   body:
     BlockStmt:
     stmts:
+    - Nop:
     - ReturnStmt:
       expr:
         CallExpr:
@@ -1555,6 +1572,8 @@ decls:
   body:
     BlockStmt:
     stmts:
+    - Nop:
+    - Nop:
     - ReturnStmt:
       expr:
         CallExpr:

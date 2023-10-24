@@ -338,6 +338,11 @@ attr(always_inline) static u64 wputc(wchar c)
     return fwrite(s.str, 1, s.str[5], stdout);
 }
 
+attr(always_inline) static i32 CXY__itoa(i32 value, char *buffer)
+{
+    return sprintf(buffer, "%d", value);
+}
+
 typedef struct {
     u64 size;
     char *data;

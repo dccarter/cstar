@@ -54,6 +54,7 @@ const FileLoc *lastNodeLoc_(FileLoc *dst, AstNode *nodes);
 #define lastNodeLoc(nodes) lastNodeLoc_(&(FileLoc){}, (nodes))
 
 bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node);
+bool transformToAwaitOperator(AstVisitor *visitor, AstNode *node);
 bool transformToDerefOperator(AstVisitor *visitor, AstNode *node);
 bool transformOptionalType(AstVisitor *visitor,
                            AstNode *node,
@@ -119,6 +120,11 @@ const Type *matchOverloadedFunction(TypingContext *ctx,
                                     u64 argsCount,
                                     const FileLoc *loc,
                                     u64 flags);
+
+const Type *makeCoroutineEntry(AstVisitor *visitor, AstNode *node);
+const Type *makeAsyncLaunchCall(AstVisitor *visitor,
+                                const Type *callee,
+                                AstNode *node);
 
 const Type *checkPathElement(AstVisitor *visitor,
                              const Type *parent,

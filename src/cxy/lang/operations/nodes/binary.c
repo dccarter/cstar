@@ -509,7 +509,9 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     const Type *left = checkType(visitor, node->binaryExpr.lhs),
                *left_ = stripAll(left);
-    if (typeIs(left_, Struct) || typeIs(left_, Class)) {
+
+    if ((typeIs(left_, Struct) && !hasFlag(left_->tStruct.decl, Native)) ||
+        typeIs(left_, Class)) {
         checkBinaryOperatorOverload(visitor, node);
         return;
     }
@@ -586,7 +588,8 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
 
     case optEquality:
         if (!typeIs(type, Primitive) && !typeIs(type, Pointer) &&
-            !typeIs(type, String) && !typeIs(type, Enum)) {
+            !typeIs(type, String) && !typeIs(type, Enum) &&
+            !typeIs(type, Opaque)) {
             logError(ctx->L,
                      &node->loc,
                      "cannot perform equality binary operation '{s}' on "

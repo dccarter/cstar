@@ -533,16 +533,21 @@ static void shakeGenericDecl(AstVisitor *visitor, AstNode *node)
 static void shakeClassOrStructDecl(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
-    AstNodeList members = {node->structDecl.members,
-                           getLastAstNode(node->structDecl.members)};
-    if (nodeIs(node, ClassDecl)) {
-        astVisit(visitor, node->classDecl.base);
-        insertAstNode(&members, createClassOrStructBuiltins(ctx->pool, node));
+
+    if (!hasFlag(node, Native)) {
+        AstNodeList members = {node->structDecl.members,
+                               getLastAstNode(node->structDecl.members)};
+        if (nodeIs(node, ClassDecl)) {
+            astVisit(visitor, node->classDecl.base);
+            insertAstNode(&members,
+                          createClassOrStructBuiltins(ctx->pool, node));
+        }
+        else {
+            insertAstNode(&members,
+                          createClassOrStructBuiltins(ctx->pool, node));
+        }
+        node->structDecl.members = members.first;
     }
-    else {
-        insertAstNode(&members, createClassOrStructBuiltins(ctx->pool, node));
-    }
-    node->structDecl.members = members.first;
 
     astVisitManyNodes(visitor, node->structDecl.implements);
     astVisitManyNodes(visitor, node->structDecl.members);

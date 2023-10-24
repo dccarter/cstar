@@ -145,9 +145,7 @@ static bool transformVariadicFunctionCallArgs(AstVisitor *visitor,
 
 static void removeEmptyVariadicFunctionParameter(AstNode *node)
 {
-    if (node->funcDecl.signature->params->next == NULL)
-        node->funcDecl.signature->params = NULL;
-    else {
+    if (node->funcDecl.signature->params->next != NULL) {
         AstNode *prev = node->funcDecl.signature->params;
         AstNode *it = prev->next;
         while (it->next) {

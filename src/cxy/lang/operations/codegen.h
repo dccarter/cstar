@@ -14,11 +14,13 @@ typedef struct {
     AstNode *program;
     cstring namespace;
     bool importedFile;
+    HashTable *nativeSources;
 } CodegenContext;
 
 void writeNamespace(CodegenContext *ctx, cstring sep);
 void writeDeclNamespace(CodegenContext *ctx, cstring namespace, cstring sep);
 void writeEnumPrefix(CodegenContext *ctx, const Type *type);
+void writeEnumWithoutNamespace(CodegenContext *ctx, const Type *type);
 void generateTypeUsage(CodegenContext *ctx, const Type *type);
 void writeTypename(CodegenContext *ctx, const Type *type);
 cstring getNativeDeclarationAliasName(const AstNode *node);

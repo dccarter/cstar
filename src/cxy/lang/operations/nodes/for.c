@@ -419,24 +419,26 @@ static bool evalExprForStmtVariadic(AstVisitor *visitor,
     AstNode *range = node->forStmt.range, *variable = node->forStmt.var;
 
     const Type *tuple = unwrapType(range->type, NULL);
-    u64 count = tuple->tuple.count;
-    for (u64 i = 0; i < count; i++) {
-        AstNode *body = deepCloneAstNode(ctx->pool, node->forStmt.body);
-        variable->varDecl.init = makeTypeReferenceNode(
-            ctx->pool, tuple->tuple.members[i], &range->loc);
+    if (tuple) {
+        u64 count = tuple->tuple.count;
+        for (u64 i = 0; i < count; i++) {
+            AstNode *body = deepCloneAstNode(ctx->pool, node->forStmt.body);
+            variable->varDecl.init = makeTypeReferenceNode(
+                ctx->pool, tuple->tuple.members[i], &range->loc);
 
-        const Type *type = evalType(ctx, body);
-        if (type == NULL || typeIs(type, Error)) {
-            node->tag = astError;
-            return false;
-        }
+            const Type *type = evalType(ctx, body);
+            if (type == NULL || typeIs(type, Error)) {
+                node->tag = astError;
+                return false;
+            }
 
-        if (nodeIs(body, BlockStmt) &&
-            findAttribute(node, S_consistent) == NULL) {
-            insertAstNode(nodes, body->blockStmt.stmts);
-        }
-        else {
-            insertAstNode(nodes, body);
+            if (nodeIs(body, BlockStmt) &&
+                findAttribute(node, S_consistent) == NULL) {
+                insertAstNode(nodes, body->blockStmt.stmts);
+            }
+            else {
+                insertAstNode(nodes, body);
+            }
         }
     }
 

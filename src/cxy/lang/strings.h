@@ -75,6 +75,11 @@
     f(destructorForward)        \
     f(newClass)                 \
     f(release)                  \
+    f(cover)                    \
+    f(Promise)                  \
+    f(Coroutine)                \
+    f(asyncLaunch)              \
+    f(sync)                     \
     f(CXY__main)
 
 // clang-format on

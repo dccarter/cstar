@@ -138,6 +138,10 @@
     memset
 ) : func(dst: &void, ch: i32, len: u64) -> &void
 
+## pub (
+    free
+) : func(ptr: &void) -> void
+
 
 ## pub (
     CXY__builtins_sizeof
@@ -165,6 +169,14 @@ pub func newClass[T]() => CXY__alloc(sizeof!(#T), T.op__destructor_fwd) : T
 ## pub(
     strlen
 ): func(str: &const char) -> u64
+
+## pub(
+    strcmp
+): func(s1: &const char, s2: &const char) -> i32
+
+## pub(
+    CXY__itoa
+): func(value: i32, str: &char) -> i32
 
 type HashCode = u32
 
@@ -227,8 +239,10 @@ pub func hash[T](val: const T, init: HashCode = 0) : HashCode {
     else #if (T.isFloat || #T == #i64 || #T == #u64) {
         return hashUint64(hashInit(), <u64>val)
     }
+    else #if (T.isEnum) {
+        return hashUint64(hashInit(), <u64>val)
+    }
     else #if (T.isTuple) {
-        var z;
         var code = hashInit();
         #for (const i: 0..T.membersCount) {
             code = hash(val.#{i}, code)
@@ -305,6 +319,17 @@ pub native func CXY__builtins_string_builder_append_ptr(
 
 pub native func CXY__builtins_get_ref(ptr: &void): void;
 pub native func CXY__builtins_drop(ptr: &void): void;
+
+## (
+    CXY__eventloop_wait_read,
+    CXY__eventloop_wait_write
+): func(fd: i32, timeout: i32) -> i32
+
+## (
+    EV_OK => AE_OK,
+    EV_IN => AE_READABLE,
+    EN_OUT => AE_WRITABLE
+) : i32
 
 @inline
 pub func getref[T](@transient obj: T) {
@@ -600,4 +625,128 @@ func destructorForward[T](ptr: &void)
         (<&T>ptr).op__destructor()
     else
         (<T>ptr).op__destructor()
+}
+
+## pub (
+    CXY_DEFAULT_CORO_STACK_SIZE
+) : u64
+
+## pub(
+    now => CXY__now_ms
+): func() -> i64
+
+## pub(
+    msleep => CXY__eventloop_sleep
+): func(ms: i64) -> void
+
+@alias(name: "Coro")
+pub native type tina;
+
+## pub(
+    suspendCoroutine => CXY__scheduler_suspend
+): func() -> void
+
+## pub (
+    scheduleCoroutine => CXY__scheduler_schedule
+): func(co: Coro) -> void
+
+## pub (
+    runningCoroutineHandle => tina_running
+): func() -> Coro
+
+
+## pub (
+    CXY__launch_coro
+) : func(entry: func(args: &void) -> void, args: &void, dbg: &const char, ss: u64) -> void
+
+pub enum PromiseState {
+    Pending,
+    Rejected,
+    Resolved
+}
+
+pub class Promise[Ret] {
+    - state: PromiseState = PromiseState.Pending;
+    - pendingCoro: Coro = null
+
+    func `init`() {
+        state = PromiseState.Pending
+        pendingCoro = null
+    }
+
+    #if (#Ret != #void) {
+        - result: Ret
+    }
+
+    @inline
+    - func resumePending() {
+        if (pendingCoro != null) {
+            scheduleCoroutine(pendingCoro)
+        }
+    }
+
+    func reject() {
+        state = PromiseState.Rejected
+        resumePending()
+    }
+
+    #if (#Ret == #void) {
+        func resolve() {
+            state = PromiseState.Resolved
+            resumePending()
+        }
+    }
+    else {
+        func resolve(res: Ret) {
+            this.result = res
+            state = PromiseState.Resolved
+            resumePending()
+        }
+    }
+
+    @inline
+    - func waitPending() {
+        if (state == PromiseState.Pending) {
+            pendingCoro = runningCoroutineHandle()
+            suspendCoroutine()
+            pendingCoro = null
+        }
+    }
+
+    #if (#Ret == #void) {
+        func `await`() {
+            waitPending()
+        }
+    }
+    else {
+        func `await`() {
+            waitPending()
+            return this.result
+        }
+    }
+
+    const func `hash`() => 0
+}
+
+pub class Coroutine[Ret, Args] {
+    args: Args
+    promise: Promise[Ret]
+
+    func `init`(args: Args) {
+        this.args = args
+        promise = Promise[Ret]()
+    }
+
+    @inline
+    func `hash`() => 0
+
+    @inline
+    func getPromise() => getref(promise)
+}
+
+func asyncLaunch[Ret, Args](entry: func(arg: &void) -> void, name: string, args: Args) {
+    var coro = Coroutine[Ret, Args](args);
+    var promise = coro.getPromise();
+    CXY__launch_coro(entry, getref(coro): &void, name: &const char, CXY_DEFAULT_CORO_STACK_SIZE)
+    return getref(promise)
 }

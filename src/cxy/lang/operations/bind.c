@@ -201,7 +201,7 @@ void bindPath(AstVisitor *visitor, AstNode *node)
             if (base->pathElement.enclosure == NULL)
                 return;
 
-            AstNode *parent = getParentScope(base->pathElement.enclosure);
+            AstNode *parent = getMemberParentScope(base->pathElement.enclosure);
 
             if (!nodeIs(parent, ClassDecl) && !nodeIs(parent, StructDecl)) {
                 logError(
@@ -420,7 +420,7 @@ void bindEnumDecl(AstVisitor *visitor, AstNode *node)
                 makeAstNode(ctx->pool,
                             &option->loc,
                             &(AstNode){.tag = astIntegerLit,
-                                       .intLiteral.value = nextValue});
+                                       .intLiteral.value = nextValue++});
             continue;
         }
 
@@ -510,7 +510,7 @@ void bindInterfaceDecl(AstVisitor *visitor, AstNode *node)
 void bindIfStmt(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
-
+    
     pushScope(ctx->env, node);
     astVisit(visitor, node->ifStmt.cond);
     astVisit(visitor, node->ifStmt.body);

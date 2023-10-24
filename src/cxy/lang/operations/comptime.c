@@ -6,6 +6,7 @@
 
 #include "lang/builtins.h"
 #include "lang/flag.h"
+#include "lang/strings.h"
 #include "lang/ttable.h"
 
 typedef AstNode *(*AstNodeMemberGetter)(EvalContext *,
@@ -342,7 +343,7 @@ static AstNode *isPointer(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 static AstNode *isStruct(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 {
     const Type *type = node->type ?: evalType(ctx, node);
-    type = resolveType(type);
+    type = unwrapType(resolveType(type), NULL);
 
     return makeAstNode(ctx->pool,
                        loc,
@@ -401,6 +402,21 @@ static AstNode *isDestructible(EvalContext *ctx,
                                         hasFlag(decl, ImplementsDeinit)});
 }
 
+static AstNode *isCover(EvalContext *ctx, const FileLoc *loc, AstNode *node)
+{
+
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = unwrapType(type, NULL);
+    AstNode *decl = getTypeDecl(type);
+
+    return makeAstNode(
+        ctx->pool,
+        loc,
+        &(AstNode){.tag = astBoolLit,
+                   .boolLiteral.value =
+                       isClassOrStructType(type) && hasFlag(decl, Native)});
+}
+
 static AstNode *isField(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 {
     return makeAstNode(ctx->pool,
@@ -440,6 +456,7 @@ static void initDefaultMembers(EvalContext *ctx)
     ADD_MEMBER("isSlice", isSlice);
     ADD_MEMBER("isEnum", isEnum);
     ADD_MEMBER("isDestructible", isDestructible);
+    ADD_MEMBER("isCover", isCover);
 
 #undef ADD_MEMBER
 }

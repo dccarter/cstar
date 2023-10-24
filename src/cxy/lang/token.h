@@ -105,6 +105,7 @@
     f(Import, "import")             \
     f(CDefine, "cDefine")           \
     f(CInclude,"cInclude")          \
+    f(CSources, "cSources")         \
     f(As,      "as")                \
     f(From,    "from")              \
     f(Unsafe,  "unsafe")            \

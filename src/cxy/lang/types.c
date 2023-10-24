@@ -200,6 +200,9 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
 
         return typeIs(from, Pointer) && isVoidPointer(from);
 
+    case typOpaque:
+        return typeIs(from, Pointer) && typeIs(from->pointer.pointed, Null);
+
     case typArray:
         if (!typeIs(from, Array) ||
             !isTypeAssignableFrom(to->array.elementType,
@@ -312,6 +315,9 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
         default:
             return unwrappedTo->primitive.id == unwrappedFrom->primitive.id;
         }
+    case typEnum:
+        if (isIntegerType(to))
+            return isTypeCastAssignable(to, from->tEnum.base);
     case typPointer:
         if (isVoidPointer(unwrappedFrom) &&
             (isClassType(unwrappedTo) || isStructPointer(unwrappedTo)))

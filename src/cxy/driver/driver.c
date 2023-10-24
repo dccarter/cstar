@@ -256,6 +256,9 @@ bool initCompilerDriver(CompilerDriver *compiler, Log *log)
     compiler->strPool = newStrPool(&compiler->pool);
     compiler->typeTable = newTypeTable(&compiler->pool, &compiler->strPool);
     compiler->moduleCache = newHashTable(sizeof(CachedModule));
+    compiler->nativeSources = newHashTable(sizeof(cstring));
+    compiler->linkLibraries = newHashTable(sizeof(cstring));
+
     compiler->L = log;
     internCommonStrings(&compiler->strPool);
     const Options *options = &compiler->options;
@@ -275,11 +278,41 @@ bool initCompilerDriver(CompilerDriver *compiler, Log *log)
     return true;
 }
 
+static cstring getModuleLocation(CompilerDriver *driver, const AstNode *source)
+{
+    cstring importer = source->loc.fileName,
+            modulePath = source->stringLiteral.value;
+    csAssert0(modulePath && modulePath[0] != '\0');
+    char path[1024];
+    u64 modulePathLen = strlen(modulePath);
+    if (modulePath[0] == '.' && modulePath[1] == '/') {
+        cstring importerFilename = strrchr(importer, '/');
+        if (importerFilename == NULL)
+            return modulePath;
+        size_t importedLen = (importerFilename - importer) + 1;
+        modulePathLen -= 2;
+        memcpy(path, importer, importedLen);
+        memcpy(&path[importedLen], modulePath + 2, modulePathLen);
+        return makeStringSized(
+            &driver->strPool, path, importedLen + modulePathLen);
+    }
+    else if (driver->options.libDir != NULL) {
+        u64 libDirLen = strlen(driver->options.libDir);
+        memcpy(path, driver->options.libDir, libDirLen);
+        if (driver->options.libDir[libDirLen - 1] != '/')
+            path[libDirLen++] = '/';
+        memcpy(&path[libDirLen], modulePath, modulePathLen);
+        return makeStringSized(
+            &driver->strPool, path, libDirLen + modulePathLen);
+    }
+    return modulePath;
+}
+
 const Type *compileModule(CompilerDriver *driver,
                           const AstNode *source,
                           AstNode *entities)
 {
-    cstring name = source->stringLiteral.value;
+    cstring name = getModuleLocation(driver, source);
     AstNode *program = findCachedModule(driver, name);
     bool cached = true;
     if (program == NULL) {

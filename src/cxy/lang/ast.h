@@ -149,7 +149,7 @@ typedef struct {
     struct AstNode *attrs;
 
 typedef enum { iptModule, iptPath } ImportKind;
-typedef enum { cInclude, cDefine } CCodeKind;
+typedef enum { cInclude, cDefine, cSources } CCodeKind;
 
 typedef struct FunctionSignature {
     struct AstNode *params;
@@ -353,6 +353,7 @@ struct AstNode {
             FunctionSignature *signature;
             struct AstNode *opaqueParams;
             struct AstNode *body;
+            struct AstNode *coroEntry;
         } funcDecl;
 
         struct {
@@ -585,6 +586,12 @@ AstNode *makeIntegerLiteral(MemPool *pool,
                             AstNode *next,
                             const Type *type);
 
+AstNode *makeStringLiteral(MemPool *pool,
+                           const FileLoc *loc,
+                           cstring value,
+                           AstNode *next,
+                           const Type *type);
+
 AstNode *makePointerAstNode(MemPool *pool,
                             const FileLoc *loc,
                             u64 flags,
@@ -671,6 +678,13 @@ AstNode *makeTypedExpr(MemPool *pool,
                        AstNode *next,
                        const Type *type);
 
+AstNode *makeTupleExpr(MemPool *pool,
+                       const FileLoc *loc,
+                       u64 flags,
+                       AstNode *members,
+                       AstNode *next,
+                       const Type *type);
+
 attr(always_inline) static AstNode *makePathElement(MemPool *pool,
                                                     const FileLoc *loc,
                                                     cstring name,
@@ -688,6 +702,13 @@ AstNode *makeCallExpr(MemPool *pool,
                       u64 flags,
                       AstNode *next,
                       const Type *type);
+
+AstNode *makeSpreadExpr(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        AstNode *expr,
+                        AstNode *next,
+                        const Type *type);
 
 AstNode *makeMemberExpr(MemPool *pool,
                         const FileLoc *loc,
@@ -841,6 +862,7 @@ AstNode *deepCloneAstNode(MemPool *pool, const AstNode *node);
 AstNode *cloneGenericDeclaration(MemPool *pool, const AstNode *node);
 
 AstNode *replaceAstNode(AstNode *node, const AstNode *with);
+void replaceAstNodeInList(AstNode **list, const AstNode *node, AstNode *with);
 
 AstNode *replaceAstNodeWith(AstNode *node, const AstNode *with);
 
@@ -920,10 +942,16 @@ FunctionSignature *makeFunctionSignature(MemPool *pool,
                                          const FunctionSignature *from);
 
 AstNode *getParentScope(AstNode *node);
+AstNode *getMemberParentScope(AstNode *node);
 
 AstNode *makeTypeReferenceNode(MemPool *pool,
                                const Type *type,
                                const FileLoc *loc);
+
+AstNode *makeTypeReferenceNode2(MemPool *pool,
+                                const Type *type,
+                                const FileLoc *loc,
+                                AstNode *next);
 
 AstNode *findInAstNode(AstNode *node, cstring name);
 AstNode *resolvePath(const AstNode *path);
@@ -960,3 +988,5 @@ attr(always_inline) static bool isStructDeclaration(AstNode *node)
            nodeIs(node, GenericDecl) &&
                isStructDeclaration(node->genericDecl.decl);
 }
+
+CCodeKind getCCodeKind(TokenTag tag);

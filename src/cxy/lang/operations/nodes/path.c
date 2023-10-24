@@ -66,7 +66,7 @@ static const Type *checkBasePathElement(AstVisitor *visitor,
         csAssert0(node->pathElement.enclosure);
 
         AstNode *enclosure = node->pathElement.enclosure,
-                *parent = getParentScope(enclosure);
+                *parent = getMemberParentScope(enclosure);
         if (keyword == S_super) {
             return node->type = getTypeBase(parent->type);
         }
@@ -113,7 +113,17 @@ void generatePath(ConstAstVisitor *visitor, const AstNode *node)
 
     if (typeIs(node->type, Enum) &&
         hasFlag(node->path.elements->next, EnumLiteral)) {
-        writeEnumPrefix(ctx, node->type);
+        //        AstNode *resolved =
+        //        node->path.elements->pathElement.resolvesTo; parent = resolved
+        //        ? resolved->parentScope : NULL; if (nodeIs(parent, Program) &&
+        //        ctx->namespace == NULL) {
+        //            AstNode *module = parent->program.module;
+        //            if (module)
+        //                writeDeclNamespace(ctx, module->moduleDecl.name,
+        //                NULL);
+        //        }
+
+        writeEnumWithoutNamespace(ctx, node->type);
         generateManyAstsWithDelim(
             visitor, "_", "_", "", node->path.elements->next);
     }
@@ -144,6 +154,7 @@ void generatePath(ConstAstVisitor *visitor, const AstNode *node)
                     format(ctx->state, "__", NULL);
                 else if (elem->type &&
                          ((name == S_this) || typeIs(elem->type, Pointer) ||
+                          typeIs(elem->type, Class) ||
                           typeIs(elem->type, This) || isSliceType(elem->type)))
                     format(ctx->state, "->", NULL);
                 else

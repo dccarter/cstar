@@ -108,7 +108,7 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
     }
 
     if (isInlineFunction(node))
-        format(ctx->state, "attr(always_inline)\n", NULL);
+        format(ctx->state, "static attr(always_inline)\n", NULL);
 
     const Type *ret = node->type->func.retType;
     generateTypeUsage(ctx, ret);
@@ -187,6 +187,9 @@ void generateFuncDeclaration(CodegenContext *context, const Type *type)
     if (hasFlag(type->func.decl, BuiltinMember))
         return;
 
+    if (isInlineFunction(type->func.decl))
+        format(state, "static ", NULL);
+
     generateTypeUsage(context, type->func.retType);
     format(state, " ", NULL);
 
@@ -219,6 +222,9 @@ void generateFuncGeneratedDeclaration(CodegenContext *context, const Type *type)
     const Type *ret = type->func.retType;
     if (hasFlag(type->func.decl, BuiltinMember))
         return;
+
+    if (isInlineFunction(type->func.decl))
+        format(state, "static ", NULL);
 
     generateTypeUsage(context, type->func.retType);
     format(state, " ", NULL);
@@ -465,7 +471,7 @@ const Type *checkFunctionSignature(AstVisitor *visitor, AstNode *node)
         params_[i] = param->type ?: checkType(visitor, param);
         if (typeIs(params_[i], Error))
             type = params_[i];
-        
+
         defaultValues += (param->funcParam.def != NULL);
     }
 
@@ -591,6 +597,16 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
     }
 
     const Type *type = checkFunctionSignature(visitor, node);
-    if (!typeIs(type, Error) && node->funcDecl.body)
+    if (typeIs(type, Error))
+        return;
+
+    if (node->funcDecl.body)
         checkFunctionBody(visitor, node);
+
+    if (typeIs(node->type, Error))
+        return;
+
+    if (hasFlag(node, Async)) {
+        makeCoroutineEntry(visitor, node);
+    }
 }

@@ -127,7 +127,8 @@ void checkEnumDecl(AstVisitor *visitor, AstNode *node)
                                   .flags = node->flags,
                                   .tEnum = {.base = base,
                                             .options = options,
-                                            .optionsCount = numOptions}});
+                                            .optionsCount = numOptions,
+                                            .decl = node}});
 
     free(options);
 }

@@ -50,7 +50,7 @@ static AstNode *aliasDecl(Parser *P, bool isPublic, bool isNative);
 
 static AstNode *enumDecl(Parser *P, bool isPublic);
 
-static AstNode *classOrStructDecl(Parser *P, bool isPublic);
+static AstNode *classOrStructDecl(Parser *P, bool isPublic, bool isNative);
 
 static AstNode *attributes(Parser *P);
 
@@ -678,7 +678,7 @@ static AstNode *tuple(
     AstNode *(with)(Parser *P))
 {
     const Token start = *consume0(P, tokLParen);
-    AstNode *args = parseAtLeastOne(P, msg, tokRParen, tokComma, with);
+    AstNode *args = parseMany(P, tokRParen, tokComma, with);
     consume0(P, tokRParen);
 
     return create(P, &start.fileLoc.begin, args, strict);
@@ -687,8 +687,7 @@ static AstNode *tuple(
 static AstNode *parseTupleType(Parser *P)
 {
     Token tok = *consume0(P, tokLParen);
-    AstNode *elems =
-        parseAtLeastOne(P, "tuple members", tokRParen, tokComma, parseType);
+    AstNode *elems = parseMany(P, tokRParen, tokComma, parseType);
     consume0(P, tokRParen);
     return newAstNode(
         P,
@@ -773,7 +772,7 @@ static AstNode *createTupleOrGroupExpression(Parser *P,
                                              bool orGroup)
 {
 
-    if (node->next == NULL && orGroup)
+    if (node && node->next == NULL && orGroup)
         return newAstNode(
             P, begin, &(AstNode){.tag = astGroupExpr, .groupExpr.expr = node});
 
@@ -1084,7 +1083,12 @@ static AstNode *primary(Parser *P, bool allowStructs)
 
 static AstNode *expression(Parser *P, bool allowStructs)
 {
+    AstNode *attrs = NULL;
+    if (check(P, tokAt))
+        attrs = attributes(P);
+
     AstNode *expr = ternary(P, primary);
+    expr->attrs = attrs;
     Token *tok = NULL;
     if (!P->inCase && (tok = match(P, tokColon, tokBangColon))) {
         u64 flags = tok->tag == tokBangColon ? flgCPointerCast : flgNone;
@@ -1096,7 +1100,6 @@ static AstNode *expression(Parser *P, bool allowStructs)
                        .flags = flags,
                        .typedExpr = {.expr = expr, .type = type}});
     }
-
     return expr;
 }
 
@@ -1388,6 +1391,9 @@ static OperatorOverload operatorOverload(Parser *P)
             }
             else
                 op = (OperatorOverload){.f = opNot, .s = S_Not};
+            break;
+        case tokAwait:
+            op = (OperatorOverload){.f = opAwait, .s = S_Await};
             break;
 
 #define f(O, PP, T, S, N)                                                      \
@@ -1848,7 +1854,7 @@ static AstNode *parseClassOrStructMember(Parser *P)
         member = aliasDecl(P, !isPrivate, false);
         break;
     case tokStruct:
-        member = classOrStructDecl(P, !isPrivate);
+        member = classOrStructDecl(P, !isPrivate, false);
         break;
     default:
         reportUnexpectedToken(P, "struct member");
@@ -1998,38 +2004,52 @@ static AstNode *comptime(Parser *P, AstNode *(*parser)(Parser *))
     unreachable("");
 }
 
-static AstNode *classOrStructDecl(Parser *P, bool isPublic)
+static AstNode *classOrStructDecl(Parser *P, bool isPublic, bool isNative)
 {
     AstNode *base = NULL, *gParams = NULL, *implements = NULL;
     AstNodeList members = {NULL};
     Token tok = *match(P, tokClass, tokStruct);
     cstring name = getTokenString(P, consume0(P, tokIdent), false);
 
-    if (match(P, tokLBracket)) {
-        gParams = parseAtLeastOne(
-            P, "generic type params", tokRBracket, tokComma, parseGenericParam);
-        consume0(P, tokRBracket);
+    if (!isNative) {
+        if (match(P, tokLBracket)) {
+            gParams = parseAtLeastOne(P,
+                                      "generic type params",
+                                      tokRBracket,
+                                      tokComma,
+                                      parseGenericParam);
+            consume0(P, tokRBracket);
+        }
+
+        if (match(P, tokColon)) {
+            if (tok.tag == tokClass && match(P, tokColon))
+                base = parseType(P);
+            if (match(P, tokColon))
+                implements = parseAtLeastOne(P,
+                                             "interface to implement",
+                                             tokLBrace,
+                                             tokComma,
+                                             parseType);
+        }
+    }
+    else {
+        implements = NULL;
     }
 
-    if (match(P, tokColon)) {
-        if (tok.tag == tokClass && match(P, tokColon))
-            base = parseType(P);
-        if (match(P, tokColon))
-            implements = parseAtLeastOne(
-                P, "interface to implement", tokLBrace, tokComma, parseType);
+    if (!isNative || check(P, tokLBrace)) {
+        consume0(P, tokLBrace);
+        while (!check(P, tokRBrace, tokEoF)) {
+            listAddAstNode(&members, comptime(P, parseClassOrStructMember));
+        }
+        consume0(P, tokRBrace);
     }
-
-    consume0(P, tokLBrace);
-    while (!check(P, tokRBrace, tokEoF)) {
-        listAddAstNode(&members, comptime(P, parseClassOrStructMember));
-    }
-    consume0(P, tokRBrace);
 
     AstNode *node = newAstNode(
         P,
         &tok.fileLoc.begin,
         &(AstNode){.tag = tok.tag == tokClass ? astClassDecl : astStructDecl,
-                   .flags = isPublic ? flgPublic : flgNone,
+                   .flags = ((isPublic ? flgPublic : flgNone) |
+                             (isNative ? flgNative : flgNone)),
                    .classDecl = {.name = name,
                                  .members = members.first,
                                  .implements = implements,
@@ -2159,24 +2179,28 @@ static AstNode *aliasDecl(Parser *P, bool isPublic, bool isNative)
 static AstNode *parseCCode(Parser *P)
 {
     Token tok = *previous(P);
-    if (!match(P, tokCDefine, tokCInclude)) {
-        parserError(
-            P,
-            &tok.fileLoc,
-            "unexpected attribute, expecting either `@cDefine` or `@cInclude`",
-            NULL);
+    if (!match(P, tokCDefine, tokCInclude, tokCSources)) {
+        parserError(P,
+                    &tok.fileLoc,
+                    "unexpected attribute, expecting either `@cDefine` or "
+                    "`@cInclude`",
+                    NULL);
     }
-    bool isInclude = previous(P)->tag == tokCInclude;
+    CCodeKind kind = getCCodeKind(previous(P)->tag);
     consume0(P, tokLParen);
-    AstNode *code = parseString(P);
+    AstNode *code = NULL;
+    if (kind == cSources) {
+        code = parseMany(P, tokRParen, tokComma, parseString);
+    }
+    else {
+        code = parseString(P);
+    }
     consume0(P, tokRParen);
 
     return makeAstNode(
         P->memPool,
         &tok.fileLoc,
-        &(AstNode){
-            .tag = astCCode,
-            .cCode = {.what = code, .kind = isInclude ? cInclude : cDefine}});
+        &(AstNode){.tag = astCCode, .cCode = {.what = code, .kind = kind}});
 }
 
 static AstNode *declaration(Parser *P)
@@ -2192,13 +2216,14 @@ static AstNode *declaration(Parser *P)
         attrs = attributes(P);
     bool isPublic = match(P, tokPub) != NULL;
     bool isNative = false;
-    if (isPublic && check(P, tokNative)) {
+    if (check(P, tokNative)) {
         // do we need to consume native
         switch (peek(P, 1)->tag) {
         case tokType:
         case tokVar:
         case tokConst:
         case tokFunc:
+        case tokStruct:
             advance(P);
             isNative = true;
             break;
@@ -2210,7 +2235,7 @@ static AstNode *declaration(Parser *P)
     switch (current(P)->tag) {
     case tokStruct:
     case tokClass:
-        decl = classOrStructDecl(P, isPublic);
+        decl = classOrStructDecl(P, isPublic, isNative);
         break;
     case tokInterface:
         decl = interfaceDecl(P, isPublic);
@@ -2375,7 +2400,7 @@ static AstNode *parseTopLevelDecl(Parser *P)
 {
     if (check(P, tokImport))
         return parseImportDecl(P);
-    else if (check(P, tokCDefine, tokCInclude)) {
+    else if (check(P, tokCDefine, tokCInclude, tokCSources)) {
         return parseCCode(P);
     }
     else
@@ -2414,7 +2439,8 @@ AstNode *parseProgram(Parser *P)
         module = parseModuleDecl(P);
 
     while (check(P, tokImport) ||
-           (check(P, tokAt) && checkPeek(P, 1, tokCDefine, tokCInclude) &&
+           (check(P, tokAt) &&
+            checkPeek(P, 1, tokCDefine, tokCInclude, tokCSources) &&
             match(P, tokAt))) {
         E4C_TRY_BLOCK({
             listAddAstNode(&topLevel, parseTopLevelDecl(P));

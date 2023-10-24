@@ -407,6 +407,7 @@ static void checkSpreadExpr(AstVisitor *visitor, AstNode *node)
 
     if (type->tuple.count == 0) {
         node->tag = astNop;
+        // node->type = makeTupleType(ctx->types, NULL, 0, flgNone);
         return;
     }
 

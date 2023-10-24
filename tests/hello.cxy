@@ -1,14 +1,6 @@
 import { println } from "stdlib/io.cxy"
-import { toJson } from "stdlib/json.cxy"
-
-struct User {
-    age: i32
-    name: string
-}
+import { add } from "./add.cxy"
 
 func main(args: const [string]) {
-    var sb = StringBuilder();
-    var megan = User{age: 34, name: "Megan"};
-    toJson(sb, (10, "Carter", User{age: 34, name: "Carter"}, megan))
-    println(sb.release())
+    println("Hello ", add(10, 32))
 }

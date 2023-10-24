@@ -855,7 +855,8 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right)
     if (_left == _right)
         return left;
 
-    if ((typeIs(_left, String) || typeIs(_left, Pointer)) &&
+    if ((typeIs(_left, String) || typeIs(_left, Pointer) ||
+         typeIs(_left, Opaque)) &&
         typeIs(stripPointer(_right), Null))
         return left;
 

@@ -15,6 +15,7 @@
 #include "lang/visitor.h"
 
 #include "core/alloc.h"
+#include "lang/operations/eval.h"
 
 static void checkClassBaseDecl(AstVisitor *visitor, AstNode *node)
 {
@@ -47,15 +48,31 @@ static void checkClassBaseDecl(AstVisitor *visitor, AstNode *node)
     }
 }
 
-static void preCheckClassMembers(AstVisitor *visitor,
-                                 AstNode *node,
-                                 NamedTypeMember *members)
+static void evalClassMembers(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *member = node->classDecl.members;
-
+    AstNode *prev = NULL;
     for (u64 i = 0; member; member = member->next, i++) {
         const Type *type;
+        if (hasFlag(member, Comptime)) {
+            if (!evaluate(ctx->evaluator, member)) {
+                node->type = ERROR_TYPE(ctx);
+                return;
+            }
+            if (nodeIs(member, Nop)) {
+                if (prev == NULL) {
+                    node->structDecl.members = member->next;
+                }
+                else {
+                    prev->next = member->next;
+                }
+                member = member->next;
+                member->parentScope = node;
+            }
+        }
+        prev = member;
+
         if (nodeIs(member, FuncDecl)) {
             type = checkFunctionSignature(visitor, member);
         }
@@ -63,19 +80,25 @@ static void preCheckClassMembers(AstVisitor *visitor,
             type = checkType(visitor, member);
         }
 
-        if (typeIs(type, Error)) {
+        if (typeIs(type, Error))
             node->type = ERROR_TYPE(ctx);
-            continue;
-        }
+    }
+}
 
+static void preCheckClassMembers(AstNode *node, NamedTypeMember *members)
+{
+    AstNode *member = node->classDecl.members;
+
+    for (u64 i = 0; member; member = member->next, i++) {
         if (nodeIs(member, Field)) {
-            members[i] = (NamedTypeMember){
-                .name = member->structField.name, .type = type, .decl = member};
+            members[i] = (NamedTypeMember){.name = member->structField.name,
+                                           .type = member->type,
+                                           .decl = member};
             member->structField.index = i;
         }
         else {
             members[i] = (NamedTypeMember){.name = getDeclarationName(member),
-                                           .type = type,
+                                           .type = member->type,
                                            .decl = member};
         }
     }
@@ -240,9 +263,6 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
             goto checkClassInterfacesError;
     }
 
-    u64 membersCount = countAstNodes(node->classDecl.members);
-    NamedTypeMember *members =
-        mallocOrDie(sizeof(NamedTypeMember) * membersCount);
     node->classDecl.thisType =
         node->classDecl.thisType
             ?: makeThisType(ctx->types, node->classDecl.name, flgNone);
@@ -250,7 +270,17 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
 
     node->type = this;
     ctx->currentClass = node;
-    preCheckClassMembers(visitor, node, members);
+    evalClassMembers(visitor, node);
+    ctx->currentClass = NULL;
+    if (typeIs(node->type, Error))
+        goto checkClassInterfacesError;
+
+    u64 membersCount = countAstNodes(node->classDecl.members);
+    NamedTypeMember *members =
+        mallocOrDie(sizeof(NamedTypeMember) * membersCount);
+
+    ctx->currentClass = node;
+    preCheckClassMembers(node, members);
     ctx->currentClass = NULL;
 
     if (typeIs(node->type, Error))

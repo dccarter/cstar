@@ -15,18 +15,33 @@
 #include "lang/visitor.h"
 
 #include "core/alloc.h"
+#include "lang/operations/eval.h"
 
-#include <string.h>
-
-static void preCheckStructMembers(AstVisitor *visitor,
-                                  AstNode *node,
-                                  NamedTypeMember *members)
+static void evaluateStructMembers(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *member = node->structDecl.members;
-
+    AstNode *prev = NULL;
     for (u64 i = 0; member; member = member->next, i++) {
-        const Type *type;
+        if (hasFlag(member, Comptime)) {
+            if (!evaluate(ctx->evaluator, member)) {
+                node->type = ERROR_TYPE(ctx);
+                return;
+            }
+            if (nodeIs(member, Nop)) {
+                if (prev == NULL) {
+                    node->structDecl.members = member->next;
+                }
+                else {
+                    prev->next = member->next;
+                }
+                member = member->next;
+                member->parentScope = node;
+            }
+        }
+        prev = member;
+
+        const Type *type = NULL;
         if (nodeIs(member, FuncDecl)) {
             type = checkFunctionSignature(visitor, member);
             if (isBuiltinsInitialized() &&
@@ -45,25 +60,27 @@ static void preCheckStructMembers(AstVisitor *visitor,
             type = checkType(visitor, member);
         }
 
-        if (typeIs(type, Error)) {
+        if (typeIs(type, Error))
             node->type = ERROR_TYPE(ctx);
-            continue;
-        }
+    }
+}
 
+static void preCheckStructMembers(AstNode *node, NamedTypeMember *members)
+{
+    AstNode *member = node->structDecl.members;
+    for (u64 i = 0; member; member = member->next, i++) {
         if (nodeIs(member, Field)) {
-            members[i] = (NamedTypeMember){
-                .name = member->structField.name, .type = type, .decl = member};
+            members[i] = (NamedTypeMember){.name = member->structField.name,
+                                           .type = member->type,
+                                           .decl = member};
             member->structField.index = i;
         }
         else {
             members[i] = (NamedTypeMember){.name = getDeclarationName(member),
-                                           .type = type,
+                                           .type = member->type,
                                            .decl = member};
         }
     }
-
-    if (typeIs(node->type, Error))
-        return;
 }
 
 void generateStructExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -97,6 +114,9 @@ void generateStructExpr(ConstAstVisitor *visitor, const AstNode *node)
 void generateStructDefinition(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
+    if (hasFlag(type, Native))
+        return;
+
     format(state, "struct ", NULL);
     writeTypename(context, type);
     format(state, " {{{>}\n", NULL);
@@ -134,7 +154,10 @@ void generateStructTypedef(CodegenContext *ctx, const Type *type)
 {
     FormatState *state = ctx->state;
     format(state, "typedef struct ", NULL);
-    writeTypename(ctx, type);
+    if (hasFlag(type, Native))
+        format(state, "{s}", (FormatArg[]){{.s = type->name}});
+    else
+        writeTypename(ctx, type);
     format(state, " ", NULL);
     writeTypename(ctx, type);
     format(state, ";\n", NULL);
@@ -333,16 +356,23 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
     if (typeIs(node->type, Error))
         goto checkStructInterfacesError;
 
-    u64 membersCount = countAstNodes(node->structDecl.members);
-    NamedTypeMember *members =
-        mallocOrDie(sizeof(NamedTypeMember) * membersCount);
     node->structDecl.thisType =
         node->structDecl.thisType
             ?: makeThisType(ctx->types, node->structDecl.name, flgNone);
     const Type *this = node->structDecl.thisType;
 
     ctx->currentStruct = node;
-    preCheckStructMembers(visitor, node, members);
+    evaluateStructMembers(visitor, node);
+    ctx->currentStruct = NULL;
+    if (typeIs(node->type, Error))
+        goto checkStructInterfacesError;
+
+    u64 membersCount = countAstNodes(node->structDecl.members);
+    NamedTypeMember *members =
+        mallocOrDie(sizeof(NamedTypeMember) * membersCount);
+
+    ctx->currentStruct = node;
+    preCheckStructMembers(node, members);
     ctx->currentStruct = NULL;
 
     if (typeIs(node->type, Error))

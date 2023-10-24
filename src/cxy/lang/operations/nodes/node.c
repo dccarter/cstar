@@ -126,10 +126,10 @@ bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     const Type *type = node->type ?: checkType(visitor, node);
     type = unwrapType(type, NULL);
-    if (!typeIs(type, Struct))
+    if (!isClassOrStructType(type))
         return false;
 
-    const NamedTypeMember *member = findStructMember(type, S_Truthy);
+    const Type *member = findMemberInType(type, S_Truthy);
     if (member == NULL)
         return false;
 
@@ -138,6 +138,25 @@ bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node)
 
     type = checkType(visitor, node);
     return typeIs(type, Primitive);
+}
+
+bool transformToAwaitOperator(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    AstNode *operand = node->unaryExpr.operand;
+    const Type *type = operand->type ?: checkType(visitor, operand);
+    type = unwrapType(type, NULL);
+    if (!isClassOrStructType(type))
+        return false;
+
+    const Type *member = findMemberInType(type, S_Await);
+    if (member == NULL)
+        return false;
+
+    transformToMemberCallExpr(visitor, node, operand, S_Await, NULL);
+
+    type = checkType(visitor, node);
+    return !(typeIs(type, Error));
 }
 
 bool transformOptionalSome(AstVisitor *visitor, AstNode *node, AstNode *value)

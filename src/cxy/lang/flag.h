@@ -63,7 +63,7 @@ static const u64 flgNone = 0;
 CXY_LANG_FLAGS(f)
 #undef f
 static const u64 flgTypeApplicable =
-    (flgConst | flgOptional | flgClosure | flgSlice);
+    (flgNative | flgConst | flgOptional | flgClosure | flgSlice);
 
 typedef u64 Flags;
 

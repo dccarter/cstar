@@ -145,30 +145,46 @@ void checkTupleExpr(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *elements = node->tupleExpr.elements, *element = elements;
-    node->tupleExpr.len = node->tupleExpr.len ?: countAstNodes(elements);
-    const Type **elements_ = mallocOrDie(sizeof(Type *) * node->tupleExpr.len);
 
+    AstNode *prev = NULL;
     for (u64 i = 0; element; element = element->next, i++) {
-        elements_[i] = checkType(visitor, element);
-        if (typeIs(elements_[i], Error)) {
+        if (nodeIs(element, Nop)) {
+            if (prev == NULL)
+                node->tupleExpr.elements = element->next;
+            else
+                prev->next = element->next;
+            continue;
+        }
+        prev = element;
+
+        const Type *type = checkType(visitor, element);
+        if (typeIs(type, Error)) {
             node->type = element->type;
             continue;
         }
 
-        const Type *type = unwrapType(elements_[i], NULL);
+        type = unwrapType(type, NULL);
         if (isClassOrStructType(type) && !hasFlag(type, Closure)) {
             AstNode *decl = getTypeDecl(type);
             node->flags |= (decl->flags & flgReferenceMembers);
         }
     }
 
-    if (!typeIs(node->type, Error)) {
-        node->type = makeTupleType(
-            ctx->types,
-            elements_,
-            node->tupleExpr.len,
-            node->flags & (flgReferenceMembers | flgConst | flgTransient));
+    if (typeIs(node->type, Error))
+        return;
+
+    node->tupleExpr.len = countAstNodes(node->tupleExpr.elements);
+    const Type **elements_ = mallocOrDie(sizeof(Type *) * node->tupleExpr.len);
+    element = node->tupleExpr.elements;
+    for (u64 i = 0; element; element = element->next, i++) {
+        elements_[i] = element->type;
     }
+
+    node->type = makeTupleType(
+        ctx->types,
+        elements_,
+        node->tupleExpr.len,
+        node->flags & (flgReferenceMembers | flgConst | flgTransient));
 
     free(elements_);
 }

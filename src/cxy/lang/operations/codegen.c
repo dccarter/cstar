@@ -14,6 +14,7 @@
 
 #include "driver/driver.h"
 
+#include "driver/cc.h"
 #include "epilogue.h"
 #include "prologue.h"
 
@@ -227,10 +228,20 @@ static void generateCCode(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state,
                "#include {s}\n",
                (FormatArg[]){{.s = node->cCode.what->stringLiteral.value}});
-    else
+    else if (node->cCode.kind == cDefine)
         format(ctx->state,
                "#define {s}\n",
                (FormatArg[]){{.s = node->cCode.what->stringLiteral.value}});
+    else {
+        cstring cxySource = node->loc.fileName;
+        AstNode *nativeSource = node->cCode.what;
+        for (; nativeSource; nativeSource = nativeSource->next) {
+            addNativeSourceFile(ctx->nativeSources,
+                                ctx->strPool,
+                                cxySource,
+                                nativeSource->stringLiteral.value);
+        }
+    }
 }
 
 void generateWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
@@ -362,12 +373,36 @@ void writeEnumPrefix(CodegenContext *ctx, const Type *type)
     }
 }
 
+void writeEnumWithoutNamespace(CodegenContext *ctx, const Type *type)
+{
+    FormatState *state = ctx->state;
+    csAssert0(type->tag == typEnum);
+
+    if (type->namespace) {
+        format(state, "{s}__", (FormatArg[]){{.s = type->namespace}});
+    }
+
+    if (type->name) {
+        format(state, "{s}", (FormatArg[]){{.s = type->name}});
+    }
+    else {
+        format(state,
+               CXY_ANONYMOUS_ENUM "{u64}",
+               (FormatArg[]){{.u64 = type->index}});
+    }
+}
+
 void writeTypename(CodegenContext *ctx, const Type *type)
 {
     FormatState *state = ctx->state;
 
-    if (!isBuiltinType(type))
+    if (!isBuiltinType(type)) {
+        if (typeIs(type, Module)) {
+            writeDeclNamespace(ctx, type->namespace, "");
+            return;
+        }
         writeDeclNamespace(ctx, type->namespace, NULL);
+    }
 
     if (type->name) {
         if (type->tag == typFunc) {
@@ -561,6 +596,7 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
     CodegenContext context = {.state = node->metadata.state,
                               .types = driver->typeTable,
                               .strPool = &driver->strPool,
+                              .nativeSources = &driver->nativeSources,
                               .program = program,
                               .importedFile = hasFlag(program, ImportedModule),
                               .namespace =

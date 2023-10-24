@@ -124,7 +124,11 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
         if (flatten && nodeIs(replacement, BlockStmt))
             replacement = replacement->blockStmt.stmts
                               ?: makeAstNop(ctx->pool, &replacement->loc);
-        replaceAstNodeWith(node, replacement);
+        clearAstBody(node);
+        node->tag = astNop;
+        node->flags &= ~flgComptime;
+        node->next = replacement;
+        getLastAstNode(replacement)->next = next;
     }
     else if (node->ifStmt.otherwise) {
         // select otherwise, reclaim if branch
@@ -132,18 +136,19 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
         if (flatten && nodeIs(replacement, BlockStmt))
             replacement = replacement->blockStmt.stmts
                               ?: makeAstNop(ctx->pool, &replacement->loc);
-        replaceAstNodeWith(node, replacement);
+
+        // select next statement, reclaim if branch
+        clearAstBody(node);
+        node->tag = astNop;
+        node->flags &= ~flgComptime;
+        node->next = replacement;
+        getLastAstNode(replacement)->next = next;
     }
     else {
         // select next statement, reclaim if branch
-        if (next && !nodeIs(next, VarDecl)) {
-            *node = *next;
-        }
-        else {
-            clearAstBody(node);
-            node->tag = astNop;
-            node->flags &= ~flgComptime;
-        }
+        clearAstBody(node);
+        node->tag = astNop;
+        node->flags &= ~flgComptime;
     }
 
     while (nodeIs(node, IfStmt) && hasFlag(node, Comptime)) {

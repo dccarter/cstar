@@ -18,3 +18,12 @@ bool createSourceFile(CompilerDriver *driver,
                       cstring *filePath,
                       u64 flags);
 bool generateAllBuiltinSources(CompilerDriver *driver);
+
+void addNativeSourceFile(HashTable *nativeSources,
+                         StrPool *strings,
+                         cstring cxySource,
+                         cstring source);
+void addLinkLibrary(HashTable *linkedLibraries,
+                    StrPool *strings,
+                    cstring cxySource,
+                    cstring source);
