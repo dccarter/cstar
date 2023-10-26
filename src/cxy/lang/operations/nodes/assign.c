@@ -60,6 +60,7 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
     AstNode *left = node->assignExpr.lhs, *right = node->assignExpr.rhs;
 
     const Type *lhs = NULL;
+    u64 flags = flgNone;
     if (nodeIs(left, IndexExpr)) {
         const Type *target = checkType(visitor, left->indexExpr.target);
         if (typeIs(target, Error)) {
@@ -71,9 +72,10 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
             checkIndexExprAssignment(visitor, node);
             return;
         }
-
+        target = unwrapType(target, &flags);
         if (isPointerType(target)) {
-            lhs = stripAll(target);
+            lhs = typeIs(target, Pointer) ? target->pointer.pointed
+                                          : target->array.elementType;
             const Type *index = checkType(visitor, left->indexExpr.index);
             if (typeIs(index, Error)) {
                 node->type = ERROR_TYPE(ctx);
@@ -121,7 +123,7 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
     bool isLeftAuto = typeIs(lhs, Auto);
 
     // TODO check r-value-ness
-    if (hasFlag(left, Const) || hasFlag(lhs, Const)) {
+    if ((flags & flgConst) || hasFlag(left, Const) || hasFlag(lhs, Const)) {
         logError(ctx->L,
                  &node->loc,
                  "lhs of assignment expressions is a constant",
@@ -149,6 +151,7 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
                  (FormatArg[]){{.t = lhs}, {.t = rhs}});
         node->type = ERROR_TYPE(ctx);
     }
+
     if (node->type == ERROR_TYPE(ctx))
         return;
 

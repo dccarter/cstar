@@ -384,6 +384,8 @@ TypeInheritance *makeTypeInheritance(TypeTable *types,
                                      const Type **interfaces,
                                      u64 interfaceCount);
 
+AstNode *findMemberDeclInType(const Type *type, cstring name);
+
 const Type *getPointedType(const Type *type);
 bool isTruthyType(const Type *type);
 const Type *getOptionalType();

@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <core/format.h>
 #include <core/strpool.h>
 #include <core/utils.h>
 
@@ -55,7 +56,9 @@
     f(ReferenceMembers,     43)                 \
     f(Pure,                 44)                 \
     f(Slice,                45)                 \
-    f(Transient,            46)
+    f(Transient,            46)                 \
+    f(Static,               47)                 \
+    f(SyncCall,             48)
 
 // clang-format on
 static const u64 flgNone = 0;
@@ -67,4 +70,5 @@ static const u64 flgTypeApplicable = (flgNative | flgConst | flgOptional |
 
 typedef u64 Flags;
 
+void appendFlagsAsString(FormatState *state, u64 flags);
 char *flagsToString(u64 flags);

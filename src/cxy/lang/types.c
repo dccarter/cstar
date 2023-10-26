@@ -309,7 +309,13 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
             return isNumericType(unwrappedFrom);
 #undef f
         case prtChar:
-            return isUnsignedType(unwrappedFrom) && unwrappedFrom->size <= 4;
+            return (isUnsignedType(unwrappedFrom) &&
+                    unwrappedFrom->size <= 4) ||
+                   (unwrappedFrom->primitive.id == prtCChar);
+        case prtCChar:
+            return (isUnsignedType(unwrappedFrom) &&
+                    unwrappedFrom->size <= 4) ||
+                   (unwrappedFrom->primitive.id == prtChar);
         case prtBool:
             return unwrappedFrom->primitive.id == prtBool;
         default:
@@ -850,6 +856,32 @@ const TypeInheritance *getTypeInheritance(const Type *type)
         return type->tStruct.inheritance;
     case typClass:
         return type->tClass.inheritance;
+    default:
+        return NULL;
+    }
+}
+
+AstNode *findMemberDeclInType(const Type *type, cstring name)
+{
+    const NamedTypeMember *member;
+    switch (type->tag) {
+    case typThis:
+        return findMemberDeclInType(type, name);
+    case typStruct:
+        member = findStructMember(type, name);
+        return member ? (AstNode *)member->decl : NULL;
+        break;
+    case typInterface:
+        member = findInterfaceMember(type, name);
+        return member ? (AstNode *)member->decl : NULL;
+        break;
+    case typModule:
+        member = findModuleMember(type, name);
+        return member ? (AstNode *)member->decl : NULL;
+        break;
+    case typClass:
+        member = findClassMember(type, name);
+        return member ? (AstNode *)member->decl : NULL;
     default:
         return NULL;
     }

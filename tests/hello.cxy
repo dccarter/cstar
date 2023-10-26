@@ -1,10 +1,44 @@
 import { println } from "stdlib/io.cxy"
+import { Address } from "stdlib/net.cxy"
+import { tcpConnect, TcpSocket, TcpListener } from "stdlib/tcp.cxy"
 
+class Handler {
+    func `init`(){}
+    async func handleConnection(listener: TcpListener, sock: TcpSocket) {
+        var buffer: [char, 512];
+        sock.send("Welcome...\n")
+        while (sock) {
+            var len = sock.receive(buffer, 512);
+            if (len) {
+                sock.send("You said: ")
+                sock.sendBuffer(buffer, *len)
+                if (buffer.[0] == <char>'Q') {
+                    sock.close()
+                    listener.close()
+                }
+            }
+        }
+    }
+}
 
-func say(name: string, fn: func(msg: String) -> void) {
-    fn(f"Hello ${name}")
+async func server(handler: Handler) {
+    var addr = Address("0.0.0.0", 8080);
+    var listener = TcpListener(addr);
+    println("listening at ", addr)
+    if (!listener.listen()) {
+        println("failed to listen")
+        return;
+    }
+
+    while (listener) {
+        var sock = listener.accept();
+        if (!sock)
+            return;
+        handler.handleConnection(listener, *sock)
+    }
+    listener.close()
 }
 
 func main(args: const [string]) {
-    var x = (msg: String) => println(msg);
+    await server(Handler())
 }

@@ -18,10 +18,10 @@
 
 #include <string.h>
 
-static AstNode *transformParamsCoroutineArgs(TypingContext *ctx,
-                                             AstNode *params)
+static AstNode *transformParamsCoroutineArgs(TypingContext *ctx, AstNode *node)
 {
-    AstNode *param = params;
+
+    AstNode *params = node->funcDecl.signature->params, *param = params;
     u64 count = countAstNodes(params);
     const Type **members = mallocOrDie(sizeof(Type *) * count);
     for (u64 i = 0; param; param = param->next, i++) {
@@ -29,11 +29,14 @@ static AstNode *transformParamsCoroutineArgs(TypingContext *ctx,
     }
 
     const Type *tuple = makeTupleType(ctx->types, members, count, flgNone);
-    return makeTypeReferenceNode(ctx->pool, tuple, manyNodesLoc(params));
+    free(members);
+    return makeTypeReferenceNode(
+        ctx->pool, tuple, params ? manyNodesLoc(params) : &node->loc);
 }
 
 static AstNode *makeLaunchAsyncArgs(TypingContext *ctx,
                                     const AstNode *node,
+                                    AstNode *obj,
                                     AstNode *args)
 {
     AstNodeList argsList = {NULL};
@@ -47,6 +50,10 @@ static AstNode *makeLaunchAsyncArgs(TypingContext *ctx,
                                    async,
                                    NULL,
                                    async->type));
+
+    if (obj)
+        insertAstNode(&argsList, obj);
+
     // "{name}"
     insertAstNode(&argsList,
                   makeStringLiteral(ctx->pool,
@@ -59,6 +66,36 @@ static AstNode *makeLaunchAsyncArgs(TypingContext *ctx,
     insertAstNode(&argsList, args);
 
     return argsList.first;
+}
+
+static AstNode *makeCallTargetObject(TypingContext *ctx,
+                                     const Type *callee,
+                                     AstNode *node)
+{
+    AstNode *func = callee->func.decl, *parent = func->parentScope;
+    if (!nodeIs(parent, ClassDecl) || hasFlag(func, Static))
+        return NULL;
+
+    if (nodeIs(node, Path)) {
+        csAssert0(node->path.elements->next != NULL);
+        AstNodeList elemList = {NULL};
+        AstNode *elem = node->path.elements;
+        while (elem->next) {
+            insertAstNode(&elemList, deepCloneAstNode(ctx->pool, elem));
+            elem = elem->next;
+        }
+
+        return makePathWithElements(ctx->pool,
+                                    manyNodesLoc(elemList.first),
+                                    elemList.last->flags,
+                                    elemList.first,
+                                    NULL);
+    }
+    else if (nodeIs(node, MemberExpr)) {
+        // TOD: what if it's a function call?
+        return deepCloneAstNode(ctx->pool, node->memberExpr.member);
+    }
+    unreachable("NOT POSSIBLE");
 }
 
 //    func helloCxyCoroutine(ptr : &void)
@@ -77,6 +114,10 @@ const Type *makeCoroutineEntry(AstVisitor *visitor, AstNode *node)
     cstring coroSymbol = makeString(ctx->strings, "coro");
     cstring promiseSymbol = makeString(ctx->strings, "promise");
     AstNode *coroutine = findBuiltinDecl(S_Coroutine);
+    csAssert0(coroutine);
+    AstNode *parent = getParentScope(node);
+    const Type *Obj =
+        nodeIs(parent, Program) ? makeVoidType(ctx->types) : parent->type;
 
     // func {name}CoroEntry(ptr: &void) {  }
     AstNode *func = makeFunctionDecl(
@@ -93,9 +134,10 @@ const Type *makeCoroutineEntry(AstVisitor *visitor, AstNode *node)
             NULL,
             flgNone,
             NULL),
-        NULL,
+        makeVoidAstNode(
+            ctx->pool, &node->loc, flgNone, NULL, makeVoidType(ctx->types)),
         makeBlockStmt(ctx->pool, &node->loc, NULL, NULL, NULL),
-        flgNone,
+        flgPure,
         NULL,
         NULL);
 
@@ -125,8 +167,11 @@ const Type *makeCoroutineEntry(AstVisitor *visitor, AstNode *node)
                              ctx->pool,
                              node->type->func.retType,
                              &node->loc,
-                             transformParamsCoroutineArgs(
-                                 ctx, node->funcDecl.signature->params)),
+                             makeTypeReferenceNode2(
+                                 ctx->pool,
+                                 Obj,
+                                 &node->loc,
+                                 transformParamsCoroutineArgs(ctx, node))),
                          NULL),
                      NULL,
                      NULL),
@@ -168,16 +213,44 @@ const Type *makeCoroutineEntry(AstVisitor *visitor, AstNode *node)
         NULL,
         NULL);
     coro->next = promise;
+
+    AstNode *callee =
+        nodeIs(parent, Program)
+            ? makeResolvedPath(ctx->pool,
+                               &node->loc,
+                               node->funcDecl.name,
+                               flgSyncCall,
+                               node,
+                               NULL,
+                               node->type)
+            : makePathWithElements(
+                  ctx->pool,
+                  &node->loc,
+                  flgSyncCall,
+                  makeResolvedPathElement(
+                      ctx->pool,
+                      &node->loc,
+                      coroSymbol,
+                      flgNone,
+                      coro,
+                      makePathElement(ctx->pool,
+                                      &node->loc,
+                                      makeString(ctx->strings, "obj"),
+                                      flgNone,
+                                      makePathElement(ctx->pool,
+                                                      &node->loc,
+                                                      node->funcDecl.name,
+                                                      flgNone,
+                                                      NULL,
+                                                      NULL),
+                                      NULL),
+                      coro->type),
+                  NULL);
+
     AstNode *call = makeCallExpr(
         ctx->pool,
         &node->loc,
-        makeResolvedPath(ctx->pool,
-                         &node->loc,
-                         node->funcDecl.name,
-                         flgNone,
-                         node,
-                         NULL,
-                         node->type),
+        callee,
         makeSpreadExpr(ctx->pool,
                        &node->loc,
                        flgNone,
@@ -252,13 +325,13 @@ const Type *makeCoroutineEntry(AstVisitor *visitor, AstNode *node)
         NULL,
         NULL);
 
-    const Type *type = checkType(visitor, func);
+    func->parentScope = parent;
+    const Type *type = checkFunctionSignature(visitor, func);
     if (typeIs(type, Error))
         return node->type = ERROR_TYPE(ctx);
 
-    func->flags |= (flgVisited | flgPure);
+    func->flags |= (flgMember | flgPure | flgStatic);
     func->next = node->next;
-    func->parentScope = ctx->root.program;
 
     node->next = func;
     node->funcDecl.coroEntry = func;
@@ -276,34 +349,41 @@ const Type *makeAsyncLaunchCall(AstVisitor *visitor,
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *func = callee->func.decl;
+    AstNode *obj = makeCallTargetObject(ctx, callee, node->callExpr.callee);
+    AstNode *asyncLaunch =
+        findBuiltinDecl(obj ? S_asyncLaunchMember : S_asyncLaunch);
+    AstNode *Args = transformParamsCoroutineArgs(ctx, func);
 
-    AstNode *asyncLaunch = findBuiltinDecl(S_asyncLaunch);
-    AstNode *Args =
-        transformParamsCoroutineArgs(ctx, func->funcDecl.signature->params);
-
-    AstNode *call =
-        makeCallExpr(ctx->pool,
-                     &node->loc,
-                     makeResolvedPathWithArgs(
-                         ctx->pool,
-                         &node->loc,
-                         S_asyncLaunch,
-                         flgNone,
-                         asyncLaunch,
-                         makeTypeReferenceNode2(
-                             ctx->pool, callee->func.retType, &node->loc, Args),
-                         NULL),
-                     makeLaunchAsyncArgs(ctx,
-                                         func,
-                                         makeTupleExpr(ctx->pool,
-                                                       &node->loc,
-                                                       flgNone,
-                                                       node->callExpr.args,
-                                                       NULL,
-                                                       Args->type)),
-                     flgNone,
-                     NULL,
-                     NULL);
+    AstNode *call = makeCallExpr(
+        ctx->pool,
+        &node->loc,
+        makeResolvedPathWithArgs(
+            ctx->pool,
+            &node->loc,
+            S_asyncLaunch,
+            flgNone,
+            asyncLaunch,
+            obj ? makeTypeReferenceNode2(
+                      ctx->pool,
+                      callee->func.retType,
+                      &node->loc,
+                      makeTypeReferenceNode2(
+                          ctx->pool, obj->type, &node->loc, Args))
+                : makeTypeReferenceNode2(
+                      ctx->pool, callee->func.retType, &node->loc, Args),
+            NULL),
+        makeLaunchAsyncArgs(ctx,
+                            func,
+                            obj,
+                            makeTupleExpr(ctx->pool,
+                                          &node->loc,
+                                          flgNone,
+                                          node->callExpr.args,
+                                          NULL,
+                                          Args->type)),
+        flgNone,
+        NULL,
+        NULL);
 
     const Type *type = checkType(visitor, call);
     if (typeIs(type, Error))

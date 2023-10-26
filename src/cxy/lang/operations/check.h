@@ -45,6 +45,7 @@ typedef struct {
 } TypingContext;
 
 void addTopLevelDeclaration(TypingContext *ctx, AstNode *node);
+void addTopLevelDeclarationAsNext(TypingContext *ctx, AstNode *node);
 void addBlockLevelDeclaration(TypingContext *ctx, AstNode *node);
 
 const FileLoc *manyNodesLoc_(FileLoc *dst, AstNode *nodes);
@@ -113,6 +114,7 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
                                AstNode *node);
 
 const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node);
+AstNode *transformClosureArgument(AstVisitor *visitor, AstNode *node);
 
 const Type *matchOverloadedFunction(TypingContext *ctx,
                                     const Type *callee,

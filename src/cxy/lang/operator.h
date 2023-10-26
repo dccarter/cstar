@@ -58,6 +58,7 @@
     f(Deref,  Mult, "*",  "deref")                  \
     f(Not,    LNot, "!",  "lnot")                   \
     f(Compl,  BNot, "~",  "bnot")                   \
+    f(AddrOf, BAnd, "&",  "addrof")              \
     f(Spread, Elipsis, "...", "spread")             \
     f(Await,  Await, "await", "await")              \
 

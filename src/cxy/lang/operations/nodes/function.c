@@ -250,8 +250,9 @@ void generateFunctionTypedef(CodegenContext *context, const Type *type)
     FormatState *state = context->state;
     const AstNode *decl = type->func.decl,
                   *parent = decl ? type->func.decl->parentScope : NULL;
-    bool isMember =
-        parent && (nodeIs(parent, StructDecl) || nodeIs(parent, ClassDecl));
+    bool isMember = parent &&
+                    (nodeIs(parent, StructDecl) || nodeIs(parent, ClassDecl)),
+         isStatic = isMember && hasFlag(decl, Static);
 
     format(state, "typedef ", NULL);
     generateTypeUsage(context, type->func.retType);
@@ -263,7 +264,7 @@ void generateFunctionTypedef(CodegenContext *context, const Type *type)
     writeTypename(context, type);
 
     format(state, ")(", NULL);
-    if (isMember) {
+    if (isMember && !isStatic) {
         if (hasFlag(type, Const))
             format(state, "const ", NULL);
         writeTypename(context, parent->type);
@@ -271,7 +272,7 @@ void generateFunctionTypedef(CodegenContext *context, const Type *type)
     }
 
     for (u64 i = 0; i < type->func.paramsCount; i++) {
-        if (isMember || i != 0)
+        if ((isMember && !isStatic) || i != 0)
             format(state, ", ", NULL);
         generateTypeUsage(context, type->func.params[i]);
     }
@@ -359,7 +360,7 @@ const Type *matchOverloadedFunction(TypingContext *ctx,
             ctx->L,
             loc,
             "incompatible function reference ({u64} functions declared did "
-            "not match function with signature {t})",
+            "not match function with signature {t}",
             (FormatArg[]){{.u64 = declarations}, {.t = &type}});
 
         decl = decls;
@@ -410,7 +411,8 @@ bool checkMemberFunctions(AstVisitor *visitor,
             }
 
             retype = members[i].type != type;
-            members[i].type = type;
+            if (members[i].name == member->funcDecl.name)
+                members[i].type = type;
         }
     }
 
@@ -590,7 +592,11 @@ const Type *checkFunctionBody(AstVisitor *visitor, AstNode *node)
     }
 
     if (typeIs(ret_, Auto))
-        return node->type = changeFunctionRetType(ctx->types, type, body_);
+        node->type = changeFunctionRetType(ctx->types, type, body_);
+
+    if (hasFlag(node, Async)) {
+        makeCoroutineEntry(visitor, node);
+    }
 
     return node->type;
 }
@@ -642,8 +648,4 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
 
     if (typeIs(node->type, Error))
         return;
-
-    if (hasFlag(node, Async)) {
-        makeCoroutineEntry(visitor, node);
-    }
 }

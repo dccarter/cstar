@@ -1,6 +1,185 @@
 Program:
 flags: (Main)
 decls:
+- FuncDecl:
+  flags: (TopLevelDecl)
+  name: closureArg0
+  params:
+  - FuncParam:
+    flags: (FuncTypeParam)
+    name: fn
+    index: 0
+    paramType:
+      TupleType:
+      members:
+      - TypeRef:
+      - FuncType:
+        flags: (TypeAst)
+        ret:
+          VoidType:
+          flags: (TypeAst)
+        params:
+        - FuncParam:
+          name: _
+          index: 0
+          paramType:
+            TypeRef:
+  body:
+    BlockStmt:
+    stmts:
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          MemberExpr:
+          flags: (FuncTypeParam)
+          target:
+            Path:
+            flags: (FuncTypeParam)
+            elements:
+            - PathElem:
+              name: fn
+            isType: false
+          member:
+            IntegerLit:
+            value: 1
+        args:
+        - MemberExpr:
+          flags: (FuncTypeParam)
+          target:
+            Path:
+            flags: (FuncTypeParam)
+            elements:
+            - PathElem:
+              name: fn
+            isType: false
+          member:
+            IntegerLit:
+            value: 0
+- FuncDecl:
+  flags: (TopLevelDecl)
+  name: closureArg1
+  params:
+  - FuncParam:
+    name: msg
+    index: 0
+    paramType:
+      StringType:
+      flags: (TypeAst)
+  - FuncParam:
+    flags: (FuncTypeParam)
+    name: fn
+    index: 0
+    paramType:
+      TupleType:
+      members:
+      - TypeRef:
+      - FuncType:
+        flags: (TypeAst)
+        ret:
+          VoidType:
+          flags: (TypeAst)
+        params:
+        - FuncParam:
+          name: _
+          index: 0
+          paramType:
+            TypeRef:
+        - FuncParam:
+          name: msg
+          index: 0
+          paramType:
+            StringType:
+            flags: (TypeAst)
+  body:
+    BlockStmt:
+    stmts:
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          MemberExpr:
+          flags: (FuncTypeParam)
+          target:
+            Path:
+            flags: (FuncTypeParam)
+            elements:
+            - PathElem:
+              name: fn
+            isType: false
+          member:
+            IntegerLit:
+            value: 1
+        args:
+        - MemberExpr:
+          flags: (FuncTypeParam)
+          target:
+            Path:
+            flags: (FuncTypeParam)
+            elements:
+            - PathElem:
+              name: fn
+            isType: false
+          member:
+            IntegerLit:
+            value: 0
+        - Path:
+          elements:
+          - PathElem:
+            name: msg
+          isType: false
+- FuncDecl:
+  flags: (TopLevelDecl)
+  name: closureArg2
+  params:
+  - FuncParam:
+    flags: (FuncTypeParam)
+    name: fn
+    index: 0
+    paramType:
+      TupleType:
+      members:
+      - TypeRef:
+      - FuncType:
+        flags: (TypeAst)
+        ret:
+          VoidType:
+          flags: (TypeAst)
+        params:
+        - FuncParam:
+          name: _
+          index: 0
+          paramType:
+            TypeRef:
+        - FuncParam:
+          name: msg
+          index: 0
+          paramType:
+            StringType:
+            flags: (TypeAst)
+  body:
+    BlockStmt:
+    stmts:
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          Path:
+          flags: (TopLevelDecl)
+          elements:
+          - PathElem:
+            flags: (TopLevelDecl)
+            name: closureArg1
+          isType: false
+        args:
+        - StringLit:
+          value: "hello"
+        - Path:
+          flags: (FuncTypeParam)
+          elements:
+          - PathElem:
+            name: fn
+          isType: false
 - StructDecl:
   flags: (Public|Generated|Slice)
   name: Slice3
@@ -97,7 +276,7 @@ decls:
             isType: false
   - FuncDecl:
     flags: (Public)
-    loc:
+    attrs:
     - Attr:
       name: inline
     overload: op__idx_assign
@@ -187,7 +366,7 @@ decls:
             isType: false
   - FuncDecl:
     flags: (Public)
-    loc:
+    attrs:
     - Attr:
       name: inline
     overload: op__idx
@@ -261,7 +440,7 @@ decls:
             isType: false
   - FuncDecl:
     flags: (Public|Const)
-    loc:
+    attrs:
     - Attr:
       name: inline
     overload: op__idx
@@ -687,7 +866,7 @@ decls:
     index: 1
   - FuncDecl:
     flags: (Public)
-    loc:
+    attrs:
     - Attr:
       name: inline
     overload: op__init
@@ -712,7 +891,7 @@ decls:
             value: false
   - FuncDecl:
     flags: (Public)
-    loc:
+    attrs:
     - Attr:
       name: inline
     overload: op__init
@@ -769,7 +948,7 @@ decls:
             value: true
   - FuncDecl:
     flags: (Public|Const)
-    loc:
+    attrs:
     - Attr:
       name: inline
     overload: op__truthy
@@ -790,7 +969,7 @@ decls:
           isType: false
   - FuncDecl:
     flags: (Public|Const)
-    loc:
+    attrs:
     - Attr:
       name: inline
     overload: op__hash
@@ -991,7 +1170,7 @@ decls:
       BlockStmt:
 - FuncDecl:
   flags: (Public|Generated)
-  loc:
+  attrs:
   - Attr:
     name: inline
   overload: op__lshift
@@ -1158,7 +1337,7 @@ decls:
         isType: false
 - FuncDecl:
   flags: (Public|Generated)
-  loc:
+  attrs:
   - Attr:
     name: inline
   overload: op__lshift
@@ -1253,7 +1432,7 @@ decls:
         isType: false
 - FuncDecl:
   flags: (Public|Generated)
-  loc:
+  attrs:
   - Attr:
     name: inline
   overload: op__lshift
@@ -1610,14 +1789,14 @@ decls:
             isType: false
 - FuncDecl:
   flags: (Generated)
-  loc:
+  attrs:
   - Attr:
     name: inline
   name: Some12
   params:
   - FuncParam:
     flags: (Transient)
-    loc:
+    attrs:
     - Attr:
       name: transient
     name: value
@@ -1687,7 +1866,7 @@ decls:
               isType: false
 - FuncDecl:
   flags: (Generated)
-  loc:
+  attrs:
   - Attr:
     name: inline
   name: None14
@@ -1868,7 +2047,7 @@ decls:
           value: 1
 - FuncDecl:
   flags: (Public|Generated)
-  loc:
+  attrs:
   - Attr:
     name: inline
   name: newClass19
@@ -2359,6 +2538,107 @@ decls:
                 flags: (Member)
                 name: x
               isType: false
+- StructDecl:
+  flags: (Closure)
+  name: CXY__closure26
+  members:
+  - FuncDecl:
+    overload: op__call
+    name: op__call
+    body:
+      BlockStmt:
+- FuncDecl:
+  name: CXY__closure26__forward
+  params:
+  - FuncParam:
+    name: ptr
+    index: 0
+    paramType:
+      TypeRef:
+  ret:
+    TypeRef:
+  body:
+    ExprStmt:
+    expr:
+      CallExpr:
+      callee:
+        MemberExpr:
+        target:
+          CastExpr:
+          to:
+            TypeRef:
+          exp:
+            Path:
+            elements:
+            - PathElem:
+              name: ptr
+            isType: false
+        member:
+          Path:
+          elements:
+          - PathElem:
+            name: op__call
+          isType: false
+- StructDecl:
+  flags: (Closure)
+  name: CXY__closure27
+  members:
+  - FuncDecl:
+    overload: op__call
+    name: op__call
+    params:
+    - FuncParam:
+      name: msg
+      index: 0
+      paramType:
+        StringType:
+        flags: (TypeAst)
+    body:
+      BlockStmt:
+- FuncDecl:
+  name: CXY__closure27__forward
+  params:
+  - FuncParam:
+    name: ptr
+    index: 0
+    paramType:
+      TypeRef:
+  - FuncParam:
+    name: msg
+    index: 0
+    paramType:
+      StringType:
+      flags: (TypeAst)
+  ret:
+    TypeRef:
+  body:
+    ExprStmt:
+    expr:
+      CallExpr:
+      callee:
+        MemberExpr:
+        target:
+          CastExpr:
+          to:
+            TypeRef:
+          exp:
+            Path:
+            elements:
+            - PathElem:
+              name: ptr
+            isType: false
+        member:
+          Path:
+          elements:
+          - PathElem:
+            name: op__call
+          isType: false
+      args:
+      - Path:
+        elements:
+        - PathElem:
+          name: msg
+        isType: false
 - FuncDecl:
   flags: (Main|TopLevelDecl)
   name: CXY__main
@@ -2494,4 +2774,72 @@ decls:
             elements:
             - PathElem:
               name: x
+            isType: false
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          Path:
+          flags: (TopLevelDecl)
+          elements:
+          - PathElem:
+            flags: (TopLevelDecl)
+            name: closureArg0
+          isType: false
+        args:
+        - TupleExpr:
+          members:
+          - CastExpr:
+            to:
+              TypeRef:
+            exp:
+              UnaryExpr:
+              op: 27
+              isPrefix: true
+              lhs:
+                StructExpr:
+                left:
+                  Path:
+                  elements:
+                  - PathElem:
+                    name: CXY__closure26
+                  isType: false
+          - Path:
+            elements:
+            - PathElem:
+              name: CXY__closure26__forward
+            isType: false
+    - ExprStmt:
+      expr:
+        CallExpr:
+        callee:
+          Path:
+          flags: (TopLevelDecl)
+          elements:
+          - PathElem:
+            flags: (TopLevelDecl)
+            name: closureArg2
+          isType: false
+        args:
+        - TupleExpr:
+          members:
+          - CastExpr:
+            to:
+              TypeRef:
+            exp:
+              UnaryExpr:
+              op: 27
+              isPrefix: true
+              lhs:
+                StructExpr:
+                left:
+                  Path:
+                  elements:
+                  - PathElem:
+                    name: CXY__closure27
+                  isType: false
+          - Path:
+            elements:
+            - PathElem:
+              name: CXY__closure27__forward
             isType: false

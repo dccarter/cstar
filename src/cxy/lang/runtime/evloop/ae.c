@@ -515,12 +515,12 @@ static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask)
     struct kevent ke;
 
     if (mask & AE_READABLE) {
-        EV_SET(&ke, fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
+        EV_SET(&ke, fd, EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, NULL);
         if (kevent(state->kqfd, &ke, 1, NULL, 0, NULL) == -1)
             return -1;
     }
     if (mask & AE_WRITABLE) {
-        EV_SET(&ke, fd, EVFILT_WRITE, EV_ADD, 0, 0, NULL);
+        EV_SET(&ke, fd, EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, NULL);
         if (kevent(state->kqfd, &ke, 1, NULL, 0, NULL) == -1)
             return -1;
     }

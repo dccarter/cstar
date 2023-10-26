@@ -441,6 +441,24 @@ AstNode *makeCastExpr(MemPool *pool,
                                   .castExpr = {.expr = expr, .to = target}});
 }
 
+AstNode *makeAddrOffExpr(MemPool *pool,
+                         const FileLoc *loc,
+                         u64 flags,
+                         AstNode *operand,
+                         AstNode *next,
+                         const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astUnaryExpr,
+                                  .flags = flags,
+                                  .type = type,
+                                  .next = next,
+                                  .unaryExpr = {.operand = operand,
+                                                .op = opAddrOf,
+                                                .isPrefix = true}});
+}
+
 AstNode *makeTypedExpr(MemPool *pool,
                        const FileLoc *loc,
                        u64 flags,
@@ -978,12 +996,12 @@ u64 countProgramDecls(const AstNode *node)
 {
     u64 len = 0;
     for (; node; node = node->next) {
+        if (nodeIs(node, ImportDecl))
+            continue;
         if (nodeIs(node, Define)) {
             len += (node->define.container ? 1
                                            : countAstNodes(node->define.names));
         }
-        else if (nodeIs(node, ImportDecl))
-            len += countAstNodes(node->import.entities);
         else
             len++;
     }
@@ -1235,19 +1253,16 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
     case astStructDecl:
         CLONE_MANY(structDecl, members);
         CLONE_MANY(structDecl, implements);
-        COPY_SORTED(structDecl, sortedMembers);
         break;
 
     case astClassDecl:
         CLONE_MANY(classDecl, members);
         CLONE_ONE(classDecl, base);
         CLONE_MANY(classDecl, implements);
-        COPY_SORTED(classDecl, sortedMembers);
         break;
 
     case astInterfaceDecl:
         CLONE_MANY(interfaceDecl, members);
-        COPY_SORTED(interfaceDecl, sortedMembers);
         break;
 
     case astEnumOption:
@@ -1670,13 +1685,13 @@ AstNode *findInAstNode(AstNode *node, cstring name)
     node = underlyingDeclaration(node);
     switch (node->tag) {
     case astStructDecl:
-        return findInSortedNodes(node->structDecl.sortedMembers, name);
+        return findMemberByName(node->structDecl.members, name);
     case astInterfaceDecl:
-        return findInSortedNodes(node->interfaceDecl.sortedMembers, name);
+        return findMemberByName(node->interfaceDecl.members, name);
     case astUnionDecl:
-        return findInSortedNodes(node->unionDecl.sortedMembers, name);
+        return findMemberByName(node->unionDecl.members, name);
     case astEnumDecl:
-        return findInSortedNodes(node->enumDecl.sortedOptions, name);
+        return findMemberByName(node->enumDecl.options, name);
     default:
         unreachable("NOT SUPPORTED");
     }

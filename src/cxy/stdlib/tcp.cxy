@@ -1,0 +1,257 @@
+module tcp
+
+import "./c.cxy" as C
+import "./net.cxy" as net
+
+func configureSocket(fd: i32)  {
+    /* Make the socket non-blocking. */
+    var opt = C.fcntl(fd, C.F_GETFL, 0);
+    if (opt == -1)
+        opt = 0;
+    var rc = C.fcntl(fd, C.F_SETFL, opt | C.O_NONBLOCK);
+    assert!(rc != -1);
+    /*  Allow re-using the same local address rapidly. */
+    opt = 1;
+    rc = net.setsockopt(fd, net.SOL_SOCKET, net.SO_REUSEADDR, &opt, sizeof!(opt):u32);
+    assert!(rc == 0);
+
+    opt = 1;
+    rc = net.setsockopt(fd, net.SOL_SOCKET, net.SO_NOSIGPIPE, &opt, sizeof!(opt):u32);
+    assert!(rc == 0 || errno == EINVAL);
+}
+
+pub class TcpSocket {
+    - addr: net.Address
+    - fd: i32
+
+    func `init`(fd: i32, addr: net.Address) {
+        this.fd = fd
+        this.addr = addr
+        configureSocket(this.fd)
+    }
+
+    func `init`() {
+        fd = -1
+    }
+
+    @inline
+    const func `hash`() => addr.op__hash()
+
+    @inline
+    const func `!!`() => (<&void>this) != null && fd != -1
+
+    @inline
+    const func address() => addr
+
+    func receive(buffer: &void, size: u64, deadline: i64 = 0) : u64? {
+        var remaining = size;
+        var data = buffer : &char;
+        var total: u64 = 0;
+
+        while (fd != -1 && remaining > 0) {
+            var sz = net.recv(fd, &data.[total], remaining, 0);
+            if (sz == 0) {
+                close()
+                return total
+            }
+
+            if (sz == -1) {
+                if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                    return null
+                }
+
+                if (total > 0)
+                    return total
+
+                var rc = fdWaitIn(fd, deadline);
+                if (rc != EV_IN) {
+                    errno = ETIMEDOUT;
+                    return null
+                }
+
+                continue
+            }
+
+            total += sz
+            remaining -= sz
+        }
+
+        return total
+    }
+
+    func sendBuffer(buffer: &const void, size: u64, deadline: i64 = 0) : u64? {
+        var data = buffer : &const char;
+        var remaining = size;
+        var total: u64 = 0;
+        while (fd != -1 && remaining > 0) {
+            var sz = net.send(fd, &data.[total], remaining, 0);
+            if (sz == -1) {
+                if(errno == EPIPE) {
+                    errno = ECONNRESET
+                    close()
+                    return null
+                }
+
+                if(errno != EAGAIN && errno != EWOULDBLOCK)
+                    return null
+
+                var rc = fdWaitOut(fd, deadline);
+                if (rc == 0) {
+                    errno = ETIMEDOUT
+                    return null
+                }
+                continue
+            }
+
+            total += sz
+            remaining -= sz
+        }
+        errno = 0
+        return total
+    }
+
+    func send[T](data: T, deadline: i64 = 0) {
+        #if (T.isString) {
+            #if (T.isStruct) {
+                return sendBuffer(data.str: &void, len!(data), deadline)
+            }
+            else {
+                return sendBuffer(data: &void, len!(data), deadline)
+            }
+        }
+        else #if (T.isSlice) {
+            return sendBuffer(data.data, data.count, deadline)
+        }
+        else {
+            error!("type {t} cannot be sent as is, consider using sendBuffer", T)
+        }
+    }
+
+    func close() : void {
+        if (fd != -1) {
+            C.close(fd)
+            fd = -1
+        }
+    }
+
+    @inline
+    func `deinit`()  => close()
+}
+
+pub class TcpListener {
+    - bind: net.Address
+    - fd: i32
+
+    func `init`(addr: net.Address) {
+        bind = addr
+        fd = -1
+    }
+
+    func `!!`() => (<&void> this) != null && fd != -1
+
+    func listen(backlog: i32 = 127) {
+        fd = net.socket(bind.family(), net.SOCK_STREAM, 0)
+        if (fd == -1) {
+            return false
+        }
+        configureSocket(fd)
+
+        var rc = net.bind(fd, bind.nativeAddr(), bind.len());
+        if (rc == -1) {
+            close()
+            return false
+        }
+
+        rc = net.listen(fd, backlog)
+        if (rc != 0) {
+            close()
+            return false
+        }
+
+        if (bind.port() == 0) {
+            var len = sizeof!(bind): u32;
+            rc = net.getsockname(fd, bind.nativeAddr(), &len)
+            if (rc == -1) {
+                close()
+                return false
+            }
+        }
+
+        return true
+    }
+
+    func accept(deadline: i64 = 0): TcpSocket? {
+        var addr: net.Address;
+        while (this) {
+            /* Try to get new connection (non-blocking). */
+            var len = sizeof!(addr): u32;
+            var accepted = net.accept(fd, addr.nativeAddr(), &len);
+            if (accepted >= 0) {
+                return TcpSocket(accepted, addr)
+            }
+
+            if (errno != EAGAIN && errno != EWOULDBLOCK)
+                return null
+            /* Wait till new connection is available. */
+            var rc = fdWaitIn(fd, deadline);
+            if (rc != EV_IN) {
+                errno = ETIMEDOUT;
+                return null
+            }
+        }
+        return null
+    }
+
+    @inline
+    func close() : void => shutdown()
+
+    func shutdown(how: i32 = net.SHUT_RDWR): void {
+        if (fd != -1) {
+            net.shutdown(fd, net.SHUT_RD)
+            C.close()
+            fd = -1
+        }
+    }
+}
+
+pub async func tcpConnect(addr: net.Address, deadline: i64 = 0) : TcpSocket {
+    /* Open a socket. */
+    var fd = net.socket(addr.family(), net.SOCK_STREAM, 0);
+    if (fd == -1)
+        return null
+
+    var sock = TcpSocket(fd, addr);
+
+    /* Connect to the remote endpoint. */
+    var rc = net.connect(fd, addr.addr: &net.sockaddr, addr.len():i32);
+    if (rc != 0) {
+        assert!(rc == -1)
+        if (errno != EINPROGRESS)
+            return null
+
+        rc = fdWaitIn(fd, deadline)
+        if (rc == 0) {
+            errno = ETIMEDOUT
+            return null
+        }
+
+        var err: i32;
+        var errSize = sizeof!(err) : u32;
+        rc = net.getsockopt(fd, net.SOL_SOCKET, net.SO_ERROR, &err : &void, &errSize)
+        if (rc != 0) {
+            err = errno
+            C.close(fd)
+            errno = err
+            return null
+        }
+
+        if (err != 0) {
+            C.close(fd)
+            errno = err
+            return null
+        }
+    }
+
+    errno = 0
+    return getref(sock)
+}

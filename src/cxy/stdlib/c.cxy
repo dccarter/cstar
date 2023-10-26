@@ -1,0 +1,64 @@
+module C
+
+@cInclude("<unistd.h>")
+@cInclude("<fcntl.h>")
+@cInclude("<sys/socket.h>")
+
+pub ## (
+    STDOUT => STDOUT_FILENO,
+    STDERR => STDERR_FILENO,
+    STDIN  => STDIN_FILENO,
+
+    O_NONBLOCK,
+    O_APPEND,
+    O_CREAT,
+    O_TRUNC,
+    O_EXCL,
+    O_DSYNC,
+    O_RSYNC,
+    O_CLOEXEC,
+    O_DIRECTORY,
+
+    F_DUPFD,
+    F_GETFD,
+    F_SETFD,
+    F_GETFL,
+    F_SETFL,
+
+    S_ISUID,
+    S_ISGID,
+    S_IRWXG,
+    S_IRGRP,
+    S_IWGRP,
+    S_IXGRP,
+    S_IRWXO,
+    S_IROTH,
+    S_IWOTH,
+    S_IXOTH
+) : i32
+
+pub ##(
+    open
+): func(pathname: &const char, flag: i32, mode: i32 = 0666) -> i32
+
+pub ##(
+    openat
+): func(dirfd: i32, pathname: &const char, flags: i32, mode: i32 = 0666) -> i32
+
+pub ##(
+    close
+): func(fd: i32) -> i32
+
+pub ##(
+    write
+): func(fd: i32, buf: &const void, count: u64) -> i32
+
+pub ##(
+    read
+): func(fd: i32, buf: &void, count: u64) -> i32
+
+pub ##(
+    fcntl
+): func(fd: i32, cmd: i32, args: i32 = 0) -> i32
+
+

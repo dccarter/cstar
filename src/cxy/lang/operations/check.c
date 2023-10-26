@@ -69,6 +69,13 @@ void addTopLevelDeclaration(TypingContext *ctx, AstNode *node)
     ctx->root.previous = node;
 }
 
+void addTopLevelDeclarationAsNext(TypingContext *ctx, AstNode *node)
+{
+    csAssert0(ctx->root.current);
+    node->next = ctx->root.current->next;
+    ctx->root.current->next = node;
+}
+
 void addBlockLevelDeclaration(TypingContext *ctx, AstNode *node)
 {
     csAssert0(ctx->block.current);
@@ -586,6 +593,8 @@ static void buildModuleType(TypingContext *ctx,
 
     AstNode *decl = node->program.top;
     for (; decl; decl = decl->next) {
+        if (nodeIs(decl, ImportDecl))
+            continue;
         i = addModuleTypeMember(members, i, decl, builtinsFlags);
     }
 

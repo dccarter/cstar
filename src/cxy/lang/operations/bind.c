@@ -190,25 +190,37 @@ void bindPath(AstVisitor *visitor, AstNode *node)
     else {
         cstring keyword = base->pathElement.name;
         if (keyword == S_This) {
-            base->pathElement.enclosure = findEnclosingClassOrStruct(
-                ctx->env, ctx->L, keyword, &base->loc);
-            if (base->pathElement.enclosure == NULL)
-                return;
-        }
-        else {
             base->pathElement.enclosure =
-                findEnclosingFunction(ctx->env, ctx->L, keyword, &base->loc);
-            if (base->pathElement.enclosure == NULL)
-                return;
-
-            AstNode *parent = getMemberParentScope(base->pathElement.enclosure);
-
-            if (!nodeIs(parent, ClassDecl) && !nodeIs(parent, StructDecl)) {
+                findEnclosingClassOrStruct(ctx->env, NULL, keyword, NULL);
+            if (base->pathElement.enclosure == NULL) {
                 logError(
                     ctx->L,
                     &base->loc,
-                    "keyword '{s}' can only be used inside a member function",
-                    (FormatArg[]){{.s = keyword}});
+                    "'This' keyword must be used inside a class or struct decl",
+                    NULL);
+                return;
+            }
+        }
+        else {
+            AstNode *func =
+                findEnclosingFunction(ctx->env, NULL, keyword, NULL);
+            if (func == NULL) {
+                logError(ctx->L,
+                         &base->loc,
+                         "'{s}' keyword must be used inside a member function",
+                         (FormatArg[]){{.s = keyword}});
+                return;
+            }
+
+            AstNode *parent =
+                findEnclosingClassOrStruct(ctx->env, NULL, keyword, NULL);
+            base->pathElement.enclosure = parent;
+            base->flags |= (func->flags & flgConst);
+            if (parent == NULL) {
+                logError(ctx->L,
+                         &base->loc,
+                         "'{s}' keyword must be used inside a member function",
+                         (FormatArg[]){{.s = keyword}});
                 return;
             }
 
@@ -510,7 +522,7 @@ void bindInterfaceDecl(AstVisitor *visitor, AstNode *node)
 void bindIfStmt(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
-    
+
     pushScope(ctx->env, node);
     astVisit(visitor, node->ifStmt.cond);
     astVisit(visitor, node->ifStmt.body);

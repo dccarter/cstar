@@ -97,7 +97,7 @@ decls:
             isType: false
   - FuncDecl:
     flags: (Public)
-    loc:
+    attrs:
     - Attr:
       name: inline
     overload: op__idx_assign
@@ -187,7 +187,7 @@ decls:
             isType: false
   - FuncDecl:
     flags: (Public)
-    loc:
+    attrs:
     - Attr:
       name: inline
     overload: op__idx
@@ -261,7 +261,7 @@ decls:
             isType: false
   - FuncDecl:
     flags: (Public|Const)
-    loc:
+    attrs:
     - Attr:
       name: inline
     overload: op__idx
@@ -687,7 +687,7 @@ decls:
     index: 1
   - FuncDecl:
     flags: (Public)
-    loc:
+    attrs:
     - Attr:
       name: inline
     overload: op__init
@@ -712,7 +712,7 @@ decls:
             value: false
   - FuncDecl:
     flags: (Public)
-    loc:
+    attrs:
     - Attr:
       name: inline
     overload: op__init
@@ -769,7 +769,7 @@ decls:
             value: true
   - FuncDecl:
     flags: (Public|Const)
-    loc:
+    attrs:
     - Attr:
       name: inline
     overload: op__truthy
@@ -790,7 +790,7 @@ decls:
           isType: false
   - FuncDecl:
     flags: (Public|Const)
-    loc:
+    attrs:
     - Attr:
       name: inline
     overload: op__hash
@@ -991,7 +991,7 @@ decls:
       BlockStmt:
 - FuncDecl:
   flags: (Public|Generated)
-  loc:
+  attrs:
   - Attr:
     name: inline
   overload: op__lshift
@@ -1158,7 +1158,7 @@ decls:
         isType: false
 - FuncDecl:
   flags: (Public|Generated)
-  loc:
+  attrs:
   - Attr:
     name: inline
   overload: op__lshift
@@ -1253,7 +1253,7 @@ decls:
         isType: false
 - FuncDecl:
   flags: (Public|Generated)
-  loc:
+  attrs:
   - Attr:
     name: inline
   overload: op__lshift
@@ -1610,14 +1610,14 @@ decls:
             isType: false
 - FuncDecl:
   flags: (Generated)
-  loc:
+  attrs:
   - Attr:
     name: inline
   name: Some12
   params:
   - FuncParam:
     flags: (Transient)
-    loc:
+    attrs:
     - Attr:
       name: transient
     name: value
@@ -1687,7 +1687,7 @@ decls:
               isType: false
 - FuncDecl:
   flags: (Generated)
-  loc:
+  attrs:
   - Attr:
     name: inline
   name: None14

@@ -33,25 +33,29 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
     AstNode *callee = node->callExpr.callee, *args = node->callExpr.args;
     const Type *callee_ = NULL;
 
-    AstNode *arg = args;
+    AstNode *arg = args, *prev = NULL;
     for (u64 i = 0; arg; arg = arg->next, i++) {
         const Type *type = arg->type ?: checkType(visitor, arg);
         if (typeIs(type, Error)) {
             node->type = ERROR_TYPE(ctx);
+            prev = arg;
             continue;
         }
 
         if (hasFlag(type, Closure)) {
-            arg->type = findStructMemberType(type, S_CallOverload);
-            if (type == NULL) {
+            arg = transformClosureArgument(visitor, arg);
+            if (prev == NULL)
+                node->callExpr.args = arg;
+            else
+                prev->next = arg;
+            prev = arg;
+
+            if (typeIs(arg->type, Error)) {
                 node->type = ERROR_TYPE(ctx);
-                logError(ctx->L,
-                         &arg->loc,
-                         "call argument is marked as closure but it is not a "
-                         "closure",
-                         NULL);
+                continue;
             }
         }
+        prev = arg;
     }
     if (typeIs(node->type, Error))
         return;
@@ -119,9 +123,11 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
     }
 
     if (hasFlag(callee_->func.decl, Async)) {
-        bool callSync = findAttribute(node, S_sync) != NULL;
-        if (!callSync && callee_->func.decl->funcDecl.coroEntry != NULL)
+        AstNode *decl = callee_->func.decl;
+        bool callSync = hasFlag(callee, SyncCall);
+        if (!callSync && decl->funcDecl.coroEntry != NULL) {
             makeAsyncLaunchCall(visitor, callee_, node);
+        }
     }
 }
 
@@ -139,7 +145,8 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, "__", NULL);
     }
     else if (hasFlag(type->func.decl, Generated) ||
-             !hasFlag(node->callExpr.callee, Define))
+             (!hasFlag(node->callExpr.callee, Define) &&
+              nodeIs(parent, Program)))
         writeDeclNamespace(ctx, type->namespace, NULL);
 
     if (type->name)
@@ -321,6 +328,8 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
     AstNode *arg = node->callExpr.args;
     for (u64 i = 0; arg; arg = arg->next, i++) {
         const Type *type = callee_->func.params[i], *expr = arg->type;
+        if (hasFlag(type, FuncTypeParam))
+            arg->type = type;
         if (!evalExplicitConstruction(visitor, type, arg)) {
             logError(ctx->L,
                      &arg->loc,

@@ -154,10 +154,12 @@ static bool compareTypes(const Type *lhs, const Type *rhs)
         if (left->name != right->name)
             return false;
 
-        if (left->func.decl && right->func.decl &&
-            left->func.decl->parentScope && right->func.decl->parentScope &&
-            left->func.decl->parentScope != right->func.decl->parentScope)
-            return false;
+        if (left->name != NULL) {
+            if (left->func.decl && right->func.decl &&
+                left->func.decl->parentScope && right->func.decl->parentScope &&
+                left->func.decl->parentScope != right->func.decl->parentScope)
+                return false;
+        }
 
         return (left->func.paramsCount == right->func.paramsCount) &&
                compareTypes(left->func.retType, right->func.retType) &&

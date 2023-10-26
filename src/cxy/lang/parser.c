@@ -460,7 +460,6 @@ static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 #define f(O, T, ...) case tok##T:
         AST_PREFIX_EXPR_LIST(f)
 #undef f
-    case tokBAnd:
         break;
     default:
         return postfix(P, parsePrimary);

@@ -418,7 +418,7 @@ struct AstNode {
                 struct AstNode *members;
                 struct AstNode *typeParams;
                 const struct Type *thisType;
-                SortedNodes *sortedMembers;
+                struct AstNode *closureForward;
                 AstNode *deinit;
             } structDecl;
 
@@ -428,7 +428,6 @@ struct AstNode {
                 struct AstNode *members;
                 struct AstNode *typeParams;
                 const struct Type *thisType;
-                SortedNodes *sortedMembers;
                 struct AstNode *base;
             } classDecl;
         };
@@ -437,7 +436,6 @@ struct AstNode {
             cstring name;
             struct AstNode *members;
             struct AstNode *typeParams;
-            SortedNodes *sortedMembers;
         } interfaceDecl;
 
         struct {
@@ -669,6 +667,13 @@ AstNode *makeCastExpr(MemPool *pool,
                       AstNode *target,
                       AstNode *next,
                       const Type *type);
+
+AstNode *makeAddrOffExpr(MemPool *pool,
+                         const FileLoc *loc,
+                         u64 flags,
+                         AstNode *expr,
+                         AstNode *next,
+                         const Type *type);
 
 AstNode *makeTypedExpr(MemPool *pool,
                        const FileLoc *loc,

@@ -79,6 +79,7 @@
     f(Promise)                  \
     f(Coroutine)                \
     f(asyncLaunch)              \
+    f(asyncLaunchMember)        \
     f(sync)                     \
     f(CXY__main)
 

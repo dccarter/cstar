@@ -216,9 +216,13 @@ static void generateBreakContinue(ConstAstVisitor *visitor, const AstNode *node)
 static void generateImportDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    format(ctx->state,
-           "#include <{s}.c>",
-           (FormatArg[]){{.s = node->import.module->stringLiteral.value}});
+    cstring module = node->import.module->stringLiteral.value;
+    if (module[0] == '.' && module[1] == '/') {
+        format(ctx->state, "#include \"{s}.c\"", (FormatArg[]){{.s = module}});
+    }
+    else {
+        format(ctx->state, "#include <{s}.c>", (FormatArg[]){{.s = module}});
+    }
 }
 
 static void generateCCode(ConstAstVisitor *visitor, const AstNode *node)
