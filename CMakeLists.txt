@@ -150,6 +150,7 @@ set(CXY_OPERATIONS_SOURCES
         src/cxy/lang/operations/nodes/index.c
         src/cxy/lang/operations/nodes/interface.c
         src/cxy/lang/operations/nodes/literal.c
+        src/cxy/lang/operations/nodes/match.c
         src/cxy/lang/operations/nodes/member.c
         src/cxy/lang/operations/nodes/new.c
         src/cxy/lang/operations/nodes/node.c
@@ -159,6 +160,7 @@ set(CXY_OPERATIONS_SOURCES
         src/cxy/lang/operations/nodes/ternary.c
         src/cxy/lang/operations/nodes/tuple.c
         src/cxy/lang/operations/nodes/type.c
+        src/cxy/lang/operations/nodes/union.c
         src/cxy/lang/operations/nodes/switch.c
         src/cxy/lang/operations/nodes/unary.c
         src/cxy/lang/operations/nodes/variables.c)

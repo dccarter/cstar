@@ -36,6 +36,23 @@ static bool comptimeCompareManyTypes(const AstNode *lhs, const AstNode *rhs)
     return lhs == NULL && rhs == NULL;
 }
 
+static u64 addUnionDecl(const Type **members, const Type *member, u64 count)
+{
+    if (typeIs(member, Union)) {
+        for (u64 i = 0; i < member->tUnion.count; i++) {
+            count = addUnionDecl(members, member->tUnion.members[i], count);
+        }
+        return count;
+    }
+
+    for (u64 i = 0; i < count; i++) {
+        if (members[i] == member)
+            return count;
+    }
+    members[count++] = member;
+    return count;
+}
+
 void checkBuiltinType(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
@@ -57,10 +74,34 @@ void checkBuiltinType(AstVisitor *visitor, AstNode *node)
     }
 }
 
+void generateTypeDeclDefinition(CodegenContext *context, const Type *type)
+{
+    FormatState *state = context->state;
+    const AstNode *decl = type->alias.decl;
+    if (decl != NULL && hasFlag(decl, ForwardDecl)) {
+        AstNode *definition = decl->typeDecl.definition;
+        format(state, "typedef struct ", NULL);
+        writeTypename(context,
+                      nodeIs(definition, TypeDecl)
+                          ? definition->typeDecl.aliased->type
+                          : definition->type);
+        format(state, " ", NULL);
+        writeTypename(context, type);
+        format(state, ";", NULL);
+    }
+    else if (type->namespace != NULL) {
+        format(state, "#ifndef ", NULL);
+        writeTypename(context, type);
+        format(state, "\n#define ", NULL);
+        writeTypename(context, type);
+        format(state, " {s} *\n#endif", (FormatArg[]){{.s = type->name}});
+    }
+}
+
 void generateTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    if (!(node->flags & flgNative))
+    if (!hasFlags(node, flgNative | flgForwardDecl))
         generateTypeUsage(ctx, node->type);
 }
 
@@ -74,7 +115,7 @@ void generateTypeinfo(ConstAstVisitor *visitor, const AstNode *node)
 void checkTypeDecl(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    if (node->typeDecl.aliased) {
+    if (!hasFlag(node, ForwardDecl) && node->typeDecl.aliased) {
         const Type *aliased = checkType(visitor, node->typeDecl.aliased);
         if (typeIs(aliased, Error)) {
             node->type = aliased;
@@ -85,7 +126,11 @@ void checkTypeDecl(AstVisitor *visitor, AstNode *node)
             ctx->types, aliased, node->typeDecl.name, node->flags & flgConst);
     }
     else {
-        node->type = makeOpaqueType(ctx->types, node->typeDecl.name);
+        node->type = makeOpaqueTypeWithFlags(
+            ctx->types,
+            node->typeDecl.name,
+            getForwardDeclDefinition(node),
+            hasFlag(node, ForwardDecl) ? flgForwardDecl : flgNone);
     }
 }
 
@@ -93,22 +138,31 @@ void checkUnionDecl(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *members = node->unionDecl.members, *member = members;
-    u64 count = node->tupleType.len;
-    const Type **members_ = mallocOrDie(sizeof(Type *) * count);
+    u64 count = 0;
 
-    for (u64 i = 0; member; member = member->next) {
-        members_[i] = checkType(visitor, member);
-        if (typeIs(members_[i], Error))
+    for (; member; member = member->next) {
+        const Type *type = checkType(visitor, member);
+        if (typeIs(type, Error)) {
             node->type = ERROR_TYPE(ctx);
+            continue;
+        }
+        if (typeIs(type, Union))
+            count += type->tUnion.count;
+        else
+            count++;
     }
 
-    if (typeIs(node->type, Error)) {
-        free(members_);
+    if (typeIs(node->type, Error))
         return;
+
+    const Type **members_ = mallocOrDie(sizeof(Type *) * count);
+    u64 i = 0;
+    member = node->unionDecl.members;
+    for (; member; member = member->next) {
+        i = addUnionDecl(members_, member->type, i);
     }
 
-    node->type = makeUnionType(ctx->types, members_, count);
-
+    node->type = makeUnionType(ctx->types, members_, i);
     free(members_);
 }
 

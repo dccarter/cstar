@@ -30,8 +30,8 @@
     f(AddThis,              17)                 \
     f(AddSuper,             18)                 \
     f(Typeinfo,             19)                 \
-    f(NewAllocated,         20)                 \
-    f(AppendNS,             21)                 \
+    f(ForwardDecl,          20)                 \
+    f(Reference,            21)                 \
     f(TopLevelDecl,         22)                 \
     f(Generated,            23)                 \
     f(CodeGenerated,        24)                 \
@@ -58,7 +58,8 @@
     f(Slice,                45)                 \
     f(Transient,            46)                 \
     f(Static,               47)                 \
-    f(SyncCall,             48)
+    f(SyncCall,             48)                 \
+    f(CodegenAfter,         49)
 
 // clang-format on
 static const u64 flgNone = 0;

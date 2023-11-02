@@ -257,6 +257,16 @@ void *CXY__realloc_slice_(void *ptr,
     cxyAbort("assertion failed (" #cond ") : %s:%d:%d\n", file, line, pos)
 #endif
 
+#ifndef CXY__builtins_assert2
+#define CXY__builtins_assert2(cond, file, line, pos, fmt, ...)                 \
+    if (!(cond))                                                               \
+    cxyAbort("assertion failed: %s:%d:%d - " fmt "\n",                         \
+             file,                                                             \
+             line,                                                             \
+             pos,                                                              \
+             ##__VA_ARGS__)
+#endif
+
 #ifndef CXY__builtins_sizeof
 #define CXY__builtins_sizeof(X) sizeof(X)
 #endif

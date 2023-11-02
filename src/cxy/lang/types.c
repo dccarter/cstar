@@ -230,6 +230,13 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
         }
         return true;
 
+    case typUnion:
+        for (u64 i = 0; i < to->tUnion.count; i++) {
+            if (to->tUnion.members[i] == from)
+                return true;
+        }
+        return false;
+
     case typFunc: {
         if (stripPointer(from)->tag == typNull)
             return true;
@@ -334,6 +341,8 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
             return true;
         else
             return isTypeAssignableFrom(to, from);
+    case typUnion:
+        return findUnionTypeIndex(from, to) != UINT32_MAX;
     case typClass:
         if (isVoidPointer(unwrappedTo))
             return true;
@@ -664,7 +673,6 @@ void printType(FormatState *state, const Type *type)
         format(state, "}", NULL);
         break;
     case typAlias:
-    case typUnion:
     case typOpaque:
         printKeyword(state, "type ");
         printNamedType(state, type);
@@ -673,6 +681,9 @@ void printType(FormatState *state, const Type *type)
         format(state, "(", NULL);
         printManyTypes(state, type->tuple.members, type->tuple.count, ", ");
         format(state, ")", NULL);
+        break;
+    case typUnion:
+        printManyTypes(state, type->tUnion.members, type->tUnion.count, " | ");
         break;
     case typFunc:
         printKeyword(state, "func");
@@ -962,6 +973,17 @@ const Type *getSliceTargetType(const Type *type)
     const Type *target = type->tStruct.members->members[0].type;
     csAssert0(typeIs(target, Pointer));
     return target->pointer.pointed;
+}
+
+u32 findUnionTypeIndex(const Type *tagged, const Type *type)
+{
+    if (!typeIs(tagged, Union))
+        return UINT32_MAX;
+    for (u32 i = 0; i < tagged->tUnion.count; i++) {
+        if (tagged->tUnion.members[i] == type)
+            return i;
+    }
+    return UINT32_MAX;
 }
 
 bool hasReferenceMembers(const Type *type)

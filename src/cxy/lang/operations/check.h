@@ -60,6 +60,12 @@ bool transformToDerefOperator(AstVisitor *visitor, AstNode *node);
 bool transformOptionalType(AstVisitor *visitor,
                            AstNode *node,
                            const Type *type);
+
+AstNode *transformToUnionValue(TypingContext *ctx,
+                               AstNode *right,
+                               const Type *lhs,
+                               const Type *rhs);
+
 bool transformOptionalSome(AstVisitor *visitor, AstNode *node, AstNode *value);
 bool transformOptionalNone(AstVisitor *visitor,
                            AstNode *node,
@@ -116,12 +122,24 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
 const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node);
 AstNode *transformClosureArgument(AstVisitor *visitor, AstNode *node);
 
-const Type *matchOverloadedFunction(TypingContext *ctx,
-                                    const Type *callee,
-                                    const Type **argTypes,
-                                    u64 argsCount,
-                                    const FileLoc *loc,
-                                    u64 flags);
+const Type *matchOverloadedFunctionPerfectMatch(TypingContext *ctx,
+                                                const Type *callee,
+                                                const Type **argTypes,
+                                                u64 argsCount,
+                                                const FileLoc *loc,
+                                                u64 flags,
+                                                bool perfectMatch);
+
+static inline const Type *matchOverloadedFunction(TypingContext *ctx,
+                                                  const Type *callee,
+                                                  const Type **argTypes,
+                                                  u64 argsCount,
+                                                  const FileLoc *loc,
+                                                  u64 flags)
+{
+    return matchOverloadedFunctionPerfectMatch(
+        ctx, callee, argTypes, argsCount, loc, flags, false);
+}
 
 const Type *makeCoroutineEntry(AstVisitor *visitor, AstNode *node);
 const Type *makeAsyncLaunchCall(AstVisitor *visitor,
@@ -166,6 +184,8 @@ void checkTernaryExpr(AstVisitor *visitor, AstNode *node);
 void checkForStmt(AstVisitor *visitor, AstNode *node);
 void checkCaseStmt(AstVisitor *visitor, AstNode *node);
 void checkSwitchStmt(AstVisitor *visitor, AstNode *node);
+void checkMatchCaseStmt(AstVisitor *visitor, AstNode *node);
+void checkMatchStmt(AstVisitor *visitor, AstNode *node);
 void checkIfStmt(AstVisitor *visitor, AstNode *node);
 
 void checkTupleType(AstVisitor *visitor, AstNode *node);

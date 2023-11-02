@@ -124,7 +124,7 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
 
     if (hasFlag(callee_->func.decl, Async)) {
         AstNode *decl = callee_->func.decl;
-        bool callSync = hasFlag(callee, SyncCall);
+        bool callSync = hasFlag(node, SyncCall);
         if (!callSync && decl->funcDecl.coroEntry != NULL) {
             makeAsyncLaunchCall(visitor, callee_, node);
         }
@@ -325,7 +325,7 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
         return;
 
     callee_ = node->callExpr.callee->type;
-    AstNode *arg = node->callExpr.args;
+    AstNode *arg = node->callExpr.args, *prev = NULL;
     for (u64 i = 0; arg; arg = arg->next, i++) {
         const Type *type = callee_->func.params[i], *expr = arg->type;
         if (hasFlag(type, FuncTypeParam))
@@ -336,8 +336,20 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
                      "incompatible argument types, expecting '{t}' but got "
                      "'{t}'",
                      (FormatArg[]){{.t = type}, {.t = type}});
+            prev = arg;
             continue;
         }
+
+        AstNode *newArg = transformToUnionValue(ctx, arg, type, expr);
+        if (newArg != arg) {
+            newArg->next = arg->next;
+            if (prev)
+                prev->next = newArg;
+            else
+                node->callExpr.args = newArg;
+            arg = newArg;
+        }
+        prev = arg;
 
         if (!hasFlag(type, Optional) || hasFlag(expr, Optional))
             continue;

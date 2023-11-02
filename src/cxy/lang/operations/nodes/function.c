@@ -283,12 +283,13 @@ void generateFunctionTypedef(CodegenContext *context, const Type *type)
         generateFuncGeneratedDeclaration(context, type);
 }
 
-const Type *matchOverloadedFunction(TypingContext *ctx,
-                                    const Type *callee,
-                                    const Type **argTypes,
-                                    u64 argsCount,
-                                    const FileLoc *loc,
-                                    u64 flags)
+const Type *matchOverloadedFunctionPerfectMatch(TypingContext *ctx,
+                                                const Type *callee,
+                                                const Type **argTypes,
+                                                u64 argsCount,
+                                                const FileLoc *loc,
+                                                u64 flags,
+                                                bool perfectMatch)
 {
     AstNode *decls = callee->func.decl->list.first ?: callee->func.decl,
             *decl = decls;
@@ -317,7 +318,7 @@ const Type *matchOverloadedFunction(TypingContext *ctx,
         for (u64 i = 0; i < argsCount; i++) {
             const Type *paramType = type->func.params[i];
             compatible = paramType == argTypes[i];
-            if (!compatible) {
+            if (!compatible && !perfectMatch) {
                 compatible = isTypeAssignableFrom(paramType, argTypes[i]);
                 if (compatible) {
                     score--;
@@ -520,12 +521,14 @@ const Type *checkFunctionSignature(AstVisitor *visitor, AstNode *node)
     }
 
     if (node->list.first && node->list.first != node) {
-        const Type *found = matchOverloadedFunction(ctx,
-                                                    node->list.first->type,
-                                                    params_,
-                                                    paramsCount,
-                                                    NULL,
-                                                    node->flags & flgConst);
+        const Type *found =
+            matchOverloadedFunctionPerfectMatch(ctx,
+                                                node->list.first->type,
+                                                params_,
+                                                paramsCount,
+                                                NULL,
+                                                node->flags & flgConst,
+                                                true);
         if (found) {
             // conflict
             logError(

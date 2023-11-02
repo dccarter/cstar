@@ -37,6 +37,7 @@ void freeTypeTable(TypeTable *table);
 const Type *resolveType(const Type *type);
 const Type *stripPointer(const Type *type);
 const Type *stripAll(const Type *type);
+const Type *stripOnce(const Type *type, u64 *flags);
 const Type *arrayToPointer(TypeTable *table, const Type *type);
 const Type *getPrimitiveType(TypeTable *table, PrtId id);
 const Type *getAnySliceType(TypeTable *table);
@@ -67,7 +68,17 @@ const Type *makeAliasType(TypeTable *table,
                           cstring name,
                           u64 flags);
 
-const Type *makeOpaqueType(TypeTable *table, cstring name);
+const Type *makeOpaqueTypeWithFlags(TypeTable *table,
+                                    cstring name,
+                                    AstNode *decl,
+                                    u64 flags);
+
+static inline const Type *makeOpaqueType(TypeTable *table,
+                                         cstring name,
+                                         AstNode *decl)
+{
+    return makeOpaqueTypeWithFlags(table, name, decl, 0);
+}
 
 const Type *makeUnionType(TypeTable *table, const Type **members, u64 count);
 

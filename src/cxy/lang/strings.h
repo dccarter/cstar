@@ -75,7 +75,7 @@
     f(destructorForward)        \
     f(newClass)                 \
     f(release)                  \
-    f(cover)                    \
+    f(poco)                     \
     f(Promise)                  \
     f(Coroutine)                \
     f(asyncLaunch)              \

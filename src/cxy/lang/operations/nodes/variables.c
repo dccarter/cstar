@@ -141,13 +141,20 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
         logError(ctx->L,
                  &node->loc,
                  "variable initializer of type '{t}' is not assignable to "
-                 "variable type '{t}",
+                 "variable type '{t}'",
                  (FormatArg[]){{.t = init_}, {.t = type_}});
         node->type = ERROR_TYPE(ctx);
         return;
     }
 
     node->type = typeIs(type_, Auto) ? init_ : type_;
+    if (typeIs(type_, Union) && type_ != init_) {
+        u32 idx = findUnionTypeIndex(type_, init_);
+        csAssert0(idx != UINT32_MAX);
+        node->varDecl.init = makeUnionValueExpr(
+            ctx->pool, &init->loc, init->flags, init, idx, NULL, type_);
+    }
+
     if (hasFlag(node, Const) && !hasFlag(node->type, Const)) {
         node->type = makeWrappedType(ctx->types, node->type, flgConst);
     }

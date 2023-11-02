@@ -31,6 +31,7 @@ void environmentFree(Env *env);
 void environmentDump(const Env *env, const char *name);
 
 bool defineSymbol(Env *env, Log *L, const char *name, AstNode *node);
+bool defineForwardDeclarable(Env *env, Log *L, const char *name, AstNode *node);
 
 void updateSymbol(Env *env, const char *name, AstNode *node);
 void defineFunctionDecl(Env *env, Log *L, const char *name, AstNode *node);

@@ -484,6 +484,33 @@ void shakeCallExpr(AstVisitor *visitor, AstNode *node)
     astVisitFallbackVisitAll(visitor, node);
 }
 
+void shakeExprStmt(AstVisitor *visitor, AstNode *node)
+{
+    if (nodeIs(node->exprStmt.expr, CallExpr) && findAttribute(node, S_sync)) {
+        node->exprStmt.expr->flags |= flgSyncCall;
+    }
+    astVisitFallbackVisitAll(visitor, node);
+}
+
+void shakeMatchStmt(AstVisitor *visitor, AstNode *node)
+{
+    ShakeAstContext *ctx = getAstVisitorContext(visitor);
+    AstNode *expr = node->matchStmt.expr;
+    astVisit(visitor, expr);
+    AstNode *var = makeVarDecl(ctx->pool,
+                               &expr->loc,
+                               flgNone,
+                               makeAnonymousVariable(ctx->strPool, "_match"),
+                               NULL,
+                               expr,
+                               NULL,
+                               NULL);
+    node->matchStmt.expr =
+        makePath(ctx->pool, &expr->loc, var->varDecl.name, flgNone, NULL);
+    addNodeInBlock(ctx, var);
+    astVisitManyNodes(visitor, node->matchStmt.cases);
+}
+
 static void shakeGenericDecl(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
@@ -551,7 +578,7 @@ static void shakeClassOrStructDecl(AstVisitor *visitor, AstNode *node)
             insertAstNode(&members,
                           createClassOrStructBuiltins(ctx->pool, node));
         }
-        else {
+        else if (findAttribute(node, S_poco) == NULL) {
             insertAstNode(&members,
                           createClassOrStructBuiltins(ctx->pool, node));
         }
@@ -702,7 +729,9 @@ AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
         [astStringExpr] = shakeStringExpr,
         [astArrayType] = shakeArrayType,
         [astClosureExpr] = shakeClosureExpr,
-        [astCallExpr] = shakeCallExpr
+        [astCallExpr] = shakeCallExpr,
+        [astExprStmt] = shakeExprStmt,
+        [astMatchStmt] = shakeMatchStmt
     }, .fallback = astVisitFallbackVisitAll);
     // clang-format on
 

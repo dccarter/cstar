@@ -201,7 +201,6 @@ static void checkBlockStmt(AstVisitor *visitor, AstNode *node)
     __typeof(ctx->block) block = ctx->block;
     ctx->block.current = NULL;
     ctx->block.self = node;
-
     for (; stmt; stmt = stmt->next) {
         ctx->block.previous = ctx->block.current;
         ctx->block.current = stmt;
@@ -225,7 +224,16 @@ static void checkBlockStmt(AstVisitor *visitor, AstNode *node)
                 return;
             }
             node->type = type;
+            if (!node->blockStmt.returned && node->next) {
+                logWarning(
+                    ctx->L,
+                    manyNodesLoc(node->next),
+                    "any code declared after return statement is unreachable",
+                    NULL);
+            }
+            node->blockStmt.returned = true;
         }
+
         if (hasFlag(node, BlockReturns))
             node->type = type;
     }
@@ -269,6 +277,13 @@ static void checkReturnStmt(AstVisitor *visitor, AstNode *node)
 
         node->type = ret->type;
 
+        if (expr && typeIs(ret->type, Union) && ret->type != expr_) {
+            u32 idx = findUnionTypeIndex(ret->type, expr_);
+            csAssert0(idx != UINT32_MAX);
+            node->returnStmt.expr = makeUnionValueExpr(
+                ctx->pool, &expr->loc, expr->flags, expr, idx, NULL, ret->type);
+        }
+
         if (!hasFlag(ret->type, Optional) || hasFlag(expr_, Optional))
             return;
 
@@ -304,10 +319,13 @@ static void checkDeferStmt(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    AstNode *block = node->deferStmt.block;
-    insertAstNode(&block->blockStmt.epilogue, node->exprStmt.expr);
-    node->tag = astNop;
-    clearAstBody(node);
+    AstNode *block = node->deferStmt.block, *expr = node->exprStmt.expr;
+    if (!block->blockStmt.returned) {
+        expr->flags |= flgDeferred;
+        insertAstNode(&block->blockStmt.epilogue, expr);
+        node->tag = astNop;
+        clearAstBody(node);
+    }
 
     node->type = makeVoidType(ctx->types);
 }
@@ -704,6 +722,7 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astExprStmt] = checkExprStmt,
         [astCaseStmt] = checkCaseStmt,
         [astSwitchStmt] = checkSwitchStmt,
+        [astMatchStmt] = checkMatchStmt,
         [astStringExpr] = checkStringExpr,
         [astCallExpr] = checkCallExpr,
         [astTupleExpr] = checkTupleExpr,

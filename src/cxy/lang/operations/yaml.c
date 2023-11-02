@@ -736,7 +736,6 @@ static void visitUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
     nodeAddHeader(visitor, node);
 
     emitMapKey(ctx, node, "name");
-    emitMapKey(ctx, node, node->unionDecl.name);
     manyNodesToYaml(visitor, "members", node->unionDecl.members);
 }
 

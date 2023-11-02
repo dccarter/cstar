@@ -25,6 +25,7 @@ struct StrPool;
     f(Attr)                 \
     f(PathElem)             \
     f(Path)                 \
+    f(UnionValue)           \
     f(GenericParam)         \
     f(GenericDecl)          \
     f(Identifier)           \
@@ -53,6 +54,7 @@ struct StrPool;
     f(MacroDecl)            \
     f(VarDecl)              \
     f(TypeDecl)             \
+    f(ForwardDecl)           \
     f(UnionDecl)            \
     f(EnumOption)           \
     f(EnumDecl)             \
@@ -96,6 +98,7 @@ struct StrPool;
     f(ForStmt)              \
     f(WhileStmt)            \
     f(SwitchStmt)           \
+    f(MatchStmt)            \
     f(CaseStmt)
 
 // clang-format on
@@ -352,7 +355,10 @@ struct AstNode {
             u16 paramsCount;
             FunctionSignature *signature;
             struct AstNode *opaqueParams;
-            struct AstNode *body;
+            union {
+                struct AstNode *body;
+                struct AstNode *definition;
+            };
             struct AstNode *coroEntry;
         } funcDecl;
 
@@ -360,7 +366,10 @@ struct AstNode {
             const char *name;
             struct AstNode *params;
             struct AstNode *ret;
-            struct AstNode *body;
+            union {
+                struct AstNode *body;
+                struct AstNode *definition;
+            };
         } macroDecl;
 
         struct {
@@ -379,12 +388,14 @@ struct AstNode {
 
         struct {
             cstring name;
-            struct AstNode *aliased;
             struct AstNode *typeParams;
+            union {
+                struct AstNode *aliased;
+                struct AstNode *definition;
+            };
         } typeDecl;
 
         struct {
-            cstring name;
             struct AstNode *members;
             struct AstNode *typeParams;
             SortedNodes *sortedMembers;
@@ -523,6 +534,7 @@ struct AstNode {
             struct AstNodeList epilogue;
             struct AstNode *stmts;
             struct AstNode *last;
+            bool returned;
         } blockStmt;
 
         struct {
@@ -543,8 +555,16 @@ struct AstNode {
         } switchStmt;
 
         struct {
+            u64 index;
+            struct AstNode *expr;
+            struct AstNode *cases;
+        } matchStmt;
+
+        struct {
             struct AstNode *match;
             struct AstNode *body;
+            struct AstNode *variable;
+            u32 idx;
         } caseStmt;
 
         struct {
@@ -564,6 +584,11 @@ struct AstNode {
         struct {
             AstNode *target;
         } reference;
+
+        struct {
+            AstNode *value;
+            u32 idx;
+        } unionValue;
     };
 };
 
@@ -659,6 +684,14 @@ AstNode *makeGroupExpr(MemPool *pool,
                        u64 flags,
                        AstNode *exprs,
                        AstNode *next);
+
+AstNode *makeUnionValueExpr(MemPool *pool,
+                            const FileLoc *loc,
+                            u64 flags,
+                            AstNode *value,
+                            u32 idx,
+                            AstNode *next,
+                            const Type *type);
 
 AstNode *makeCastExpr(MemPool *pool,
                       const FileLoc *loc,
@@ -937,6 +970,8 @@ const char *getDeclKeyword(AstTag tag);
 
 const char *getDeclarationName(const AstNode *node);
 void setDeclarationName(AstNode *node, cstring name);
+void setForwardDeclDefinition(AstNode *node, AstNode *definition);
+AstNode *getForwardDeclDefinition(AstNode *node);
 AstNode *getGenericDeclarationParams(AstNode *node);
 void setGenericDeclarationParams(AstNode *node, AstNode *params);
 

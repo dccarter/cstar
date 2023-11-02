@@ -166,6 +166,8 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
         node->type = lhs;
     }
 
+    node->assignExpr.rhs = transformToUnionValue(ctx, right, lhs, rhs);
+
     if (!hasFlag(lhs, Optional) || hasFlag(rhs, Optional))
         return;
 

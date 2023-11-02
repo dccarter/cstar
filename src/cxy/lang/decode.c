@@ -228,7 +228,6 @@ static void unpackNodeBody(AstNodeUnpackContext *ctx, AstNode *node)
         node->typeDecl.aliased = unpackNode(ctx);
         break;
     case astUnionDecl:
-        node->unionDecl.name = unpackString(ctx);
         node->unionDecl.members = unpackManyNodes(ctx, NULL);
         break;
     case astEnumOption:

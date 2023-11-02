@@ -551,7 +551,6 @@ static void visitUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
     JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
     cJSON *jsonNode = nodeCreateJSON(visitor, node);
 
-    cJSON_AddStringToObject(jsonNode, "name", node->unionDecl.name);
     cJSON_AddItemToObject(
         jsonNode, "members", manyNodesToJson(visitor, node->unionDecl.members));
 

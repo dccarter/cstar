@@ -95,7 +95,7 @@ static const Type *checkBasePathElement(AstVisitor *visitor,
         csAssert0(node->pathElement.resolvesTo);
         node->flags |=
             (nodeIs(node->pathElement.resolvesTo, Field) ? flgMember : flgNone);
-        return node->type = node->pathElement.resolvesTo->type;
+        return node->type = checkType(visitor, node->pathElement.resolvesTo);
     }
 }
 
@@ -304,6 +304,7 @@ void evalPath(AstVisitor *visitor, AstNode *node)
             type = symbol->type->info.target;
             goto retry;
         case typTuple:
+        case typUnion:
             node->tag = astTypeRef;
             node->flags = type->flags;
             node->type = type;

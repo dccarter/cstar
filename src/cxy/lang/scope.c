@@ -4,6 +4,7 @@
 
 #include "scope.h"
 #include "builtins.h"
+#include "flag.h"
 
 #include "core/alloc.h"
 
@@ -111,6 +112,40 @@ bool defineSymbol(Env *env, Log *L, const char *name, AstNode *node)
     }
 
     return wasInserted;
+}
+
+bool defineForwardDeclarable(Env *env, Log *L, const char *name, AstNode *node)
+{
+    csAssert0(env->scope);
+    if (isIgnoreVar(name))
+        return true;
+
+    Symbol symbol = {.name = name, .node = node};
+    u32 hash = hashPtr(hashInit(), name);
+    bool wasInserted = insertInHashTable(
+        &env->scope->symbols, &symbol, hash, sizeof(Symbol), compareSymbols);
+
+    if (!wasInserted) {
+        Symbol *prev = findInHashTable(&env->scope->symbols,
+                                       &symbol,
+                                       hash,
+                                       sizeof(Symbol),
+                                       compareSymbols);
+        if (!hasFlag(prev->node, ForwardDecl)) {
+            if (L) {
+                logError(L,
+                         &node->loc,
+                         "symbol '{s}' already defined in current scope",
+                         (FormatArg[]){{.s = name}});
+                logNote(L, &prev->node->loc, "previously declared here", NULL);
+            }
+            return false;
+        }
+        setForwardDeclDefinition(prev->node, node);
+        prev->node = node;
+    }
+
+    return true;
 }
 
 void updateSymbol(Env *env, const char *name, AstNode *node)

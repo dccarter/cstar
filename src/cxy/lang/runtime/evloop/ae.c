@@ -462,7 +462,7 @@ static int aeApiPoll(aeEventLoop *eventLoop, struct timeval *tvp)
 static char *aeApiName(void) { return "epoll"; }
 
 #elif defined(HAVE_KQUEUE)
-
+#define AE_POKE_USER_ID 0x1
 #include <sys/event.h>
 #include <sys/types.h>
 
@@ -488,7 +488,23 @@ static int aeApiCreate(aeEventLoop *eventLoop)
         zfree(state);
         return -1;
     }
+
     eventLoop->apidata = state;
+
+    struct kevent events[1];
+    EV_SET(&events[0],
+           AE_POKE_USER_ID,
+           EVFILT_USER,
+           EV_ADD | EV_ENABLE | EV_CLEAR,
+           0,
+           0,
+           NULL);
+    if (kevent(state->kqfd, events, 1, NULL, 0, NULL) != 0) {
+        zfree(state->events);
+        zfree(state);
+        return -1;
+    }
+
     return 0;
 }
 
@@ -507,6 +523,14 @@ static void aeApiFree(aeEventLoop *eventLoop)
     close(state->kqfd);
     zfree(state->events);
     zfree(state);
+}
+
+static void aeApiPoke(aeEventLoop *eventLoop)
+{
+    aeApiState *state = eventLoop->apidata;
+    struct kevent events[1];
+    EV_SET(&events[0], AE_POKE_USER_ID, EVFILT_USER, 0, NOTE_TRIGGER, 0, NULL);
+    kevent(state->kqfd, events, 1, NULL, 0, NULL);
 }
 
 static int aeApiAddEvent(aeEventLoop *eventLoop, int fd, int mask)
@@ -746,6 +770,8 @@ void aeDeleteEventLoop(aeEventLoop *eventLoop)
 }
 
 void aeStop(aeEventLoop *eventLoop) { eventLoop->stop = 1; }
+
+void aePoke(aeEventLoop *eventLoop) { aeApiPoke(eventLoop); }
 
 int aeCreateFileEvent(aeEventLoop *eventLoop,
                       int fd,

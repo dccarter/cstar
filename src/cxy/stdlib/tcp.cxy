@@ -208,7 +208,7 @@ pub class TcpListener {
     func shutdown(how: i32 = net.SHUT_RDWR): void {
         if (fd != -1) {
             net.shutdown(fd, net.SHUT_RD)
-            C.close()
+            C.close(fd)
             fd = -1
         }
     }

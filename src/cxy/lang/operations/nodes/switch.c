@@ -140,6 +140,11 @@ void checkDuplicateCaseMatches(TypingContext *ctx,
 void generateCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getAstVisitorContext(visitor);
+    if (nodeIs(node->parentScope, MatchStmt)) {
+        generateMatchCaseStmt(visitor, node);
+        return;
+    }
+
     AstNode *cond = node->parentScope->switchStmt.cond;
     u64 defaultTag = node->parentScope->switchStmt.index;
 
@@ -229,6 +234,11 @@ void generateSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
 void checkCaseStmt(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
+    if (nodeIs(node->parentScope, MatchStmt)) {
+        checkMatchCaseStmt(visitor, node);
+        return;
+    }
+
     const Type *cond = node->parentScope->switchStmt.cond->type;
 
     if (node->caseStmt.match) {

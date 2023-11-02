@@ -49,7 +49,7 @@ static void defineDeclaration_(Env *env, Log *L, cstring name, AstNode *node)
         defineFunctionDecl(env, L, name, node);
     }
     else
-        defineSymbol(env, L, name, node);
+        defineForwardDeclarable(env, L, name, node);
 }
 
 static void defineDeclaration(BindContext *ctx, cstring name, AstNode *node)
@@ -402,8 +402,6 @@ void bindUnionDecl(AstVisitor *visitor, AstNode *node)
     BindContext *ctx = getAstVisitorContext(visitor);
 
     astVisitManyNodes(visitor, node->unionDecl.members);
-
-    defineDeclaration(ctx, node->unionDecl.name, node);
 }
 
 void bindEnumOption(AstVisitor *visitor, AstNode *node)
@@ -624,12 +622,29 @@ void bindSwitchStmt(AstVisitor *visitor, AstNode *node)
     popScope(ctx->env);
 }
 
+void bindMatchStmt(AstVisitor *visitor, AstNode *node)
+{
+    BindContext *ctx = getAstVisitorContext(visitor);
+    pushScope(ctx->env, node);
+
+    astVisit(visitor, node->matchStmt.expr);
+    astVisitManyNodes(visitor, node->matchStmt.cases);
+
+    popScope(ctx->env);
+}
+
 void bindCaseStmt(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
     pushScope(ctx->env, node);
 
     astVisit(visitor, node->caseStmt.match);
+    if (node->caseStmt.variable) {
+        defineSymbol(ctx->env,
+                     ctx->L,
+                     node->caseStmt.variable->ident.value,
+                     node->caseStmt.variable);
+    }
     astVisit(visitor, node->caseStmt.body);
 
     popScope(ctx->env);
@@ -724,6 +739,7 @@ AstNode *bindAst(CompilerDriver *driver, AstNode *node)
         [astForStmt] = bindForStmt,
         [astWhileStmt] = bindWhileStmt,
         [astSwitchStmt] = bindSwitchStmt,
+        [astMatchStmt] = bindMatchStmt,
         [astCaseStmt] = bindCaseStmt,
         [astMacroCallExpr] = bindMacroCallExpr,
         [astMemberExpr] = bindMemberExpr

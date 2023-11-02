@@ -1,44 +1,77 @@
 import { println } from "stdlib/io.cxy"
-import { Address } from "stdlib/net.cxy"
-import { tcpConnect, TcpSocket, TcpListener } from "stdlib/tcp.cxy"
 
-class Handler {
-    func `init`(){}
-    async func handleConnection(listener: TcpListener, sock: TcpSocket) {
-        var buffer: [char, 512];
-        sock.send("Welcome...\n")
-        while (sock) {
-            var len = sock.receive(buffer, 512);
-            if (len) {
-                sock.send("You said: ")
-                sock.sendBuffer(buffer, *len)
-                if (buffer.[0] == <char>'Q') {
-                    sock.close()
-                    listener.close()
-                }
+type Ast;
+
+struct AstBase {
+    next:  Ast
+    attrs: Ast
+
+    const func `str`(sb: StringBuilder) {}
+    const func `hash`() => 0
+}
+
+struct AstLiteral {
+    base: AstBase
+    value: bool | wchar | i64 | f64 | string
+
+    func `init`(value: bool) {
+        this.value = value
+    }
+
+    func `init`(value: wchar) {
+        this.value = value
+    }
+
+    func `init`(value: i64) {
+        this.value = value
+    }
+
+    func `init`(value: f64) {
+        this.value = value
+    }
+
+    func `init`(value: string) {
+        this.value = value
+    }
+
+    const func `str`(sb: StringBuilder) {}
+    const func `hash`() => 0
+}
+
+struct AstBinary {
+    base:   AstBase
+    left:   Ast
+    right:  Ast
+
+    func `init`(lhs: Ast, rhs: Ast) {
+        this.left = lhs;
+        this.right = rhs;
+    }
+
+    const func `str`(sb: StringBuilder) {}
+    const func `hash`() => 0
+}
+
+type Ast  = AstBase | AstLiteral | AstBinary
+func visit(ast: &Ast) {
+    match (ast) {
+        case AstLiteral as &lit => {
+            match (lit.value) {
+                case bool as value => println(value)
+                case wchar as value => println(value)
+                case i64 as value => println(value)
+                case f64 as value => println(value)
+                case string as value => println(value)
             }
+        }
+        case AstBinary as &bin => {
+            visit(bin.left)
+            visit(bin.right)
         }
     }
 }
 
-async func server(handler: Handler) {
-    var addr = Address("0.0.0.0", 8080);
-    var listener = TcpListener(addr);
-    println("listening at ", addr)
-    if (!listener.listen()) {
-        println("failed to listen")
-        return;
-    }
-
-    while (listener) {
-        var sock = listener.accept();
-        if (!sock)
-            return;
-        handler.handleConnection(listener, *sock)
-    }
-    listener.close()
-}
-
 func main(args: const [string]) {
-    await server(Handler())
+    var ast: Ast = AstLiteral("Hello");
+    visit(&ast)
 }

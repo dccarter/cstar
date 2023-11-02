@@ -166,7 +166,12 @@ typedef struct Type {
 
         struct {
             const Type *aliased;
+            AstNode *decl;
         } alias;
+
+        struct {
+            AstNode *decl;
+        } opaque;
 
         struct {
             const Type *target;
@@ -391,3 +396,4 @@ bool isTruthyType(const Type *type);
 const Type *getOptionalType();
 const Type *getOptionalTargetType(const Type *type);
 const Type *getSliceTargetType(const Type *type);
+u32 findUnionTypeIndex(const Type *tagged, const Type *type);

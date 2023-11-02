@@ -219,14 +219,14 @@ const Type *makeCoroutineEntry(AstVisitor *visitor, AstNode *node)
             ? makeResolvedPath(ctx->pool,
                                &node->loc,
                                node->funcDecl.name,
-                               flgSyncCall,
+                               flgNone,
                                node,
                                NULL,
                                node->type)
             : makePathWithElements(
                   ctx->pool,
                   &node->loc,
-                  flgSyncCall,
+                  flgNone,
                   makeResolvedPathElement(
                       ctx->pool,
                       &node->loc,
@@ -274,7 +274,7 @@ const Type *makeCoroutineEntry(AstVisitor *visitor, AstNode *node)
                            NULL),
                        NULL,
                        NULL),
-        flgNone,
+        flgSyncCall,
         NULL,
         NULL);
     AstNode *ret = NULL;

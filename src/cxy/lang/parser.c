@@ -33,6 +33,8 @@ static AstNode *statement(Parser *P);
 
 static AstNode *parseType(Parser *P);
 
+static AstNode *parseUnionType(Parser *P);
+
 static AstNode *primary(Parser *P, bool allowStructs);
 
 static AstNode *macroExpression(Parser *P, AstNode *callee);
@@ -57,6 +59,8 @@ static AstNode *attributes(Parser *P);
 static AstNode *substitute(Parser *P, bool allowStructs);
 
 static AstNode *block(Parser *P);
+
+static AstNode *comptime(Parser *P, AstNode *(*parser)(Parser *));
 
 static void listAddAstNode(AstNodeList *list, AstNode *node)
 {
@@ -1618,6 +1622,66 @@ static AstNode *switchStatement(Parser *P)
                    .switchStmt = {.cond = cond, .cases = cases.first}});
 }
 
+static AstNode *matchCaseStatement(Parser *P)
+{
+    u64 flags = flgNone;
+    Token tok = *current(P);
+    AstNode *match = NULL, *body = NULL;
+    AstNode *variable = NULL;
+    bool isMulti = previous(P)->tag == tokComma;
+    if (match(P, tokCase) || isMulti) {
+        P->inCase = true;
+        match = parseType(P);
+        P->inCase = false;
+        if (!isMulti && !check(P, tokComma) && match(P, tokAs)) {
+            bool isPointer = match(P, tokBAnd);
+            variable = parseIdentifier(P);
+            variable->flags |= (isPointer ? flgReference : flgNone);
+        }
+    }
+    else {
+        consume(P, tokElse, "expecting an 'else' or a 'case' statement", NULL);
+        flags |= flgDefault;
+    }
+
+    if (!match(P, tokComma)) {
+        consume0(P, tokFatArrow);
+        if (!check(P, tokCase, tokRBrace)) {
+            body = statement(P);
+        }
+    }
+
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){
+            .tag = astCaseStmt,
+            .flags = flags,
+            .caseStmt = {.match = match, .body = body, .variable = variable}});
+}
+
+static AstNode *matchStatement(Parser *P)
+{
+    AstNodeList cases = {NULL};
+    Token tok = *consume0(P, tokMatch);
+
+    consume0(P, tokLParen);
+    AstNode *expr = expression(P, false);
+    consume0(P, tokRParen);
+
+    consume0(P, tokLBrace);
+    while (!check(P, tokRBrace, tokEoF)) {
+        listAddAstNode(&cases, comptime(P, matchCaseStatement));
+    }
+    consume0(P, tokRBrace);
+
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astMatchStmt,
+                   .matchStmt = {.expr = expr, .cases = cases.first}});
+}
+
 static AstNode *deferStatement(Parser *P)
 {
     AstNode *expr = NULL;
@@ -1625,7 +1689,7 @@ static AstNode *deferStatement(Parser *P)
     bool isBlock = check(P, tokLBrace) != NULL;
     expr = expression(P, true);
     if (!isBlock)
-        consume0(P, tokSemicolon);
+        match(P, tokSemicolon);
 
     return newAstNode(
         P,
@@ -1689,6 +1753,9 @@ static AstNode *statement(Parser *P)
     case tokSwitch:
         stmt = switchStatement(P);
         break;
+    case tokMatch:
+        stmt = matchStatement(P);
+        break;
     case tokWhile:
         stmt = whileStatement(P);
         break;
@@ -1728,7 +1795,7 @@ static AstNode *statement(Parser *P)
     return stmt;
 }
 
-static AstNode *parseType(Parser *P)
+static AstNode *parseTypeImpl(Parser *P)
 {
     AstNode *type;
     Token tok = *current(P);
@@ -1795,6 +1862,26 @@ static AstNode *parseType(Parser *P)
 
     type->flags |= flgTypeAst;
     return type;
+}
+
+static AstNode *parseType(Parser *P)
+{
+    AstNodeList members = {0};
+    Token tok = *current(P);
+    do {
+        listAddAstNode(&members, parseTypeImpl(P));
+    } while (match(P, tokBOr));
+
+    if (members.first != members.last) {
+        return newAstNode(P,
+                          &tok.fileLoc.begin,
+                          &(AstNode){.tag = astUnionDecl,
+                                     .flags = flgNone,
+                                     .unionDecl = {.members = members.first}});
+    }
+    else {
+        return members.first;
+    }
 }
 
 static AstNode *parseStructField(Parser *P, bool isPrivate)
@@ -1888,8 +1975,6 @@ static AstNode *parseInterfaceMember(Parser *P)
     return member;
 }
 
-static AstNode *comptime(Parser *P, AstNode *(*parser)(Parser *));
-
 static AstNode *parseComptimeIf(Parser *P, AstNode *(*parser)(Parser *))
 {
     AstNode *cond;
@@ -1952,14 +2037,13 @@ static AstNode *parseComptimeWhile(Parser *P, AstNode *(*parser)(Parser *))
 
 static AstNode *parseComptimeFor(Parser *P, AstNode *(*parser)(Parser *))
 {
-    Token tok = *consume0(P, tokWhile);
+    Token tok = *consume0(P, tokFor);
     consume0(P, tokLParen);
     AstNode *var = variable(P, false, false, true, true);
     consume0(P, tokColon);
     AstNode *range = expression(P, true);
     consume0(P, tokRParen);
 
-    consume0(P, tokRParen);
     consume0(P, tokLBrace);
     AstNode *body = parseManyNoSeparator(P, tokRBrace, parser);
     consume0(P, tokRBrace);
@@ -2147,32 +2231,20 @@ static AstNode *aliasDecl(Parser *P, bool isPublic, bool isNative)
     flags |= isNative ? flgNative : flgNone;
     cstring name = getTokenString(P, consume0(P, tokIdent), false);
     if (!isNative) {
-        consume0(P, tokAssign);
-        AstNodeList members = {NULL};
-        do {
-            listAddAstNode(&members, parseType(P));
-        } while (match(P, tokBOr));
-        alias = members.first;
+        if (match(P, tokAssign))
+            alias = parseType(P);
+        else {
+            flags |= flgForwardDecl;
+            alias = NULL;
+        }
     }
-    else {
-        consume0(P, tokSemicolon);
-    }
-    if (alias && alias->next) {
-        return newAstNode(
-            P,
-            &tok.fileLoc.begin,
-            &(AstNode){.tag = astUnionDecl,
-                       .flags = flags,
-                       .unionDecl = {.name = name, .members = alias}});
-    }
-    else {
-        return newAstNode(
-            P,
-            &tok.fileLoc.begin,
-            &(AstNode){.tag = astTypeDecl,
-                       .flags = flags,
-                       .typeDecl = {.name = name, .aliased = alias}});
-    }
+    match(P, tokSemicolon);
+
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astTypeDecl,
+                                 .flags = flags,
+                                 .typeDecl = {.name = name, .aliased = alias}});
 }
 
 static AstNode *parseCCode(Parser *P)

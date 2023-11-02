@@ -262,6 +262,7 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
         node->type = checkType(visitor, substitute);
         substitute->flags |= flgVisited;
     }
+
     addTopLevelDeclaration(ctx, substitute);
 
     node->pathElement.resolvesTo = substitute;

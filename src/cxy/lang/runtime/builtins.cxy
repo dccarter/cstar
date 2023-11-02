@@ -336,6 +336,10 @@ pub native func CXY__builtins_drop(ptr: &void): void;
     EV_OUT => AE_WRITABLE
 ) : i32
 
+## (
+    stopScheduler => CXY__scheduler_stop
+): func() -> void
+
 @inline
 pub func getref[T](@transient obj: T) {
     CXY__builtins_get_ref(obj: &void)
@@ -456,6 +460,13 @@ class StringBuilder {
                 this << val.[i]
             }
             this.appendChar(']')
+        }
+        else #if (U.isUnion) {
+            match (val) {
+                #for (const i: 0..#{U.membersCount}) {
+                    case #{typeat!(U, i)} as y => this << y
+                }
+            }
         }
         return this
     }
