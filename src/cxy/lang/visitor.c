@@ -131,10 +131,14 @@
         MODE##Visit(visitor, node->varDecl.init);                              \
         break;                                                                 \
     case astTypeDecl:                                                          \
-        MODE##Visit(visitor, node->typeDecl.aliased);                          \
+        if (!hasFlag(node, ForwardDecl))                                       \
+            MODE##Visit(visitor, node->typeDecl.aliased);                      \
         break;                                                                 \
     case astUnionDecl:                                                         \
         MODE##VisitManyNodes(visitor, node->unionDecl.members);                \
+        break;                                                                 \
+    case astUnionValue:                                                        \
+        MODE##Visit(visitor, node->unionValue.value);                          \
         break;                                                                 \
     case astEnumOption:                                                        \
         MODE##Visit(visitor, node->enumOption.value);                          \
@@ -225,6 +229,10 @@
     case astSwitchStmt:                                                        \
         MODE##Visit(visitor, node->switchStmt.cond);                           \
         MODE##Visit(visitor, node->switchStmt.cases);                          \
+        break;                                                                 \
+    case astMatchStmt:                                                         \
+        MODE##Visit(visitor, node->matchStmt.expr);                            \
+        MODE##Visit(visitor, node->matchStmt.cases);                           \
         break;                                                                 \
     case astCaseStmt:                                                          \
         MODE##Visit(visitor, node->caseStmt.match);                            \

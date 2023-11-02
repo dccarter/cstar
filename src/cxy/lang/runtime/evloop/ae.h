@@ -94,6 +94,7 @@ aeEventLoop *aeCreateEventLoop(int setsize);
 void aeDeleteEventLoop(aeEventLoop *eventLoop);
 
 void aeStop(aeEventLoop *eventLoop);
+void aePoke(aeEventLoop *eventLoop);
 
 int aeCreateFileEvent(aeEventLoop *eventLoop,
                       int fd,

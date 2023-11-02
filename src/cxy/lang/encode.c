@@ -359,8 +359,6 @@ static void visitUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
-
-    packString(&ctx->packer, node->unionDecl.name);
     manyNodesToBinary(visitor, node->unionDecl.members);
 }
 

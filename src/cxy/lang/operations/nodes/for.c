@@ -487,7 +487,7 @@ static bool evalForStmtWithRange(AstVisitor *visitor,
 {
     EvalContext *ctx = getAstVisitorContext(visitor);
     AstNode *range = node->forStmt.range, *variable = node->forStmt.var;
-
+    bool preserve = findAttribute(node, S_consistent) != NULL;
     i64 i = integerLiteralValue(range->rangeExpr.start),
         count = integerLiteralValue(range->rangeExpr.end),
         step = range->rangeExpr.step
@@ -500,6 +500,11 @@ static bool evalForStmtWithRange(AstVisitor *visitor,
             ctx->pool,
             &range->loc,
             &(AstNode){.tag = astIntegerLit, .intLiteral.value = i});
+        if (nodeIs(body, BlockStmt) && !preserve && body->blockStmt.stmts) {
+            body->blockStmt.stmts->parentScope = node->parentScope;
+        }
+        else
+            body->parentScope = node->parentScope;
 
         const Type *type = evalType(ctx, body);
         if (type == NULL || typeIs(type, Error)) {
@@ -507,8 +512,7 @@ static bool evalForStmtWithRange(AstVisitor *visitor,
             return false;
         }
 
-        if (nodeIs(body, BlockStmt) &&
-            findAttribute(node, S_consistent) == NULL) {
+        if (nodeIs(body, BlockStmt) && !preserve) {
             insertAstNode(nodes, body->blockStmt.stmts);
         }
         else {

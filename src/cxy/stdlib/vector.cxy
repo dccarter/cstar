@@ -10,7 +10,7 @@ pub class Vector[T] {
     - func grow() {
         if (count >= capacity) {
             capacity += (capacity / 2)
-            data = <&T> CXY__alloc(sizeof!(#T) * capacity, null)
+            data = <&T> CXY__realloc(data: &void, sizeof!(#T) * capacity, null)
         }
     }
 
@@ -76,6 +76,12 @@ pub class Vector[T] {
                 return (data.[i], i++)
             else
                 return null
+        }
+    }
+
+    func each(cb: func(item: T) -> void) {
+        for (var i: 0..count) {
+            cb(data.[i])
         }
     }
 

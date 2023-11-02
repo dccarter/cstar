@@ -175,21 +175,26 @@ static void appendFlagName(FormatState *state, u64 index)
     }
 }
 
-char *flagsToString(u64 flags)
+void appendFlagsAsString(FormatState *state, u64 flags)
 {
-    FormatState state = newFormatState("", true);
     int index = 0;
     bool first = true;
-    format(&state, "(", NULL);
     while (flags >> index) {
         if (flags & (1ull << index)) {
             if (!first)
-                format(&state, "|", NULL);
-            appendFlagName(&state, index);
+                format(state, "|", NULL);
+            appendFlagName(state, index);
             first = false;
         }
         index++;
     }
+}
+
+char *flagsToString(u64 flags)
+{
+    FormatState state = newFormatState("", true);
+    format(&state, "(", NULL);
+    appendFlagsAsString(&state, flags);
     format(&state, ")", NULL);
 
     char *str = formatStateToString(&state);

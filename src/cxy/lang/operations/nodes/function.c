@@ -219,7 +219,6 @@ void generateFuncGeneratedDeclaration(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
     u32 index = type->func.decl->funcDecl.index;
-    const Type *ret = type->func.retType;
     if (hasFlag(type->func.decl, BuiltinMember))
         return;
 
@@ -251,8 +250,9 @@ void generateFunctionTypedef(CodegenContext *context, const Type *type)
     FormatState *state = context->state;
     const AstNode *decl = type->func.decl,
                   *parent = decl ? type->func.decl->parentScope : NULL;
-    bool isMember =
-        parent && (nodeIs(parent, StructDecl) || nodeIs(parent, ClassDecl));
+    bool isMember = parent &&
+                    (nodeIs(parent, StructDecl) || nodeIs(parent, ClassDecl)),
+         isStatic = isMember && hasFlag(decl, Static);
 
     format(state, "typedef ", NULL);
     generateTypeUsage(context, type->func.retType);
@@ -264,7 +264,7 @@ void generateFunctionTypedef(CodegenContext *context, const Type *type)
     writeTypename(context, type);
 
     format(state, ")(", NULL);
-    if (isMember) {
+    if (isMember && !isStatic) {
         if (hasFlag(type, Const))
             format(state, "const ", NULL);
         writeTypename(context, parent->type);
@@ -272,7 +272,7 @@ void generateFunctionTypedef(CodegenContext *context, const Type *type)
     }
 
     for (u64 i = 0; i < type->func.paramsCount; i++) {
-        if (isMember || i != 0)
+        if ((isMember && !isStatic) || i != 0)
             format(state, ", ", NULL);
         generateTypeUsage(context, type->func.params[i]);
     }
@@ -283,12 +283,13 @@ void generateFunctionTypedef(CodegenContext *context, const Type *type)
         generateFuncGeneratedDeclaration(context, type);
 }
 
-const Type *matchOverloadedFunction(TypingContext *ctx,
-                                    const Type *callee,
-                                    const Type **argTypes,
-                                    u64 argsCount,
-                                    const FileLoc *loc,
-                                    u64 flags)
+const Type *matchOverloadedFunctionPerfectMatch(TypingContext *ctx,
+                                                const Type *callee,
+                                                const Type **argTypes,
+                                                u64 argsCount,
+                                                const FileLoc *loc,
+                                                u64 flags,
+                                                bool perfectMatch)
 {
     AstNode *decls = callee->func.decl->list.first ?: callee->func.decl,
             *decl = decls;
@@ -317,7 +318,7 @@ const Type *matchOverloadedFunction(TypingContext *ctx,
         for (u64 i = 0; i < argsCount; i++) {
             const Type *paramType = type->func.params[i];
             compatible = paramType == argTypes[i];
-            if (!compatible) {
+            if (!compatible && !perfectMatch) {
                 compatible = isTypeAssignableFrom(paramType, argTypes[i]);
                 if (compatible) {
                     score--;
@@ -360,7 +361,7 @@ const Type *matchOverloadedFunction(TypingContext *ctx,
             ctx->L,
             loc,
             "incompatible function reference ({u64} functions declared did "
-            "not match function with signature {t})",
+            "not match function with signature {t}",
             (FormatArg[]){{.u64 = declarations}, {.t = &type}});
 
         decl = decls;
@@ -411,7 +412,8 @@ bool checkMemberFunctions(AstVisitor *visitor,
             }
 
             retype = members[i].type != type;
-            members[i].type = type;
+            if (members[i].name == member->funcDecl.name)
+                members[i].type = type;
         }
     }
 
@@ -422,6 +424,7 @@ void checkFunctionParam(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *type = node->funcParam.type, *def = node->funcParam.def;
+    AstNode *parent = node->parentScope;
 
     const Type *type_ = checkType(visitor, type), *def_ = NULL;
     if (typeIs(type_, Error)) {
@@ -431,6 +434,43 @@ void checkFunctionParam(AstVisitor *visitor, AstNode *node)
 
     if (hasFlag(type, Const) && !hasFlag(type_, Const))
         type_ = makeWrappedType(ctx->types, type_, flgConst);
+
+    if (typeIs(type_, Func) && !hasFlag(parent, Pure) &&
+        !hasFlag(parent, Native)) //
+    {
+        type->funcType.params = makeFunctionParam(
+            ctx->pool,
+            &type->loc,
+            makeString(ctx->strings, "_"),
+            makeTypeReferenceNode(ctx->pool,
+                                  makeVoidPointerType(ctx->types, flgNone),
+                                  &type->loc),
+            NULL,
+            flgNone,
+            type->funcType.params);
+        type->type = NULL;
+        type_ = checkType(visitor, type);
+        if (typeIs(type_, Error))
+            return;
+
+        type = node->funcParam.type = makeTupleTypeAst(
+            ctx->pool,
+            &type->loc,
+            flgNone,
+            makeTypeReferenceNode2(ctx->pool,
+                                   makeVoidPointerType(ctx->types, flgNone),
+                                   &type->loc,
+                                   type),
+            NULL,
+            makeTupleType(ctx->types,
+                          (const Type *[]){
+                              makeVoidPointerType(ctx->types, flgNone), type_},
+                          2,
+                          flgFuncTypeParam));
+        node->type = type->type;
+        node->flags |= flgFuncTypeParam;
+        return;
+    }
 
     if (def == NULL) {
         node->type = type_;
@@ -481,12 +521,14 @@ const Type *checkFunctionSignature(AstVisitor *visitor, AstNode *node)
     }
 
     if (node->list.first && node->list.first != node) {
-        const Type *found = matchOverloadedFunction(ctx,
-                                                    node->list.first->type,
-                                                    params_,
-                                                    paramsCount,
-                                                    NULL,
-                                                    node->flags & flgConst);
+        const Type *found =
+            matchOverloadedFunctionPerfectMatch(ctx,
+                                                node->list.first->type,
+                                                params_,
+                                                paramsCount,
+                                                NULL,
+                                                node->flags & flgConst,
+                                                true);
         if (found) {
             // conflict
             logError(
@@ -553,7 +595,11 @@ const Type *checkFunctionBody(AstVisitor *visitor, AstNode *node)
     }
 
     if (typeIs(ret_, Auto))
-        return node->type = changeFunctionRetType(ctx->types, type, body_);
+        node->type = changeFunctionRetType(ctx->types, type, body_);
+
+    if (hasFlag(node, Async)) {
+        makeCoroutineEntry(visitor, node);
+    }
 
     return node->type;
 }
@@ -605,8 +651,4 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
 
     if (typeIs(node->type, Error))
         return;
-
-    if (hasFlag(node, Async)) {
-        makeCoroutineEntry(visitor, node);
-    }
 }

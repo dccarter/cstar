@@ -166,7 +166,12 @@ typedef struct Type {
 
         struct {
             const Type *aliased;
+            AstNode *decl;
         } alias;
+
+        struct {
+            AstNode *decl;
+        } opaque;
 
         struct {
             const Type *target;
@@ -384,8 +389,11 @@ TypeInheritance *makeTypeInheritance(TypeTable *types,
                                      const Type **interfaces,
                                      u64 interfaceCount);
 
+AstNode *findMemberDeclInType(const Type *type, cstring name);
+
 const Type *getPointedType(const Type *type);
 bool isTruthyType(const Type *type);
 const Type *getOptionalType();
 const Type *getOptionalTargetType(const Type *type);
 const Type *getSliceTargetType(const Type *type);
+u32 findUnionTypeIndex(const Type *tagged, const Type *type);

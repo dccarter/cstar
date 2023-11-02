@@ -154,10 +154,12 @@ static bool compareTypes(const Type *lhs, const Type *rhs)
         if (left->name != right->name)
             return false;
 
-        if (left->func.decl && right->func.decl &&
-            left->func.decl->parentScope && right->func.decl->parentScope &&
-            left->func.decl->parentScope != right->func.decl->parentScope)
-            return false;
+        if (left->name != NULL) {
+            if (left->func.decl && right->func.decl &&
+                left->func.decl->parentScope && right->func.decl->parentScope &&
+                left->func.decl->parentScope != right->func.decl->parentScope)
+                return false;
+        }
 
         return (left->func.paramsCount == right->func.paramsCount) &&
                compareTypes(left->func.retType, right->func.retType) &&
@@ -360,6 +362,11 @@ const Type *resolveType(const Type *type)
         case typInfo:
             type = resolveType(type->info.target);
             break;
+        case typOpaque:
+            if (hasFlag(type, ForwardDecl)) {
+                return resolveType(type->opaque.decl->type) ?: type;
+            }
+            return type;
         default:
             return type;
         }
@@ -400,6 +407,27 @@ const Type *stripAll(const Type *type)
         }
     }
     return NULL;
+}
+
+const Type *stripOnce(const Type *type, u64 *flags)
+{
+    type = resolveType(type);
+    if (typeIs(type, Wrapped)) {
+        if (flags)
+            *flags |= type->flags;
+        type = type->wrapped.target;
+    }
+
+    if (typeIs(type, Pointer)) {
+        if (flags)
+            *flags |= type->flags;
+        type = type->pointer.pointed;
+    }
+
+    if (flags)
+        *flags |= type->flags;
+
+    return type;
 }
 
 u64 pointerLevels(const Type *type)
@@ -522,9 +550,17 @@ const Type *makeAliasType(TypeTable *table,
     return getOrInsertType(table, &type).s;
 }
 
-const Type *makeOpaqueType(TypeTable *table, cstring name)
+const Type *makeOpaqueTypeWithFlags(TypeTable *table,
+                                    cstring name,
+                                    AstNode *decl,
+                                    u64 flags)
 {
-    Type type = make(Type, .tag = typOpaque, .name = name, .size = 0);
+    Type type = make(Type,
+                     .tag = typOpaque,
+                     .name = name,
+                     .flags = flags,
+                     .size = 0,
+                     .opaque = {.decl = decl});
 
     return getOrInsertType(table, &type).s;
 }

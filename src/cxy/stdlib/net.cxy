@@ -1,15 +1,51 @@
 module net
 
-@cInclude("<sys/socket.h>")
-@cInclude("<arpa/inet.h>")
-
-@cInclude("<netinet/in.h>")
 @cInclude("<ifaddrs.h>")
-@cInclude("<dns/dns.h>")
+@cInclude("<arpa/inet.h>")
+@cInclude("<sys/socket.h>")
+@cInclude("<netinet/in.h>")
 
+@cInclude("<dns/dns.h>")
 @cSources("dns/dns.c")
 
-##(
+pub ##(
+    SOCK_STREAM,
+    SOCK_DGRAM,
+    SOCK_RAW,
+    SOCK_RDM,
+    SOCK_SEQPACKET,
+
+    SOL_SOCKET,
+
+    SO_DEBUG,
+    SO_ACCEPTCONN,
+    SO_REUSEADDR,
+    SO_KEEPALIVE,
+    SO_DONTROUTE,
+    SO_BROADCAST,
+    SO_USELOOPBACK,
+    SO_LINGER,
+    SO_OOBINLINE,
+    SO_REUSEPORT,
+    SO_TIMESTAMP,
+    SO_BINDANY,
+    SO_ZEROIZE,
+    SO_SNDBUF,
+    SO_RCVBUF,
+    SO_SNDLOWAT,
+    SO_RCVLOWAT,
+    SO_SNDTIMEO,
+    SO_RCVTIMEO,
+    SO_ERROR,
+    SO_TYPE,
+    SO_NETPROC,
+    SO_RTABLE,
+    SO_PEERCRED,
+    SO_SPLICE,
+    SO_DOMAIN,
+    SO_PROTOCOL,
+    SO_NOSIGPIPE,
+
     AF_UNSPEC,
     AF_UNIX,
     AF_INET,
@@ -26,71 +62,216 @@ module net
     PF_UNSPEC,
     PF_LOCAL,
     PF_UNIX,
+
+    INET_ADDRSTRLEN,
+    INET6_ADDRSTRLEN,
+
+    SHUT_RD,
+    SHUT_WR,
+    SHUT_RDWR,
+
+    DNS_T_A
 ) : i32
 
-## (
+pub ## (
     INADDR_ANY
 ) : u32
 
-## (
-    htons,
-    ntohs
-) : func(x: u16) -> u16
-
-## (
-    htonl,
-    ntohl
-) : func(x: u32) -> u32
-
-// from <arpa/inet.h>
-## (
-    inet_pton
-) : func(af: i32, src: &const char, dst: &void) -> i32
-
-## (
-    inet_ntop
-): func(af: i32, src: &const void, dst: &char, size: i32) -> &const char
-
-## (
-    INET_ADDRSTRLEN,
-    INET6_ADDRSTRLEN
-) : i32
-
-enum IPVersion {
-    Any,
-    V4,
-    V6
-}
-
-native struct in_addr {
+pub native struct in_addr {
     s_addr: u32
 }
 
-native struct sockaddr_in {
+pub native struct sockaddr_in {
     sin_family: i16
     sin_port: u16
     sin_addr: in_addr
 }
 
-native struct in6_addr {
+pub native struct in6_addr {
     s6_addr: [u8, 16]
 }
 
-## (
-    in6addr_any
-) : in6_addr
-
-native struct sockaddr_in6 {
+pub native struct sockaddr_in6 {
     sin6_family: u16
     sin6_port: u16
     sin6_flowinfo: u32
     sin6_addr: in6_addr
 }
 
-native struct sockaddr {
+pub native struct sockaddr {
 	sa_len: u8
 	sa_family: u8
 	sa_data: [u8, 14]
+}
+
+pub native struct addrinfo {
+    ai_family: i32
+    ai_addr: This
+    ai_next: This
+}
+
+pub native struct ifaddrs {
+	ifa_next: This
+	ifa_name: &char
+	ifa_addr: &sockaddr
+}
+
+pub native struct dns_resolv_conf
+pub native struct dns_hosts
+pub native struct dns_hints
+pub native struct dns_options
+pub native struct dns_cache
+pub native struct dns_resolver
+pub native struct dns_addrinfo
+
+type addrinfo_ptr_t = &addrinfo
+type ifaddrs_ptr = &ifaddrs
+
+var cxy_DNS_conf: &dns_resolv_conf = null;
+var cxy_DNS_hosts: &dns_hosts = null;
+var cxy_DNS_hints: &dns_hints = null;
+
+pub ## (
+    htons,
+    ntohs
+) : func(x: u16) -> u16
+
+pub ## (
+    htonl,
+    ntohl
+) : func(x: u32) -> u32
+
+pub ##(
+    connect
+): func(sockfd: i32, addr: &const sockaddr, len: i32) -> i32
+
+pub ##(
+   socket
+) : func(domain: i32, type_: i32, protocol: i32) -> i32
+
+pub ##(
+    bind
+):  func(fd: i32, addr: &const sockaddr, len: u64) -> i32
+
+pub ##(
+    listen
+): func(fd: i32, backlog: i32) -> i32
+
+pub ##(
+    getsockopt
+): func(fd: i32, level: i32, name: i32, optval: &void, len: &u32) -> i32
+
+pub ##(
+    setsockopt
+): func(fd: i32, level: i32, name: i32,optval: &const void, len: u32) -> i32
+
+pub ##(
+    getsockname
+): func(fd: i32, addr: &sockaddr, len: &u32) -> i32
+
+pub ##(
+    accept
+): func(fd: i32, addr: &sockaddr, len: &u32) -> i32
+
+pub ##(
+    shutdown
+): func(fd: i32, how: i32) -> i32
+
+pub ##(
+    recv
+) : func(fd: i32, buf: &void, len: u64, flags: i32) -> i64
+
+pub ##(
+    recvfrom
+) : func(fd: i32, buf: &void, len: u64, flags: i32, src: &sockaddr, addrLen: &u32) -> i64
+
+pub ##(
+    send
+) : func(fd: i32, buf: &const void, len: u64, flags: i32) -> i64
+
+pub ##(
+    sendto
+) : func(fd: i32, buf: &const void, len: u64, flags: i32, src: &sockaddr, addrLen: &u32) -> i64
+
+// from <arpa/inet.h>
+pub ## (
+    inet_pton
+) : func(af: i32, src: &const char, dst: &void) -> i32
+
+pub ## (
+    inet_ntop
+): func(af: i32, src: &const void, dst: &char, size: i32) -> &const char
+
+pub ##(
+    getifaddrs
+) : func(addrs: &ifaddrs_ptr) -> i32
+
+pub ##(
+    freeifaddrs
+) : func(addrs: &ifaddrs) -> void
+
+pub ## (
+    in6addr_any
+) : in6_addr
+
+pub ## (
+    dns_resconf_local
+) : func(rc: &i32) -> &dns_resolv_conf
+
+pub ## (
+    dns_hosts_local
+): func(rc: &i32) -> &dns_hosts
+
+pub ## (
+    dns_hints_local
+): func(conf: &dns_resolv_conf, rc: &i32) -> &dns_hints
+
+pub ## (
+    dns_res_open
+) : func(
+    conf: &dns_resolv_conf,
+    hosts: &dns_hosts,
+    hints: &dns_hints,
+    cache: &dns_cache,
+    opts: &dns_options,
+    rc: &i32
+) -> &dns_resolver
+
+pub ## (
+    dns_res_close
+): func(resolver: &dns_resolver) -> void
+
+pub ## (
+    dns_opts
+) : func() -> &dns_options
+
+pub ## (
+    dns_ai_open
+): func(
+    host: &const char,
+    server: &const char,
+    gtype: i32, // cheating here (it suppose to be a native enum
+    hints: &addrinfo,
+    resolver: &dns_resolver,
+    rc: &i32
+) -> &dns_addrinfo
+
+pub ## (
+    dns_ai_close
+) : func(ai: &dns_addrinfo) -> void
+
+pub ## (
+    dns_ai_nextent
+) : func(ai: &addrinfo_ptr_t, dai: &dns_addrinfo) -> i32
+
+pub ## (
+    dns_ai_pollfd
+) : func(dai: &dns_addrinfo) -> i32
+
+pub enum IPVersion {
+    Any,
+    V4,
+    V6
 }
 
 struct Address {
@@ -172,6 +353,9 @@ struct Address {
             return ntohs((addr !: &sockaddr_in6).sin6_port)
     }
 
+    func nativeAddr() => addr: &sockaddr
+    const func nativeAddr() => addr: &const sockaddr
+
     @inline
     const func `hash`() => hashBytes(hashInit(), addr, 32)
 
@@ -204,23 +388,6 @@ struct Address {
             sb.appendString("0.0.0.0:0000")
     }
 }
-
-// from <ifaddrs.h>
-native struct ifaddrs {
-	ifa_next: This
-	ifa_name: &char
-	ifa_addr: &sockaddr
-}
-
-type ifaddrs_ptr = &ifaddrs
-
-##(
-    getifaddrs
-) : func(addrs: &ifaddrs_ptr) -> i32
-
-##(
-    freeifaddrs
-) : func(addrs: &ifaddrs) -> void
 
 pub func getLocalAddress(name: string, port: u16, mode: IPVersion = IPVersion.Any) {
     if (name == null)
@@ -287,85 +454,6 @@ pub func getLocalAddress(name: string, port: u16, mode: IPVersion = IPVersion.An
     return addr
 }
 
-native struct dns_resolv_conf
-native struct dns_hosts
-native struct dns_hints
-native struct dns_options
-native struct dns_cache
-native struct dns_resolver
-
-native struct addrinfo {
-    ai_family: i32
-    ai_addr: This
-    ai_next: This
-}
-
-native struct dns_addrinfo
-
-var cxy_DNS_conf: &dns_resolv_conf = null;
-var cxy_DNS_hosts: &dns_hosts = null;
-var cxy_DNS_hints: &dns_hints = null;
-
-## (
-    DNS_T_A
-) : i32
-
-## (
-    dns_resconf_local
-) : func(rc: &i32) -> &dns_resolv_conf
-
-## (
-    dns_hosts_local
-): func(rc: &i32) -> &dns_hosts
-
-## (
-    dns_hints_local
-): func(conf: &dns_resolv_conf, rc: &i32) -> &dns_hints
-
-## (
-    dns_res_open
-) : func(
-    conf: &dns_resolv_conf,
-    hosts: &dns_hosts,
-    hints: &dns_hints,
-    cache: &dns_cache,
-    opts: &dns_options,
-    rc: &i32
-) -> &dns_resolver
-
-## (
-    dns_res_close
-): func(resolver: &dns_resolver) -> void
-
-## (
-    dns_opts
-) : func() -> &dns_options
-
-## (
-    dns_ai_open
-): func(
-    host: &const char,
-    server: &const char,
-    gtype: i32, // cheating here (it suppose to be a native enum
-    hints: &addrinfo,
-    resolver: &dns_resolver,
-    rc: &i32
-) -> &dns_addrinfo
-
-## (
-    dns_ai_close
-) : func(ai: &dns_addrinfo) -> void
-
-type addrinfo_ptr_t = &addrinfo
-
-## (
-    dns_ai_nextent
-) : func(ai: &addrinfo_ptr_t, dai: &dns_addrinfo) -> i32
-
-## (
-    dns_ai_pollfd
-) : func(dai: &dns_addrinfo) -> i32
-
 pub async func getRemoteAddress(name: string, port: u16, mode: IPVersion = IPVersion.Any) {
     var rc: i32;
     var addr = Address(name, port, mode);
@@ -404,7 +492,7 @@ pub async func getRemoteAddress(name: string, port: u16, mode: IPVersion = IPVer
         if (rc == EAGAIN) {
             var fd = dns_ai_pollfd(ai);
             assert!(fd >= 0)
-            var status = CXY__eventloop_wait_read(fd, 0);
+            var status = fdWaitIn(fd, 0);
             assert!(status == EV_IN)
             continue
         }
@@ -467,4 +555,5 @@ pub async func getRemoteAddress(name: string, port: u16, mode: IPVersion = IPVer
     dns_ai_close(ai)
     return addr
 }
+
 

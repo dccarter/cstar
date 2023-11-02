@@ -33,25 +33,29 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
     AstNode *callee = node->callExpr.callee, *args = node->callExpr.args;
     const Type *callee_ = NULL;
 
-    AstNode *arg = args;
+    AstNode *arg = args, *prev = NULL;
     for (u64 i = 0; arg; arg = arg->next, i++) {
         const Type *type = arg->type ?: checkType(visitor, arg);
         if (typeIs(type, Error)) {
             node->type = ERROR_TYPE(ctx);
+            prev = arg;
             continue;
         }
 
         if (hasFlag(type, Closure)) {
-            arg->type = findStructMemberType(type, S_CallOverload);
-            if (type == NULL) {
+            arg = transformClosureArgument(visitor, arg);
+            if (prev == NULL)
+                node->callExpr.args = arg;
+            else
+                prev->next = arg;
+            prev = arg;
+
+            if (typeIs(arg->type, Error)) {
                 node->type = ERROR_TYPE(ctx);
-                logError(ctx->L,
-                         &arg->loc,
-                         "call argument is marked as closure but it is not a "
-                         "closure",
-                         NULL);
+                continue;
             }
         }
+        prev = arg;
     }
     if (typeIs(node->type, Error))
         return;
@@ -119,9 +123,11 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
     }
 
     if (hasFlag(callee_->func.decl, Async)) {
-        bool callSync = findAttribute(node, S_sync) != NULL;
-        if (!callSync && callee_->func.decl->funcDecl.coroEntry != NULL)
+        AstNode *decl = callee_->func.decl;
+        bool callSync = hasFlag(node, SyncCall);
+        if (!callSync && decl->funcDecl.coroEntry != NULL) {
             makeAsyncLaunchCall(visitor, callee_, node);
+        }
     }
 }
 
@@ -139,7 +145,8 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, "__", NULL);
     }
     else if (hasFlag(type->func.decl, Generated) ||
-             !hasFlag(node->callExpr.callee, Define))
+             (!hasFlag(node->callExpr.callee, Define) &&
+              nodeIs(parent, Program)))
         writeDeclNamespace(ctx, type->namespace, NULL);
 
     if (type->name)
@@ -155,9 +162,11 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
 
     if (isMember) {
         const AstNode *callee = node->callExpr.callee;
+        AstNode *resolvesTo =
+            nodeIs(callee, Path) ? callee->path.elements->pathElement.resolvesTo
+                                 : NULL;
         bool needsThis =
-            (hasFlag(callee, Member) ||
-             (nodeIs(callee, Path) && callee->path.elements->next == NULL)) &&
+            (hasFlag(callee, Member) || nodeIs(resolvesTo, FuncDecl)) &&
             !hasFlag(callee, ClosureStyle);
 
         if (needsThis) {
@@ -271,6 +280,36 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
         if (overload)
             callee_ = overload;
     }
+    else if (typeIs(callee_, Tuple) && hasFlag(callee_, FuncTypeParam)) {
+        node->callExpr.callee = makeMemberExpr(
+            ctx->pool,
+            &callee->loc,
+            callee->flags,
+            deepCloneAstNode(ctx->pool, callee),
+            makeIntegerLiteral(ctx->pool,
+                               &callee->loc,
+                               1,
+                               NULL,
+                               getPrimitiveType(ctx->types, prtI64)),
+            NULL,
+            callee_->tuple.members[1]);
+
+        node->callExpr.args = makeMemberExpr(
+            ctx->pool,
+            &callee->loc,
+            callee->flags,
+            callee,
+            makeIntegerLiteral(ctx->pool,
+                               &callee->loc,
+                               0,
+                               NULL,
+                               getPrimitiveType(ctx->types, prtI64)),
+            node->callExpr.args,
+            callee_->tuple.members[0]);
+
+        node->type = checkType(visitor, node);
+        return;
+    }
 
     if (!typeIs(callee_, Func)) {
         logError(ctx->L,
@@ -286,17 +325,31 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
         return;
 
     callee_ = node->callExpr.callee->type;
-    AstNode *arg = node->callExpr.args;
+    AstNode *arg = node->callExpr.args, *prev = NULL;
     for (u64 i = 0; arg; arg = arg->next, i++) {
         const Type *type = callee_->func.params[i], *expr = arg->type;
+        if (hasFlag(type, FuncTypeParam))
+            arg->type = type;
         if (!evalExplicitConstruction(visitor, type, arg)) {
             logError(ctx->L,
                      &arg->loc,
                      "incompatible argument types, expecting '{t}' but got "
                      "'{t}'",
                      (FormatArg[]){{.t = type}, {.t = type}});
+            prev = arg;
             continue;
         }
+
+        AstNode *newArg = transformToUnionValue(ctx, arg, type, expr);
+        if (newArg != arg) {
+            newArg->next = arg->next;
+            if (prev)
+                prev->next = newArg;
+            else
+                node->callExpr.args = newArg;
+            arg = newArg;
+        }
+        prev = arg;
 
         if (!hasFlag(type, Optional) || hasFlag(expr, Optional))
             continue;

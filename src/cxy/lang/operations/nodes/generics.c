@@ -231,7 +231,6 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
     cstring name =
         makeAnonymousVariable(ctx->strings, getDeclarationName(substitute));
     setDeclarationName(substitute, name);
-    addTopLevelDeclaration(ctx, substitute);
 
     cstring namespace = pushGenericDeclNamespace(ctx->types, generic);
     type = goi.s;
@@ -259,8 +258,12 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
         if (!typeIs(node->type, Error))
             node->type = checkFunctionBody(visitor, substitute);
     }
-    else
+    else {
         node->type = checkType(visitor, substitute);
+        substitute->flags |= flgVisited;
+    }
+
+    addTopLevelDeclaration(ctx, substitute);
 
     node->pathElement.resolvesTo = substitute;
     node->pathElement.name = getDeclarationName(substitute);
@@ -272,5 +275,9 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
 
 resolveGenericDeclError:
     free(paramTypes);
+    logError(ctx->L,
+             &node->loc,
+             "resolving generic declaration failed '{t}' failed",
+             (FormatArg[]){{.t = generic->type}});
     return node->type = ERROR_TYPE(ctx);
 }

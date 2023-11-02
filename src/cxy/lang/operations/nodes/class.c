@@ -72,6 +72,7 @@ static void evalClassMembers(AstVisitor *visitor, AstNode *node)
             }
         }
         prev = member;
+        member->parentScope = node;
 
         if (nodeIs(member, FuncDecl)) {
             type = checkFunctionSignature(visitor, member);
@@ -133,11 +134,10 @@ void generateClassDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     const Type *type = node->type;
-
-    for (u64 i = 0; i < type->tStruct.members->count; i++) {
-        const NamedTypeMember *member = &type->tStruct.members->members[i];
+    const AstNode *member = node->classDecl.members;
+    for (; member; member = member->next) {
         if (typeIs(member->type, Func)) {
-            astConstVisit(visitor, member->decl);
+            astConstVisit(visitor, member);
         }
     }
 }
@@ -314,8 +314,13 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
                                       node->flags & flgTypeApplicable);
         ((Type *)this)->this.that = node->type;
     }
-    else
+    else if (typeIs(node->type, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+    else {
         node->type = this->this.that;
+    }
 
     ctx->currentClass = NULL;
 

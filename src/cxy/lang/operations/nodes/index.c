@@ -161,7 +161,7 @@ void checkIndexExpr(AstVisitor *visitor, AstNode *node)
     node->flags |= node->indexExpr.target->flags;
     const Type *unwrapped = unwrapType(target, NULL),
                *stripped = stripAll(target);
-    if (typeIs(unwrapped, Array)) {
+    if (typeIs(stripped, Array)) {
         if (!isIntegerType(index)) {
             logError(ctx->L,
                      &node->indexExpr.index->loc,

@@ -19,18 +19,27 @@ const Type *checkPathElement(AstVisitor *visitor,
                              AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
+    u64 flags = flgNone;
     const Type *resolved = NULL;
+    AstNode *decl = NULL;
     switch (parent->tag) {
+    case typEnum:
+        resolved = expectInType(
+            ctx->types, parent, ctx->L, node->pathElement.name, &node->loc);
+        flags = flgEnumLiteral;
+        break;
     case typThis:
     case typStruct:
     case typInterface:
-    case typContainer:
     case typModule:
-    case typEnum:
     case typClass:
-        resolved = expectInType(
-            ctx->types, parent, ctx->L, node->pathElement.name, &node->loc);
-        break;
+        decl = findMemberDeclInType(parent, node->pathElement.name);
+        if (decl != NULL && decl->type != NULL) {
+            resolved = decl->type;
+            flags = resolved->flags | decl->flags;
+            break;
+        }
+        // fallthrough
     default:
         logError(ctx->L,
                  &node->loc,
@@ -49,9 +58,8 @@ const Type *checkPathElement(AstVisitor *visitor,
     }
 
     node->type = resolved;
-    node->flags = resolved->flags;
-    if (typeIs(parent, Enum))
-        node->flags |= flgEnumLiteral;
+    node->flags = flags;
+    node->pathElement.resolvesTo = decl;
 
     return resolved;
 }
@@ -65,18 +73,17 @@ static const Type *checkBasePathElement(AstVisitor *visitor,
         cstring keyword = node->pathElement.name;
         csAssert0(node->pathElement.enclosure);
 
-        AstNode *enclosure = node->pathElement.enclosure,
-                *parent = getMemberParentScope(enclosure);
+        AstNode *enclosure = node->pathElement.enclosure;
         if (keyword == S_super) {
-            return node->type = getTypeBase(parent->type);
+            return node->type = getTypeBase(enclosure->type);
         }
         else if (keyword == S_this) {
             return node->type =
-                       nodeIs(parent, StructDecl)
+                       nodeIs(enclosure, StructDecl)
                            ? makePointerType(ctx->types,
-                                             parent->type,
+                                             enclosure->type,
                                              enclosure->flags & flgConst)
-                           : parent->type;
+                           : enclosure->type;
         }
         else if (keyword == S_This) {
             return makePointerType(
@@ -88,14 +95,14 @@ static const Type *checkBasePathElement(AstVisitor *visitor,
         csAssert0(node->pathElement.resolvesTo);
         node->flags |=
             (nodeIs(node->pathElement.resolvesTo, Field) ? flgMember : flgNone);
-        return node->type = node->pathElement.resolvesTo->type;
+        return node->type = checkType(visitor, node->pathElement.resolvesTo);
     }
 }
 
 void generatePathElement(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    if (hasFlag(node, Member)) {
+    if (hasFlag(node, Member) && !hasFlag(node, Static)) {
         format(ctx->state,
                "this->{s}{s}",
                (FormatArg[]){{.s = hasFlag(node, Inherited) ? "super." : ""},
@@ -129,17 +136,20 @@ void generatePath(ConstAstVisitor *visitor, const AstNode *node)
     }
     else if (hasFlag(node, BuiltinMember) || nodeIs(parent, StructDecl) ||
              (typeIs(node->type, Func) &&
-              hasFlag(node->type->func.decl, Pure))) {
+              hasFlag(node->type->func.decl, Pure) && parent->type)) {
         const Type *scope = parent->type;
         const AstNode *func = node->type->func.decl;
         writeTypename(ctx, scope);
         format(ctx->state, "__{s}", (FormatArg[]){{.s = func->funcDecl.name}});
     }
     else {
-        const AstNode *elem = node->path.elements;
+        const AstNode *elem = node->path.elements, *next = elem->next;
         AstNode *resolved = elem->pathElement.resolvesTo;
         parent = resolved ? resolved->parentScope : NULL;
-        if (nodeIs(parent, Program)) {
+        if (typeIs(elem->type, Module) && !typeIs(next->type, Container)) {
+            elem = next;
+        }
+        else if (nodeIs(parent, Program) && elem->pathElement.name != S_this) {
             AstNode *module = parent->program.module;
             if (module)
                 writeDeclNamespace(ctx, module->moduleDecl.name, NULL);
@@ -294,6 +304,7 @@ void evalPath(AstVisitor *visitor, AstNode *node)
             type = symbol->type->info.target;
             goto retry;
         case typTuple:
+        case typUnion:
             node->tag = astTypeRef;
             node->flags = type->flags;
             node->type = type;

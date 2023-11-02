@@ -124,6 +124,7 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
         if (flatten && nodeIs(replacement, BlockStmt))
             replacement = replacement->blockStmt.stmts
                               ?: makeAstNop(ctx->pool, &replacement->loc);
+        replacement->parentScope = node->parentScope;
         clearAstBody(node);
         node->tag = astNop;
         node->flags &= ~flgComptime;
@@ -138,6 +139,7 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
                               ?: makeAstNop(ctx->pool, &replacement->loc);
 
         // select next statement, reclaim if branch
+        replacement->parentScope = node->parentScope;
         clearAstBody(node);
         node->tag = astNop;
         node->flags &= ~flgComptime;

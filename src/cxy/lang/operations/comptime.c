@@ -144,17 +144,21 @@ static AstNode *getMembersCount(EvalContext *ctx,
         return NULL;
 
     const Type *type = stripAll(node->type);
+    u64 count = 0;
     switch (type->tag) {
     case typTuple:
-        return makeAstNode(
-            ctx->pool,
-            loc,
-            &(AstNode){.tag = astIntegerLit,
-                       .intLiteral.value = (i64)type->tuple.count});
-    default:
+        count = type->tuple.count;
         break;
+    case typUnion:
+        count = type->tUnion.count;
+        break;
+    default:
+        return NULL;
     }
-    return NULL;
+    return makeAstNode(
+        ctx->pool,
+        loc,
+        &(AstNode){.tag = astIntegerLit, .intLiteral.value = (i64)count});
 }
 
 static AstNode *getTypeInfo(EvalContext *ctx,
@@ -375,6 +379,19 @@ static AstNode *evalIsTupleType(EvalContext *ctx,
                                   .boolLiteral.value = typeIs(type, Tuple)});
 }
 
+static AstNode *evalIsUnionType(EvalContext *ctx,
+                                const FileLoc *loc,
+                                AstNode *node)
+{
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = unwrapType(resolveType(type), NULL);
+
+    return makeAstNode(ctx->pool,
+                       loc,
+                       &(AstNode){.tag = astBoolLit,
+                                  .boolLiteral.value = typeIs(type, Union)});
+}
+
 static AstNode *isEnum(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 {
     node->type ?: evalType(ctx, node);
@@ -448,6 +465,7 @@ static void initDefaultMembers(EvalContext *ctx)
     ADD_MEMBER("isStruct", isStruct);
     ADD_MEMBER("isClass", isClass);
     ADD_MEMBER("isTuple", evalIsTupleType);
+    ADD_MEMBER("isUnion", evalIsUnionType);
     ADD_MEMBER("isField", isField);
     ADD_MEMBER("isString", isString);
     ADD_MEMBER("isBoolean", isBoolean);

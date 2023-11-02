@@ -77,6 +77,7 @@ static void recordClonedAstNode(CloneAstConfig *config,
     case astVarDecl:
     case astIdentifier:
     case astClosureExpr:
+    case astMatchStmt:
         mapAstNode(&config->mapping, from, to);
         break;
     default:
@@ -424,6 +425,24 @@ AstNode *makeGroupExpr(
                                   .groupExpr = {.expr = exprs}});
 }
 
+AstNode *makeUnionValueExpr(MemPool *pool,
+                            const FileLoc *loc,
+                            u64 flags,
+                            AstNode *value,
+                            u32 idx,
+                            AstNode *next,
+                            const Type *type)
+{
+    csAssert0(typeIs(type, Union));
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astUnionValue,
+                                  .flags = flags,
+                                  .type = type,
+                                  .next = next,
+                                  .unionValue = {.value = value, .idx = idx}});
+}
+
 AstNode *makeCastExpr(MemPool *pool,
                       const FileLoc *loc,
                       u64 flags,
@@ -439,6 +458,24 @@ AstNode *makeCastExpr(MemPool *pool,
                                   .type = type,
                                   .next = next,
                                   .castExpr = {.expr = expr, .to = target}});
+}
+
+AstNode *makeAddrOffExpr(MemPool *pool,
+                         const FileLoc *loc,
+                         u64 flags,
+                         AstNode *operand,
+                         AstNode *next,
+                         const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astUnaryExpr,
+                                  .flags = flags,
+                                  .type = type,
+                                  .next = next,
+                                  .unaryExpr = {.operand = operand,
+                                                .op = opAddrOf,
+                                                .isPrefix = true}});
 }
 
 AstNode *makeTypedExpr(MemPool *pool,
@@ -474,6 +511,24 @@ AstNode *makeTupleExpr(MemPool *pool,
             .type = type,
             .next = next,
             .tupleExpr = {.elements = members, .len = countAstNodes(members)}});
+}
+
+AstNode *makeTupleTypeAst(MemPool *pool,
+                          const FileLoc *loc,
+                          u64 flags,
+                          AstNode *members,
+                          AstNode *next,
+                          const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){
+            .tag = astTupleType,
+            .flags = flags,
+            .type = type,
+            .next = next,
+            .tupleType = {.elements = members, .len = countAstNodes(members)}});
 }
 
 AstNode *makeCallExpr(MemPool *pool,
@@ -960,12 +1015,12 @@ u64 countProgramDecls(const AstNode *node)
 {
     u64 len = 0;
     for (; node; node = node->next) {
+        if (nodeIs(node, ImportDecl))
+            continue;
         if (nodeIs(node, Define)) {
             len += (node->define.container ? 1
                                            : countAstNodes(node->define.names));
         }
-        else if (nodeIs(node, ImportDecl))
-            len += countAstNodes(node->import.entities);
         else
             len++;
     }
@@ -1208,7 +1263,8 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
         CLONE_MANY(varDecl, names);
         break;
     case astTypeDecl:
-        CLONE_ONE(typeDecl, aliased);
+        if (!hasFlag(node, ForwardDecl))
+            CLONE_ONE(typeDecl, aliased);
         break;
     case astUnionDecl:
         CLONE_MANY(unionDecl, members);
@@ -1217,19 +1273,16 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
     case astStructDecl:
         CLONE_MANY(structDecl, members);
         CLONE_MANY(structDecl, implements);
-        COPY_SORTED(structDecl, sortedMembers);
         break;
 
     case astClassDecl:
         CLONE_MANY(classDecl, members);
         CLONE_ONE(classDecl, base);
         CLONE_MANY(classDecl, implements);
-        COPY_SORTED(classDecl, sortedMembers);
         break;
 
     case astInterfaceDecl:
         CLONE_MANY(interfaceDecl, members);
-        COPY_SORTED(interfaceDecl, sortedMembers);
         break;
 
     case astEnumOption:
@@ -1304,6 +1357,10 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
         CLONE_MANY(tupleExpr, elements);
         break;
 
+    case astUnionValue:
+        CLONE_MANY(unionValue, value);
+        break;
+
     case astFieldExpr:
         CLONE_ONE(fieldExpr, value);
         break;
@@ -1340,9 +1397,14 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
         CLONE_ONE(switchStmt, cond);
         CLONE_MANY(switchStmt, cases);
         break;
+    case astMatchStmt:
+        CLONE_ONE(matchStmt, expr);
+        CLONE_MANY(matchStmt, cases);
+        break;
     case astCaseStmt:
         CLONE_ONE(caseStmt, match);
-        CLONE_ONE(caseStmt, match);
+        CLONE_ONE(caseStmt, variable);
+        CLONE_ONE(caseStmt, body);
         break;
 
     case astIdentifier:
@@ -1486,8 +1548,6 @@ const char *getDeclarationName(const AstNode *node)
         return node->typeDecl.name;
     case astEnumDecl:
         return node->enumDecl.name;
-    case astUnionDecl:
-        return node->unionDecl.name;
     case astStructDecl:
     case astClassDecl:
         return node->structDecl.name;
@@ -1517,9 +1577,6 @@ void setDeclarationName(AstNode *node, cstring name)
     case astEnumDecl:
         node->enumDecl.name = name;
         break;
-    case astUnionDecl:
-        node->unionDecl.name = name;
-        break;
     case astStructDecl:
     case astClassDecl:
         node->structDecl.name = name;
@@ -1529,6 +1586,38 @@ void setDeclarationName(AstNode *node, cstring name)
         break;
     default:
         csAssert(false, "%s is not a declaration", getAstNodeName(node));
+    }
+}
+
+void setForwardDeclDefinition(AstNode *node, AstNode *definition)
+{
+    csAssert0(hasFlag(node, ForwardDecl));
+    switch (node->tag) {
+    case astFuncDecl:
+        node->funcDecl.definition = definition;
+        break;
+    case astMacroDecl:
+        node->macroDecl.definition = definition;
+        break;
+    case astTypeDecl:
+        node->typeDecl.definition = definition;
+        break;
+    default:
+        csAssert(false, "%s is not a declaration", getAstNodeName(node));
+    }
+}
+
+AstNode *getForwardDeclDefinition(AstNode *node)
+{
+    switch (node->tag) {
+    case astFuncDecl:
+        return node->funcDecl.definition;
+    case astMacroDecl:
+        return node->macroDecl.definition;
+    case astTypeDecl:
+        return node->typeDecl.definition;
+    default:
+        return NULL;
     }
 }
 
@@ -1652,13 +1741,13 @@ AstNode *findInAstNode(AstNode *node, cstring name)
     node = underlyingDeclaration(node);
     switch (node->tag) {
     case astStructDecl:
-        return findInSortedNodes(node->structDecl.sortedMembers, name);
+        return findMemberByName(node->structDecl.members, name);
     case astInterfaceDecl:
-        return findInSortedNodes(node->interfaceDecl.sortedMembers, name);
+        return findMemberByName(node->interfaceDecl.members, name);
     case astUnionDecl:
-        return findInSortedNodes(node->unionDecl.sortedMembers, name);
+        return findMemberByName(node->unionDecl.members, name);
     case astEnumDecl:
-        return findInSortedNodes(node->enumDecl.sortedOptions, name);
+        return findMemberByName(node->enumDecl.options, name);
     default:
         unreachable("NOT SUPPORTED");
     }

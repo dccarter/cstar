@@ -38,7 +38,7 @@
 
 // Alignment to use for all types. (MSVC doesn't provide stdalign.h -_-)
 #define _TINA_MAX_ALIGN ((size_t)16)
-
+static u64 TINA_CID = 0;
 const tina TINA_EMPTY = {
     .body = NULL,
     .user_data = NULL,
@@ -46,6 +46,7 @@ const tina TINA_EMPTY = {
     .buffer = NULL,
     .size = 0,
     .completed = false,
+    .cid = 0,
     ._caller = NULL,
     ._stack_pointer = NULL,
     ._canary_end = &TINA_EMPTY._canary,
@@ -97,6 +98,7 @@ tina *tina_init(void *buffer, size_t size, tina_func *body, void *user_data)
         .buffer = buffer,
         .size = size,
         .completed = false,
+        .cid = TINA_CID++,
         ._caller = NULL,
         ._stack_pointer = NULL,
         ._canary_end = (uint32_t *)stack_end,
@@ -148,7 +150,13 @@ void *tina_swap(tina *from, tina *to, void *value)
                  "stack underflow.");
     __tina_running.co = __tina_running.update ? to : __tina_running.co;
     __tina_running.update = true;
-
+#ifdef _TINA_DEBUG_SWAP
+    printf("swap - %s:%llu -> %s:%llu\n",
+           from->name,
+           from->cid,
+           to->name,
+           to->cid);
+#endif
     typedef void *swap(void **sp_from, void **sp_to, void *value);
     return ((swap *)_tina_swap)(
         &from->_stack_pointer, &to->_stack_pointer, value);

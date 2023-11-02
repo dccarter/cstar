@@ -633,6 +633,68 @@ static AstNode *makeTypeofNode(AstVisitor *visitor,
     return makeTypeinfoNode(visitor, &node->loc, type);
 }
 
+static AstNode *makeTypeAtIdxNode(AstVisitor *visitor,
+                                  const AstNode *node,
+                                  AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 2))
+        return NULL;
+    AstNode *index = args->next;
+    const FileLoc *loc = &index->loc;
+
+    const Type *type = args->type ?: evalType(ctx, args);
+    csAssert0(type);
+    type = unwrapType(type, NULL);
+
+    if (!evaluate(visitor, index) || !nodeIs(index, IntegerLit)) {
+        logError(ctx->L,
+                 loc,
+                 "invalid `typeat!` macro argument, second argument must be "
+                 "compile time integer literal",
+                 NULL);
+        return NULL;
+    }
+
+    u64 idx = index->intLiteral.value;
+    const Type *atIndex = NULL;
+    switch (type->tag) {
+    case typTuple:
+        if (idx < type->tuple.count) {
+            atIndex = type->tuple.members[idx];
+            break;
+        }
+
+        logError(ctx->L,
+                 loc,
+                 "invalid `typeat!` macro argument, index {u64} out of "
+                 "bounds on type {t}",
+                 (FormatArg[]){{.u64 = idx}, {.t = type}});
+        return NULL;
+    case typUnion:
+        if (idx < type->tUnion.count) {
+            atIndex = type->tUnion.members[idx];
+            break;
+        }
+
+        logError(ctx->L,
+                 loc,
+                 "invalid `typeat!` macro argument, index {u64} out of "
+                 "bounds on type {t}",
+                 (FormatArg[]){{.u64 = idx}, {.t = type}});
+        return NULL;
+    default:
+        logError(
+            ctx->L,
+            &node->loc,
+            "invalid `typeat!` macro argument, type {t} does not have members",
+            (FormatArg[]){{.t = type}});
+        return NULL;
+    }
+
+    return makeTypeReferenceNode(ctx->pool, atIndex, &node->loc);
+}
+
 static AstNode *makeBaseOfNode(AstVisitor *visitor,
                                const AstNode *node,
                                AstNode *args)
@@ -741,6 +803,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "mkInteger", makeAstIntegerNode},
     {.name = "ptroff", makePointerOfNode},
     {.name = "sizeof", makeSizeofNode},
+    {.name = "typeat", makeTypeAtIdxNode},
     {.name = "typeof", makeTypeofNode},
     {.name = "unchecked", makeUncheckedNode},
     {.name = "warn", makeAstLogWarningNode},

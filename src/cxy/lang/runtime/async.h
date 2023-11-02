@@ -32,6 +32,7 @@
 void CXY__eventloop_init();
 int CXY__eventloop_wait_read(int fd, int timeout);
 int CXY__eventloop_wait_write(int fd, int timeout);
+void CXY__eventloop_poke(void);
 void CXY__eventloop_sleep(i64 ms);
 void CXY__launch_coro(void (*fn)(void *), void *args, const char *dbg, u64 ss);
 void CXY__scheduler_start(tina *main);

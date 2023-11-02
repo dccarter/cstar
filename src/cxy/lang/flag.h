@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <core/format.h>
 #include <core/strpool.h>
 #include <core/utils.h>
 
@@ -29,8 +30,8 @@
     f(AddThis,              17)                 \
     f(AddSuper,             18)                 \
     f(Typeinfo,             19)                 \
-    f(NewAllocated,         20)                 \
-    f(AppendNS,             21)                 \
+    f(ForwardDecl,          20)                 \
+    f(Reference,            21)                 \
     f(TopLevelDecl,         22)                 \
     f(Generated,            23)                 \
     f(CodeGenerated,        24)                 \
@@ -55,16 +56,20 @@
     f(ReferenceMembers,     43)                 \
     f(Pure,                 44)                 \
     f(Slice,                45)                 \
-    f(Transient,            46)
+    f(Transient,            46)                 \
+    f(Static,               47)                 \
+    f(SyncCall,             48)                 \
+    f(CodegenAfter,         49)
 
 // clang-format on
 static const u64 flgNone = 0;
 #define f(name, bit) static const u64 flg##name = BIT(bit);
 CXY_LANG_FLAGS(f)
 #undef f
-static const u64 flgTypeApplicable =
-    (flgNative | flgConst | flgOptional | flgClosure | flgSlice);
+static const u64 flgTypeApplicable = (flgNative | flgConst | flgOptional |
+                                      flgClosure | flgSlice | flgFuncTypeParam);
 
 typedef u64 Flags;
 
+void appendFlagsAsString(FormatState *state, u64 flags);
 char *flagsToString(u64 flags);

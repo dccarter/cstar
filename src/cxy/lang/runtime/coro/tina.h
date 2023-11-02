@@ -51,6 +51,8 @@ struct tina {
     size_t size;
     // Has the coroutine's body function exited? (readonly)
     bool completed;
+    // the coroutine ID
+    u64 cid;
     // Private:
     tina *_caller;
     void *_stack_pointer;

@@ -477,6 +477,40 @@ void shakeClosureExpr(AstVisitor *visitor, AstNode *node)
     astVisit(visitor, node->closureExpr.body);
 }
 
+void shakeCallExpr(AstVisitor *visitor, AstNode *node)
+{
+    if (findAttribute(node, S_sync))
+        node->flags |= flgSyncCall;
+    astVisitFallbackVisitAll(visitor, node);
+}
+
+void shakeExprStmt(AstVisitor *visitor, AstNode *node)
+{
+    if (nodeIs(node->exprStmt.expr, CallExpr) && findAttribute(node, S_sync)) {
+        node->exprStmt.expr->flags |= flgSyncCall;
+    }
+    astVisitFallbackVisitAll(visitor, node);
+}
+
+void shakeMatchStmt(AstVisitor *visitor, AstNode *node)
+{
+    ShakeAstContext *ctx = getAstVisitorContext(visitor);
+    AstNode *expr = node->matchStmt.expr;
+    astVisit(visitor, expr);
+    AstNode *var = makeVarDecl(ctx->pool,
+                               &expr->loc,
+                               flgNone,
+                               makeAnonymousVariable(ctx->strPool, "_match"),
+                               NULL,
+                               expr,
+                               NULL,
+                               NULL);
+    node->matchStmt.expr =
+        makePath(ctx->pool, &expr->loc, var->varDecl.name, flgNone, NULL);
+    addNodeInBlock(ctx, var);
+    astVisitManyNodes(visitor, node->matchStmt.cases);
+}
+
 static void shakeGenericDecl(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
@@ -484,6 +518,8 @@ static void shakeGenericDecl(AstVisitor *visitor, AstNode *node)
             *gparam = gparams;
     node->genericDecl.paramsCount = countAstNodes(gparams);
     node->genericDecl.name = getDeclarationName(node->genericDecl.decl);
+    if (findAttribute(node, S_pure))
+        node->genericDecl.decl->flags |= flgPure;
 
     astVisit(visitor, gparams);
 
@@ -542,7 +578,7 @@ static void shakeClassOrStructDecl(AstVisitor *visitor, AstNode *node)
             insertAstNode(&members,
                           createClassOrStructBuiltins(ctx->pool, node));
         }
-        else {
+        else if (findAttribute(node, S_poco) == NULL) {
             insertAstNode(&members,
                           createClassOrStructBuiltins(ctx->pool, node));
         }
@@ -551,9 +587,6 @@ static void shakeClassOrStructDecl(AstVisitor *visitor, AstNode *node)
 
     astVisitManyNodes(visitor, node->structDecl.implements);
     astVisitManyNodes(visitor, node->structDecl.members);
-
-    node->structDecl.sortedMembers =
-        makeSortedNodes(ctx->pool, node->structDecl.members, NULL);
 }
 
 static void shakeForStmt(AstVisitor *visitor, AstNode *node)
@@ -695,7 +728,10 @@ AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
         [astBlockStmt] = shakeBlockStmt,
         [astStringExpr] = shakeStringExpr,
         [astArrayType] = shakeArrayType,
-        [astClosureExpr] = shakeClosureExpr
+        [astClosureExpr] = shakeClosureExpr,
+        [astCallExpr] = shakeCallExpr,
+        [astExprStmt] = shakeExprStmt,
+        [astMatchStmt] = shakeMatchStmt
     }, .fallback = astVisitFallbackVisitAll);
     // clang-format on
 

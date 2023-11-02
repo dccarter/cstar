@@ -127,6 +127,7 @@
     ECASECLASH,
     EILSEQ,
     EOVERFLOW,
+    EWOULDBLOCK,
  ) : i32
 
 ## pub (
@@ -321,15 +322,23 @@ pub native func CXY__builtins_get_ref(ptr: &void): void;
 pub native func CXY__builtins_drop(ptr: &void): void;
 
 ## (
-    CXY__eventloop_wait_read,
-    CXY__eventloop_wait_write
-): func(fd: i32, timeout: i32) -> i32
+    fdWaitIn => CXY__eventloop_wait_read,
+    fdWaitOut => CXY__eventloop_wait_write
+): func(fd: i32, timeout: i64) -> i32
+
+## (
+    fdClear => CXY__eventloop_fd_clear
+): func(fd: i32, mask: i32) -> i32
 
 ## (
     EV_OK => AE_OK,
     EV_IN => AE_READABLE,
-    EN_OUT => AE_WRITABLE
+    EV_OUT => AE_WRITABLE
 ) : i32
+
+## (
+    stopScheduler => CXY__scheduler_stop
+): func() -> void
 
 @inline
 pub func getref[T](@transient obj: T) {
@@ -451,6 +460,13 @@ class StringBuilder {
                 this << val.[i]
             }
             this.appendChar(']')
+        }
+        else #if (U.isUnion) {
+            match (val) {
+                #for (const i: 0..#{U.membersCount}) {
+                    case #{typeat!(U, i)} as y => this << y
+                }
+            }
         }
         return this
     }
@@ -728,13 +744,22 @@ pub class Promise[Ret] {
     const func `hash`() => 0
 }
 
-pub class Coroutine[Ret, Args] {
+pub class Coroutine[Ret, Obj, Args] {
     args: Args
     promise: Promise[Ret]
-
-    func `init`(args: Args) {
-        this.args = args
-        promise = Promise[Ret]()
+    #if (#Obj == #void) {
+        func `init`(args: Args) {
+            this.args = args
+            promise = Promise[Ret]()
+        }
+    }
+    else {
+        obj: Obj
+        func `init`(obj: Obj, args: Args) {
+            this.args = args
+            this.obj = obj
+            promise = Promise[Ret]()
+        }
     }
 
     @inline
@@ -744,8 +769,17 @@ pub class Coroutine[Ret, Args] {
     func getPromise() => getref(promise)
 }
 
-func asyncLaunch[Ret, Args](entry: func(arg: &void) -> void, name: string, args: Args) {
-    var coro = Coroutine[Ret, Args](args);
+@pure
+func asyncLaunch[Ret, Args](entry: func(arg: &void) -> void, name: string,args: Args) {
+    var coro = Coroutine[Ret, void, Args](args);
+    var promise = coro.getPromise();
+    CXY__launch_coro(entry, getref(coro): &void, name: &const char, CXY_DEFAULT_CORO_STACK_SIZE)
+    return getref(promise)
+}
+
+@pure
+func asyncLaunchMember[Ret, Obj, Args](entry: func(arg: &void) -> void, obj: Obj, name: string,args: Args) {
+    var coro = Coroutine[Ret, Obj, Args](obj, args);
     var promise = coro.getPromise();
     CXY__launch_coro(entry, getref(coro): &void, name: &const char, CXY_DEFAULT_CORO_STACK_SIZE)
     return getref(promise)

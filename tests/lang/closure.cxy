@@ -1,4 +1,16 @@
 
+func closureArg0(fn: func() -> void) {
+    fn()
+}
+
+func closureArg1(msg: string, fn: func(msg: string) -> void) {
+    fn(msg)
+}
+
+func closureArg2(fn: func(msg: string) -> void) {
+    closureArg1("hello", fn)
+}
+
 func main(args: [string]) {
     // simple closure
     const one = () => 1;
@@ -19,4 +31,7 @@ func main(args: [string]) {
         //
         const g = () => f"${b} -> ${x}"
     }
+
+    closureArg0(() => {})
+    closureArg2((msg: string) => {})
 }

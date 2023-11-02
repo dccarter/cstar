@@ -1,42 +1,22 @@
 module io
 
-@cInclude("<unistd.h>")
-
-##pub (
-    STDOUT => STDOUT_FILENO,
-    STDERR => STDERR_FILENO,
-    STDIN  => STDIN_FILENO,
-
-    O_NONBLOCK
-): i32
-
-@alias(name: "C_write")
-pub native func write(fd: i32, data: &const void, size: u64) : i64;
-
-@alias(name: "C_read")
-pub native func read(fd: i32, data: &void, size: u64) : i64;
-
-@alias(name: "C_close")
-pub native func close(fd: i32) : i32;
-
-pub native func C__fcntl_GETFL(fd: i32): i32;
-pub native func C__fcntl_SETFL(fd: i32, flags: i32): i32;
+import { write, STDOUT } from "./c.cxy"
 
 pub func print[T](it: const T) {
     @flatten
     #if (T.isString) {
         @flatten
         #if (T.isStruct) {
-            C_write(STDOUT, it.str, it.count)
+            write(STDOUT, it.str, it.count)
         }
         else {
-            C_write(STDOUT, it: string, len!(it))
+            write(STDOUT, it: string, len!(it))
         }
     }
     else {
         var j;
         var str = f"${it}";
-        C_write(STDOUT, str.str, str.count)
+        write(STDOUT, str.str, str.count)
     }
 }
 
@@ -50,5 +30,5 @@ pub func println(@transient ...args: const auto) {
         #{i += 1}
     }
 
-    C_write(STDOUT, "\n" : &const char, 1)
+    write(STDOUT, "\n" : &const char, 1)
 }

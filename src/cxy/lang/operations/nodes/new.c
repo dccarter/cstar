@@ -217,7 +217,7 @@ void checkNewExpr(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     const Type *type = NULL, *init = NULL;
-    u64 flags = flgNewAllocated;
+    u64 flags = flgNone;
 
     if (node->newExpr.type) {
         flags = node->newExpr.type->flags;
@@ -260,6 +260,5 @@ void checkNewExpr(AstVisitor *visitor, AstNode *node)
     }
 
     node->flags = flags;
-    node->type =
-        makePointerType(ctx->types, type, type->flags | flgNewAllocated);
+    node->type = makePointerType(ctx->types, type, type->flags);
 }

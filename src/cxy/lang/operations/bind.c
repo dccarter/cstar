@@ -49,7 +49,7 @@ static void defineDeclaration_(Env *env, Log *L, cstring name, AstNode *node)
         defineFunctionDecl(env, L, name, node);
     }
     else
-        defineSymbol(env, L, name, node);
+        defineForwardDeclarable(env, L, name, node);
 }
 
 static void defineDeclaration(BindContext *ctx, cstring name, AstNode *node)
@@ -190,25 +190,37 @@ void bindPath(AstVisitor *visitor, AstNode *node)
     else {
         cstring keyword = base->pathElement.name;
         if (keyword == S_This) {
-            base->pathElement.enclosure = findEnclosingClassOrStruct(
-                ctx->env, ctx->L, keyword, &base->loc);
-            if (base->pathElement.enclosure == NULL)
-                return;
-        }
-        else {
             base->pathElement.enclosure =
-                findEnclosingFunction(ctx->env, ctx->L, keyword, &base->loc);
-            if (base->pathElement.enclosure == NULL)
-                return;
-
-            AstNode *parent = getMemberParentScope(base->pathElement.enclosure);
-
-            if (!nodeIs(parent, ClassDecl) && !nodeIs(parent, StructDecl)) {
+                findEnclosingClassOrStruct(ctx->env, NULL, keyword, NULL);
+            if (base->pathElement.enclosure == NULL) {
                 logError(
                     ctx->L,
                     &base->loc,
-                    "keyword '{s}' can only be used inside a member function",
-                    (FormatArg[]){{.s = keyword}});
+                    "'This' keyword must be used inside a class or struct decl",
+                    NULL);
+                return;
+            }
+        }
+        else {
+            AstNode *func =
+                findEnclosingFunction(ctx->env, NULL, keyword, NULL);
+            if (func == NULL) {
+                logError(ctx->L,
+                         &base->loc,
+                         "'{s}' keyword must be used inside a member function",
+                         (FormatArg[]){{.s = keyword}});
+                return;
+            }
+
+            AstNode *parent =
+                findEnclosingClassOrStruct(ctx->env, NULL, keyword, NULL);
+            base->pathElement.enclosure = parent;
+            base->flags |= (func->flags & flgConst);
+            if (parent == NULL) {
+                logError(ctx->L,
+                         &base->loc,
+                         "'{s}' keyword must be used inside a member function",
+                         (FormatArg[]){{.s = keyword}});
                 return;
             }
 
@@ -390,8 +402,6 @@ void bindUnionDecl(AstVisitor *visitor, AstNode *node)
     BindContext *ctx = getAstVisitorContext(visitor);
 
     astVisitManyNodes(visitor, node->unionDecl.members);
-
-    defineDeclaration(ctx, node->unionDecl.name, node);
 }
 
 void bindEnumOption(AstVisitor *visitor, AstNode *node)
@@ -510,7 +520,7 @@ void bindInterfaceDecl(AstVisitor *visitor, AstNode *node)
 void bindIfStmt(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
-    
+
     pushScope(ctx->env, node);
     astVisit(visitor, node->ifStmt.cond);
     astVisit(visitor, node->ifStmt.body);
@@ -612,12 +622,29 @@ void bindSwitchStmt(AstVisitor *visitor, AstNode *node)
     popScope(ctx->env);
 }
 
+void bindMatchStmt(AstVisitor *visitor, AstNode *node)
+{
+    BindContext *ctx = getAstVisitorContext(visitor);
+    pushScope(ctx->env, node);
+
+    astVisit(visitor, node->matchStmt.expr);
+    astVisitManyNodes(visitor, node->matchStmt.cases);
+
+    popScope(ctx->env);
+}
+
 void bindCaseStmt(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
     pushScope(ctx->env, node);
 
     astVisit(visitor, node->caseStmt.match);
+    if (node->caseStmt.variable) {
+        defineSymbol(ctx->env,
+                     ctx->L,
+                     node->caseStmt.variable->ident.value,
+                     node->caseStmt.variable);
+    }
     astVisit(visitor, node->caseStmt.body);
 
     popScope(ctx->env);
@@ -712,6 +739,7 @@ AstNode *bindAst(CompilerDriver *driver, AstNode *node)
         [astForStmt] = bindForStmt,
         [astWhileStmt] = bindWhileStmt,
         [astSwitchStmt] = bindSwitchStmt,
+        [astMatchStmt] = bindMatchStmt,
         [astCaseStmt] = bindCaseStmt,
         [astMacroCallExpr] = bindMacroCallExpr,
         [astMemberExpr] = bindMemberExpr

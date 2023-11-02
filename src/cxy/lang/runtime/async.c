@@ -105,7 +105,6 @@ void *CXY__cleanup_coro_handler(tina *co, void *arg)
 
         if (arg == CXY__scheduler.this_coro)
             break;
-
         arg = tina_swap(co, CXY__scheduler.this_coro, NULL);
     }
 
@@ -116,7 +115,7 @@ void *CXY__cleanup_coro_handler(tina *co, void *arg)
 
 void CXY__eventloop_init()
 {
-    CXY__scheduler.loop = aeCreateEventLoop(10);
+    CXY__scheduler.loop = aeCreateEventLoop(CXY_MAX_EVENT_LOOP_FDS);
 
     CXY__assert(CXY__scheduler.loop != NULL, "");
     CXY__scheduler.loop_coro =
@@ -156,6 +155,7 @@ int CXY__eventloop_wait_read(int fd, int timeout)
     if (status == AE_OK) {
         void *result =
             tina_swap(tina_running(), CXY__scheduler.this_coro, NULL);
+        aeDeleteFileEvent(CXY__scheduler.loop, fd, AE_READABLE);
         return (int)(intptr_t)result;
     }
 
@@ -173,10 +173,17 @@ int CXY__eventloop_wait_write(int fd, int timeout)
     if (status == AE_OK) {
         void *result =
             tina_swap(tina_running(), CXY__scheduler.this_coro, NULL);
+        aeDeleteFileEvent(CXY__scheduler.loop, fd, AE_WRITABLE);
         return (int)(intptr_t)result;
     }
 
     return status;
+}
+
+void CXY__eventloop_fd_clear(int fd, int mask)
+{
+    aeDeleteFileEvent(
+        CXY__scheduler.loop, fd, mask & (AE_WRITABLE | AE_READABLE));
 }
 
 void CXY__eventloop_sleep(i64 ms)

@@ -24,6 +24,7 @@
 #define CXY_ANONYMOUS_ARRAY "AnonymousArray"
 #define CXY_ANONYMOUS_SLICE "AnonymousSlice"
 #define CXY_ANONYMOUS_ENUM "AnonymousEnum"
+#define CXY_ANONYMOUS_UNION "AnonymousUnion"
 
 static void generateType(CodegenContext *context, const Type *type)
 {
@@ -43,6 +44,9 @@ static void generateType(CodegenContext *context, const Type *type)
     case typTuple:
         generateTupleDefinition(context, type);
         break;
+    case typUnion:
+        generateUnionDefinition(context, type);
+        break;
     case typEnum:
         generateEnumDefinition(context, type);
         break;
@@ -53,15 +57,8 @@ static void generateType(CodegenContext *context, const Type *type)
         generateClassDefinition(context, type);
         break;
     case typOpaque:
-        if (type->namespace == NULL)
-            break;
-        format(state, "#ifndef ", NULL);
-        writeTypename(context, type);
-        format(state, "\n#define ", NULL);
-        writeTypename(context, type);
-        format(state, " {s} *\n#endif\n", (FormatArg[]){{.s = type->name}});
-
-        return;
+        generateTypeDeclDefinition(context, type);
+        break;
     default:
         return;
     }
@@ -142,10 +139,34 @@ static void generateTypedExpr(ConstAstVisitor *visitor, const AstNode *node)
 static void generateCastExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    format(ctx->state, "(", NULL);
-    generateTypeUsage(ctx, node->castExpr.to->type);
-    format(ctx->state, ")", NULL);
-    astConstVisit(visitor, node->castExpr.expr);
+    u32 idx = UINT32_MAX;
+    if (typeIs(node->castExpr.expr->type, Union)) {
+        idx = findUnionTypeIndex(node->castExpr.expr->type,
+                                 node->castExpr.to->type);
+        format(ctx->state, "({{ ", NULL);
+        generateTypeUsage(ctx, node->castExpr.expr->type);
+        format(ctx->state, " tmp = ", NULL);
+        astConstVisit(visitor, node->castExpr.expr);
+        format(ctx->state, "; ", NULL);
+        format(ctx->state,
+               "CXY__builtins_assert2(tmp.tag == {u32}, \"{s}\", {u64}, {u64}, "
+               "\"UnionCastPanic: cast from {t} to {t}, current idx = %d\", "
+               "tmp.tag); (",
+               (FormatArg[]){{.u32 = idx},
+                             {.s = node->loc.fileName},
+                             {.u64 = node->loc.begin.row},
+                             {.u64 = node->loc.begin.col},
+                             {.t = node->castExpr.expr->type},
+                             {.t = node->castExpr.to->type}});
+        generateTypeUsage(ctx, node->castExpr.to->type);
+        format(ctx->state, ")tmp._{u32}; })", (FormatArg[]){{.u32 = idx}});
+    }
+    else {
+        format(ctx->state, "(", NULL);
+        generateTypeUsage(ctx, node->castExpr.to->type);
+        format(ctx->state, ")", NULL);
+        astConstVisit(visitor, node->castExpr.expr);
+    }
 }
 
 static void generateExpressionStmt(ConstAstVisitor *visitor,
@@ -156,6 +177,27 @@ static void generateExpressionStmt(ConstAstVisitor *visitor,
     format(ctx->state, ";", NULL);
 }
 
+static void generateBlockEpilogueOnReturn(ConstAstVisitor *visitor,
+                                          const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    AstNode *parent = node->parentScope;
+    if (parent == NULL || nodeIs(parent, FuncDecl)) {
+        return;
+    }
+
+    if (nodeIs(parent, BlockStmt)) {
+        const AstNode *epilogue = parent->blockStmt.epilogue.first;
+        for (; epilogue; epilogue = epilogue->next) {
+            astConstVisit(visitor, epilogue);
+            if (hasFlag(epilogue, Deferred) && !nodeIs(epilogue, BlockStmt))
+                format(ctx->state, ";", NULL);
+            format(ctx->state, "\n", NULL);
+        }
+    }
+    generateBlockEpilogueOnReturn(visitor, parent);
+}
+
 void generateBlock(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -164,9 +206,9 @@ void generateBlock(ConstAstVisitor *visitor, const AstNode *node)
 
     format(ctx->state, "{{{>}\n", NULL);
     for (const AstNode *stmt = node->blockStmt.stmts; stmt; stmt = stmt->next) {
-        if (epilogue && nodeIs(stmt, ReturnStmt)) {
+        if (nodeIs(stmt, ReturnStmt)) {
             ret = stmt;
-            continue;
+            break;
         }
 
         if (hasFlag(stmt, CodeGenerated))
@@ -188,8 +230,10 @@ void generateBlock(ConstAstVisitor *visitor, const AstNode *node)
             format(ctx->state, "\n", NULL);
     }
 
-    if (ret)
+    if (ret) {
+        generateBlockEpilogueOnReturn(visitor, node);
         astConstVisit(visitor, ret);
+    }
     format(ctx->state, "{<}\n}", NULL);
 }
 
@@ -216,9 +260,13 @@ static void generateBreakContinue(ConstAstVisitor *visitor, const AstNode *node)
 static void generateImportDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    format(ctx->state,
-           "#include <{s}.c>",
-           (FormatArg[]){{.s = node->import.module->stringLiteral.value}});
+    cstring module = node->import.module->stringLiteral.value;
+    if (module[0] == '.' && module[1] == '/') {
+        format(ctx->state, "#include \"{s}.c\"", (FormatArg[]){{.s = module}});
+    }
+    else {
+        format(ctx->state, "#include <{s}.c>", (FormatArg[]){{.s = module}});
+    }
 }
 
 static void generateCCode(ConstAstVisitor *visitor, const AstNode *node)
@@ -429,6 +477,11 @@ void writeTypename(CodegenContext *ctx, const Type *type)
                    CXY_ANONYMOUS_TUPLE "_{u64}_t",
                    (FormatArg[]){{.u64 = type->index}});
             break;
+        case typUnion:
+            format(state,
+                   CXY_ANONYMOUS_UNION "_{u64}_t",
+                   (FormatArg[]){{.u64 = type->index}});
+            break;
         case typStruct:
             format(state,
                    CXY_ANONYMOUS_STRUCT "_{u64}_t",
@@ -511,6 +564,7 @@ void generateTypeUsage(CodegenContext *ctx, const Type *type)
     case typTuple:
     case typStruct:
     case typFunc:
+    case typUnion:
         writeTypename(ctx, type);
         break;
     case typThis:
@@ -627,6 +681,7 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
         [astUnaryExpr] = generateUnaryExpr,
         [astAssignExpr] = generateAssignExpr,
         [astTupleExpr] = generateTupleExpr,
+        [astUnionValue] = generateUnionValueExpr,
         [astStructExpr] = generateStructExpr,
         [astArrayExpr] = generateArrayExpr,
         [astMemberExpr] = generateMemberExpr,
@@ -647,6 +702,7 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
         [astWhileStmt] = generateWhileStmt,
         [astForStmt] = generateForStmt,
         [astSwitchStmt] = generateSwitchStmt,
+        [astMatchStmt] = generateMatchStmt,
         [astCaseStmt] = generateCaseStmt,
         [astFuncParam] = generateFuncParam,
         [astFuncDecl] = generateFunctionDefinition,
