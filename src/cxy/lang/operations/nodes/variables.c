@@ -75,10 +75,10 @@ void generateVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
 
-    if (hasFlag(node, Native))
-        format(ctx->state, "extern ", NULL);
-    else
-        generateCleanupAttribute(ctx, node);
+    //    if (hasFlag(node, Native))
+    //        format(ctx->state, "extern ", NULL);
+    //    else
+    //        generateCleanupAttribute(ctx, node);
 
     if (hasFlag(node, Const) && !hasFlag(node->type, Const))
         format(ctx->state, "const ", NULL);
@@ -92,7 +92,7 @@ void generateVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
 
     if (node->varDecl.init) {
         format(ctx->state, " = ", NULL);
-        generateExpressionWithMemoryManagement(visitor, node->varDecl.init);
+        astConstVisit(visitor, node->varDecl.init);
     }
     format(ctx->state, ";", NULL);
 }

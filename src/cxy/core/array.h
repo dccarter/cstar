@@ -28,3 +28,4 @@ void pushOnDynArrayExplicit(DynArray *, const void *, size_t);
 void resizeDynArray(DynArray *, size_t);
 void clearDynArray(DynArray *);
 void freeDynArray(DynArray *);
+#define dynArrayAt(T, arr, idx) ((T)(arr)->elems)[(idx)]

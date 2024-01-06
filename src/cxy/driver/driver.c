@@ -17,6 +17,7 @@
 #include "lang/ttable.h"
 
 #include <errno.h>
+#include <limits.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -25,6 +26,12 @@ typedef struct CachedModule {
     cstring path;
     AstNode *program;
 } CachedModule;
+
+typedef struct ResolvedModulePath {
+    cstring dir;
+    cstring importPath;
+    cstring codegenPath;
+} ResolvedModulePath;
 
 static bool compareCachedModules(const void *lhs, const void *rhs)
 {
@@ -141,24 +148,35 @@ cstring getFilenameWithoutDirs(cstring fileName)
     return fileName;
 }
 
-char *getGeneratedPath(const Options *options,
+cstring getRelativeDirectory(CompilerDriver *driver, cstring filePath)
+{
+    cstring libDir = driver->options.libDir ?: driver->currentDir;
+    return strncmp(libDir, filePath, driver->currentDirLen) == 0
+               ? libDir
+               : driver->sourceDir;
+}
+
+char *getGeneratedPath(CompilerDriver *driver,
                        cstring dir,
                        cstring filePath,
                        cstring ext)
 {
     FormatState state = newFormatState("    ", true);
-    cstring fileName = getFilenameWithoutDirs(filePath);
+    cstring fp = filePath, fd = getRelativeDirectory(driver, filePath);
+    while (fd && *fp && *fd && *fd == *fp)
+        fp++, fd++;
+    if (*fp && *fp == '/')
+        fp++;
 
     format(&state,
            "{s}/{s}/{s}{s}",
-           (FormatArg[]){{.s = options->buildDir ?: "./"},
+           (FormatArg[]){{.s = driver->options.buildDir ?: "./"},
                          {.s = dir},
-                         {.s = fileName},
+                         {.s = fp},
                          {.s = ext}});
 
     char *path = formatStateToString(&state);
     freeFormatState(&state);
-
     return path;
 }
 
@@ -250,15 +268,36 @@ static bool compileBuiltin(CompilerDriver *driver,
     return false;
 }
 
+static bool configureDriverSourceDir(CompilerDriver *driver, cstring *fileName)
+{
+    char buf[PATH_MAX];
+    char *tmp = realpath(*fileName, buf);
+    if (tmp == NULL) {
+        logError(driver->L,
+                 NULL,
+                 "main source file {s} does not exist",
+                 (FormatArg[]){{.s = buf}});
+        return false;
+    }
+    driver->sourceDirLen = strrchr(tmp, '/') - tmp;
+    driver->sourceDir =
+        makeStringSized(&driver->strPool, tmp, driver->sourceDirLen);
+    *fileName = makeString(&driver->strPool, tmp);
+    return true;
+}
+
 bool initCompilerDriver(CompilerDriver *compiler, Log *log)
 {
+    char tmp[PATH_MAX];
     compiler->pool = newMemPool();
     compiler->strPool = newStrPool(&compiler->pool);
     compiler->typeTable = newTypeTable(&compiler->pool, &compiler->strPool);
     compiler->moduleCache = newHashTable(sizeof(CachedModule));
     compiler->nativeSources = newHashTable(sizeof(cstring));
     compiler->linkLibraries = newHashTable(sizeof(cstring));
-
+    compiler->currentDir =
+        makeString(&compiler->strPool, getcwd(tmp, PATH_MAX));
+    compiler->currentDirLen = strlen(compiler->currentDir);
     compiler->L = log;
     internCommonStrings(&compiler->strPool);
     const Options *options = &compiler->options;
@@ -283,7 +322,7 @@ static cstring getModuleLocation(CompilerDriver *driver, const AstNode *source)
     cstring importer = source->loc.fileName,
             modulePath = source->stringLiteral.value;
     csAssert0(modulePath && modulePath[0] != '\0');
-    char path[1024];
+    char path[PATH_MAX];
     u64 modulePathLen = strlen(modulePath);
     if (modulePath[0] == '.' && modulePath[1] == '/') {
         cstring importerFilename = strrchr(importer, '/');
@@ -293,19 +332,29 @@ static cstring getModuleLocation(CompilerDriver *driver, const AstNode *source)
         modulePathLen -= 2;
         memcpy(path, importer, importedLen);
         memcpy(&path[importedLen], modulePath + 2, modulePathLen);
-        return makeStringSized(
-            &driver->strPool, path, importedLen + modulePathLen);
+        path[importedLen + modulePathLen] = '\0';
+        char tmp[PATH_MAX];
+        return makeString(&driver->strPool, realpath(path, tmp));
     }
     else if (driver->options.libDir != NULL) {
+        char tmp[PATH_MAX];
         u64 libDirLen = strlen(driver->options.libDir);
         memcpy(path, driver->options.libDir, libDirLen);
         if (driver->options.libDir[libDirLen - 1] != '/')
             path[libDirLen++] = '/';
         memcpy(&path[libDirLen], modulePath, modulePathLen);
-        return makeStringSized(
-            &driver->strPool, path, libDirLen + modulePathLen);
+        path[libDirLen + modulePathLen] = '\0';
+        return makeString(&driver->strPool, realpath(path, tmp));
     }
-    return modulePath;
+    else {
+        char tmp[PATH_MAX];
+        memcpy(path, driver->currentDir, driver->currentDirLen);
+        if (driver->currentDir[driver->currentDirLen - 1] != '/')
+            path[driver->currentDirLen] = '/';
+        memcpy(&path[driver->currentDirLen + 1], modulePath, modulePathLen);
+        path[driver->currentDirLen + 1 + modulePathLen] = '\0';
+        return makeString(&driver->strPool, realpath(path, tmp));
+    }
 }
 
 const Type *compileModule(CompilerDriver *driver,
@@ -372,6 +421,8 @@ const Type *compileModule(CompilerDriver *driver,
 
 bool compileFile(const char *fileName, CompilerDriver *driver)
 {
+    if (!configureDriverSourceDir(driver, &fileName))
+        return false;
     startCompilerStats(driver);
     AstNode *program = parseFile(driver, fileName);
     program->flags |= flgMain;

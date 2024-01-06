@@ -43,7 +43,7 @@ static void evaluateStructMembers(AstVisitor *visitor, AstNode *node)
 
         const Type *type = NULL;
         if (nodeIs(member, FuncDecl)) {
-            type = checkFunctionSignature(visitor, member);
+            type = member->type ?: checkFunctionSignature(visitor, member);
             if (isBuiltinsInitialized() &&
                 member->funcDecl.operatorOverload == opDeinitOverload) //
             {
@@ -122,6 +122,12 @@ void generateStructDefinition(CodegenContext *context, const Type *type)
     format(state, " {{{>}\n", NULL);
 
     u64 y = 0;
+    if (type->tStruct.inheritance && type->tStruct.inheritance->base) {
+        generateTypeUsage(context, type->tStruct.inheritance->base);
+        format(state, " super;", NULL);
+        y++;
+    }
+
     for (u64 i = 0; i < type->tStruct.members->count; i++) {
         const NamedTypeMember *field = &type->tStruct.members->members[i];
         if (typeIs(field->type, Func) || typeIs(field->type, Generic))
@@ -290,6 +296,8 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
             continue;
         }
 
+        field->fieldExpr.value->parentScope = field;
+        field->type = member->type;
         const Type *type = checkType(visitor, field->fieldExpr.value);
         if (!isTypeAssignableFrom(member->type, type)) {
             logError(ctx->L,
@@ -344,6 +352,13 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
 void checkStructDecl(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
+    const Type *base = NULL;
+    if (node->structDecl.base) {
+        checkBaseDecl(visitor, node);
+        if (typeIs(node->type, Error))
+            return;
+        base = node->structDecl.base->type;
+    }
 
     const Type **implements = NULL;
     u64 implementsCount = countAstNodes(node->structDecl.implements);
@@ -383,6 +398,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
                                                members,
                                                membersCount,
                                                node,
+                                               base,
                                                implements,
                                                implementsCount,
                                                node->flags & flgTypeApplicable);
@@ -400,6 +416,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
             members,
             membersCount,
             node,
+            base,
             implements,
             implementsCount,
             node->flags & (flgReferenceMembers | flgTypeApplicable));

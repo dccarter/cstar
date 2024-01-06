@@ -14,6 +14,11 @@ typedef struct CompilerDriver {
     HashTable moduleCache;
     HashTable nativeSources;
     HashTable linkLibraries;
+    cstring currentDir; // Directory that cxy was executed from
+    u64 currentDirLen;
+    cstring sourceDir; // Root directory for source files (derived from first
+                       // compile unit)
+    u64 sourceDirLen;
     CompilerStats stats;
     Log *L;
     TypeTable *typeTable;
@@ -27,7 +32,7 @@ typedef struct {
 } EmbeddedSource;
 
 cstring getFilenameWithoutDirs(cstring fileName);
-char *getGeneratedPath(const Options *options,
+char *getGeneratedPath(CompilerDriver *driver,
                        cstring dir,
                        cstring filePath,
                        cstring ext);

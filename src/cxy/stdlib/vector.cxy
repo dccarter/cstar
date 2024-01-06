@@ -85,6 +85,22 @@ pub class Vector[T] {
         }
     }
 
+    func accumulate[U](fun: func(acc: U, item: T) -> U, acc: U) {
+        for (var i: 0..count) {
+            acc = fun(acc, data.[i])
+        }
+        return acc
+    }
+
+    func filter(fun: func(item: T) -> bool) {
+        var vec = Vector[T]();
+        for (var i: 0..count) {
+            if (fun(data.[i]))
+                vec.push(data.[i])
+        }
+        return vec
+    }
+
     const func `str`(sb: StringBuilder) {
         sb << '['
         for (var i: 0..count) {

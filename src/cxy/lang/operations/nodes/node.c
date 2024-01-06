@@ -13,6 +13,59 @@
 #include <string.h>
 #include <strings.h>
 
+static AstNode *makeStructInitializerForDefaults(TypingContext *ctx,
+                                                 AstNode *node)
+{
+    AstNode *decl = typeIs(node->type, Class) ? node->type->tClass.decl
+                                              : node->type->tStruct.decl;
+    AstNode *member = decl ? decl->structDecl.members : NULL;
+    AstNodeList init = {};
+    for (; member; member = member->next) {
+        if (!nodeIs(member, Field) ||          //
+            hasFlag(member, Static) ||         //
+            member->structField.value == NULL) //
+        {
+            continue;
+        }
+        insertAstNode(&init,
+                      makeFieldExpr(ctx->pool,
+                                    &member->loc,
+                                    member->structField.name,
+                                    member->structField.value->flags,
+                                    deepCloneAstNode(ctx->pool,
+                                                     member->structField.value),
+                                    NULL));
+    }
+    return init.first;
+}
+
+static AstNode *transformRValueToLValue(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    if (node == NULL || !nodeIs(node, CallExpr))
+        return node;
+
+    cstring tmpSymbol = makeAnonymousVariable(ctx->strings, "_rv");
+    AstNode *tmpVar = makeVarDecl(ctx->pool,
+                                  &node->loc,
+                                  node->flags & flgConst,
+                                  tmpSymbol,
+                                  NULL,
+                                  node,
+                                  NULL,
+                                  node->type);
+    astVisit(visitor, node);
+    addBlockLevelDeclaration(ctx, tmpVar);
+
+    return makeResolvedPath(ctx->pool,
+                            &node->loc,
+                            tmpSymbol,
+                            tmpVar->flags,
+                            tmpVar,
+                            NULL,
+                            tmpVar->type);
+}
+
 void transformToMemberCallExpr(AstVisitor *visitor,
                                AstNode *node,
                                AstNode *target,
@@ -46,7 +99,7 @@ void transformToMemberCallExpr(AstVisitor *visitor,
     node->tag = astCallExpr;
     node->type = NULL;
     node->callExpr.callee = callee;
-    node->callExpr.args = args;
+    node->callExpr.args = transformRValueToLValue(visitor, args);
 }
 
 const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
@@ -59,15 +112,16 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
 
     cstring name = makeAnonymousVariable(ctx->strings, "_new_tmp");
     // S{}
-    AstNode *structExpr = typeIs(callee->type, Struct)
-                              ? makeStructExpr(ctx->pool,
-                                               &callee->loc,
-                                               flags,
-                                               callee,
-                                               NULL,
-                                               NULL,
-                                               callee->type)
-                              : makeNewClassCall(ctx, callee);
+    AstNode *structExpr =
+        typeIs(callee->type, Struct)
+            ? makeStructExpr(ctx->pool,
+                             &callee->loc,
+                             flags,
+                             callee,
+                             makeStructInitializerForDefaults(ctx, callee),
+                             NULL,
+                             callee->type)
+            : makeNewClassCall(ctx, callee);
     // var name = S{}
     AstNode *varDecl = makeVarDecl(ctx->pool,
                                    &callee->loc,
@@ -135,7 +189,11 @@ bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node)
         return false;
 
     transformToMemberCallExpr(
-        visitor, node, shallowCloneAstNode(ctx->pool, node), S_Truthy, NULL);
+        visitor,
+        node,
+        transformRValueToLValue(visitor, shallowCloneAstNode(ctx->pool, node)),
+        S_Truthy,
+        NULL);
 
     type = checkType(visitor, node);
     return typeIs(type, Primitive);

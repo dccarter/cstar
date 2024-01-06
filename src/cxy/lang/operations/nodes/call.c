@@ -102,8 +102,11 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
 
     if (paramsCount > argsCount) {
         // Add default parameters to function call
-        AstNode *param = getNodeAtIndex(
-            callee_->func.decl->funcDecl.signature->params, argsCount);
+        AstNode *decl = callee_->func.decl;
+        AstNode *param = getNodeAtIndex(nodeIs(decl, FuncDecl)
+                                            ? decl->funcDecl.signature->params
+                                            : decl->funcType.params,
+                                        argsCount);
         csAssert0(param);
 
         if (node->callExpr.args == NULL) {
@@ -140,7 +143,7 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
             *parent = func ? getParentScope(func) : NULL;
     u32 index = nodeIs(func, FuncDecl) ? func->funcDecl.index : 0;
 
-    if (nodeIs(parent, StructDecl) || nodeIs(parent, ClassDecl)) {
+    if (isClassOrStructAstNode(parent)) {
         writeTypename(ctx, parent->type);
         format(ctx->state, "__", NULL);
     }
@@ -157,8 +160,7 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     if (index)
         format(ctx->state, "_{u32}", (FormatArg[]){{.u32 = index}});
 
-    bool isMember = (nodeIs(parent, StructDecl) || nodeIs(parent, ClassDecl)) &&
-                    !hasFlag(func, Pure);
+    bool isMember = isClassOrStructAstNode(parent) && !hasFlag(func, Pure);
 
     if (isMember) {
         const AstNode *callee = node->callExpr.callee;
@@ -167,7 +169,8 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
                                  : NULL;
         bool needsThis =
             (hasFlag(callee, Member) || nodeIs(resolvesTo, FuncDecl)) &&
-            !hasFlag(callee, ClosureStyle);
+            !hasFlag(callee, ClosureStyle) &&
+            (nodeIs(callee, Path) && callee->path.elements->next == NULL);
 
         if (needsThis) {
             if (hasFlag(node->callExpr.callee, AddSuper))
@@ -237,10 +240,7 @@ void generateCallExpr(ConstAstVisitor *visitor, const AstNode *node)
                 astConstVisit(visitor, arg);
             }
             else {
-                if (!isConstType(paramType) && !hasFlag(param, Transient))
-                    generateExpressionWithMemoryManagement(visitor, arg);
-                else
-                    astConstVisit(visitor, arg);
+                astConstVisit(visitor, arg);
             }
             param = param->next;
         }

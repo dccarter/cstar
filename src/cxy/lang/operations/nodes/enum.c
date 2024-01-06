@@ -10,6 +10,7 @@
 #include "lang/ttable.h"
 
 #include "core/alloc.h"
+#include "lang/strings.h"
 
 static int compareEnumOptionsByValue(const void *lhs, const void *rhs)
 {

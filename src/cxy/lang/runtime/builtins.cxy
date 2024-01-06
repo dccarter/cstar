@@ -165,7 +165,7 @@
 ) : func(ptr: &void) -> void
 
 @inline
-pub func newClass[T]() => CXY__alloc(sizeof!(#T), T.op__destructor_fwd) : T
+pub func newClass[T]() => CXY__alloc(sizeof!(#T), null) : T
 
 ## pub(
     strlen
@@ -256,6 +256,18 @@ pub func hash[T](val: const T, init: HashCode = 0) : HashCode {
             code = hash(x, code)
         }
         return code
+    }
+    else #if (T.isUnion) {
+        var code = hashInit();
+        match (val) {
+            #for (const i: 0..#{T.membersCount}) {
+                case #{typeat!(T, i)} as y => {
+                    code = hash(#{i}, code)
+                    code = hash(y, code)
+                }
+            }
+        }
+        return code;
     }
     else {
         // this will fail if T does not implement hash function
@@ -373,13 +385,43 @@ pub struct String {
         count = 0
     }
 
+    const func compare(other: const This) {
+        if (count != other.count)
+            return <i32>(count - other.count)
+
+        for (const i : 0..count) {
+            if (str.[i] != other.str.[i])
+                return <i32>str.[i] - <i32>other.str.[i]
+        }
+
+        return <i32>0
+    }
+
     @inline
-    func `hash`() => hashString(hashInit(), str)
+    const func `==`(other: const This) => compare(other) == 0
+
+    @inline
+    const func `!=`(other: const This) => compare(other) != 0
+
+    @inline
+    const func `<`(other: const This) => compare(other) < 0
+
+    @inline
+    const func `>`(other: const This) => compare(other) > 0
+
+    @inline
+    const func `<=`(other: const This) => compare(other) <= 0
+
+    @inline
+    const func `>=`(other: const This) => compare(other) >= 0
+
+    @inline
+    const func `hash`() => hashBytes(hashInit(), str, count)
 
     @inline
     func `copy`() => String{str: getref(str), count: count}
 
-    @[pure]
+    @[static]
     func `destructor_fwd`(ptr: &void) {
         (<&String>ptr).op__deinit()
     }
@@ -440,7 +482,7 @@ class StringBuilder {
         else #if (#U == #wchar)
              appendChar(val)
         else #if (U.isEnum)
-            appendInt(<i64>val)
+            appendString(val.__name)
         else #if (U.isStruct || U.isClass)
             val.op__str(this)
         else #if (U.isTuple) {

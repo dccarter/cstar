@@ -1,0 +1,57 @@
+import { DiagnosticsPrinter, Log, FileLoc, FilePos } from "./core/log.cxy"
+import { MemPool, StringPool } from "./core/memory.cxy"
+import "stdlib/c.cxy" as C
+import { println } from "stdlib/io.cxy"
+
+type AstNode = AstHead
+
+struct AstHead {
+    next:  AstNode
+    attrs: AstNode
+    loc:   FileLoc
+    flags: u64
+}
+
+struct AstLiteral : AstHead {
+    value: bool | wchar | i64 | f64 | string
+
+    func `init`(value: bool, loc: FileLoc) {
+        this.value = value
+        super.loc = loc
+    }
+
+    func `init`(value: wchar, loc: FileLoc) {
+        this.value = value
+        super.loc = loc
+    }
+
+    func `init`(value: i64, loc: FileLoc) {
+        this.value = value
+        super.loc = loc
+    }
+
+    func `init`(value: f64, loc: FileLoc) {
+        this.value = value
+        super.loc = loc
+    }
+
+    func `init`(value: string, loc: FileLoc) {
+        this.value = value
+        super.loc = loc
+    }
+}
+
+func main(args: [string]) {
+    var log = Log();
+    log.error(FileLoc(args.[1], FilePos(42, 1, 1257), FilePos(42, 55, 1311)), "hello world")
+    var printer = DiagnosticsPrinter(log.diagnostics);
+    var str = printer.dump();
+    C.write(C.STDOUT, str.str, str.count)
+    var pool = MemPool();
+    var strings = StringPool(pool);
+    var s = strings.intern("_var");
+    var s1 = strings.concat("_s1", String("_2"), String("_3"));
+    println(s)
+    println(s1)
+}
+

@@ -2,64 +2,17 @@
 // Created by Carter Mbotho on 2023-07-14.
 //
 
+#include "bind.h"
+
 #include "lang/operations.h"
 
 #include "lang/builtins.h"
 #include "lang/capture.h"
 #include "lang/flag.h"
+#include "lang/operations/macro.h"
 #include "lang/scope.h"
 #include "lang/strings.h"
 #include "lang/visitor.h"
-#include "macro.h"
-
-typedef struct {
-    Log *L;
-    MemPool *pool;
-    StrPool *strings;
-    Env *env;
-    union {
-        struct {
-            bool isComptimeContext;
-            AstNode *currentClosure;
-        };
-        struct {
-            bool isComptimeContext;
-            AstNode *currentClosure;
-        } stack;
-    };
-} BindContext;
-
-static cstring getAliasName(const AstNode *node)
-{
-    if (!hasFlag(node, Native))
-        return NULL;
-    const AstNode *alias = findAttribute(node, S_alias);
-
-    if (alias == NULL)
-        return NULL;
-
-    const AstNode *name = findAttributeArgument(alias, S_name);
-
-    return (nodeIs(name, StringLit)) ? name->stringLiteral.value : NULL;
-}
-
-static void defineDeclaration_(Env *env, Log *L, cstring name, AstNode *node)
-{
-    if (nodeIs(node, FuncDecl)) {
-        defineFunctionDecl(env, L, name, node);
-    }
-    else
-        defineForwardDeclarable(env, L, name, node);
-}
-
-static void defineDeclaration(BindContext *ctx, cstring name, AstNode *node)
-{
-    defineDeclaration_(ctx->env, ctx->L, name, node);
-    cstring alias = getAliasName(node);
-    if (alias && alias != name) {
-        defineDeclaration(ctx, alias, node);
-    }
-}
 
 static inline bool isCallableDecl(AstNode *node)
 {
@@ -225,7 +178,7 @@ void bindPath(AstVisitor *visitor, AstNode *node)
             }
 
             if (keyword == S_super) {
-                if (!nodeIs(parent, ClassDecl)) {
+                if (!nodeIs(parent, ClassDecl) && !nodeIs(parent, StructDecl)) {
                     logError(ctx->L,
                              &base->loc,
                              "keyword 'super' can only be used inside a class "
@@ -241,6 +194,7 @@ void bindPath(AstVisitor *visitor, AstNode *node)
                              NULL);
                     return;
                 }
+                base->flags |= flgMember;
             }
         }
     }
@@ -268,63 +222,10 @@ void bindGenericParam(AstVisitor *visitor, AstNode *node)
 void bindGenericDecl(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
-
-    if (!nodeIs(node->parentScope, StructDecl) &&
-        !nodeIs(node->parentScope, ClassDecl)) //
-    {
-        defineDeclaration(ctx, getDeclarationName(node), node);
-    }
-
     pushScope(ctx->env, node);
     astVisitManyNodes(visitor, node->genericDecl.params);
     astVisit(visitor, node->genericDecl.decl);
     popScope(ctx->env);
-}
-
-void bindDefine(AstVisitor *visitor, AstNode *node)
-{
-    BindContext *ctx = getAstVisitorContext(visitor);
-    AstNode *name = node->define.names;
-
-    astVisit(visitor, node->define.type);
-
-    if (node->define.container) {
-        defineSymbol(
-            ctx->env, ctx->L, node->define.container->ident.value, node);
-        pushScope(ctx->env, node);
-    }
-
-    for (; name; name = name->next) {
-        name->flags |= flgDefine;
-        defineSymbol(ctx->env, ctx->L, name->ident.value, name);
-        if (name->ident.alias && name->ident.alias != name->ident.value)
-            defineSymbol(ctx->env, ctx->L, name->ident.alias, name);
-    }
-
-    if (node->define.container)
-        popScope(ctx->env);
-}
-
-void bindImportDecl(AstVisitor *visitor, AstNode *node)
-{
-    BindContext *ctx = getAstVisitorContext(visitor);
-    const Type *exports = node->type;
-
-    if (node->import.entities == NULL) {
-        AstNode *alias = node->import.alias;
-        cstring name = alias ? alias->ident.value : exports->name;
-        defineSymbol(ctx->env, ctx->L, name, node);
-    }
-    else {
-        AstNode *entity = node->import.entities;
-        for (; entity; entity = entity->next) {
-            defineSymbol(ctx->env,
-                         ctx->L,
-                         entity->importEntity.alias
-                             ?: entity->importEntity.name,
-                         entity->importEntity.target);
-        }
-    }
 }
 
 void bindFuncParam(AstVisitor *visitor, AstNode *node)
@@ -339,12 +240,11 @@ void bindFuncParam(AstVisitor *visitor, AstNode *node)
 
 void bindFunctionDecl(AstVisitor *visitor, AstNode *node)
 {
-    AstNode *parent = node->parentScope;
     BindContext *ctx = getAstVisitorContext(visitor);
-    if (nodeIs(parent, Program))
-        defineDeclaration(ctx, node->funcDecl.name, node);
-
     pushScope(ctx->env, node);
+
+    if (node->funcDecl.target)
+        astVisit(visitor, node->funcDecl.target);
 
     astVisit(visitor, node->funcDecl.signature->ret);
     astVisitManyNodes(visitor, node->funcDecl.signature->params);
@@ -383,24 +283,19 @@ void bindVarDecl(AstVisitor *visitor, AstNode *node)
         astVisit(visitor, name);
     astVisit(visitor, node->varDecl.type);
     astVisit(visitor, node->varDecl.init);
-
+    if (node->varDecl.init)
+        node->varDecl.init->parentScope = node;
     for (; name; name = name->next)
         defineDeclaration(ctx, name->ident.value, node);
 }
 
 void bindTypeDecl(AstVisitor *visitor, AstNode *node)
 {
-    BindContext *ctx = getAstVisitorContext(visitor);
-
     astVisit(visitor, node->typeDecl.aliased);
-
-    defineDeclaration(ctx, node->typeDecl.name, node);
 }
 
 void bindUnionDecl(AstVisitor *visitor, AstNode *node)
 {
-    BindContext *ctx = getAstVisitorContext(visitor);
-
     astVisitManyNodes(visitor, node->unionDecl.members);
 }
 
@@ -444,8 +339,6 @@ void bindEnumDecl(AstVisitor *visitor, AstNode *node)
     }
     node->enumDecl.len = i;
     popScope(ctx->env);
-
-    defineDeclaration(ctx, node->typeDecl.name, node);
 }
 
 void bindStructField(AstVisitor *visitor, AstNode *node)
@@ -461,17 +354,13 @@ void bindStructOrClassDecl(AstVisitor *visitor, AstNode *node)
     BindContext *ctx = getAstVisitorContext(visitor);
     AstNode *member = node->structDecl.members;
 
-    if (nodeIs(node, ClassDecl))
-        astVisit(visitor, node->classDecl.base);
-
+    astVisit(visitor, node->structDecl.base);
     astVisitManyNodes(visitor, node->structDecl.implements);
 
     pushScope(ctx->env, node);
-    if (nodeIs(node, ClassDecl) || (!isBuiltinsInitialized()))
-        defineSymbol(ctx->env, ctx->L, S_This, node);
+    defineSymbol(ctx->env, ctx->L, S_This, node);
 
     for (; member; member = member->next) {
-        // functions will be visited later
         if (isCallableDecl(member)) {
             if (nodeIs(member, FuncDecl)) {
                 defineFunctionDecl(
@@ -482,8 +371,9 @@ void bindStructOrClassDecl(AstVisitor *visitor, AstNode *node)
                     ctx->env, ctx->L, getDeclarationName(member), member);
             }
         }
-        else
+        else {
             astVisit(visitor, member);
+        }
     }
 
     if (nodeIs(node, ClassDecl) || (!isBuiltinsInitialized()))
@@ -496,8 +386,6 @@ void bindStructOrClassDecl(AstVisitor *visitor, AstNode *node)
     }
 
     popScope(ctx->env);
-
-    defineDeclaration(ctx, node->structDecl.name, node);
 }
 
 void bindInterfaceDecl(AstVisitor *visitor, AstNode *node)
@@ -506,15 +394,10 @@ void bindInterfaceDecl(AstVisitor *visitor, AstNode *node)
     AstNode *member = node->interfaceDecl.members;
 
     pushScope(ctx->env, node);
-
     for (; member; member = member->next) {
-        // functions will be visited later
         astVisit(visitor, member);
     }
-
     popScope(ctx->env);
-
-    defineDeclaration(ctx, node->interfaceDecl.name, node);
 }
 
 void bindIfStmt(AstVisitor *visitor, AstNode *node)
@@ -677,9 +560,6 @@ void bindMemberExpr(AstVisitor *visitor, AstNode *node)
 void bindProgram(AstVisitor *visitor, AstNode *node)
 {
     AstNode *decl = node->program.decls;
-
-    astVisitManyNodes(visitor, node->program.top);
-
     for (; decl; decl = decl->next) {
         astVisit(visitor, decl);
     }
@@ -701,17 +581,13 @@ void withParentScope(Visitor func, AstVisitor *visitor, AstNode *node)
     ctx->stack = stack;
 }
 
-AstNode *bindAst(CompilerDriver *driver, AstNode *node)
+void bindAstPhase2(CompilerDriver *driver, Env *env, AstNode *node)
 {
-    Env env;
-    environmentInit(&env, node);
-    BindContext context = {.env = &env, .L = driver->L, .pool = &driver->pool};
+    BindContext context = {.env = env, .L = driver->L, .pool = &driver->pool};
 
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context, {
         [astProgram] = bindProgram,
-        [astDefine] = bindDefine,
-        [astImportDecl] = bindImportDecl,
         [astIdentifier] = bindIdentifier,
         [astGenericParam] = bindGenericParam,
         [astGenericDecl] = bindGenericDecl,
@@ -747,7 +623,4 @@ AstNode *bindAst(CompilerDriver *driver, AstNode *node)
     // clang-format on
 
     astVisit(&visitor, node);
-    environmentFree(&env);
-
-    return node;
 }

@@ -520,7 +520,7 @@ static AstNode *makeUncheckedNode(AstVisitor *visitor,
     if (!validateMacroArgumentCount(ctx, &node->loc, args, 2))
         return NULL;
     AstNode *expr = args, *next = args->next;
-    const Type *type = next->type;
+    const Type *type = next->type ?: evalType(ctx, next);
     csAssert0(type);
 
     if (!typeIs(type, Info) && !hasFlag(args, Typeinfo)) {

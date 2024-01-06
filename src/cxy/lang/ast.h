@@ -229,6 +229,7 @@ struct AstNode {
             cstring value;
             cstring alias;
             AstNode *resolvesTo;
+            u16 super;
         } ident;
 
         struct {
@@ -298,17 +299,13 @@ struct AstNode {
             struct AstNode *start;
             struct AstNode *end;
             struct AstNode *step;
+            bool down;
         } rangeExpr;
 
         struct {
             struct AstNode *type;
             struct AstNode *init;
         } newExpr;
-
-        struct {
-            struct AstNode *to;
-            struct AstNode *expr;
-        } castExpr;
 
         struct {
             struct AstNode *target;
@@ -337,7 +334,8 @@ struct AstNode {
                 struct AstNode *enclosure;
                 struct AstNode *resolvesTo;
             };
-            u32 index;
+            u16 index;
+            u16 super;
             bool isKeyword;
         } pathElement;
 
@@ -355,6 +353,7 @@ struct AstNode {
             u16 paramsCount;
             FunctionSignature *signature;
             struct AstNode *opaqueParams;
+            struct AstNode *target;
             union {
                 struct AstNode *body;
                 struct AstNode *definition;
@@ -412,6 +411,7 @@ struct AstNode {
             u64 len;
             struct AstNode *base;
             struct AstNode *options;
+            struct AstNode *getName;
             SortedNodes *sortedOptions;
         } enumDecl;
 
@@ -422,26 +422,24 @@ struct AstNode {
             struct AstNode *value;
         } structField;
 
-        union {
-            struct {
-                cstring name;
-                struct AstNode *implements;
-                struct AstNode *members;
-                struct AstNode *typeParams;
-                const struct Type *thisType;
-                struct AstNode *closureForward;
-                AstNode *deinit;
-            } structDecl;
+        struct {
+            cstring name;
+            struct AstNode *implements;
+            struct AstNode *base;
+            struct AstNode *members;
+            struct AstNode *typeParams;
+            const struct Type *thisType;
+            struct AstNode *closureForward;
+        } structDecl;
 
-            struct {
-                cstring name;
-                struct AstNode *implements;
-                struct AstNode *members;
-                struct AstNode *typeParams;
-                const struct Type *thisType;
-                struct AstNode *base;
-            } classDecl;
-        };
+        struct {
+            cstring name;
+            struct AstNode *implements;
+            struct AstNode *base;
+            struct AstNode *members;
+            struct AstNode *typeParams;
+            const struct Type *thisType;
+        } classDecl;
 
         struct {
             cstring name;
@@ -476,9 +474,16 @@ struct AstNode {
         } stringExpr;
 
         struct {
+            u32 idx;
             struct AstNode *expr;
             struct AstNode *type;
         } typedExpr;
+
+        struct {
+            u32 idx;
+            struct AstNode *expr;
+            struct AstNode *to;
+        } castExpr;
 
         struct {
             struct AstNode *callee;
@@ -614,6 +619,13 @@ AstNode *makeStringLiteral(MemPool *pool,
                            cstring value,
                            AstNode *next,
                            const Type *type);
+
+AstNode *makeIdentifier(MemPool *pool,
+                        const FileLoc *loc,
+                        cstring name,
+                        u32 super,
+                        AstNode *next,
+                        const Type *type);
 
 AstNode *makePointerAstNode(MemPool *pool,
                             const FileLoc *loc,
@@ -1035,5 +1047,7 @@ static bool isStructDeclaration(AstNode *node)
            nodeIs(node, GenericDecl) &&
                isStructDeclaration(node->genericDecl.decl);
 }
+
+bool isLValueAstNode(const AstNode *node);
 
 CCodeKind getCCodeKind(TokenTag tag);

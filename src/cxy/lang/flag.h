@@ -46,7 +46,7 @@
     f(BuiltinMember,        33)                 \
     f(ComptimeIterable,     34)                 \
     f(Define,               35)                 \
-    f(CPointerCast,         36)                 \
+    f(UnsafeCast,           36)                 \
     f(DeclarationOnly,      37)                 \
     f(Inherited,            38)                 \
     f(BlockReturns,         39)                 \

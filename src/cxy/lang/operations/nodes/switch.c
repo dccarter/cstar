@@ -30,10 +30,17 @@ typedef struct {
 
 static i64 getEnumValue(const AstNode *node)
 {
-    csAssert0(typeIs(node->type, Enum) && node->path.elements->next);
+    csAssert0(typeIs(node->type, Enum));
+    cstring name = NULL;
+    if (nodeIs(node, Path) && node->path.elements->next)
+        name = node->path.elements->next->pathElement.name;
+    else if (nodeIs(node, MemberExpr) &&
+             nodeIs(node->memberExpr.member, Identifier))
+        name = node->memberExpr.member->ident.value;
+    else
+        unreachable("UNSUPPORTED");
 
-    const EnumOption *option =
-        findEnumOption(node->type, node->path.elements->next->pathElement.name);
+    const EnumOption *option = findEnumOption(node->type, name);
     csAssert0(option);
 
     return option->value;

@@ -1,0 +1,57 @@
+module format
+
+pub enum Style {
+    Normal = 0,
+    Bold,
+    Dim,
+    Underline,
+    Italic
+}
+
+pub enum Color {
+    Normal = 0,
+    Red = 32,
+    Green = 33,
+    Blue = 34,
+    Cyan = 36,
+    Magenta = 35,
+    Yellow = 33,
+    White = 37
+}
+
+@poco
+pub struct Fmt {
+    style: Style
+    color: Color
+
+    func `init`(color: Color = .Normal, style: Style = .Normal) {
+        this.style = style
+        this.color = color
+    }
+
+    const func `str`(sb: StringBuilder) {
+        if (style == .Normal || color == .Normal) {
+            sb.appendString("\33[0m");
+            if (style == .Normal && color == .Normal)
+                return;
+        }
+
+        sb.appendString("\33[");
+        if (style != .Normal) {
+            sb.appendInt(style: i32)
+            sb.appendChar(';')
+        }
+        sb.appendInt(color: i32)
+        sb.appendChar('m');
+    }
+
+    const func `hash`() => 0
+}
+
+pub const resetStyle = Fmt{style: Style.Normal, color: .Normal};
+pub const errorStyle = Fmt{style: Style.Bold, color: .Red};
+pub const literalStyle = Fmt{style: Style.Normal, color: .Magenta};
+pub const keywordStyle = Fmt{style: Style.Bold, color: .Blue};
+pub const commentStyle = Fmt{style: Style.Normal, color: .Green};
+pub const ellipsisStyle = Fmt{style: Style.Normal, color: .White};
+pub const locStyle = Fmt{style: Style.Bold, color: .White};

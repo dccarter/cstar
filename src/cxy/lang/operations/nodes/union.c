@@ -17,7 +17,7 @@ AstNode *transformToUnionValue(TypingContext *ctx,
                                const Type *rhs)
 {
     const Type *stripped = stripOnce(lhs, NULL);
-    if (typeIs(stripped, Union) && stripped != rhs) {
+    if (rhs != lhs && typeIs(stripped, Union) && stripped != rhs) {
         u32 idx = findUnionTypeIndex(stripped, rhs);
         csAssert0(idx != UINT32_MAX);
         return makeUnionValueExpr(
@@ -30,7 +30,9 @@ void generateUnionDefinition(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
 
-    format(state, "typedef struct {{{>}\n", NULL);
+    format(state, "typedef struct _", NULL);
+    writeTypename(context, type);
+    format(state, " {{{>}\n", NULL);
     format(state, "u32 tag;\n", NULL);
     format(state, "union {{{>}\n", NULL);
     for (u64 i = 0; i < type->tUnion.count; i++) {

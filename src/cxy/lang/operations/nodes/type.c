@@ -77,14 +77,9 @@ void checkBuiltinType(AstVisitor *visitor, AstNode *node)
 void generateTypeDeclDefinition(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
-    const AstNode *decl = type->alias.decl;
-    if (decl != NULL && hasFlag(decl, ForwardDecl)) {
-        AstNode *definition = decl->typeDecl.definition;
-        format(state, "typedef struct ", NULL);
-        writeTypename(context,
-                      nodeIs(definition, TypeDecl)
-                          ? definition->typeDecl.aliased->type
-                          : definition->type);
+    if (type->alias.aliased != NULL) {
+        format(state, "typedef struct _", NULL);
+        writeTypename(context, type->alias.aliased);
         format(state, " ", NULL);
         writeTypename(context, type);
         format(state, ";", NULL);
@@ -116,14 +111,21 @@ void checkTypeDecl(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     if (!hasFlag(node, ForwardDecl) && node->typeDecl.aliased) {
+        const Type *type =
+            makeThisType(ctx->types, node->typeDecl.name, flgNone);
+        node->type = type;
+        ((Type *)type)->this.trackReferences = true;
+
         const Type *aliased = checkType(visitor, node->typeDecl.aliased);
         if (typeIs(aliased, Error)) {
+            resolveThisReferences(ctx->types, type, NULL);
             node->type = aliased;
             return;
         }
 
-        node->type = makeAliasType(
+        ((Type *)type)->this.that = node->type = makeAliasType(
             ctx->types, aliased, node->typeDecl.name, node->flags & flgConst);
+        resolveThisReferences(ctx->types, type, aliased);
     }
     else {
         node->type = makeOpaqueTypeWithFlags(

@@ -171,9 +171,6 @@ void generateFunctionDefinition(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, "{<}\n}", NULL);
     }
 
-    //    if (node->funcDecl.operatorOverload == opDelete) {
-    //        generateStructDelete(ctx, parent->type);
-    //    }
     format(ctx->state, "\n", NULL);
     ctx->namespace = namespace;
 }
@@ -332,6 +329,8 @@ const Type *matchOverloadedFunctionPerfectMatch(TypingContext *ctx,
                 }
                 break;
             }
+            else
+                break;
         }
 
         if (!compatible)
@@ -361,7 +360,7 @@ const Type *matchOverloadedFunctionPerfectMatch(TypingContext *ctx,
             ctx->L,
             loc,
             "incompatible function reference ({u64} functions declared did "
-            "not match function with signature {t}",
+            "not match function with signature {t})",
             (FormatArg[]){{.u64 = declarations}, {.t = &type}});
 
         decl = decls;
@@ -477,6 +476,7 @@ void checkFunctionParam(AstVisitor *visitor, AstNode *node)
         return;
     }
 
+    def->parentScope = node;
     def_ = checkType(visitor, def);
     if (typeIs(def_, Error)) {
         node->type = ERROR_TYPE(ctx);
@@ -613,22 +613,29 @@ void checkFunctionType(AstVisitor *visitor, AstNode *node)
     const Type **params = mallocOrDie(sizeof(Type *) * count);
 
     AstNode *param = node->funcType.params;
+    u64 defaultValuesCount = 0;
     for (u64 i = 0; param; param = param->next, i++) {
         param->parentScope = node;
         params[i] = checkType(visitor, param);
-        if (params[i] == ERROR_TYPE(ctx))
+        if (params[i] == ERROR_TYPE(ctx)) {
             node->type = ERROR_TYPE(ctx);
+        }
+        else if (param->funcParam.def) {
+            defaultValuesCount++;
+        }
     }
 
     if (node->type == NULL) {
-        node->type = makeFuncType(ctx->types,
-                                  &(Type){.tag = typFunc,
-                                          .name = NULL,
-                                          .flags = node->flags,
-                                          .func = {.retType = ret,
-                                                   .params = params,
-                                                   .paramsCount = count,
-                                                   .decl = node}});
+        node->type = makeFuncType(
+            ctx->types,
+            &(Type){.tag = typFunc,
+                    .name = NULL,
+                    .flags = node->flags,
+                    .func = {.retType = ret,
+                             .params = params,
+                             .paramsCount = count,
+                             .defaultValuesCount = defaultValuesCount,
+                             .decl = node}});
     }
 
     free(params);

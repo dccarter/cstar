@@ -10,12 +10,24 @@ func incrementWrap(capacity: u64, index: u64) => (index + 1 >= capacity) ? (<u64
 @inline
 func isOccupiedHash(hash: u32) => (hash & OCCUPIED_MASK) == OCCUPIED_MASK;
 
-@builtins(toString: false)
+@poco
 struct HashMapNode[K, V] {
     key: K
-    value: V
+    #if (#V != #void) {
+        value: V
+    }
 
     func `init`() {}
+
+    @inline
+    func `==`(key: K) {
+        #if (K.isStruct) {
+            return this.key == &key
+        }
+        else {
+            return this.key == key
+        }
+    }
 }
 
 pub class HashMap[K, V] {
@@ -89,10 +101,9 @@ pub class HashMap[K, V] {
     func `deinit`() {
         if (capacity) {
             for (const i : 0..capacity) {
-                if (isBucketOccupied(i))
-                {
-                }
+                if (isBucketOccupied(i)) {
                     //data.[i] = null
+                }
             }
 
             CXY__free(data: &void)
@@ -106,7 +117,7 @@ pub class HashMap[K, V] {
         var hashCode = hash[K](key) | OCCUPIED_MASK;
         var index = CXY__hash_mod_prime(hashCode, capacity);
         while (isBucketOccupied(index)) {
-            if (hashes.[index] == hashCode && key == data.[index].key){
+            if (hashes.[index] == hashCode && data.[index] == key){
                 if (replace)
                     data.[index].value = value
                 return false;
@@ -128,7 +139,7 @@ pub class HashMap[K, V] {
         const hashCode = hash[K](key) | OCCUPIED_MASK;
         var index = CXY__hash_mod_prime(hashCode, capacity);
         while (isBucketOccupied(index)) {
-            if (hashes.[index] == hashCode && key == data.[index].key)
+            if (hashes.[index] == hashCode && data.[index] == key)
                 return data.[index].value;
             index = incrementWrap(capacity, index)
         }
@@ -140,7 +151,7 @@ pub class HashMap[K, V] {
         var index = CXY__hash_mod_prime(hashCode, capacity);
         var found = false;
         while (isBucketOccupied(index)) {
-            if (hashes.[index] == hashCode && key == data.[index].key) {
+            if (hashes.[index] == hashCode && data.[index] == key) {
                 return removeAt(key, index)
             }
             index = incrementWrap(capacity, index)
@@ -192,6 +203,180 @@ pub class HashMap[K, V] {
                     sb << ", "
 
                 sb << data.[i].key << ": " << data.[i].value
+                first = false
+            }
+
+            i++
+        }
+
+        sb <<  "}"
+    }
+}
+
+pub class HashSet[K] {
+    - data: &HashMapNode[K, void]
+    - hashes: &u32
+    - size: u64 = 0;
+    - capacity: u64 = 0;
+
+    @inline
+    - func needsRehash() => size * 100 >= capacity * MAX_LOAD_FACTOR
+
+    @inline
+    - func isBucketOccupied(bucket: u64) => isOccupiedHash(hashes.[bucket])
+
+    - func rehash() {
+        var newCapacity = CXY__hash_next_prime(capacity);
+        if (newCapacity <= capacity)
+            newCapacity = capacity * 2 + 1;
+        var newData = <&HashMapNode[K, void]> CXY__alloc(sizeof!(#HashMapNode[K, void]) * newCapacity, null);
+        var newHashes = <&u32> CXY__alloc(sizeof!(#u32) * newCapacity, null);
+
+        var n = capacity;
+        for (const i: 0..n) {
+            const hashCode = hashes.[i];
+            if (!isOccupiedHash(hashCode))
+                continue;
+            var index = CXY__hash_mod_prime(<u64>hashCode, newCapacity);
+            while (isOccupiedHash(newHashes.[index]))
+                index = incrementWrap(newCapacity, index);
+
+            newData.[index] = data.[i]
+            //data.[i] = null
+            newHashes.[index] = hashCode;
+        }
+
+        CXY__free(hashes: &void)
+        CXY__free(data: &void)
+        hashes = newHashes;
+        data = newData
+        capacity = newCapacity
+    }
+
+    @inline
+    - func removeAt(key: K, index: u64) {
+        var next = incrementWrap(capacity, index);
+        while (isBucketOccupied(next)) {
+            const nextHash = hashes.[next];
+            const desired = CXY__hash_mod_prime(nextHash, capacity);
+            if (desired <= index || desired > next) {
+                data.[index] = data.[next]
+                hashes.[index] = nextHash
+               index = next
+            }
+            next = incrementWrap(capacity, next)
+        }
+        hashes.[index] = 0
+        size--
+    }
+
+    func `init`(capacity: u64 = DEFAULT_HASH_TABLE_CAPACITY) {
+        capacity = CXY__hash_next_prime(capacity)
+        data = <&HashMapNode[K, void]> CXY__alloc(sizeof!(#HashMapNode[K, void]) * capacity, null)
+        hashes = <&u32> CXY__alloc(sizeof!(#u32) * capacity, null)
+        this.capacity = capacity
+    }
+
+    func `deinit`() {
+        if (capacity) {
+            for (const i : 0..capacity) {
+                if (isBucketOccupied(i)) {
+                    //data.[i] = null
+                }
+            }
+
+            CXY__free(data: &void)
+            CXY__free(hashes: &void)
+            size = 0
+            capacity = 0
+        }
+    }
+
+    func insert(key: K) {
+        var hashCode = hash[K](key) | OCCUPIED_MASK;
+        var index = CXY__hash_mod_prime(hashCode, capacity);
+        while (isBucketOccupied(index)) {
+            if (hashes.[index] == hashCode && data.[index] == key) {
+                return false
+            }
+            index = incrementWrap(capacity, index)
+        }
+
+        data.[index] = HashMapNode[K, void]{key: key}
+        hashes.[index] = hashCode
+        size++
+
+        if (needsRehash())
+            rehash()
+
+        return true;
+    }
+
+    func get(key: K) : K? {
+        const hashCode = hash[K](key) | OCCUPIED_MASK;
+        var index = CXY__hash_mod_prime(hashCode, capacity);
+        while (isBucketOccupied(index)) {
+            if (hashes.[index] == hashCode && data.[index] == key)
+                return data.[index].key
+            index = incrementWrap(capacity, index)
+        }
+        return null
+    }
+
+    func contains(key: K) => !!get(key)
+
+    func remove(key: K) {
+        const hashCode = hash[K](key) | OCCUPIED_MASK;
+        var index = CXY__hash_mod_prime(hashCode, capacity);
+        var found = false;
+        while (isBucketOccupied(index)) {
+            if (hashes.[index] == hashCode && data.[index] == key) {
+                removeAt(key, index)
+                return true
+            }
+            index = incrementWrap(capacity, index)
+        }
+
+        return false
+    }
+
+    func clear() {
+        if (size == 0)
+            return;
+
+        for (const i : 0..capacity) {
+            if (isBucketOccupied(i)) {
+                //data.[i] = null
+            }
+        }
+
+        memset(hashes: &void, 0, sizeof!(#u32)*capacity)
+        size = 0
+    }
+
+    func `..`() {
+        var i = 0;
+        return () : K? => {
+            while (i < capacity) {
+                if (isOccupiedHash(hashes.[i]))
+                    return data.[i++].key
+                i++
+            }
+            return null
+        }
+    }
+
+    const func `str`(sb: StringBuilder) {
+        sb << "{"
+        var i = 0;
+        var first = true;
+
+        while (i < capacity) {
+            if (isOccupiedHash(hashes.[i])) {
+                if (!first)
+                    sb << ", "
+
+                sb << data.[i].key
                 first = false
             }
 

@@ -17,7 +17,7 @@
 #include "core/alloc.h"
 #include "lang/operations/eval.h"
 
-static void checkClassBaseDecl(AstVisitor *visitor, AstNode *node)
+void checkBaseDecl(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     const Type *base = checkType(visitor, node->classDecl.base);
@@ -27,7 +27,7 @@ static void checkClassBaseDecl(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    if (!typeIs(base, Class)) {
+    if (nodeIs(node, ClassDecl) && !typeIs(base, Class)) {
         logError(ctx->L,
                  &node->classDecl.base->loc,
                  "base of type of '{t}' is not supported, base must be a class",
@@ -35,14 +35,22 @@ static void checkClassBaseDecl(AstVisitor *visitor, AstNode *node)
         node->type = ERROR_TYPE(ctx);
         return;
     }
-
-    const AstNode *finalized = findAttribute(base->tClass.decl, S_final);
-    if (finalized != NULL) {
+    else if (nodeIs(node, StructDecl) && !typeIs(base, Struct)) {
         logError(
             ctx->L,
             &node->classDecl.base->loc,
-            "base class {t} cannot be extended, base class marked as final",
+            "base of type of '{t}' is not supported, base must be a struct",
             (FormatArg[]){{.t = base}});
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    const AstNode *finalized = findAttribute(base->tClass.decl, S_final);
+    if (finalized != NULL) {
+        logError(ctx->L,
+                 &node->classDecl.base->loc,
+                 "base {t} cannot be extended, base class marked as final",
+                 (FormatArg[]){{.t = base}});
         node->type = ERROR_TYPE(ctx);
         return;
     }
@@ -155,7 +163,7 @@ void generateClassTypedef(CodegenContext *ctx, const Type *type)
 AstNode *makeNewClassCall(TypingContext *ctx, AstNode *node)
 {
     const Type *type = node->type;
-    csAssert0(typeIs(type, Class));
+    csAssert0(isClassType(type));
     AstNode *new = findBuiltinDecl(S_newClass);
     csAssert0(new);
 
@@ -247,7 +255,7 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
     const Type **implements = NULL, *base = NULL;
 
     if (node->classDecl.base) {
-        checkClassBaseDecl(visitor, node);
+        checkBaseDecl(visitor, node);
         if (typeIs(node->type, Error))
             return;
         base = node->classDecl.base->type;

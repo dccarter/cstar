@@ -1,0 +1,288 @@
+module log
+
+import { Vector } from "stdlib/vector.cxy"
+import { HashMap as Map } from "stdlib/map.cxy"
+import { File } from "stdlib/io.cxy"
+import "stdlib/c.cxy" as C
+
+import { Fmt, Color, Style, resetStyle, locStyle } from "./format.cxy"
+
+@poco
+pub struct FilePos {
+    row: u32 = 0;
+    col: u32 = 0;
+    byteOffset: u64 = 0;
+
+    @inline
+    func `init`(row: u32, col: u32, offset: u32) {
+        this.row = row
+        this.col = col
+        this.byteOffset = offset
+    }
+
+    @inline
+    func `init`() { }
+
+    const func `<`(other: const This) {
+        return row < other.row? true :
+                                (col < other.col? true: false)
+    }
+}
+
+@poco
+struct FileLoc {
+    filename: string = null;
+    begin: FilePos
+    end: FilePos
+
+    func `init`(filename: string, begin: FilePos, end: FilePos) {
+        this.filename = filename
+        this.begin = begin
+        this.end = end
+    }
+}
+
+enum LogLevel {
+    Error, Warning, Info
+}
+
+@poco
+struct Diagnostic {
+    loc: FileLoc
+    lvl: LogLevel
+    msg: String
+
+    const func `str`(sb: StringBuilder) => {}
+    const func `hash`() => 0
+}
+
+pub class Log {
+    - errorCount: u32 = 0;
+    - warningCount: u64 = 0;
+    - diagnostics: Vector[Diagnostic]
+
+    func `init`() {
+        this.diagnostics = Vector[Diagnostic]();
+    }
+
+    @inline
+    func error(loc: FileLoc, msg: String) {
+        errorCount++
+        diagnostics.push(Diagnostic{loc: loc, lvl: LogLevel.Error, msg: msg})
+    }
+
+    @inline
+    func warn(loc: FileLoc, msg: String) {
+        warningCount++
+        diagnostics.push(Diagnostic{loc: loc, lvl: LogLevel.Warning, msg: msg})
+    }
+
+    @inline
+    func info(loc: FileLoc, msg: String) {
+        diagnostics.push(Diagnostic{loc: loc, lvl: LogLevel.Info, msg: msg})
+    }
+
+    @inline
+    func empty() => diagnostics.count > 0
+
+    const func `str`(sb: StringBuilder) => { }
+
+    const func `hash`() => 0
+}
+
+#const LINE_SEARCH_RANGE = 64:u64
+#const LINE_BUF_CAPACITY = 64:u64
+
+pub struct DiagnosticsPrinter {
+    - showDiagnostics: bool = true;
+    - diagnostics: Vector[Diagnostic]
+    - cachedFiles: Map[string, File]
+    - sb: StringBuilder
+    - header: [(string, Fmt), 3] = [
+      ("error", Fmt(Color.Red, Style.Bold)),
+      ("warning", Fmt(Color.Yellow, Style.Bold)),
+      ("info", Fmt(Color.Cyan, Style.Bold))
+    ];
+
+    @inline
+    func `init`(diagnostics: Vector[Diagnostic], showDiagnostics: bool = true) {
+        this.diagnostics = diagnostics
+        this.showDiagnostics = showDiagnostics
+        cachedFiles = Map[string, File]()
+        sb = StringBuilder()
+    }
+
+    func dump() {
+        for (const diagnostic, _: this.diagnostics) {
+            dump(&diagnostic)
+        }
+        sb.appendChar('\n')
+        return this.sb.release()
+    }
+
+    - func dump(diagnostic: &const Diagnostic) : void {
+        const head = header.[diagnostic.lvl:i32];
+        this.sb << head.1 << head.0 << resetStyle
+        this.sb << ": " << diagnostic.msg << '\n'
+
+        if (diagnostic.loc.filename != null) {
+            if (diagnostic.loc.begin < &diagnostic.loc.end) {
+                this.sb << " in " << locStyle
+                        << (<string>diagnostic.loc.filename) << ':'
+                        << diagnostic.loc.begin.row << ':'
+                        << diagnostic.loc.begin.col
+                        << " ( to " << diagnostic.loc.end.row << ':'
+                        << diagnostic.loc.end.col << ')'
+                        << resetStyle << '\n'
+            }
+            else {
+                this.sb << " in " << locStyle
+                        << (<string>diagnostic.loc.filename) << ':'
+                        << diagnostic.loc.begin.row << ':'
+                        << diagnostic.loc.begin.col
+                        << resetStyle << '\n'
+            }
+
+            if (showDiagnostics) {
+                printDiagnostic(head.1, diagnostic.loc);
+            }
+        }
+    }
+
+    func getCachedFile(filename: string) {
+        const fp = this.cachedFiles.[filename];
+        if (fp) {
+            return *fp
+        }
+        const fd = C.open(filename: &const char, C.O_CLOEXEC|C.O_RDONLY);
+        if (fd == -1) {
+            return File(-1);
+        }
+        this.cachedFiles.[filename] = File(fd)
+        return File(fd)
+    }
+
+    - func findLineBegin(fp: File, offset: u64) {
+        var data: [char, #{LINE_SEARCH_RANGE}];
+        while (offset > 0) {
+            var remaining = offset > #{LINE_SEARCH_RANGE} ? #{LINE_SEARCH_RANGE} : offset;
+            offset -= remaining
+            fp.read(data, remaining, offset:i64)
+            for (const i: range(remaining, 0, 1, true)) {
+                if (data.[i] == <char>'\n')
+                    return offset + i + 1
+            }
+        }
+        return 0;
+    }
+
+    - func findLineEnd(fp: File, offset: u64) {
+        var data: [char, #{LINE_SEARCH_RANGE}];
+        fp.seek(offset)
+        while (true) {
+            var bytesRead = fp.read(data, #{LINE_SEARCH_RANGE});
+            var count = *bytesRead;
+            for (const i: 0..count) {
+                if (data.[i] == <char>'\n')
+                    return offset + i
+            }
+            offset += count
+            if (count < #{LINE_SEARCH_RANGE})
+                return offset
+        }
+        return 0
+    }
+
+    - func countDigits(line: u64) {
+        var n:u64 = 1;
+        while (line >= 10) {
+            line /= 10;
+            n++;
+        }
+        return n;
+    }
+
+    - func printEmptySpace(lineNumberLen: i64) {
+        if (lineNumberLen >= 4) {
+            sb.appendString("    ")
+            lineNumberLen -= 4;
+        }
+
+        for (var i: 0..lineNumberLen)
+            sb.appendChar(' ');
+    }
+
+    func printFileLine(lineBegin: u64, fp: File) {
+        var buf: [char, #{LINE_BUF_CAPACITY}];
+        fp.seek(lineBegin:i64)
+        while (true) {
+            const count = fp.read(buf, #{LINE_BUF_CAPACITY});
+            if (!count)
+                break;
+
+            var endOfLine = C.strrchr(buf, <char>'\n');
+            if (endOfLine)
+                endOfLine.[0] = <char>'\0'
+            else
+                buf.[#{LINE_BUF_CAPACITY}-1] = <char>'\0'
+            sb.appendString(buf : string)
+            if (endOfLine)
+                break;
+        }
+        sb.appendChar('\n');
+    }
+
+    - func printLineMarkers(style: Fmt, count: u64) {
+        this.sb << style
+        for (const i: 0..count)
+            sb.appendChar('^');
+        this.sb << resetStyle
+    }
+
+    @inline
+    - func isMultilineFileLoc(fileLoc: FileLoc) => fileLoc.begin.row != fileLoc.end.row
+
+    - func printDiagnostic(style: Fmt, fileLoc: FileLoc) : void {
+        var fp =
+            fileLoc.filename != null ? getCachedFile(fileLoc.filename) : File(-1);
+
+        if (!fp) {
+            return;
+        }
+
+        var lineNumberLen = countDigits(fileLoc.end.row);
+        var beginOffset = findLineBegin(fp, fileLoc.begin.byteOffset);
+
+        printEmptySpace(<i64>lineNumberLen + 1)
+        this.sb << style << '|' << resetStyle << '\n'
+
+        printEmptySpace(<i64>(lineNumberLen - countDigits(fileLoc.begin.row)))
+        this.sb << locStyle << fileLoc.begin.row << resetStyle << style << " |" << resetStyle
+        printFileLine(beginOffset, fp)
+
+        printEmptySpace(<i64>lineNumberLen + 1)
+        this.sb << style << '|' << resetStyle
+
+        printEmptySpace(<i64>(fileLoc.begin.byteOffset - beginOffset))
+        if (isMultilineFileLoc(fileLoc)) {
+            printLineMarkers(style,
+                             findLineEnd(fp, fileLoc.begin.byteOffset) - fileLoc.begin.byteOffset)
+
+            if (fileLoc.begin.row + 1 < fileLoc.end.row) {
+                printEmptySpace(<i64>lineNumberLen)
+                this.sb << locStyle << "..." << resetStyle << '\n'
+            }
+
+            this.sb << locStyle << fileLoc.end.row << resetStyle << style << " |" << resetStyle
+            var endOffset = findLineBegin(fp, fileLoc.end.byteOffset);
+            printFileLine(endOffset, fp)
+
+            printEmptySpace(<i64>lineNumberLen + 1)
+            this.sb << style << '|' << resetStyle
+            printLineMarkers(style, fileLoc.end.byteOffset - endOffset)
+        }
+        else
+            printLineMarkers(style,
+                             fileLoc.end.byteOffset - fileLoc.begin.byteOffset)
+    }
+}

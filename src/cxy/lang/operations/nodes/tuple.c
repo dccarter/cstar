@@ -132,10 +132,7 @@ void generateTupleExpr(ConstAstVisitor *visitor, const AstNode *node)
         if (i != 0)
             format(ctx->state, ", ", NULL);
         format(ctx->state, "._{u64} = ", (FormatArg[]){{.u64 = i}});
-        if (!hasFlag(node->type, Transient))
-            generateExpressionWithMemoryManagement(visitor, arg);
-        else
-            astConstVisit(visitor, arg);
+        astConstVisit(visitor, arg);
     }
 
     format(ctx->state, "}", NULL);

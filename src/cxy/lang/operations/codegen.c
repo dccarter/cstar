@@ -29,7 +29,7 @@
 static void generateType(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
-    if (hasFlags(type, flgBuiltin))
+    if (hasFlags(type, flgBuiltin | flgCodeGenerated))
         return;
 
     switch (type->tag) {
@@ -57,7 +57,12 @@ static void generateType(CodegenContext *context, const Type *type)
         generateClassDefinition(context, type);
         break;
     case typOpaque:
+    case typAlias:
         generateTypeDeclDefinition(context, type);
+        break;
+    case typThis:
+        if (typeIs(type->this.that, Alias))
+            generateType(context, type->this.that);
         break;
     default:
         return;
@@ -105,9 +110,49 @@ static void generateAllTypes(CodegenContext *ctx)
     free(types);
 }
 
+static void generateUnionCast(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    const Type *to = node->castExpr.to->type;
+    u32 idx = node->castExpr.idx;
+
+    if (!hasFlag(node, UnsafeCast)) {
+        format(ctx->state, "({{ ", NULL);
+        generateTypeUsage(ctx, node->castExpr.expr->type);
+        format(ctx->state, " tmp = ", NULL);
+        astConstVisit(visitor, node->castExpr.expr);
+        format(ctx->state, "; ", NULL);
+        format(ctx->state,
+               "CXY__builtins_assert2(tmp.tag == {u32}, \"{s}\", {u64}, "
+               "{u64}, "
+               "\"UnionCastPanic: cast from {t} to {t}, current idx = %d\", "
+               "tmp.tag); (",
+               (FormatArg[]){{.u32 = idx},
+                             {.s = node->loc.fileName},
+                             {.u64 = node->loc.begin.row},
+                             {.u64 = node->loc.begin.col},
+                             {.t = node->castExpr.expr->type},
+                             {.t = to}});
+        generateTypeUsage(ctx, to);
+        format(
+            ctx->state,
+            "){s}tmp._{u32}; })",
+            (FormatArg[]){{.s = typeIs(to, Pointer) ? "&" : ""}, {.u32 = idx}});
+    }
+    else {
+        if (typeIs(to, Pointer))
+            format(ctx->state, "&", NULL);
+        astConstVisit(visitor, node->castExpr.expr);
+        format(ctx->state, "._{u32}", (FormatArg[]){{.u32 = idx}});
+    }
+}
+
 static void generateIdentifier(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    for (u16 i = 0; i < node->ident.super; i++) {
+        format(ctx->state, "super.", NULL);
+    }
     format(ctx->state, "{s}", (FormatArg[]){{.s = node->ident.value}});
 }
 
@@ -129,39 +174,25 @@ static void generateGroupExpr(ConstAstVisitor *visitor, const AstNode *node)
 
 static void generateTypedExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    format(ctx->state, "(", NULL);
-    generateTypeUsage(ctx, node->type);
-    format(ctx->state, ")", NULL);
-    astConstVisit(visitor, node->typedExpr.expr);
+    if (typeIs(node->typedExpr.expr->type, Union)) {
+        generateUnionCast(visitor, node);
+    }
+    else {
+        CodegenContext *ctx = getConstAstVisitorContext(visitor);
+        format(ctx->state, "(", NULL);
+        generateTypeUsage(ctx, node->type);
+        format(ctx->state, ")", NULL);
+        astConstVisit(visitor, node->typedExpr.expr);
+    }
 }
 
 static void generateCastExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    u32 idx = UINT32_MAX;
     if (typeIs(node->castExpr.expr->type, Union)) {
-        idx = findUnionTypeIndex(node->castExpr.expr->type,
-                                 node->castExpr.to->type);
-        format(ctx->state, "({{ ", NULL);
-        generateTypeUsage(ctx, node->castExpr.expr->type);
-        format(ctx->state, " tmp = ", NULL);
-        astConstVisit(visitor, node->castExpr.expr);
-        format(ctx->state, "; ", NULL);
-        format(ctx->state,
-               "CXY__builtins_assert2(tmp.tag == {u32}, \"{s}\", {u64}, {u64}, "
-               "\"UnionCastPanic: cast from {t} to {t}, current idx = %d\", "
-               "tmp.tag); (",
-               (FormatArg[]){{.u32 = idx},
-                             {.s = node->loc.fileName},
-                             {.u64 = node->loc.begin.row},
-                             {.u64 = node->loc.begin.col},
-                             {.t = node->castExpr.expr->type},
-                             {.t = node->castExpr.to->type}});
-        generateTypeUsage(ctx, node->castExpr.to->type);
-        format(ctx->state, ")tmp._{u32}; })", (FormatArg[]){{.u32 = idx}});
+        generateUnionCast(visitor, node);
     }
     else {
+        CodegenContext *ctx = getConstAstVisitorContext(visitor);
         format(ctx->state, "(", NULL);
         generateTypeUsage(ctx, node->castExpr.to->type);
         format(ctx->state, ")", NULL);
@@ -568,7 +599,13 @@ void generateTypeUsage(CodegenContext *ctx, const Type *type)
         writeTypename(ctx, type);
         break;
     case typThis:
-        generateTypeUsage(ctx, type->this.that);
+        if (typeIs(type->this.that, Alias)) {
+            writeTypename(ctx, type->this.that);
+            format(ctx->state, "*", NULL);
+        }
+        else {
+            generateTypeUsage(ctx, type->this.that);
+        }
         break;
     case typOpaque:
     case typClass:
