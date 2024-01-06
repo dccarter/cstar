@@ -122,7 +122,9 @@ set(CXY_LANG_SOURCES
 
 
 set(CXY_OPERATIONS_SOURCES
-        src/cxy/lang/operations/bind.c
+        src/cxy/lang/operations/bind/bind.c
+        src/cxy/lang/operations/bind/phase1.c
+        src/cxy/lang/operations/bind/phase2.c
         src/cxy/lang/operations/check.c
         src/cxy/lang/operations/codegen.c
         src/cxy/lang/operations/comptime.c
@@ -132,7 +134,7 @@ set(CXY_OPERATIONS_SOURCES
         src/cxy/lang/operations/finalize.c
         src/cxy/lang/operations/json.c
         src/cxy/lang/operations/macro.c
-        src/cxy/lang/operations/shake.c
+        src/cxy/lang/operations/shake/shake.c
         src/cxy/lang/operations/yaml.c
         src/cxy/lang/operations/nodes/array.c
         src/cxy/lang/operations/nodes/assign.c

@@ -81,6 +81,7 @@
     f(asyncLaunch)              \
     f(asyncLaunchMember)        \
     f(sync)                     \
+    f(__name)                   \
     f(CXY__main)
 
 // clang-format on

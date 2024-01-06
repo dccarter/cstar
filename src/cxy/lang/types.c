@@ -219,6 +219,8 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
         return stripPointer(from)->tag == typNull ||
                isTypeAssignableFrom(to->optional.target, from);
     case typThis:
+        if (typeIs(to->this.that, Alias) && typeIs(from, Pointer))
+            return isTypeAssignableFrom(to->this.that, from->pointer.pointed);
         return to->this.that == from;
     case typTuple:
         if (!typeIs(from, Tuple) || to->tuple.count != from->tuple.count)
@@ -342,7 +344,9 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
         else
             return isTypeAssignableFrom(to, from);
     case typUnion:
-        return findUnionTypeIndex(from, to) != UINT32_MAX;
+        return findUnionTypeIndex(from,
+                                  typeIs(to, Pointer) ? to->pointer.pointed
+                                                      : to) != UINT32_MAX;
     case typClass:
         if (isVoidPointer(unwrappedTo))
             return true;
@@ -693,7 +697,10 @@ void printType(FormatState *state, const Type *type)
         printType(state, type->func.retType);
         break;
     case typThis:
-        printType(state, type->this.that);
+        if (type->this.that != NULL)
+            printType(state, type->this.that);
+        else
+            format(state, "Unresolved", NULL);
         break;
     case typEnum:
         printKeyword(state, "enum ");
@@ -903,6 +910,11 @@ const Type *getTypeBase(const Type *type)
     switch (type->tag) {
     case typClass:
         return type->tClass.inheritance ? type->tClass.inheritance->base : NULL;
+    case typStruct:
+        return type->tStruct.inheritance ? type->tStruct.inheritance->base
+                                         : NULL;
+    case typThis:
+        return getTypeBase(type->this.that);
     case typEnum:
         return type->tEnum.base;
     default:
@@ -994,4 +1006,38 @@ bool hasReferenceMembers(const Type *type)
             hasFlag(type->tClass.decl, ReferenceMembers)) ||
            (isStructType(type) &&
             hasFlag(type->tStruct.decl, ReferenceMembers));
+}
+
+void pushThisReference(const Type *this, AstNode *node)
+{
+    if (!typeIs(this, This))
+        return;
+    Type *type = (Type *)this;
+    if (type->this.references.elems == NULL)
+        type->this.references = newDynArray(sizeof(AstNode *));
+
+    DynArray *refs = &type->this.references;
+    pushOnDynArrayExplicit(refs, &node, sizeof(AstNode *));
+}
+
+void resolveThisReferences(TypeTable *table, const Type *this, const Type *type)
+{
+    if (!typeIs(this, This) || this->this.references.elems == NULL)
+        return;
+
+    DynArray *refs = (DynArray *)&this->this.references;
+
+    if (type != NULL) {
+        for (int i = 0; i < refs->size; i++) {
+            AstNode *node = dynArrayAt(AstNode **, refs, i);
+            u64 flags = flgNone;
+            if (!typeIs(node->type, This))
+                unwrapType(node->type, &flags);
+            node->type = makePointerType(table, type, flags);
+        }
+    }
+
+    freeDynArray(refs);
+    memset(&((Type *)this)->this.references, 0, sizeof(DynArray));
+    ((Type *)this)->this.trackReferences = false;
 }

@@ -15,6 +15,18 @@
 
 #include "core/alloc.h"
 
+static AstNode *getArrayDimension(AstNode *node)
+{
+    switch (node->tag) {
+    case astCastExpr:
+        return node->castExpr.expr;
+    case astTypedExpr:
+        return node->typedExpr.expr;
+    default:
+        return node;
+    }
+}
+
 static void generateArrayDelete(CodegenContext *context, const Type *type)
 {
     FormatState *state = context->state;
@@ -322,13 +334,18 @@ void checkArrayType(AstVisitor *visitor, AstNode *node)
     }
 
     u64 size = UINT64_MAX;
-    const Type *dim = checkType(visitor, node->arrayType.dim);
-    if (typeIs(dim, Error)) {
+    const Type *dim_ = checkType(visitor, node->arrayType.dim);
+    if (typeIs(dim_, Error)) {
         node->type = ERROR_TYPE(ctx);
         return;
     }
+    AstNode *dim = getArrayDimension(node->arrayType.dim);
+    if (dim == NULL) {
+        node->type = makeArrayType(ctx->types, element, size);
+        return;
+    }
 
-    if (nodeIs(node, IntegerLit)) {
+    if (!nodeIs(dim, IntegerLit)) {
         logError(ctx->L,
                  &node->loc,
                  "expecting array dimension to be constant integral type "
@@ -337,7 +354,7 @@ void checkArrayType(AstVisitor *visitor, AstNode *node)
         node->type = ERROR_TYPE(ctx);
         return;
     }
-    size = node->arrayType.dim->intLiteral.value;
+    size = dim->intLiteral.value;
     node->type = makeArrayType(ctx->types, element, size);
 }
 

@@ -34,12 +34,14 @@ typedef struct {
             AstNode *currentCall;
             AstNode *currentStruct;
             AstNode *currentClass;
+            bool shallow;
         } stack;
 
         struct {
             AstNode *currentCall;
             AstNode *currentStruct;
             AstNode *currentClass;
+            bool shallow;
         };
     };
 } TypingContext;
@@ -86,6 +88,7 @@ bool checkMemberFunctions(AstVisitor *visitor,
 
 void implementClassOrStructBuiltins(AstVisitor *visitor, AstNode *node);
 
+void checkBaseDecl(AstVisitor *visitor, AstNode *node);
 void checkImplements(AstVisitor *visitor,
                      AstNode *node,
                      const Type **implements,
@@ -145,13 +148,17 @@ const Type *makeCoroutineEntry(AstVisitor *visitor, AstNode *node);
 const Type *makeAsyncLaunchCall(AstVisitor *visitor,
                                 const Type *callee,
                                 AstNode *node);
+AstNode *makeEnumGetName(TypingContext *ctx, AstNode *node);
 
-const Type *checkPathElement(AstVisitor *visitor,
-                             const Type *parent,
-                             AstNode *node);
+const Type *checkMember(AstVisitor *visitor, const Type *parent, AstNode *node);
 
 const Type *checkMaybeComptime(AstVisitor *visitor, AstNode *node);
-const Type *checkType(AstVisitor *visitor, AstNode *node);
+const Type *checkTypeShallow(AstVisitor *visitor, AstNode *node, bool shallow);
+static inline const Type *checkType(AstVisitor *visitor, AstNode *node)
+{
+    return checkTypeShallow(visitor, node, true);
+}
+
 const Type *checkFunctionSignature(AstVisitor *visitor, AstNode *node);
 const Type *checkFunctionBody(AstVisitor *visitor, AstNode *node);
 
@@ -182,6 +189,7 @@ void checkMemberExpr(AstVisitor *visitor, AstNode *node);
 void checkTernaryExpr(AstVisitor *visitor, AstNode *node);
 
 void checkForStmt(AstVisitor *visitor, AstNode *node);
+void checkRangeExpr(AstVisitor *visitor, AstNode *node);
 void checkCaseStmt(AstVisitor *visitor, AstNode *node);
 void checkSwitchStmt(AstVisitor *visitor, AstNode *node);
 void checkMatchCaseStmt(AstVisitor *visitor, AstNode *node);

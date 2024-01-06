@@ -211,6 +211,22 @@ AstNode *makeStringLiteral(MemPool *pool,
                                   .stringLiteral = {.value = value}});
 }
 
+AstNode *makeIdentifier(MemPool *pool,
+                        const FileLoc *loc,
+                        cstring name,
+                        u32 super,
+                        AstNode *next,
+                        const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astIdentifier,
+                                  .flags = flgNone,
+                                  .next = next,
+                                  .type = type,
+                                  .ident = {.value = name, .super = super}});
+}
+
 AstNode *makePointerAstNode(MemPool *pool,
                             const FileLoc *loc,
                             u64 flags,
@@ -941,12 +957,16 @@ bool isLiteralExpr(const AstNode *node)
 
 bool isEnumLiteral(const AstNode *node)
 {
-    if (!typeIs(node->type, Enum) || !nodeIs(node, Path) ||
-        node->path.elements->next == NULL)
+    if (!typeIs(node->type, Enum))
         return false;
-
-    return (node->path.elements->next->flags & flgEnumLiteral) ==
-           flgEnumLiteral;
+    switch (node->tag) {
+    case astPath:
+        return hasFlag(node->path.elements->next, EnumLiteral);
+    case astMemberExpr:
+        return hasFlag(node->memberExpr.member, EnumLiteral);
+    default:
+        return false;
+    }
 }
 
 bool isIntegralLiteral(const AstNode *node)
@@ -1895,5 +1915,17 @@ CCodeKind getCCodeKind(TokenTag tag)
         return cSources;
     default:
         unreachable();
+    }
+}
+
+bool isLValueAstNode(const AstNode *node)
+{
+    switch (node->tag) {
+    case astPath:
+    case astIdentifier:
+    case astMemberExpr:
+        return true;
+    default:
+        return false;
     }
 }

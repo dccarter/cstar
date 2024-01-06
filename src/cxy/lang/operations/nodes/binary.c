@@ -487,7 +487,7 @@ static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
         node->type = ERROR_TYPE(ctx);
         return;
     }
-
+    
     transformToMemberCallExpr(
         visitor, node, node->binaryExpr.lhs, name, node->binaryExpr.rhs);
 
@@ -512,11 +512,14 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
 
     if ((typeIs(left_, Struct) && !hasFlag(left_->tStruct.decl, Native)) ||
         typeIs(left_, Class)) {
-        checkBinaryOperatorOverload(visitor, node);
-        return;
+        if (!nodeIs(node->binaryExpr.rhs, NullLit) || !isPointerType(left)) {
+            checkBinaryOperatorOverload(visitor, node);
+            return;
+        }
     }
 
     Operator op = node->binaryExpr.op;
+    node->binaryExpr.rhs->parentScope = node;
     const Type *right = checkType(visitor, node->binaryExpr.rhs);
     BinaryOperatorKind opKind = getBinaryOperatorKind(op);
 
@@ -536,16 +539,18 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
 
     switch (opKind) {
     case optNumeric:
-        if (!isNumericType(type)) {
-            logError(ctx->L,
-                     &node->loc,
-                     "cannot perform binary operation '{s}' on non-numeric "
-                     "type '{t}'",
-                     (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
-            node->type = ERROR_TYPE(ctx);
-            return;
-        }
-        break;
+
+        if (isNumericType(type) ||
+            (isPointerType(type) && (op == opAdd || op == opSub)))
+            break;
+
+        logError(ctx->L,
+                 &node->loc,
+                 "cannot perform binary operation '{s}' on non-numeric "
+                 "type '{t}'",
+                 (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
+        node->type = ERROR_TYPE(ctx);
+        return;
 
     case optInteger:
         if (!isIntegerType(type)) {

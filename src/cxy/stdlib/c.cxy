@@ -18,6 +18,8 @@ pub ## (
     O_RSYNC,
     O_CLOEXEC,
     O_DIRECTORY,
+    O_RDONLY,
+    O_WRONLY,
 
     F_DUPFD,
     F_GETFD,
@@ -34,12 +36,32 @@ pub ## (
     S_IRWXO,
     S_IROTH,
     S_IWOTH,
-    S_IXOTH
+    S_IXOTH,
+
+    SEEK_SET,
+    SEEK_CUR,
+    SEEK_END
 ) : i32
 
 pub ##(
+    malloc
+): func(size: u64) -> &void
+
+pub ##(
+    free
+): func(ptr: &void) -> void
+
+pub ##(
+    calloc
+): func(nitems: u64, size: u64) -> &void
+
+pub ##(
+    realloc
+): func(ptr: &void, size: u64) -> &void
+
+pub ##(
     open
-): func(pathname: &const char, flag: i32, mode: i32 = 0666) -> i32
+): func(pathname: &const char, flags: i32, mode: i32 = 0666) -> i32
 
 pub ##(
     openat
@@ -61,4 +83,11 @@ pub ##(
     fcntl
 ): func(fd: i32, cmd: i32, args: i32 = 0) -> i32
 
+pub ##(
+    lseek
+): func(fd: i32, offset: i64, whence: i32) -> i64
+
+pub ##(
+    strrchr
+): func(str: &const char, c: char) -> &char
 

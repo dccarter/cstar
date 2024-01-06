@@ -127,7 +127,7 @@ static void transformForCustomRange(AstVisitor *visitor,
     AstNode *rangeOperatorVar = makeVarDecl(
         ctx->pool,
         &range->loc,
-        range->flags & ~flgConst,
+        range->flags & ~(flgConst | flgTopLevelDecl),
         makeAnonymousVariable(ctx->strings, "tmpRange"),
         NULL,
         makeCallExpr(ctx->pool,
@@ -333,12 +333,18 @@ static void generateForStmtRange(ConstAstVisitor *visitor, const AstNode *node)
     astConstVisit(visitor, range->rangeExpr.start);
     format(ctx->state, "; ", NULL);
     astConstVisit(visitor, var->varDecl.names);
-    format(ctx->state, " < ", NULL);
+    if (range->rangeExpr.down)
+        format(ctx->state, " > ", NULL);
+    else
+        format(ctx->state, " < ", NULL);
     astConstVisit(visitor, range->rangeExpr.end);
     format(ctx->state, "; ", NULL);
     astConstVisit(visitor, var->varDecl.names);
     if (range->rangeExpr.step) {
-        format(ctx->state, " += ", NULL);
+        if (range->rangeExpr.down)
+            format(ctx->state, " -= ", NULL);
+        else
+            format(ctx->state, " += ", NULL);
         astConstVisit(visitor, range->rangeExpr.step);
     }
     else
@@ -537,6 +543,49 @@ void generateForStmt(ConstAstVisitor *visitor, const AstNode *node)
     else {
         unreachable("currently not supported");
     }
+}
+
+void checkRangeExpr(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    const Type *start = checkType(visitor, node->rangeExpr.start);
+    if (typeIs(start, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+    else if (!isNumericType(start)) {
+        logError(ctx->L,
+                 &node->rangeExpr.start->loc,
+                 "`range` start type '{t}' is not supported, expecting a "
+                 "numeric type",
+                 (FormatArg[]){{.t = start}});
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    const Type *end = checkType(visitor, node->rangeExpr.end);
+    if (!isTypeAssignableFrom(start, end)) {
+        logError(ctx->L,
+                 &node->rangeExpr.end->loc,
+                 "`range` inconsistent types, expect type `{t}`, but got `{t}`",
+                 (FormatArg[]){{.t = start}, {.t = end}});
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    if (node->rangeExpr.step) {
+        const Type *step = checkType(visitor, node->rangeExpr.end);
+        if (!isNumericType(step)) {
+            logError(ctx->L,
+                     &node->rangeExpr.start->loc,
+                     "`range` step type '{t}' is not supported, expecting a "
+                     "numeric type",
+                     (FormatArg[]){{.t = start}, {.t = end}});
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+    }
+    node->type = start;
 }
 
 void checkForStmt(AstVisitor *visitor, AstNode *node)

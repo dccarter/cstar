@@ -460,6 +460,15 @@ static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
         return lit;
     }
 
+    if (check(P, tokDot) && peek(P, 1)->tag == tokIdent) {
+        const Token tok = *advance(P);
+        AstNode *member = parseIdentifier(P);
+        return newAstNode(
+            P,
+            &tok.fileLoc.begin,
+            &(AstNode){.tag = astMemberExpr, .memberExpr = {.member = member}});
+    }
+
     switch (current(P)->tag) {
 #define f(O, T, ...) case tok##T:
         AST_PREFIX_EXPR_LIST(f)
@@ -633,6 +642,7 @@ static AstNode *implicitCast(Parser *P)
 static AstNode *range(Parser *P)
 {
     AstNode *start, *end, *step = NULL;
+    bool down = false;
     Token tok = *consume0(P, tokRange);
     consume0(P, tokLParen);
     start = expressionWithoutStructs(P);
@@ -641,13 +651,19 @@ static AstNode *range(Parser *P)
     if (match(P, tokComma)) {
         step = expressionWithoutStructs(P);
     }
+    if (match(P, tokComma)) {
+        consume0(P, tokTrue);
+        down = true;
+    }
     consume0(P, tokRParen);
 
-    return makeAstNode(
-        P->memPool,
-        &tok.fileLoc,
-        &(AstNode){.tag = astRangeExpr,
-                   .rangeExpr = {.start = start, .end = end, .step = step}});
+    return makeAstNode(P->memPool,
+                       &tok.fileLoc,
+                       &(AstNode){.tag = astRangeExpr,
+                                  .rangeExpr = {.start = start,
+                                                .end = end,
+                                                .step = step,
+                                                .down = down}});
 }
 
 static AstNode *closure(Parser *P)
@@ -1094,7 +1110,7 @@ static AstNode *expression(Parser *P, bool allowStructs)
     expr->attrs = attrs;
     Token *tok = NULL;
     if (!P->inCase && (tok = match(P, tokColon, tokBangColon))) {
-        u64 flags = tok->tag == tokBangColon ? flgCPointerCast : flgNone;
+        u64 flags = tok->tag == tokBangColon ? flgUnsafeCast : flgNone;
         AstNode *type = parseType(P);
         return newAstNode(
             P,
@@ -2105,7 +2121,7 @@ static AstNode *classOrStructDecl(Parser *P, bool isPublic, bool isNative)
         }
 
         if (match(P, tokColon)) {
-            if (tok.tag == tokClass && match(P, tokColon))
+            if (!check(P, tokColon))
                 base = parseType(P);
             if (match(P, tokColon))
                 implements = parseAtLeastOne(P,

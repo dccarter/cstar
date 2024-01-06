@@ -387,12 +387,23 @@ void shakeWhileStmt(AstVisitor *visitor, AstNode *node)
 void shakeFuncDecl(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
-    AstNode *params = node->funcDecl.signature->params, *param = params;
     u16 required = 0, total = 0;
     node->flags |= findAttribute(node, S_pure) == NULL ? flgNone : flgPure;
-
     bool hasDefaultParams = false, isVariadic = false;
+    if (node->funcDecl.target != NULL) {
+        AstNode *target = node->funcDecl.target;
+        // add this param
+        node->funcDecl.signature->params =
+            makeFunctionParam(ctx->pool,
+                              &target->loc,
+                              S_this,
+                              shallowCloneAstNode(ctx->pool, target),
+                              NULL,
+                              node->flags & flgConst,
+                              node->funcDecl.signature->params);
+    }
 
+    AstNode *params = node->funcDecl.signature->params, *param = params;
     for (; param; param = param->next) {
         total++;
         astVisit(visitor, param);
@@ -566,29 +577,6 @@ static void shakeGenericDecl(AstVisitor *visitor, AstNode *node)
     astVisit(visitor, decl);
 }
 
-static void shakeClassOrStructDecl(AstVisitor *visitor, AstNode *node)
-{
-    ShakeAstContext *ctx = getAstVisitorContext(visitor);
-
-    if (!hasFlag(node, Native)) {
-        AstNodeList members = {node->structDecl.members,
-                               getLastAstNode(node->structDecl.members)};
-        if (nodeIs(node, ClassDecl)) {
-            astVisit(visitor, node->classDecl.base);
-            insertAstNode(&members,
-                          createClassOrStructBuiltins(ctx->pool, node));
-        }
-        else if (findAttribute(node, S_poco) == NULL) {
-            insertAstNode(&members,
-                          createClassOrStructBuiltins(ctx->pool, node));
-        }
-        node->structDecl.members = members.first;
-    }
-
-    astVisitManyNodes(visitor, node->structDecl.implements);
-    astVisitManyNodes(visitor, node->structDecl.members);
-}
-
 static void shakeForStmt(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
@@ -694,8 +682,6 @@ static void shakeArrayType(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
     if (node->arrayType.dim == NULL) {
-        AstNode *slice = findBuiltinDecl(S_Slice);
-        csAssert0(slice);
         node->tag = astPath;
         node->type = NULL;
         node->path.elements =
@@ -703,7 +689,7 @@ static void shakeArrayType(AstVisitor *visitor, AstNode *node)
                                             &node->loc,
                                             S_Slice,
                                             flgNone,
-                                            slice,
+                                            NULL,
                                             NULL,
                                             node->arrayType.elementType,
                                             NULL);
@@ -723,8 +709,6 @@ AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
         [astForStmt] = shakeForStmt,
         [astFuncDecl] = shakeFuncDecl,
         [astGenericDecl] = shakeGenericDecl,
-        [astStructDecl] = shakeClassOrStructDecl,
-        [astClassDecl] = shakeClassOrStructDecl,
         [astBlockStmt] = shakeBlockStmt,
         [astStringExpr] = shakeStringExpr,
         [astArrayType] = shakeArrayType,

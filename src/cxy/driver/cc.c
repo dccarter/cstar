@@ -204,7 +204,7 @@ bool createSourceFile(CompilerDriver *driver,
     const Options *options = &driver->options;
     bool isImport = (flags & flgImportedModule), isMain = (flags & flgMain);
     char *sourceFile = getGeneratedPath(
-        &driver->options, isImport ? "c/imports" : "c/src", *filePath, ".c");
+        driver, isImport ? "c/imports" : "c/src", *filePath, ".c");
 
     makeDirectoryForPath(driver, sourceFile);
 

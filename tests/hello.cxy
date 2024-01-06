@@ -1,77 +1,17 @@
 import { println } from "stdlib/io.cxy"
-
-type Ast;
-
-struct AstBase {
-    next:  Ast
-    attrs: Ast
-
-    const func `str`(sb: StringBuilder) {}
-    const func `hash`() => 0
+import { Vector } from "stdlib/vector.cxy"
+//
+interface MemoryAllocator {
+    func allocate(size: u64): &void
+    func free(ptr: &void) : void
 }
 
-struct AstLiteral {
-    base: AstBase
-    value: bool | wchar | i64 | f64 | string
-
-    func `init`(value: bool) {
-        this.value = value
-    }
-
-    func `init`(value: wchar) {
-        this.value = value
-    }
-
-    func `init`(value: i64) {
-        this.value = value
-    }
-
-    func `init`(value: f64) {
-        this.value = value
-    }
-
-    func `init`(value: string) {
-        this.value = value
-    }
-
-    const func `str`(sb: StringBuilder) {}
-    const func `hash`() => 0
+class PoolAllocator ::MemoryAllocator {
+    func `init`(){}
+    func allocate(size: u64): &void => null
+    func free(ptr: &void) : void => {}
 }
 
-struct AstBinary {
-    base:   AstBase
-    left:   Ast
-    right:  Ast
-
-    func `init`(lhs: Ast, rhs: Ast) {
-        this.left = lhs;
-        this.right = rhs;
-    }
-
-    const func `str`(sb: StringBuilder) {}
-    const func `hash`() => 0
-}
-
-type Ast  = AstBase | AstLiteral | AstBinary
-func visit(ast: &Ast) {
-    match (ast) {
-        case AstLiteral as &lit => {
-            match (lit.value) {
-                case bool as value => println(value)
-                case wchar as value => println(value)
-                case i64 as value => println(value)
-                case f64 as value => println(value)
-                case string as value => println(value)
-            }
-        }
-        case AstBinary as &bin => {
-            visit(bin.left)
-            visit(bin.right)
-        }
-    }
-}
-
-func main(args: const [string]) {
-    var ast: Ast = AstLiteral("Hello");
-    visit(&ast)
+func main(args: [string]) {
+    hello(new[PoolAllocator](pool, ...))
 }

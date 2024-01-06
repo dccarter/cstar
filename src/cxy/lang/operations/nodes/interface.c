@@ -34,8 +34,8 @@ void checkImplements(AstVisitor *visitor,
         if (!typeIs(implements[i], Interface)) {
             logError(ctx->L,
                      &inf->loc,
-                     "only interfaces can be implemented by structs, type "
-                     "'{t}' is not an interface",
+                     "only interfaces can be implemented by structs or "
+                     "classes, type '{t}' is not an interface",
                      (FormatArg[]){{.t = implements[i]}});
             node->type = ERROR_TYPE(ctx);
             continue;

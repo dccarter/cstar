@@ -129,12 +129,13 @@ static void checkIdentifier(AstVisitor *visitor, AstNode *node)
     node->type = node->ident.resolvesTo->type;
 }
 
-const Type *checkType(AstVisitor *visitor, AstNode *node)
+const Type *checkTypeShallow(AstVisitor *visitor, AstNode *node, bool shallow)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     if (node == NULL)
         return NULL;
 
+    ctx->shallow = shallow;
     if (hasFlag(node, Comptime)) {
         node->flags &= ~flgComptime;
         bool status = evaluate(ctx->evaluator, node);
@@ -148,7 +149,12 @@ const Type *checkType(AstVisitor *visitor, AstNode *node)
         return node->type;
 
     astVisit(visitor, node);
-    return resolveType(node->type);
+    const Type *type = resolveType(node->type),
+               *unwrapped = unwrapType(type, NULL);
+    if (typeIs(unwrapped, This) && unwrapped->this.trackReferences) {
+        pushThisReference(unwrapped, node);
+    }
+    return type;
 }
 
 static void checkGenericDecl(AstVisitor *visitor, AstNode *node)
@@ -481,6 +487,11 @@ void checkCastExpr(AstVisitor *visitor, AstNode *node)
                  (FormatArg[]){{.t = expr}, {.t = target}});
     }
     node->type = target;
+    if (typeIs(expr, Union)) {
+        node->castExpr.idx = findUnionTypeIndex(
+            expr, typeIs(target, Pointer) ? target->pointer.pointed : target);
+        csAssert0(node->castExpr.idx != UINT32_MAX);
+    }
 
     if (!hasFlag(target, Optional) || hasFlag(expr, Optional))
         return;
@@ -518,6 +529,12 @@ void checkTypedExpr(AstVisitor *visitor, AstNode *node)
                  (FormatArg[]){{.t = expr}, {.t = type}});
         node->type = ERROR_TYPE(ctx);
         return;
+    }
+
+    if (typeIs(expr, Union)) {
+        node->castExpr.idx = findUnionTypeIndex(
+            expr, typeIs(type, Pointer) ? type->pointer.pointed : type);
+        csAssert0(node->castExpr.idx != UINT32_MAX);
     }
 
     if (!hasFlag(type, Optional) || hasFlag(expr, Optional))
@@ -734,6 +751,7 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astAssignExpr] = checkAssignExpr,
         [astIndexExpr] = checkIndexExpr,
         [astStructExpr] = checkStructExpr,
+        [astRangeExpr] = checkRangeExpr,
         [astNewExpr] = checkNewExpr,
         [astCastExpr] = checkCastExpr,
         [astTypedExpr] = checkTypedExpr,

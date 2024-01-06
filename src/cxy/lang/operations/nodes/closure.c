@@ -121,21 +121,28 @@ static AstNode *makeClosureForwardFunction(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *call = findMemberByName(node, S_CallOverload);
     csAssert0(call);
-    AstNode *ptrParam = makeFunctionParam(
-        ctx->pool,
-        &node->loc,
-        S_ptr,
-        makeTypeReferenceNode(
-            ctx->pool, makeVoidPointerType(ctx->types, flgNone), &node->loc),
-        NULL,
-        flgNone,
-        deepCloneAstNode(ctx->pool, call->funcDecl.signature->params));
+    AstNodeList params = {};
+    insertAstNode(
+        &params,
+        makeFunctionParam(
+            ctx->pool,
+            &node->loc,
+            S_ptr,
+            makeTypeReferenceNode(ctx->pool,
+                                  makeVoidPointerType(ctx->types, flgNone),
+                                  &node->loc),
+            NULL,
+            flgNone,
+            NULL));
+    for (AstNode *param = call->funcDecl.signature->params; param;
+         param = param->next)
+        insertAstNode(&params, deepCloneAstNode(ctx->pool, param));
 
     AstNode *forward = makeFunctionDecl(
         ctx->pool,
         &node->loc,
         makeStringConcat(ctx->strings, node->structDecl.name, "__forward"),
-        ptrParam,
+        params.first,
         makeTypeReferenceNode(ctx->pool, call->type->func.retType, &node->loc),
         makeExprStmt(ctx->pool,
                      &node->loc,
@@ -175,9 +182,9 @@ static AstNode *makeClosureForwardFunction(AstVisitor *visitor, AstNode *node)
                                           &node->loc,
                                           S_ptr,
                                           flgNone,
-                                          ptrParam,
+                                          params.first,
                                           NULL,
-                                          ptrParam->type),
+                                          params.first->type),
                          makeTypeReferenceNode(
                              ctx->pool,
                              makePointerType(ctx->types, node->type, flgNone),

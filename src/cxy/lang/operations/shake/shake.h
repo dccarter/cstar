@@ -5,7 +5,7 @@
 #ifndef CXY_SHAKE_H
 #define CXY_SHAKE_H
 
-#include <lang/ast.h>
+#include "lang/ast.h"
 
 AstNode *createClassOrStructBuiltins(MemPool *pool, AstNode *node);
 

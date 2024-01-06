@@ -14,32 +14,91 @@
 
 #include "core/alloc.h"
 
-const Type *checkPathElement(AstVisitor *visitor,
-                             const Type *parent,
-                             AstNode *node)
+static AstNode *resolveMember(TypingContext *ctx,
+                              const Type *parent,
+                              AstNode *node,
+                              u64 *flags,
+                              cstring name)
+{
+    AstNode *decl = findMemberDeclInType(parent, name);
+    if (decl != NULL && decl->type != NULL) {
+        *flags = decl->type->flags | decl->flags;
+    }
+    else {
+        logError(ctx->L,
+                 &node->loc,
+                 "type '{t}' does not have a member named '{s}'",
+                 (FormatArg[]){{.t = parent}, {.s = name}});
+    }
+    return decl;
+}
+
+static AstNode *resolveMemberUpInheritance(TypingContext *ctx,
+                                           const Type *parent,
+                                           AstNode *node,
+                                           u64 *flags,
+                                           cstring name,
+                                           int depth)
+{
+    AstNode *decl = findMemberDeclInType(parent, name);
+    if (decl == NULL) {
+        TypeInheritance *inheritance = typeIs(parent, Struct)
+                                           ? parent->tStruct.inheritance
+                                           : parent->tClass.inheritance;
+        const Type *base = inheritance ? inheritance->base : NULL;
+        if (base) {
+            return resolveMemberUpInheritance(
+                ctx, base, node, flags, name, depth + 1);
+        }
+        else if (depth == 0) {
+            logError(ctx->L,
+                     &node->loc,
+                     "type '{t}' does not have a member named '{s}'",
+                     (FormatArg[]){{.t = parent}, {.s = name}});
+        }
+        return NULL;
+    }
+    if (nodeIs(node, Identifier))
+        node->ident.super = depth;
+    else
+        node->pathElement.super = depth;
+
+    *flags = decl->flags;
+    return decl;
+}
+
+const Type *checkMember(AstVisitor *visitor, const Type *parent, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
+    cstring name =
+        nodeIs(node, PathElem) ? node->pathElement.name : node->ident.value;
     u64 flags = flgNone;
     const Type *resolved = NULL;
     AstNode *decl = NULL;
     switch (parent->tag) {
     case typEnum:
-        resolved = expectInType(
-            ctx->types, parent, ctx->L, node->pathElement.name, &node->loc);
-        flags = flgEnumLiteral;
+        if (name == S___name) {
+            resolved = makeStringType(ctx->types);
+            flags |= flgEnumLiteral;
+        }
+        else {
+            resolved =
+                expectInType(ctx->types, parent, ctx->L, name, &node->loc);
+            flags = flgEnumLiteral;
+        }
         break;
     case typThis:
+        return checkMember(visitor, parent->this.that, node);
     case typStruct:
+    case typClass:
+        decl = resolveMemberUpInheritance(ctx, parent, node, &flags, name, 0);
+        resolved = decl ? decl->type : NULL;
+        break;
     case typInterface:
     case typModule:
-    case typClass:
-        decl = findMemberDeclInType(parent, node->pathElement.name);
-        if (decl != NULL && decl->type != NULL) {
-            resolved = decl->type;
-            flags = resolved->flags | decl->flags;
-            break;
-        }
-        // fallthrough
+        decl = resolveMember(ctx, parent, node, &flags, name);
+        resolved = decl ? decl->type : NULL;
+        break;
     default:
         logError(ctx->L,
                  &node->loc,
@@ -59,8 +118,13 @@ const Type *checkPathElement(AstVisitor *visitor,
 
     node->type = resolved;
     node->flags = flags;
-    node->pathElement.resolvesTo = decl;
-
+    if (nodeIs(node, Identifier))
+        node->ident.resolvesTo = decl;
+    else
+        node->pathElement.resolvesTo = decl;
+    if (nodeIs(decl, Identifier) && hasFlag(decl, Define)) {
+        node->_namedNode.name = decl->ident.value;
+    }
     return resolved;
 }
 
@@ -95,7 +159,10 @@ static const Type *checkBasePathElement(AstVisitor *visitor,
         csAssert0(node->pathElement.resolvesTo);
         node->flags |=
             (nodeIs(node->pathElement.resolvesTo, Field) ? flgMember : flgNone);
-        return node->type = checkType(visitor, node->pathElement.resolvesTo);
+        return node->type =
+                   node->pathElement.resolvesTo->type
+                       ?: checkTypeShallow(
+                              visitor, node->pathElement.resolvesTo, true);
     }
 }
 
@@ -108,8 +175,12 @@ void generatePathElement(ConstAstVisitor *visitor, const AstNode *node)
                (FormatArg[]){{.s = hasFlag(node, Inherited) ? "super." : ""},
                              {.s = node->pathElement.name}});
     }
-    else
+    else {
+        for (u16 i = 0; i < node->pathElement.super; i++) {
+            format(ctx->state, "super.", NULL);
+        }
         format(ctx->state, "{s}", (FormatArg[]){{.s = node->pathElement.name}});
+    }
 }
 
 void generatePath(ConstAstVisitor *visitor, const AstNode *node)
@@ -118,21 +189,19 @@ void generatePath(ConstAstVisitor *visitor, const AstNode *node)
     const AstNode *parent =
         typeIs(node->type, Func) ? node->type->func.decl->parentScope : NULL;
 
-    if (typeIs(node->type, Enum) &&
+    if (typeIs(node->path.elements->type, Enum) &&
         hasFlag(node->path.elements->next, EnumLiteral)) {
-        //        AstNode *resolved =
-        //        node->path.elements->pathElement.resolvesTo; parent = resolved
-        //        ? resolved->parentScope : NULL; if (nodeIs(parent, Program) &&
-        //        ctx->namespace == NULL) {
-        //            AstNode *module = parent->program.module;
-        //            if (module)
-        //                writeDeclNamespace(ctx, module->moduleDecl.name,
-        //                NULL);
-        //        }
-
-        writeEnumWithoutNamespace(ctx, node->type);
-        generateManyAstsWithDelim(
-            visitor, "_", "_", "", node->path.elements->next);
+        if (node->path.elements->next->pathElement.name == S___name) {
+            writeEnumWithoutNamespace(ctx, node->path.elements->type);
+            format(ctx->state,
+                   "__get_name({s})",
+                   (FormatArg[]){{.s = node->path.elements->pathElement.name}});
+        }
+        else {
+            writeEnumWithoutNamespace(ctx, node->path.elements->type);
+            generateManyAstsWithDelim(
+                visitor, "_", "_", "", node->path.elements->next);
+        }
     }
     else if (hasFlag(node, BuiltinMember) || nodeIs(parent, StructDecl) ||
              (typeIs(node->type, Func) &&
@@ -146,10 +215,14 @@ void generatePath(ConstAstVisitor *visitor, const AstNode *node)
         const AstNode *elem = node->path.elements, *next = elem->next;
         AstNode *resolved = elem->pathElement.resolvesTo;
         parent = resolved ? resolved->parentScope : NULL;
-        if (typeIs(elem->type, Module) && !typeIs(next->type, Container)) {
+        if (typeIs(elem->type, Module) && typeIs(next->type, Container)) {
             elem = next;
         }
-        else if (nodeIs(parent, Program) && elem->pathElement.name != S_this) {
+        else if (typeIs(elem->type, Module) && hasFlag(next, Define)) {
+            elem = next;
+        }
+        else if (nodeIs(parent, Program) && elem->pathElement.name != S_this &&
+                 !hasFlag(node, Define)) {
             AstNode *module = parent->program.module;
             if (module)
                 writeDeclNamespace(ctx, module->moduleDecl.name, NULL);
@@ -193,13 +266,15 @@ void checkPath(AstVisitor *visitor, AstNode *node)
     }
 
     u64 flags = base->flags | base->pathElement.resolvesTo->flags;
+    const Type *prev = stripAll(type);
     for (; elem; elem = elem->next) {
-        type = checkPathElement(visitor, stripAll(type), elem);
+        type = checkMember(visitor, prev, elem);
         if (typeIs(type, Error)) {
             node->type = ERROR_TYPE(ctx);
             return;
         }
         flags = elem->flags;
+        prev = type;
     }
 
     node->type = type;

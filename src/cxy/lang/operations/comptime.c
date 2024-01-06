@@ -91,6 +91,9 @@ static AstNode *getName(EvalContext *ctx, const FileLoc *loc, AstNode *node)
     case astClassDecl:
         name = node->structDecl.name;
         break;
+    case astEnumDecl:
+        name = node->enumDecl.name;
+        break;
     case astFuncDecl:
         name = node->funcDecl.name;
         break;

@@ -113,7 +113,7 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
     //        AstNode *func = findEnclosingFunc(ctx->env, NULL, NULL);
     //        left->flags |= (func->flags & flgConst);
     //    }
-
+    right->parentScope = node;
     const Type *rhs = checkType(visitor, right);
     if (typeIs(rhs, Error)) {
         node->type = ERROR_TYPE(ctx);

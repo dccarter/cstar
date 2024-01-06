@@ -1,22 +1,22 @@
 module io
 
-import { write, STDOUT } from "./c.cxy"
+import "./c.cxy" as C
 
 pub func print[T](it: const T) {
     @flatten
     #if (T.isString) {
         @flatten
         #if (T.isStruct) {
-            write(STDOUT, it.str, it.count)
+            C.write(C.STDOUT, it.str, it.count)
         }
         else {
-            write(STDOUT, it: string, len!(it))
+            C.write(C.STDOUT, it: string, len!(it))
         }
     }
     else {
         var j;
         var str = f"${it}";
-        write(STDOUT, str.str, str.count)
+        C.write(C.STDOUT, str.str, str.count)
     }
 }
 
@@ -30,5 +30,48 @@ pub func println(@transient ...args: const auto) {
         #{i += 1}
     }
 
-    write(STDOUT, "\n" : &const char, 1)
+    C.write(C.STDOUT, "\n" : &const char, 1)
+}
+
+struct File {
+    fd: i32 = -1
+
+    @inline
+    func `init`(fd: i32) {
+        this.fd = fd
+    }
+
+    func read(data: &void, size: u64) : u64? {
+        if (fd == -1)
+            return null
+
+        var bytes = C.read(fd, data, size);
+        if (bytes == -1)
+            return null
+
+        return <u64>bytes;
+    }
+
+    func read(data: &void, size: u64, off: i64) : u64? {
+        if (fd == -1)
+            return null
+
+        if (C.lseek(fd, off, C.SEEK_SET) == -1)
+            return null
+
+        var bytes = C.read(fd, data, size);
+        if (bytes == -1)
+            return null
+
+        return <u64>bytes;
+    }
+
+    @inline
+    func `!!`() => fd != -1
+
+    @inline
+    func seek(off: u64, whence: i32 = C.SEEK_SET) => C.lseek(fd, off:i64, whence)
+
+    const func `str`(sb: StringBuilder) => {}
+    const func `hash`() => fd
 }

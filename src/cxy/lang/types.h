@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "core/array.h"
 #include "core/format.h"
 #include "core/utils.h"
 
@@ -151,6 +152,8 @@ typedef struct Type {
         } pointer;
 
         struct {
+            bool trackReferences;
+            DynArray references;
             const Type *that;
         } this;
 
@@ -397,3 +400,7 @@ const Type *getOptionalType();
 const Type *getOptionalTargetType(const Type *type);
 const Type *getSliceTargetType(const Type *type);
 u32 findUnionTypeIndex(const Type *tagged, const Type *type);
+void pushThisReference(const Type *this, AstNode *node);
+void resolveThisReferences(TypeTable *table,
+                           const Type *this,
+                           const Type *type);

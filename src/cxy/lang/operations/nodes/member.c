@@ -17,9 +17,9 @@
 
 static inline const Type *isStructMethodRef(const AstNode *node)
 {
-    return (node->type->tag == typFunc && node->type->func.decl &&
-            node->type->func.decl->parentScope &&
-            node->type->func.decl->parentScope->tag == astStructDecl)
+    return typeIs(node->type, Func) && node->type->func.decl &&
+                   node->type->func.decl->parentScope &&
+                   isClassOrStructAstNode(node->type->func.decl->parentScope)
                ? node->type->func.decl->parentScope->type
                : NULL;
 }
@@ -81,11 +81,70 @@ static bool evalStringMemberExpr(EvalContext *ctx, AstNode *node)
     return false;
 }
 
+static const Type *determineMemberTargetType(TypingContext *ctx,
+                                             const AstNode *parent,
+                                             AstNode *node)
+{
+    if (parent == NULL)
+        return NULL;
+
+    const Type *type = NULL;
+    switch (parent->tag) {
+    case astVarDecl:
+        type = parent->varDecl.type ? parent->varDecl.type->type : NULL;
+        break;
+    case astAssignExpr:
+    case astBinaryExpr:
+        type = parent->assignExpr.lhs->type;
+        break;
+    case astSwitchStmt:
+        type = parent->switchStmt.cond->type;
+        break;
+    case astCaseStmt:
+        return determineMemberTargetType(ctx, parent->parentScope, node);
+    case astFuncParam:
+        type = parent->funcParam.type->type;
+        break;
+    case astFieldExpr:
+        type = parent->type;
+        break;
+    default:
+        break;
+    }
+
+    if (type == NULL) {
+        logError(ctx->L,
+                 &node->loc,
+                 "shorthand member expression not supported on current context",
+                 NULL);
+        return NULL;
+    }
+
+    const Type *stripped = stripOnce(type, NULL);
+    if (!typeIs(stripped, Enum)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "shorthand member expression on type '{t}', only supported on "
+                 "enum types",
+                 (FormatArg[]){{.t = type}});
+    }
+
+    node->memberExpr.target = makeResolvedPath(ctx->pool,
+                                               &node->loc,
+                                               type->name,
+                                               type->flags & flgConst,
+                                               type->tEnum.decl,
+                                               NULL,
+                                               type);
+    return type;
+}
+
 void generateMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     const AstNode *target = node->memberExpr.target,
                   *member = node->memberExpr.member;
+    const Type *target_ = stripOnce(target->type, NULL);
     const Type *scope = isStructMethodRef(node);
 
     if (scope) {
@@ -93,6 +152,11 @@ void generateMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
             writeTypename(ctx, scope);
             format(ctx->state, "__", NULL);
         }
+        astConstVisit(visitor, member);
+    }
+    else if (typeIs(target_, Enum)) {
+        writeTypename(ctx, target_);
+        format(ctx->state, "_", NULL);
         astConstVisit(visitor, member);
     }
     else {
@@ -117,7 +181,13 @@ void checkMemberExpr(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *target = node->memberExpr.target,
             *member = node->memberExpr.member;
-    const Type *target_ = checkType(visitor, target);
+    const Type *target_ =
+        target ? checkType(visitor, target)
+               : determineMemberTargetType(ctx, node->parentScope, node);
+    if (target_ == NULL) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
     if (typeIs(target_, Error)) {
         node->type = ERROR_TYPE(ctx);
         return;
@@ -130,7 +200,7 @@ void checkMemberExpr(AstVisitor *visitor, AstNode *node)
 
     target_ = stripAll(target_);
     if (nodeIs(member, Identifier)) {
-        node->type = findMemberInType(target_, member->ident.value);
+        node->type = checkMember(visitor, target_, member);
         if (node->type == NULL) {
             logError(ctx->L,
                      &member->loc,
@@ -138,10 +208,26 @@ void checkMemberExpr(AstVisitor *visitor, AstNode *node)
                      (FormatArg[]){{.t = target_}, {.s = member->ident.value}});
             node->type = ERROR_TYPE(ctx);
         }
+        if (member->ident.super) {
+            node->memberExpr.target = makeMemberExpr(
+                ctx->pool,
+                &target->loc,
+                target->flags,
+                target,
+                makeIdentifier(ctx->pool,
+                               &target->loc,
+                               S_super,
+                               member->ident.super - 1,
+                               NULL,
+                               member->ident.resolvesTo->parentScope->type),
+                NULL,
+                member->ident.resolvesTo->parentScope->type);
+            member->ident.super--;
+        }
     }
     else if (nodeIs(member, Path)) {
         AstNode *name = member->path.elements;
-        node->type = checkPathElement(visitor, target_, name);
+        node->type = checkMember(visitor, target_, name);
         if (node->type == NULL) {
             logError(
                 ctx->L,

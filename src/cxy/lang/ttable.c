@@ -735,6 +735,7 @@ const Type *makeStructType(TypeTable *table,
                            NamedTypeMember *members,
                            u64 membersCount,
                            AstNode *decl,
+                           const Type *base,
                            const Type **interfaces,
                            u64 interfacesCount,
                            u64 flags)
@@ -747,7 +748,7 @@ const Type *makeStructType(TypeTable *table,
         type->tStruct.members =
             makeTypeMembersContainer(table, members, membersCount);
         type->tStruct.inheritance =
-            makeTypeInheritance(table, NULL, interfaces, interfacesCount);
+            makeTypeInheritance(table, base, interfaces, interfacesCount);
         type->tStruct.decl = decl;
     }
 
@@ -784,6 +785,7 @@ const Type *replaceStructType(TypeTable *table,
                               NamedTypeMember *members,
                               u64 membersCount,
                               AstNode *decl,
+                              const Type *base,
                               const Type **interfaces,
                               u64 interfacesCount,
                               u64 flags)
@@ -794,6 +796,7 @@ const Type *replaceStructType(TypeTable *table,
                           members,
                           membersCount,
                           decl,
+                          base,
                           interfaces,
                           interfacesCount,
                           flags);
@@ -930,6 +933,8 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right)
         default:
             return NULL;
         }
+    case typPointer:
+        return isIntegralType(_right) ? _left : NULL;
     default:
         return NULL;
     }
