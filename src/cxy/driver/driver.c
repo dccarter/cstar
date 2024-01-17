@@ -1,6 +1,5 @@
 #include "driver.h"
 #include "builtins.h"
-#include "cc.h"
 #include "options.h"
 #include "stages.h"
 
@@ -8,13 +7,12 @@
 #include "core/mempool.h"
 #include "core/utils.h"
 
-#include "lang/ast.h"
-#include "lang/builtins.h"
-#include "lang/flag.h"
-#include "lang/lexer.h"
-#include "lang/parser.h"
-#include "lang/strings.h"
-#include "lang/ttable.h"
+#include "lang/frontend/ast.h"
+#include "lang/frontend/flag.h"
+#include "lang/frontend/lexer.h"
+#include "lang/frontend/parser.h"
+#include "lang/frontend/strings.h"
+#include "lang/frontend/ttable.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -148,38 +146,6 @@ cstring getFilenameWithoutDirs(cstring fileName)
     return fileName;
 }
 
-cstring getRelativeDirectory(CompilerDriver *driver, cstring filePath)
-{
-    cstring libDir = driver->options.libDir ?: driver->currentDir;
-    return strncmp(libDir, filePath, driver->currentDirLen) == 0
-               ? libDir
-               : driver->sourceDir;
-}
-
-char *getGeneratedPath(CompilerDriver *driver,
-                       cstring dir,
-                       cstring filePath,
-                       cstring ext)
-{
-    FormatState state = newFormatState("    ", true);
-    cstring fp = filePath, fd = getRelativeDirectory(driver, filePath);
-    while (fd && *fp && *fd && *fd == *fp)
-        fp++, fd++;
-    if (*fp && *fp == '/')
-        fp++;
-
-    format(&state,
-           "{s}/{s}/{s}{s}",
-           (FormatArg[]){{.s = driver->options.buildDir ?: "./"},
-                         {.s = dir},
-                         {.s = fp},
-                         {.s = ext}});
-
-    char *path = formatStateToString(&state);
-    freeFormatState(&state);
-    return path;
-}
-
 void makeDirectoryForPath(CompilerDriver *driver, cstring path)
 {
     u64 len;
@@ -261,11 +227,24 @@ static bool compileBuiltin(CompilerDriver *driver,
 
     program->flags |= flgBuiltinsModule;
     if (compileProgram(driver, program, fileName)) {
-        initializeBuiltins(driver->L, &program->loc, program->type);
         return true;
     }
 
     return false;
+}
+
+bool initCompilerDriver(CompilerDriver *compiler, Log *log)
+{
+    char tmp[PATH_MAX];
+    compiler->pool = newMemPool();
+    compiler->strPool = newStrPool(&compiler->pool);
+    compiler->typeTable = newTypeTable(&compiler->pool, &compiler->strPool);
+    compiler->moduleCache = newHashTable(sizeof(CachedModule));
+    compiler->L = log;
+    internCommonStrings(&compiler->strPool);
+    const Options *options = &compiler->options;
+
+    return true;
 }
 
 static bool configureDriverSourceDir(CompilerDriver *driver, cstring *fileName)
@@ -283,37 +262,6 @@ static bool configureDriverSourceDir(CompilerDriver *driver, cstring *fileName)
     driver->sourceDir =
         makeStringSized(&driver->strPool, tmp, driver->sourceDirLen);
     *fileName = makeString(&driver->strPool, tmp);
-    return true;
-}
-
-bool initCompilerDriver(CompilerDriver *compiler, Log *log)
-{
-    char tmp[PATH_MAX];
-    compiler->pool = newMemPool();
-    compiler->strPool = newStrPool(&compiler->pool);
-    compiler->typeTable = newTypeTable(&compiler->pool, &compiler->strPool);
-    compiler->moduleCache = newHashTable(sizeof(CachedModule));
-    compiler->nativeSources = newHashTable(sizeof(cstring));
-    compiler->linkLibraries = newHashTable(sizeof(cstring));
-    compiler->currentDir =
-        makeString(&compiler->strPool, getcwd(tmp, PATH_MAX));
-    compiler->currentDirLen = strlen(compiler->currentDir);
-    compiler->L = log;
-    internCommonStrings(&compiler->strPool);
-    const Options *options = &compiler->options;
-
-    if (options->cmd != cmdDev) {
-        if (!generateAllBuiltinSources(compiler))
-            return false;
-    }
-
-    if (options->cmd == cmdBuild || !options->withoutBuiltins) {
-        return compileBuiltin(compiler,
-                              CXY_BUILTINS_SOURCE,
-                              CXY_BUILTINS_SOURCE_SIZE,
-                              "__builtins.cxy");
-    }
-
     return true;
 }
 
@@ -376,6 +324,9 @@ const Type *compileModule(CompilerDriver *driver,
         }
 
         program = parseFile(driver, name);
+        if (program == NULL)
+            return NULL;
+
         if (program->program.module == NULL) {
             logError(driver->L,
                      &source->loc,
@@ -383,9 +334,6 @@ const Type *compileModule(CompilerDriver *driver,
                      (FormatArg[]){{.s = name}});
             return NULL;
         }
-
-        if (program == NULL)
-            return NULL;
 
         program->flags |= flgImportedModule;
         if (!compileProgram(driver, program, name))

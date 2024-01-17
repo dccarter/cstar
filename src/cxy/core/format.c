@@ -1,6 +1,6 @@
 #include "core/format.h"
 #include "core/alloc.h"
-#include "lang/types.h"
+#include "lang/frontend/types.h"
 
 #include <assert.h>
 #include <inttypes.h>

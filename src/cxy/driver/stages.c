@@ -3,9 +3,8 @@
 //
 
 #include "stages.h"
-#include "cc.h"
 
-#include "lang/flag.h"
+#include "lang/frontend/flag.h"
 #include "lang/operations.h"
 
 #include <ctype.h>
@@ -166,10 +165,10 @@ static AstNode *executeFinalizeAst(CompilerDriver *driver, AstNode *node)
 static AstNode *executeGenerateCode(CompilerDriver *driver, AstNode *node)
 {
     csAssert0(nodeIs(node, Metadata));
-    if (!(node->metadata.stages & BIT(ccsFinalize))) {
+    if (!(node->metadata.stages & BIT(ccsTypeCheck))) {
         logError(driver->L,
                  builtinLoc(),
-                 "cannot generate code for an un-finalized ast",
+                 "cannot generate code for an unbound ast",
                  NULL);
         return NULL;
     }
@@ -181,13 +180,7 @@ static AstNode *executeGenerateCode(CompilerDriver *driver, AstNode *node)
     if (hasErrors(driver->L))
         return NULL;
 
-    bool status = createSourceFile(
-        driver, &state, &node->metadata.filePath, node->metadata.node->flags);
     freeFormatState(&state);
-
-    if (!status) {
-        return NULL;
-    }
 
     node->metadata.stages |= BIT(ccsCodegen);
     node->metadata.state = NULL;
@@ -209,7 +202,6 @@ static AstNode *executeTargetCompile(CompilerDriver *driver, AstNode *node)
     if (!hasFlag(node->metadata.node, Main))
         return node;
 
-    compileCSourceFile(driver, node->metadata.filePath);
     free((void *)node->metadata.filePath);
     node->metadata.stages |= BIT(ccsCompile);
     return node;
@@ -305,11 +297,12 @@ static CompilerStageExecutor compilerStageExecutors[ccsCOUNT] = {
     [ccsShake] = executeShakeAst,
     [ccsBind] = executeBindAst,
     [ccsTypeCheck] = executeTypeCheckAst,
-    [ccsFinalize] = executeFinalizeAst,
+//    [ccsFinalize] = executeFinalizeAst,
     [ccsCodegen] = executeGenerateCode,
     // TODO causing issues
     // [ccsCollect] = executeCollect,
-    [ccsCompile] = executeTargetCompile};
+    // [ccsCompile] = executeTargetCompile
+};
 
 AstNode *executeCompilerStage(CompilerDriver *driver,
                               CompilerStage stage,

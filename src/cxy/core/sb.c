@@ -88,6 +88,13 @@ void stringBuilderAppendInt(StringBuilder *sb, i64 num)
     stringBuilderAppendCstr0(sb, data, len);
 }
 
+void stringBuilderAppendUInt(StringBuilder *sb, u64 num)
+{
+    char data[32];
+    i64 len = sprintf(data, "%" PRIu64, num);
+    stringBuilderAppendCstr0(sb, data, len);
+}
+
 void stringBuilderAppendFloat(StringBuilder *sb, f64 num)
 {
     char data[32];

@@ -230,10 +230,6 @@ attr(noreturn) attr(format, printf, 1, 2) void cxyAbort(const char *fmt, ...);
         T1 f;                                                                  \
         T2 s;                                                                  \
     }
-#define unpack(A, B, P)                                                        \
-    __typeof(P) LINE_VAR(uPp) = (P);                                           \
-    __typeof__((P).f) A = LINE_VAR(uPp).f;                                     \
-    __typeof__((P).s) B = LINE_VAR(uPp).s
 
 #define make(T, ...) ((T){__VA_ARGS__})
 #define New(P, T, ...)                                                         \
@@ -252,6 +248,8 @@ static inline unsigned ilog2(uintmax_t i)
 }
 
 size_t convertEscapeSeq(const char *str, size_t n, u32 *res);
+size_t escapeString(const char *str, size_t n, char *dst, size_t size);
+
 bool isColorSupported(FILE *);
 char *readFile(const char *fileName, size_t *file_size);
 int binarySearch(const void *arr,

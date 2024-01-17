@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <lang/ast.h>
+#include "lang/frontend/ast.h"
 
 struct CompilerDriver;
 

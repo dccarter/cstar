@@ -1,0 +1,210 @@
+//
+// Created by Carter Mbotho on 2024-01-09.
+//
+
+#include "check.h"
+
+#include "lang/frontend/flag.h"
+
+typedef enum {
+    optInvalid = -1,
+    optNumeric,
+    optInteger,
+    optLogical,
+    optComparison,
+    optEquality,
+    optRange,
+} BinaryOperatorKind;
+
+static BinaryOperatorKind getBinaryOperatorKind(Operator op)
+{
+    switch (op) {
+        // Numeric arithmetic
+#define f(O, ...) case op##O:
+        AST_ARITH_EXPR_LIST(f)
+        return optNumeric;
+
+        AST_BIT_EXPR_LIST(f)
+        AST_SHIFT_EXPR_LIST(f)
+        return optInteger;
+
+        AST_LOGIC_EXPR_LIST(f)
+        return optLogical;
+
+        AST_CMP_EXPR_LIST(f)
+        return (op == opEq || op == opNe) ? optEquality : optComparison;
+#undef f
+    case opRange:
+        return optRange;
+    default:
+        unreachable("");
+    }
+}
+
+static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+
+    const Type *left = node->binaryExpr.lhs->type;
+    cstring name = getOpOverloadName(node->binaryExpr.op);
+    const Type *target = stripPointer(left);
+    const NamedTypeMember *overload = findStructMember(stripAll(target), name);
+
+    if (overload == NULL) {
+        logError(ctx->L,
+                 &node->loc,
+                 "struct '{t}' does not not overload '{s}' binary operator",
+                 (FormatArg[]){{.t = target},
+                               {.s = getBinaryOpString(node->binaryExpr.op)}});
+        node->type = ERROR_TYPE(ctx);
+    }
+
+    const Type *right = checkType(visitor, node->binaryExpr.rhs);
+    if (typeIs(right, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    transformToMemberCallExpr(
+        visitor, node, node->binaryExpr.lhs, name, node->binaryExpr.rhs);
+
+    checkType(visitor, node);
+}
+
+void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    const Type *left = checkType(visitor, node->binaryExpr.lhs),
+               *left_ = stripAll(left);
+
+    if ((typeIs(left_, Struct) && !hasFlag(left_->tStruct.decl, Native)) ||
+        typeIs(left_, Class)) {
+        if (!nodeIs(node->binaryExpr.rhs, NullLit) || !isPointerType(left)) {
+            checkBinaryOperatorOverload(visitor, node);
+            return;
+        }
+    }
+
+    Operator op = node->binaryExpr.op;
+    node->binaryExpr.rhs->parentScope = node;
+    const Type *right = checkType(visitor, node->binaryExpr.rhs);
+    BinaryOperatorKind opKind = getBinaryOperatorKind(op);
+
+    const Type *type = unwrapType(promoteType(ctx->types, left, right), NULL);
+
+    if (type == NULL) {
+        logError(ctx->L,
+                 &node->loc,
+                 "binary operation '{s}' between type '{t}' and '{t}' is not "
+                 "supported",
+                 (FormatArg[]){
+                     {.s = getBinaryOpString(op)}, {.t = left}, {.t = right}});
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+    node->type = type;
+
+    switch (opKind) {
+    case optNumeric:
+
+        if (isNumericType(type) ||
+            (isPointerType(type) && (op == opAdd || op == opSub)))
+            break;
+
+        logError(ctx->L,
+                 &node->loc,
+                 "cannot perform binary operation '{s}' on non-numeric "
+                 "type '{t}'",
+                 (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
+        node->type = ERROR_TYPE(ctx);
+        return;
+
+    case optInteger:
+        if (!isIntegerType(type)) {
+            logError(ctx->L,
+                     &node->loc,
+                     "cannot perform binary operation '{s}' on non-integer "
+                     "type '{t}'",
+                     (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+        break;
+
+    case optLogical:
+        if (!isBooleanType(type)) {
+            logError(ctx->L,
+                     &node->loc,
+                     "cannot perform logical binary operation '{s}' on "
+                     "non-boolean "
+                     "type '{t}'",
+                     (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+        break;
+
+    case optComparison:
+        if (!isNumericType(type)) {
+            logError(ctx->L,
+                     &node->loc,
+                     "cannot perform comparison binary operation '{s}' on "
+                     "non-numeric "
+                     "type '{t}'",
+                     (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
+            return;
+            node->type = ERROR_TYPE(ctx);
+        }
+        node->type = getPrimitiveType(ctx->types, prtBool);
+        break;
+
+    case optEquality:
+        if (!typeIs(type, Primitive) && !typeIs(type, Pointer) &&
+            !typeIs(type, String) && !typeIs(type, Enum) &&
+            !typeIs(type, Opaque)) {
+            logError(ctx->L,
+                     &node->loc,
+                     "cannot perform equality binary operation '{s}' on "
+                     "type '{t}'",
+                     (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+        node->type = getPrimitiveType(ctx->types, prtBool);
+        break;
+
+    case optRange: {
+        if (!isIntegralType(left)) {
+            logError(ctx->L,
+                     &node->loc,
+                     "expecting an integral type for range expression "
+                     "start, got "
+                     "type '{t}'",
+                     (FormatArg[]){{.t = left}});
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+
+        if (!isIntegralType(right)) {
+            logError(ctx->L,
+                     &node->loc,
+                     "expecting an integral type for range expression end, got "
+                     "type '{t}'",
+                     (FormatArg[]){{.t = left}});
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+
+        AstNode binary = *node;
+        clearAstBody(node);
+        node->tag = astRangeExpr;
+        node->rangeExpr.start = binary.binaryExpr.lhs;
+        node->rangeExpr.end = binary.binaryExpr.rhs;
+        node->rangeExpr.step = NULL;
+        node->type = getPrimitiveType(ctx->types, prtI64);
+        break;
+    }
+    default:
+        unreachable("");
+    }
+}

@@ -4,10 +4,11 @@
 
 #pragma once
 
-#include <driver/driver.h>
-#include <lang/ast.h>
+#include "driver/driver.h"
+#include "lang/frontend/ast.h"
 
 typedef struct cJSON cJSON;
+
 AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node);
 AstNode *dumpAstJson(CompilerDriver *driver, AstNode *node, FILE *file);
 AstNode *dumpAstToYaml(CompilerDriver *driver, AstNode *node, FILE *file);
