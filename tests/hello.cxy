@@ -1,15 +1,11 @@
 
 pub native func printf(fmt: string, ...args: auto) : i32;
-
-var num:i32 = 20;
-func hello() : &void {
-    return &num
-}
+pub native func read(fd: i32, buf: &void, count: u64): i64;
 
 pub func main(): i32 {
-    var x = hello() : &i32;
-    var y = x.[0];
-    return y
+    var data: [i8, 64];
+
+    return <i32>read(0, data, 64);
 }
 
 func min[T](a: T, b: T)  => a < b? a : b
