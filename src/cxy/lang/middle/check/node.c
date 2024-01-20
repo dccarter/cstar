@@ -108,7 +108,7 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
 
     // turn S(...) => ({ var tmp = S{}; tmp.init(...); tmp; })
 
-    cstring name = makeAnonymousVariable(ctx->strings, "_new_tmp");
+    cstring name = makeAnonymousVariable(ctx->strings, "s");
     // S{}
     AstNode *structExpr =
         typeIs(callee->type, Struct)

@@ -19,6 +19,12 @@ typedef struct AstVisitor {
     void (*dispatch)(Visitor, struct AstVisitor *, AstNode *);
 } AstVisitor;
 
+typedef struct AstModifier {
+    AstNode *parent;
+    AstNode *previous;
+    AstNode *current;
+} AstModifier;
+
 typedef struct ConstAstVisitor ConstAstVisitor;
 
 typedef void (*ConstVisitor)(struct ConstAstVisitor *, const AstNode *);
@@ -53,3 +59,6 @@ void astVisit(AstVisitor *visitor, AstNode *node);
 void astVisitManyNodes(AstVisitor *visitor, AstNode *node);
 void astConstVisit(ConstAstVisitor *visitor, const AstNode *node);
 void astConstVisitManyNodes(ConstAstVisitor *visitor, const AstNode *node);
+
+void astModifierAdd(AstModifier *ctx, AstNode *node);
+void astModifierAddAsNext(AstModifier *ctx, AstNode *node);

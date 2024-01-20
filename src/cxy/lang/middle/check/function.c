@@ -141,6 +141,9 @@ bool checkMemberFunctions(AstVisitor *visitor,
     bool retype = false;
     for (u64 i = 0; member; member = member->next, i++) {
         if (nodeIs(member, FuncDecl)) {
+            if (member->funcDecl.this_)
+                member->funcDecl.this_->type = makePointerType(
+                    ctx->types, node->type, member->flags & flgConst);
             const Type *type = checkFunctionBody(visitor, member);
             if (typeIs(type, Error)) {
                 node->type = ERROR_TYPE(ctx);

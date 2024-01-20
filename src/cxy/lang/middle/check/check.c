@@ -134,6 +134,7 @@ static void checkReturnStmt(AstVisitor *visitor, AstNode *node)
     AstNode *expr = node->returnStmt.expr, *func = node->returnStmt.func,
             *ret = nodeIs(func, FuncDecl) ? func->funcDecl.signature->ret
                                           : func->closureExpr.ret;
+
     const Type *expr_ =
         expr ? checkType(visitor, expr) : makeVoidType(ctx->types);
 
@@ -509,7 +510,7 @@ const FileLoc *manyNodesLoc_(FileLoc *dst, AstNode *nodes)
         return dst;
     }
 
-    return locExtend(dst, &nodes->loc, &getLastAstNode(nodes)->loc);
+    return locExtend_(dst, &nodes->loc, &getLastAstNode(nodes)->loc);
 }
 
 const FileLoc *lastNodeLoc_(FileLoc *dst, AstNode *nodes)

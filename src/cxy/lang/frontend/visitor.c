@@ -321,3 +321,22 @@ void astConstVisitFallbackVisitAll(ConstAstVisitor *visitor,
 
 void astVisitSkip(AstVisitor *visitor, AstNode *node) {}
 void astConstVisitSkip(ConstAstVisitor *visitor, const AstNode *node) {}
+
+void astModifierAdd(AstModifier *ctx, AstNode *node)
+{
+    csAssert0(ctx->current);
+
+    node->next = ctx->current;
+    if (ctx->previous)
+        ctx->previous->next = node;
+    else
+        ctx->parent->program.decls = node;
+    ctx->previous = node;
+}
+
+void astModifierAddAsNext(AstModifier *ctx, AstNode *node)
+{
+    csAssert0(ctx->current);
+    node->next = ctx->current->next;
+    ctx->current->next = node;
+}

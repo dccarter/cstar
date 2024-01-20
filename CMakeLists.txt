@@ -148,6 +148,7 @@ set(CXY_MIDDLE_SOURCES
         src/cxy/lang/middle/dump/json.c
         src/cxy/lang/middle/dump/yaml.c
 
+        src/cxy/lang/middle/shake/closure.c
         src/cxy/lang/middle/shake/shake.c)
 
 set(CXY_LANG_BACKEND_SOURCES
@@ -155,7 +156,8 @@ set(CXY_LANG_BACKEND_SOURCES
         src/cxy/lang/backend/llvm/binary.cpp
         src/cxy/lang/backend/llvm/codegen.cpp
         src/cxy/lang/backend/llvm/context.cpp
-        src/cxy/lang/backend/llvm/for.cpp)
+        src/cxy/lang/backend/llvm/for.cpp
+        src/cxy/lang/backend/llvm/simplify.c)
 
 set(CXY_DRIVER_SOURCES
         src/cxy/driver/driver.c

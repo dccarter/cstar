@@ -12,46 +12,33 @@
 static const Type *createStructForClosure(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    AstNode *fields = NULL, *it = NULL;
+    AstNodeList members = {};
 
     for (u64 i = 0; i < node->closureExpr.captureCount; i++) {
         Capture *capture = &node->closureExpr.capture[i];
-        AstNode *field = makeAstNode(
-            ctx->pool,
-            &capture->node->loc,
-            &(AstNode){
-                .tag = astField,
-                .type = capture->node->type,
-                .flags = flgPrivate | capture->node->flags | flgMember,
-                .structField = {
-                    .name = getCapturedNodeName(capture->node),
-                    .type = makeTypeReferenceNode(
-                        ctx->pool, capture->node->type, &capture->node->loc)}});
-        if (fields == NULL) {
-            fields = it = field;
-        }
-        else {
-            it = it->next = field;
-        }
+        insertAstNode(
+            &members,
+            makeStructField(ctx->pool,
+                            &capture->node->loc,
+                            getCapturedNodeName(capture->node),
+                            flgPrivate | capture->node->flags | flgMember,
+                            makeTypeReferenceNode(ctx->pool,
+                                                  capture->node->type,
+                                                  &capture->node->loc),
+                            NULL,
+                            NULL));
     }
 
-    AstNode *func = makeAstNode(
-        ctx->pool,
-        &node->loc,
-        &(AstNode){.tag = astFuncDecl,
-                   .type = NULL,
-                   .funcDecl = {.name = S_CallOverload,
-                                .operatorOverload = opCallOverload,
-                                .signature = makeFunctionSignature(
-                                    ctx->pool,
-                                    &(FunctionSignature){
-                                        .params = node->closureExpr.params,
-                                        .ret = node->closureExpr.ret}),
-                                .body = node->closureExpr.body}});
-    if (it)
-        it->next = func;
-    else
-        fields = func;
+    AstNode *func = insertAstNode(&members,
+                                  makeFunctionDecl(ctx->pool,
+                                                   &node->loc,
+                                                   S_CallOverload,
+                                                   node->closureExpr.params,
+                                                   node->closureExpr.ret,
+                                                   node->closureExpr.body,
+                                                   flgNone,
+                                                   NULL,
+                                                   NULL));
 
     AstNode *closure =
         makeAstNode(ctx->pool,
@@ -59,9 +46,24 @@ static const Type *createStructForClosure(AstVisitor *visitor, AstNode *node)
                     &(AstNode){.tag = astStructDecl,
                                .flags = flgClosure,
                                .structDecl = {.name = makeAnonymousVariable(
-                                                  ctx->strings, "CXY__closure"),
-                                              .members = fields}});
-    it = fields;
+                                                  ctx->strings, "__Closure"),
+                                              .members = members.first}});
+
+    func->funcDecl.this_ =
+        makeFunctionParam(ctx->pool,
+                          &func->loc,
+                          S_this,
+                          makeResolvedPath(ctx->pool,
+                                           &func->loc,
+                                           closure->structDecl.name,
+                                           flgNone,
+                                           closure,
+                                           func->funcDecl.signature->params,
+                                           NULL),
+                          NULL,
+                          flgNone,
+                          NULL);
+    AstNode *it = members.first;
     for (; it; it = it->next) {
         it->parentScope = closure;
     }
@@ -79,36 +81,33 @@ static void transformClosureToStructExpr(AstVisitor *visitor,
                                          AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    AstNode *fields = NULL, *it = NULL;
+    AstNodeList fields = {};
 
     for (u64 i = 0; i < node->closureExpr.captureCount; i++) {
         Capture *capture = &node->closureExpr.capture[i];
         cstring name = getCapturedNodeName(capture->node);
-        AstNode *field = makeAstNode(
-            ctx->pool,
-            &capture->node->loc,
-            &(AstNode){.tag = astFieldExpr,
-                       .type = capture->node->type,
-                       .flags = flgPrivate | capture->node->flags,
-                       .fieldExpr = {.name = name,
-                                     .value = makePath(ctx->pool,
-                                                       &node->loc,
-                                                       name,
-                                                       capture->node->flags |
-                                                           capture->flags,
-                                                       capture->node->type)}});
-        if (fields == NULL) {
-            fields = it = field;
-        }
-        else {
-            it = it->next = field;
-        }
+        insertAstNode(&fields,
+                      // file: value
+                      makeFieldExpr(ctx->pool,
+                                    &capture->node->loc,
+                                    name,
+                                    flgPrivate | capture->node->flags,
+                                    // value
+                                    makeResolvedPath(ctx->pool,
+                                                     &node->loc,
+                                                     name,
+                                                     capture->node->flags |
+                                                         capture->flags,
+                                                     capture->node,
+                                                     NULL,
+                                                     capture->node->type),
+                                    NULL));
     }
 
     clearAstBody(node);
     node->tag = astStructExpr;
     node->type = type;
-    node->structExpr.fields = fields;
+    node->structExpr.fields = fields.first;
     node->structExpr.left =
         makePath(ctx->pool, &node->loc, type->name, flgNone, type);
 }
@@ -118,7 +117,10 @@ static AstNode *makeClosureForwardFunction(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *call = findMemberByName(node, S_CallOverload);
     csAssert0(call);
+
     AstNodeList params = {};
+    AstNodeList argList = {NULL};
+
     insertAstNode(
         &params,
         makeFunctionParam(
@@ -131,29 +133,10 @@ static AstNode *makeClosureForwardFunction(AstVisitor *visitor, AstNode *node)
             NULL,
             flgNone,
             NULL));
-    for (AstNode *param = call->funcDecl.signature->params; param;
-         param = param->next)
-        insertAstNode(&params, deepCloneAstNode(ctx->pool, param));
 
-    AstNode *forward = makeFunctionDecl(
-        ctx->pool,
-        &node->loc,
-        makeStringConcat(ctx->strings, node->structDecl.name, "__forward"),
-        params.first,
-        makeTypeReferenceNode(ctx->pool, call->type->func.retType, &node->loc),
-        makeExprStmt(ctx->pool,
-                     &node->loc,
-                     flgNone,
-                     NULL,
-                     NULL,
-                     call->type->func.retType),
-        flgNone,
-        NULL,
-        NULL);
-
-    AstNodeList argList = {NULL};
-    AstNode *param = forward->funcDecl.signature->params->next;
+    AstNode *param = call->funcDecl.signature->params;
     for (; param; param = param->next) {
+        insertAstNode(&params, shallowCloneAstNode(ctx->pool, param));
         insertAstNode(&argList,
                       makeResolvedPath(ctx->pool,
                                        &param->loc,
@@ -164,43 +147,69 @@ static AstNode *makeClosureForwardFunction(AstVisitor *visitor, AstNode *node)
                                        param->type));
     }
 
-    AstNode *body = forward->funcDecl.body;
-    body->exprStmt.expr = makeCallExpr(
+    // func __Closure__fwd(self: &void, ...) : Ret =>
+    //      (<&__Closure>self).op__call(...)
+    AstNode *forward = makeFunctionDecl(
         ctx->pool,
         &node->loc,
-        makeMemberExpr(
+        makeStringConcat(ctx->strings, node->structDecl.name, "__fwd"),
+        // self: &void, ...
+        params.first,
+        // Ret
+        makeTypeReferenceNode(ctx->pool, call->type->func.retType, &node->loc),
+        // (<&__Closure>self).op__call(...)
+        makeExprStmt(
             ctx->pool,
             &node->loc,
             flgNone,
-            makeCastExpr(ctx->pool,
-                         &node->loc,
-                         flgNone,
-                         makeResolvedPath(ctx->pool,
-                                          &node->loc,
-                                          S_ptr,
-                                          flgNone,
-                                          params.first,
-                                          NULL,
-                                          params.first->type),
-                         makeTypeReferenceNode(
-                             ctx->pool,
-                             makePointerType(ctx->types, node->type, flgNone),
-                             &node->loc),
-                         NULL,
-                         makePointerType(ctx->types, node->type, flgNone)),
-            makeResolvedPath(ctx->pool,
-                             &node->loc,
-                             S_CallOverload,
-                             call->flags,
-                             call,
-                             NULL,
-                             call->type),
+            // (<&__Closure>self).op__call(...)
+            makeCallExpr(
+                ctx->pool,
+                &node->loc,
+                // (<&__Closure>self).op__call
+                makeMemberExpr(
+                    ctx->pool,
+                    &node->loc,
+                    flgNone,
+                    // (<&__Closure>self)
+                    makeCastExpr(
+                        ctx->pool,
+                        &node->loc,
+                        flgNone,
+                        // self
+                        makeResolvedPath(ctx->pool,
+                                         &node->loc,
+                                         S_ptr,
+                                         flgNone,
+                                         params.first,
+                                         NULL,
+                                         params.first->type),
+                        // &__Closure
+                        makeTypeReferenceNode(
+                            ctx->pool,
+                            makePointerType(ctx->types, node->type, flgNone),
+                            &node->loc),
+                        NULL,
+                        makePointerType(ctx->types, node->type, flgNone)),
+                    // op__call
+                    makeResolvedPath(ctx->pool,
+                                     &node->loc,
+                                     S_CallOverload,
+                                     call->flags,
+                                     call,
+                                     NULL,
+                                     call->type),
+                    NULL,
+                    call->type),
+                argList.first,
+                flgNone,
+                NULL,
+                call->type->func.retType),
             NULL,
-            call->type),
-        argList.first,
+            NULL),
         flgNone,
         NULL,
-        call->type->func.retType);
+        NULL);
 
     const Type *type = checkType(visitor, forward);
     if (typeIs(type, Error))

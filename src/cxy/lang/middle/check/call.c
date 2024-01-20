@@ -158,8 +158,19 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
 
         flags &= ~flgConst;
         const Type *overload = findStructMemberType(callee_, S_CallOverload);
-        if (overload)
+        if (overload) {
             callee_ = overload;
+            callee = makeMemberExpr(
+                ctx->pool,
+                &callee->loc,
+                callee->flags,
+                callee,
+                makeIdentifier(
+                    ctx->pool, &callee->loc, S_CallOverload, 0, NULL, overload),
+                NULL,
+                overload);
+            node->callExpr.callee = callee;
+        }
     }
     else if (typeIs(callee_, Tuple) && hasFlag(callee_, FuncTypeParam)) {
         node->callExpr.callee = makeMemberExpr(
@@ -211,7 +222,7 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
     for (u64 i = 0; arg; arg = arg->next, i++) {
         if (isVariadic && i >= callee_->func.paramsCount)
             break;
-        
+
         const Type *type = callee_->func.params[i], *expr = arg->type;
         if (hasFlag(type, FuncTypeParam))
             arg->type = type;

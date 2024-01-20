@@ -9,7 +9,10 @@
 #include <vector>
 
 extern "C" {
+#include "llvm.h"
+
 #include "lang/frontend/flag.h"
+#include "lang/frontend/strings.h"
 #include "lang/frontend/ttable.h"
 #include "lang/frontend/visitor.h"
 }
@@ -37,6 +40,11 @@ static llvm::Function *generateFunctionProto(AstVisitor *visitor, AstNode *node)
     Type *type = const_cast<Type *>(node->type);
     std::vector<llvm::Type *> params;
 
+    if (auto this_ = node->funcDecl.this_) {
+        // add this parameter
+        node->funcDecl.signature->params = this_;
+    }
+
     AstNode *param = node->funcDecl.signature->params;
     for (u64 i = 0; param; param = param->next, i++) {
         if (hasFlag(node, Variadic) && hasFlag(param, Variadic))
@@ -49,7 +57,7 @@ static llvm::Function *generateFunctionProto(AstVisitor *visitor, AstNode *node)
                                 params,
                                 hasFlag(node, Variadic)),
         getLinkageType(node),
-        type->name,
+        ctx.makeTypeName(node),
         &ctx.module());
 
     updateType(type, func);
@@ -165,19 +173,19 @@ static llvm::Value *generateCastExpr(AstVisitor *visitor,
     }
 }
 
-void visitBoolLit(AstVisitor *visitor, AstNode *node)
+static void visitBoolLit(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
     ctx.returnValue(ctx.builder().getInt1(node->boolLiteral.value));
 }
 
-void visitCharLit(AstVisitor *visitor, AstNode *node)
+static void visitCharLit(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
     ctx.returnValue(ctx.builder().getInt32(node->charLiteral.value));
 }
 
-void visitIntegerLit(AstVisitor *visitor, AstNode *node)
+static void visitIntegerLit(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
     ctx.returnValue(llvm::ConstantInt::get(ctx.getLLVMType(node->type),
@@ -185,21 +193,21 @@ void visitIntegerLit(AstVisitor *visitor, AstNode *node)
                                            node->intLiteral.isNegative));
 }
 
-void visitFloatLit(AstVisitor *visitor, AstNode *node)
+static void visitFloatLit(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
     ctx.returnValue(llvm::ConstantFP::get(
         ctx.context(), llvm::APFloat(node->floatLiteral.value)));
 }
 
-void visitStringLit(AstVisitor *visitor, AstNode *node)
+static void visitStringLit(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
     ctx.returnValue(
         ctx.builder().CreateGlobalStringPtr(node->stringLiteral.value));
 }
 
-void visitPathElement(AstVisitor *visitor, AstNode *node)
+static void visitPathElement(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
     auto target = node->pathElement.resolvesTo;
@@ -219,53 +227,51 @@ void visitPathElement(AstVisitor *visitor, AstNode *node)
     }
 }
 
-void visitPath(AstVisitor *visitor, AstNode *node)
+static void visitIdentifierExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
-    AstNode *base = node->path.elements, *elem = base->next;
-    auto target = base->pathElement.resolvesTo;
+    auto target = node->ident.resolvesTo;
     auto value = static_cast<llvm::Value *>(target->codegen);
 
-    for (; elem; elem = elem->next) {
-        if (hasFlag(target, TopLevelDecl)) {
-            // reference to a global variable
-            auto variable = llvm::dyn_cast<llvm::GlobalVariable>(value);
-            ctx.builder().CreateLoad(
-                variable->getValueType(), value, base->pathElement.name);
-        }
-        else if (nodeIs(target, VarDecl) || nodeIs(target, FuncParam)) {
-            auto variable = static_cast<llvm::AllocaInst *>(target->codegen);
-            ctx.builder().CreateLoad(
-                variable->getAllocatedType(), value, base->pathElement.name);
-        }
-
-        target = elem->pathElement.resolvesTo;
-        csAssert0(target);
-        value = static_cast<llvm::Value *>(target->codegen);
-        base = elem;
+    if (ctx.stack().loadVariable) {
+        ctx.returnValue(ctx.builder().CreateLoad(
+            ctx.getLLVMType(node->type), value, node->ident.value));
     }
+    else {
+        ctx.returnValue(value);
+    }
+}
+
+static void visitMemberExpr(AstVisitor *visitor, AstNode *node)
+{
+    auto &ctx = LLVMContext::from(visitor);
+    auto target = node->memberExpr.target;
+    auto type = target->type;
+
+    auto load = ctx.stack().loadVariable;
+    ctx.stack().loadVariable = typeIs(type, Pointer);
+    auto value = codegen(visitor, target);
+    ctx.stack().loadVariable = load;
+
+    auto member = node->memberExpr.member;
+    csAssert0(nodeIs(member, Identifier));
+    auto field = member->ident.resolvesTo;
+    csAssert0(nodeIs(field, Field));
+
+    value = ctx.builder().CreateStructGEP(
+        ctx.getLLVMType(stripPointer(target->type)),
+        value,
+        field->fieldExpr.index,
+        field->fieldExpr.name);
 
     if (ctx.stack().loadVariable) {
-        if (hasFlag(target, TopLevelDecl)) {
-            // reference to a global variable
-            auto variable = llvm::dyn_cast<llvm::GlobalVariable>(value);
-            ctx.returnValue(
-                ctx.builder().CreateLoad(variable->getValueType(), variable));
-            return;
-        }
-        else if (nodeIs(target, VarDecl) || nodeIs(target, FuncParam)) {
-            auto variable = static_cast<llvm::AllocaInst *>(target->codegen);
-            ctx.returnValue(
-                ctx.builder().CreateLoad(variable->getAllocatedType(),
-                                         variable,
-                                         base->pathElement.name));
-            return;
-        }
+        value = ctx.builder().CreateLoad(ctx.getLLVMType(member->type), value);
     }
+
     ctx.returnValue(value);
 }
 
-void visitCastExpr(AstVisitor *visitor, AstNode *node)
+static void visitCastExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
     auto to = unwrapType(node->castExpr.to->type, nullptr);
@@ -273,7 +279,7 @@ void visitCastExpr(AstVisitor *visitor, AstNode *node)
     ctx.returnValue(value);
 }
 
-void visitAddrOfExpr(AstVisitor *visitor, AstNode *node)
+static void visitAddrOfExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
     auto load = ctx.stack().loadVariable;
@@ -284,7 +290,7 @@ void visitAddrOfExpr(AstVisitor *visitor, AstNode *node)
     ctx.returnValue(value);
 }
 
-void visitIndexExpr(AstVisitor *visitor, AstNode *node)
+static void visitIndexExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
     auto type = node->indexExpr.target->type;
@@ -322,7 +328,7 @@ void visitIndexExpr(AstVisitor *visitor, AstNode *node)
         ctx.returnValue(variable);
 }
 
-void visitTypedExpr(AstVisitor *visitor, AstNode *node)
+static void visitTypedExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
     auto value =
@@ -333,7 +339,7 @@ void visitTypedExpr(AstVisitor *visitor, AstNode *node)
     ctx.returnValue(value);
 }
 
-void visitAssignExpr(AstVisitor *visitor, AstNode *node)
+static void visitAssignExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
     if (node->binaryExpr.op != opAssign) {
@@ -352,9 +358,11 @@ void visitAssignExpr(AstVisitor *visitor, AstNode *node)
     ctx.stack().loadVariable = false;
     auto variable = codegen(visitor, node->binaryExpr.lhs);
     ctx.stack().loadVariable = true;
+    node->codegen = variable;
 
     if (variable == nullptr)
         return;
+
     auto value = codegen(visitor, node->binaryExpr.rhs);
     if (value == nullptr)
         return;
@@ -373,7 +381,7 @@ void visitAssignExpr(AstVisitor *visitor, AstNode *node)
     ctx.returnValue(ctx.builder().CreateStore(value, variable));
 }
 
-void visitTernaryExpr(AstVisitor *visitor, AstNode *node)
+static void visitTernaryExpr(AstVisitor *visitor, AstNode *node)
 {
     // This is ok to do since the structure of a ternary node is the same as
     // that of an if
@@ -382,7 +390,7 @@ void visitTernaryExpr(AstVisitor *visitor, AstNode *node)
     astVisit(visitor, node);
 }
 
-void visitUnaryExpr(AstVisitor *visitor, AstNode *node)
+static void visitUnaryExpr(AstVisitor *visitor, AstNode *node)
 {
     if (node->unaryExpr.isPrefix) {
         visitPrefixUnaryExpr(visitor, node);
@@ -404,7 +412,7 @@ void visitUnaryExpr(AstVisitor *visitor, AstNode *node)
     ctx.returnValue(value);
 }
 
-void visitCallExpr(AstVisitor *visitor, AstNode *node)
+static void visitCallExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
     auto func = node->callExpr.callee->type;
@@ -420,14 +428,29 @@ void visitCallExpr(AstVisitor *visitor, AstNode *node)
         args.push_back(value);
     }
 
-    ctx.returnValue(ctx.builder().CreateCall(callee, args, "calltmp"));
+    ctx.returnValue(ctx.builder().CreateCall(callee, args));
+}
+
+static void visitStructExpr(AstVisitor *visitor, AstNode *node)
+{
+    auto &ctx = LLVMContext::from(visitor);
+    if (node->structExpr.fields) {
+        auto obj = ctx.createUndefined(node->type);
+
+        auto field = node->structExpr.fields;
+        for (u64 i = 0; field; field = field->next, i++) {
+            auto value = codegen(visitor, field->fieldExpr.value);
+            obj = ctx.builder().CreateInsertValue(obj, value, i);
+        }
+        ctx.returnValue(obj);
+    }
 }
 
 void visitReturnStmt(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
     if (node->returnStmt.expr) {
-        auto expr = node->returnStmt.expr, func = node->returnStmt.func;
+        auto expr = node->returnStmt.expr, func = ctx.stack().currentFunction;
         auto funcReturnType = unwrapType(func->type->func.retType, nullptr);
         auto value = generateCastExpr(visitor, funcReturnType, expr);
         ctx.builder().CreateStore(
@@ -437,114 +460,6 @@ void visitReturnStmt(AstVisitor *visitor, AstNode *node)
     ctx.builder().CreateBr(
         static_cast<llvm::BasicBlock *>(ctx.stack().funcEnd));
     ctx.unreachable = true;
-}
-
-void visitVariableDecl(AstVisitor *visitor, AstNode *node)
-{
-    auto &ctx = LLVMContext::from(visitor);
-    if (hasFlag(node, TopLevelDecl)) {
-        // global variable
-        ctx.module().getOrInsertGlobal(node->varDecl.name,
-                                       ctx.getLLVMType(node->type));
-        auto var = ctx.module().getGlobalVariable(node->varDecl.name);
-        var->setAlignment(llvm::Align(4));
-        var->setConstant(hasFlag(node, Const));
-        if (node->varDecl.init) {
-            auto value = codegen(visitor, node->varDecl.init);
-            var->setInitializer(llvm::dyn_cast<llvm::Constant>(value));
-        }
-        node->codegen = var;
-        ctx.returnValue(var);
-        return;
-    }
-
-    auto func = ctx.builder().GetInsertBlock()->getParent();
-    llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(),
-                                 func->getEntryBlock().begin());
-    auto variable = ctx.createStackVariable(node->type, node->varDecl.name);
-    node->codegen = variable;
-
-    if (!node->varDecl.init) {
-        ctx.returnValue(variable);
-        return;
-    }
-
-    auto init = node->varDecl.init;
-    auto value = codegen(visitor, init);
-    if (!nodeIs(init, ArrayExpr)) {
-        if (node->type != node->varDecl.init->type) {
-            // change the type of the right hand side
-            if (isFloatType(node->type))
-                value = ctx.builder().CreateSIToFP(
-                    value, variable->getAllocatedType());
-            else if (isUnsignedType(node->type))
-                value = ctx.builder().CreateZExt(value,
-                                                 variable->getAllocatedType());
-            else
-                value = ctx.builder().CreateSExt(value,
-                                                 variable->getAllocatedType());
-        }
-        ctx.builder().CreateStore(value, variable);
-    }
-    ctx.returnValue(variable);
-}
-
-void visitFuncDecl(AstVisitor *visitor, AstNode *node)
-{
-    auto &ctx = LLVMContext::from(visitor);
-    auto type = node->type;
-    llvm::Function *func = ctx.module().getFunction(type->name)
-                               ?: generateFunctionProto(visitor, node);
-
-    if (func == nullptr)
-        return;
-
-    if (hasFlag(node, Extern)) {
-        ctx.returnValue(func);
-        return;
-    }
-
-    auto bb = llvm::BasicBlock::Create(ctx.context(), "entry", func);
-    auto end = llvm::BasicBlock::Create(ctx.context(), "end");
-    ctx.stack().funcEnd = end;
-    ctx.builder().SetInsertPoint(bb);
-
-    AstNode *param = node->funcDecl.signature->params;
-    for (auto &arg : func->args()) {
-        // Allocate a local variable for each argument
-        auto binding = ctx.builder().CreateAlloca(
-            arg.getType(), nullptr, param->funcParam.name);
-        ctx.builder().CreateStore(&arg, binding);
-        param->codegen = binding;
-        param = param->next;
-    }
-
-    llvm::AllocaInst *result{nullptr};
-    if (!typeIs(type->func.retType, Void)) {
-        result = ctx.builder().CreateAlloca(
-            ctx.getLLVMType(type->func.retType), nullptr, "res");
-        ctx.stack().result = result;
-    }
-
-    codegen(visitor, node->funcDecl.body);
-    if (!ctx.unreachable)
-        ctx.builder().CreateBr(end);
-    ctx.unreachable = false;
-
-    // generate return statement
-    func->insert(func->end(), end);
-    ctx.builder().SetInsertPoint(end);
-    if (result) {
-        auto value = ctx.builder().CreateLoad(
-            ctx.getLLVMType(type->func.retType), result);
-        ctx.builder().CreateRet(value);
-    }
-    else {
-        ctx.builder().CreateRetVoid();
-    }
-
-    llvm::verifyFunction(*func);
-    ctx.returnValue(func);
 }
 
 void visitIfStmt(AstVisitor *visitor, AstNode *node)
@@ -679,6 +594,138 @@ void visitWhileStmt(AstVisitor *visitor, AstNode *node)
     ctx.returnValue(builder.getInt32(0));
 }
 
+void visitVariableDecl(AstVisitor *visitor, AstNode *node)
+{
+    auto &ctx = LLVMContext::from(visitor);
+    if (hasFlag(node, TopLevelDecl)) {
+        // global variable
+        ctx.module().getOrInsertGlobal(node->varDecl.name,
+                                       ctx.getLLVMType(node->type));
+        auto var = ctx.module().getGlobalVariable(node->varDecl.name);
+        var->setAlignment(llvm::Align(4));
+        var->setConstant(hasFlag(node, Const));
+        if (node->varDecl.init) {
+            auto value = codegen(visitor, node->varDecl.init);
+            var->setInitializer(llvm::dyn_cast<llvm::Constant>(value));
+        }
+        node->codegen = var;
+        ctx.returnValue(var);
+        return;
+    }
+
+    auto func = ctx.builder().GetInsertBlock()->getParent();
+    llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(),
+                                 func->getEntryBlock().begin());
+    auto variable = ctx.createStackVariable(node->type, node->varDecl.name);
+    node->codegen = variable;
+
+    if (!node->varDecl.init) {
+        ctx.returnValue(variable);
+        return;
+    }
+
+    auto init = node->varDecl.init;
+    auto value = codegen(visitor, init);
+    if (value) {
+        if (node->type != node->varDecl.init->type) {
+            // change the type of the right hand side
+            if (isFloatType(node->type))
+                value = ctx.builder().CreateSIToFP(
+                    value, variable->getAllocatedType());
+            else if (isUnsignedType(node->type))
+                value = ctx.builder().CreateZExt(value,
+                                                 variable->getAllocatedType());
+            else
+                value = ctx.builder().CreateSExt(value,
+                                                 variable->getAllocatedType());
+        }
+        ctx.builder().CreateStore(value, variable);
+    }
+    ctx.returnValue(variable);
+}
+
+void visitFuncDecl(AstVisitor *visitor, AstNode *node)
+{
+    auto &ctx = LLVMContext::from(visitor);
+    auto type = node->type;
+    llvm::Function *func = ctx.module().getFunction(type->name)
+                               ?: generateFunctionProto(visitor, node);
+
+    if (func == nullptr)
+        return;
+
+    if (hasFlag(node, Extern)) {
+        ctx.returnValue(func);
+        return;
+    }
+
+    auto bb = llvm::BasicBlock::Create(ctx.context(), "entry", func);
+    auto end = llvm::BasicBlock::Create(ctx.context(), "end");
+    ctx.stack().funcEnd = end;
+    ctx.builder().SetInsertPoint(bb);
+
+    AstNode *param = node->funcDecl.signature->params;
+    for (auto &arg : func->args()) {
+        // Allocate a local variable for each argument
+        auto binding = ctx.builder().CreateAlloca(
+            arg.getType(), nullptr, param->funcParam.name);
+        ctx.builder().CreateStore(&arg, binding);
+        param->codegen = binding;
+        param = param->next;
+    }
+
+    llvm::AllocaInst *result{nullptr};
+    if (!typeIs(type->func.retType, Void)) {
+        result = ctx.builder().CreateAlloca(
+            ctx.getLLVMType(type->func.retType), nullptr, "res");
+        ctx.stack().result = result;
+    }
+
+    ctx.stack().currentFunction = node;
+    codegen(visitor, node->funcDecl.body);
+    if (!ctx.unreachable)
+        ctx.builder().CreateBr(end);
+    ctx.unreachable = false;
+
+    // generate return statement
+    func->insert(func->end(), end);
+    ctx.builder().SetInsertPoint(end);
+    if (result) {
+        auto value = ctx.builder().CreateLoad(
+            ctx.getLLVMType(type->func.retType), result);
+        ctx.builder().CreateRet(value);
+    }
+    else {
+        ctx.builder().CreateRetVoid();
+    }
+
+    llvm::verifyFunction(*func);
+    ctx.returnValue(func);
+}
+
+void visitStructDecl(AstVisitor *visitor, AstNode *node)
+{
+    auto &ctx = LLVMContext::from(visitor);
+    auto member = node->structDecl.members;
+    std::vector<llvm::Type *> members;
+    for (; member; member = member->next) {
+        if (nodeIs(member, Field)) {
+            members.push_back(ctx.getLLVMType(member->type));
+        }
+    }
+
+    auto structType = llvm::StructType::create(
+        ctx.context(), members, ctx.makeTypeName(node));
+    node->codegen = structType;
+    updateType(node->type, structType);
+
+    member = node->structDecl.members;
+    for (; member; member = member->next) {
+        if (!nodeIs(member, Field))
+            codegen(visitor, member);
+    }
+}
+
 llvm::Value *codegen(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
@@ -690,11 +737,12 @@ llvm::Value *codegen(AstVisitor *visitor, AstNode *node)
 AstNode *generateCode(CompilerDriver *driver, AstNode *node)
 {
     auto context = LLVMContext(driver, node->metadata.filePath);
+    // simplify the AST first
+    simplifyAst(driver, node);
 
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context, {
-        [astPath] = visitPath,
-        [astPathElem] = visitPathElement,
+        [astIdentifier] = visitIdentifierExpr,
         [astIntegerLit] = visitIntegerLit,
         [astBoolLit] = visitBoolLit,
         [astCharLit] = visitCharLit,
@@ -708,16 +756,19 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
         [astTypedExpr] = visitTypedExpr,
         [astCallExpr] = visitCallExpr,
         [astCastExpr] = visitCastExpr,
+        [astMemberExpr] = visitMemberExpr,
         [astAddressOf] = visitAddrOfExpr,
         [astIndexExpr] = visitIndexExpr,
-        [astVarDecl] = visitVariableDecl,
-        [astFuncDecl] = visitFuncDecl,
+        [astStructExpr] = visitStructExpr,
         [astReturnStmt] = visitReturnStmt,
         [astIfStmt] = visitIfStmt,
         [astWhileStmt] = visitWhileStmt,
         [astForStmt] = visitForStmt,
         [astContinueStmt] = visitContinueStmt,
         [astBreakStmt] = visitBreakStmt,
+        [astVarDecl] = visitVariableDecl,
+        [astFuncDecl] = visitFuncDecl,
+        [astStructDecl] = visitStructDecl,
         [astGenericDecl] = astVisitSkip
     }, .fallback = astVisitFallbackVisitAll, .dispatch = dispatch);
     // clang-format on

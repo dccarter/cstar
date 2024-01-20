@@ -13,17 +13,6 @@
 
 #include "core/alloc.h"
 
-typedef struct {
-    Log *L;
-    MemPool *pool;
-    StrPool *strPool;
-    struct {
-        AstNode *current;
-        AstNode *previous;
-        AstNode *self;
-    } block;
-} ShakeAstContext;
-
 static void addNodeInBlock(ShakeAstContext *ctx, AstNode *node)
 {
     if (ctx->block.previous == NULL) {
@@ -390,18 +379,6 @@ void shakeFuncDecl(AstVisitor *visitor, AstNode *node)
     u16 required = 0, total = 0;
     node->flags |= findAttribute(node, S_pure) == NULL ? flgNone : flgPure;
     bool hasDefaultParams = false, isVariadic = false;
-    if (node->funcDecl.target != NULL) {
-        AstNode *target = node->funcDecl.target;
-        // add this param
-        node->funcDecl.signature->params =
-            makeFunctionParam(ctx->pool,
-                              &target->loc,
-                              S_this,
-                              shallowCloneAstNode(ctx->pool, target),
-                              NULL,
-                              node->flags & flgConst,
-                              node->funcDecl.signature->params);
-    }
 
     AstNode *params = node->funcDecl.signature->params, *param = params;
     for (; param; param = param->next) {
@@ -470,28 +447,6 @@ void shakeFuncDecl(AstVisitor *visitor, AstNode *node)
             node->flags |= flgVariadic;
         }
     }
-}
-
-void shakeClosureExpr(AstVisitor *visitor, AstNode *node)
-{
-    ShakeAstContext *ctx = getAstVisitorContext(visitor);
-    astVisitManyNodes(visitor, node->closureExpr.params);
-    astVisit(visitor, node->closureExpr.ret);
-
-    if (node->closureExpr.body && !nodeIs(node->closureExpr.body, BlockStmt)) {
-        node->closureExpr.body = makeAstNode(
-            ctx->pool,
-            &node->closureExpr.body->loc,
-            &(AstNode){
-                .tag = astBlockStmt,
-                .blockStmt = {.stmts = makeAstNode(
-                                  ctx->pool,
-                                  &node->closureExpr.body->loc,
-                                  &(AstNode){.tag = astReturnStmt,
-                                             .returnStmt.expr =
-                                                 node->closureExpr.body})}});
-    }
-    astVisit(visitor, node->closureExpr.body);
 }
 
 void shakeCallExpr(AstVisitor *visitor, AstNode *node)
@@ -684,24 +639,6 @@ static void shakeStringExpr(AstVisitor *visitor, AstNode *node)
     node->stmtExpr.stmt->flags |= flgBlockReturns;
 }
 
-// static void shakeArrayType(AstVisitor *visitor, AstNode *node)
-//{
-//     ShakeAstContext *ctx = getAstVisitorContext(visitor);
-//     if (node->arrayType.dim == NULL) {
-//         node->tag = astPath;
-//         node->type = NULL;
-//         node->path.elements =
-//             makeResolvedPathElementWithArgs(ctx->pool,
-//                                             &node->loc,
-//                                             S_Slice,
-//                                             flgNone,
-//                                             NULL,
-//                                             NULL,
-//                                             node->arrayType.elementType,
-//                                             NULL);
-//     }
-// }
-
 AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
 {
     ShakeAstContext context = {
@@ -717,7 +654,6 @@ AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
         [astGenericDecl] = shakeGenericDecl,
         [astBlockStmt] = shakeBlockStmt,
         [astStringExpr] = shakeStringExpr,
-//        [astArrayType] = shakeArrayType,
         [astClosureExpr] = shakeClosureExpr,
         [astCallExpr] = shakeCallExpr,
         [astExprStmt] = shakeExprStmt,
