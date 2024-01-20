@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Install LLVM and Clang
-        uses: ./
+        uses: KyleMayes/install-llvm-action@v1
         with:
           version: "17"
           env: true
