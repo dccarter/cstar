@@ -1,11 +1,19 @@
-
 pub native func printf(fmt: string, ...args: auto) : i32;
 pub native func read(fd: i32, buf: &void, count: u64): i64;
 
-pub func main(): i32 {
-    var data: [i8, 64];
+struct User {
+    name: string
+    age: i32
+    func `init`() {
+        name = "Carter"
+        this.age = 32
+    }
+}
 
-    return <i32>read(0, data, 64);
+pub func main(): i32 {
+    const x = 100;
+    const y = () => x;
+    return y();
 }
 
 func min[T](a: T, b: T)  => a < b? a : b
