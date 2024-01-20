@@ -118,6 +118,65 @@ size_t convertEscapeSeq(const char *ptr, size_t n, u32 *res)
     return 1;
 }
 
+size_t escapeString(const char *str, size_t n, char *dst, size_t size)
+{
+    csAssert0(size >= n);
+
+    u64 i = 0, j = 0;
+
+    while (i < n) {
+        if (str[i] != '\\') {
+            dst[j++] = str[i++];
+            continue;
+        }
+
+        i++;
+        if ((n - i) < 1)
+            continue;
+
+        switch (str[i]) {
+        case '0':
+            dst[j++] = '\0';
+            i++;
+            break;
+        case 'n':
+            dst[j++] = '\n';
+            i++;
+            break;
+        case 't':
+            dst[j++] = '\t';
+            i++;
+            break;
+        case 'v':
+            dst[j++] = '\v';
+            i++;
+            break;
+        case 'r':
+            dst[j++] = '\r';
+            i++;
+            break;
+        case 'a':
+            dst[j++] = '\a';
+            i++;
+            break;
+        case 'b':
+            dst[j++] = '\b';
+            i++;
+            break;
+        case '$':
+            dst[j++] = '$';
+            i++;
+            break;
+        default:
+            dst[j++] = '\\';
+            break;
+        }
+    }
+
+    dst[j] = 0;
+    return j;
+}
+
 bool isColorSupported(FILE *file) { return isatty(fileno(file)); }
 
 char *readFile(const char *fileName, size_t *file_size)

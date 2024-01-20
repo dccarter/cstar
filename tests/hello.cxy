@@ -1,17 +1,20 @@
-import { println } from "stdlib/io.cxy"
-import { Vector } from "stdlib/vector.cxy"
-//
-interface MemoryAllocator {
-    func allocate(size: u64): &void
-    func free(ptr: &void) : void
+pub native func printf(fmt: string, ...args: auto) : i32;
+pub native func read(fd: i32, buf: &void, count: u64): i64;
+
+struct User {
+    name: string
+    age: i32
+    func `init`() {
+        name = "Carter"
+        this.age = 32
+    }
 }
 
-class PoolAllocator ::MemoryAllocator {
-    func `init`(){}
-    func allocate(size: u64): &void => null
-    func free(ptr: &void) : void => {}
+pub func main(): i32 {
+    const x = 100;
+    const y = () => x;
+    return y();
 }
 
-func main(args: [string]) {
-    hello(new[PoolAllocator](pool, ...))
-}
+func min[T](a: T, b: T)  => a < b? a : b
+func max[T](a: T, b: T)  => a > b? a : b

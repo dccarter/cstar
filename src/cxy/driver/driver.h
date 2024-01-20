@@ -5,7 +5,6 @@
 #include <driver/stats.h>
 
 #include <core/strpool.h>
-#include <lang/scope.h>
 
 typedef struct CompilerDriver {
     Options options;
