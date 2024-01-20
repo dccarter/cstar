@@ -78,6 +78,8 @@ llvm::Type *LLVMContext::convertToLLVMType(const Type *type)
     case typArray:
         return llvm::ArrayType::get(getLLVMType(type->array.elementType),
                                     type->array.len);
+    case typThis:
+        return getLLVMType(type->_this.that);
     default:
         return nullptr;
     }
@@ -99,4 +101,28 @@ llvm::AllocaInst *LLVMContext::createStackVariable(const Type *type,
     llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(),
                                  func->getEntryBlock().begin());
     return tmpBuilder.CreateAlloca(getLLVMType(type), nullptr, name);
+}
+
+std::string LLVMContext::makeTypeName(const AstNode *node)
+{
+    std::string mangled{};
+    llvm::raw_string_ostream ss(mangled);
+    makeTypeName(ss, node);
+    return mangled;
+}
+
+void LLVMContext::makeTypeName(llvm::raw_string_ostream &ss,
+                               const AstNode *node)
+{
+    if (node == nullptr)
+        return;
+    makeTypeName(ss, node->parentScope);
+
+    if (node->parentScope && node->parentScope->type) {
+        ss << "_";
+    }
+
+    if (node->type) {
+        ss << node->type->name;
+    }
 }

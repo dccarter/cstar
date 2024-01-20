@@ -13,11 +13,12 @@ struct StrPool;
 // clang-format off
 
 #define CXY_LANG_AST_TAGS(f) \
-    f(Error)                \
+    f(Error)                 \
     f(Nop)                  \
     f(Ref)                  \
     f(Deleted)              \
     f(ComptimeOnly)         \
+    f(ClosureCapture)       \
     f(Program)              \
     f(Metadata)             \
     f(CCode)                \
@@ -185,6 +186,10 @@ struct AstNode {
         struct {
             cstring name;
         } _namedNode;
+
+        struct {
+            AstNode *captured;
+        } capture;
 
         struct {
             struct AstNode *module;
@@ -359,7 +364,7 @@ struct AstNode {
             u16 paramsCount;
             FunctionSignature *signature;
             struct AstNode *opaqueParams;
-            struct AstNode *target;
+            struct AstNode *this_;
             union {
                 struct AstNode *body;
                 struct AstNode *definition;
@@ -511,6 +516,7 @@ struct AstNode {
             struct AstNode *params;
             struct AstNode *ret;
             struct AstNode *body;
+            struct AstNode *construct;
         } closureExpr;
 
         struct {
@@ -640,6 +646,14 @@ AstNode *makeIdentifier(MemPool *pool,
                         AstNode *next,
                         const Type *type);
 
+AstNode *makeResolvedIdentifier(MemPool *pool,
+                                const FileLoc *loc,
+                                cstring name,
+                                u32 super,
+                                AstNode *resolvesTo,
+                                AstNode *next,
+                                const Type *type);
+
 AstNode *makePointerAstNode(MemPool *pool,
                             const FileLoc *loc,
                             u64 flags,
@@ -703,6 +717,14 @@ AstNode *makeFieldExpr(MemPool *pool,
                        u64 flags,
                        AstNode *value,
                        AstNode *next);
+
+AstNode *makeStructField(MemPool *pool,
+                         const FileLoc *loc,
+                         cstring name,
+                         u64 flags,
+                         AstNode *type,
+                         AstNode *def,
+                         AstNode *next);
 
 AstNode *makeGroupExpr(MemPool *pool,
                        const FileLoc *loc,
@@ -926,6 +948,8 @@ AstNode *makeIndexExpr(MemPool *pool,
                        AstNode *next,
                        const Type *type);
 
+AstNode *makeAstClosureCapture(MemPool *pool, AstNode *captured);
+
 AstNode *makeAstNop(MemPool *pool, const FileLoc *loc);
 
 AstNode *copyAstNode(MemPool *pool, const AstNode *node);
@@ -1003,7 +1027,7 @@ const AstNode *getParentScopeWithTagConst(const AstNode *node, AstTag tag);
 
 void insertAstNodeAfter(AstNode *before, AstNode *after);
 
-void insertAstNode(AstNodeList *list, AstNode *node);
+AstNode *insertAstNode(AstNodeList *list, AstNode *node);
 
 void unlinkAstNode(AstNode **head, AstNode *prev, AstNode *node);
 

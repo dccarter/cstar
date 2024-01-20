@@ -241,6 +241,25 @@ AstNode *makeIdentifier(MemPool *pool,
                                   .ident = {.value = name, .super = super}});
 }
 
+AstNode *makeResolvedIdentifier(MemPool *pool,
+                                const FileLoc *loc,
+                                cstring name,
+                                u32 super,
+                                AstNode *resolvesTo,
+                                AstNode *next,
+                                const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astIdentifier,
+                                  .flags = flgNone,
+                                  .next = next,
+                                  .type = type,
+                                  .ident = {.value = name,
+                                            .super = super,
+                                            .resolvesTo = resolvesTo}});
+}
+
 AstNode *makePointerAstNode(MemPool *pool,
                             const FileLoc *loc,
                             u64 flags,
@@ -443,6 +462,24 @@ AstNode *makeFieldExpr(MemPool *pool,
                                   .fieldExpr = {.name = name, .value = value}});
 }
 
+AstNode *makeStructField(MemPool *pool,
+                         const FileLoc *loc,
+                         cstring name,
+                         u64 flags,
+                         AstNode *type,
+                         AstNode *def,
+                         AstNode *next)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astField,
+                   .flags = flags,
+                   .type = type ? type->type : NULL,
+                   .next = next,
+                   .structField = {.name = name, .type = type, .value = def}});
+}
+
 AstNode *makeGroupExpr(
     MemPool *pool, const FileLoc *loc, u64 flags, AstNode *exprs, AstNode *next)
 {
@@ -499,7 +536,7 @@ AstNode *makeAddrOffExpr(MemPool *pool,
 {
     return makeAstNode(pool,
                        loc,
-                       &(AstNode){.tag = astUnaryExpr,
+                       &(AstNode){.tag = astAddressOf,
                                   .flags = flags,
                                   .type = type,
                                   .next = next,
@@ -733,7 +770,7 @@ AstNode *makeFunctionParam(MemPool *pool,
     return makeAstNode(pool,
                        loc,
                        &(AstNode){.tag = astFuncParam,
-                                  .type = paramType->type,
+                                  .type = paramType ? paramType->type : NULL,
                                   .next = next,
                                   .flags = flags,
                                   .funcParam = {.name = name,
@@ -920,6 +957,16 @@ AstNode *makeIndexExpr(MemPool *pool,
                    .type = type,
                    .next = next,
                    .indexExpr = {.target = target, .index = index}});
+}
+
+AstNode *makeAstClosureCapture(MemPool *pool, AstNode *captured)
+{
+    return makeAstNode(pool,
+                       &captured->loc,
+                       &(AstNode){.tag = astIndexExpr,
+                                  .flags = captured->flags,
+                                  .type = captured->type,
+                                  .capture = {.captured = captured}});
 }
 
 AstNode *makeAstNop(MemPool *pool, const FileLoc *loc)
@@ -1547,10 +1594,10 @@ void insertAstNodeAfter(AstNode *before, AstNode *after)
     before->next = after;
 }
 
-void insertAstNode(AstNodeList *list, AstNode *node)
+AstNode *insertAstNode(AstNodeList *list, AstNode *node)
 {
     if (node == NULL)
-        return;
+        return NULL;
 
     if (list->first == NULL) {
         list->first = node;
@@ -1559,6 +1606,7 @@ void insertAstNode(AstNodeList *list, AstNode *node)
         list->last->next = node;
     }
     list->last = getLastAstNode(node);
+    return list->last;
 }
 
 void unlinkAstNode(AstNode **head, AstNode *prev, AstNode *node)

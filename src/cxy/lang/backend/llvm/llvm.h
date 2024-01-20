@@ -2,7 +2,8 @@
 // Created by Carter Mbotho on 2024-01-18.
 //
 
-#ifndef CXY_LLVM_H
-#define CXY_LLVM_H
+#pragma once
 
-#endif //CXY_LLVM_H
+#include "driver/driver.h"
+
+void simplifyAst(CompilerDriver *driver, AstNode *program);

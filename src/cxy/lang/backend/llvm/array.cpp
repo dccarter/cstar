@@ -48,21 +48,12 @@ static llvm::Constant *makeArrayLiteral(LLVMContext &ctx, AstNode *node)
 void visitArrayExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
-    auto parent = node->parentScope;
-    auto tmpVariable = nodeIs(parent, VarDecl)
-                           ? static_cast<llvm::AllocaInst *>(parent->codegen)
-                           : ctx.createStackVariable(node->type);
+    auto array = ctx.createUndefined(node->type);
 
-    auto type = ctx.getLLVMType(node->type);
     auto elem = node->arrayExpr.elements;
-
     for (u64 i = 0; elem; elem = elem->next, i++) {
         auto value = codegen(visitor, elem);
-        auto dst = ctx.builder().CreateGEP(
-            type,
-            tmpVariable,
-            {ctx.builder().getInt64(0), ctx.builder().getInt64(i)});
-        ctx.builder().CreateStore(value, dst);
+        array = ctx.builder().CreateInsertValue(array, value, i);
     }
-    ctx.returnValue(tmpVariable);
+    ctx.returnValue(array);
 }

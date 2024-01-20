@@ -47,7 +47,7 @@
     f(ComptimeIterable,     34)                 \
     f(Define,               35)                 \
     f(UnsafeCast,           36)                 \
-    f(Extern,      37)                 \
+    f(Extern,               37)                 \
     f(Inherited,            38)                 \
     f(BlockReturns,         39)                 \
     f(BuiltinsModule,       40)                 \
@@ -59,7 +59,8 @@
     f(Transient,            46)                 \
     f(Static,               47)                 \
     f(SyncCall,             48)                 \
-    f(CodegenAfter,         49)
+    f(Bound,                49)                 \
+    f(CodegenAfter,         50)
 
 // clang-format on
 static const u64 flgNone = 0;

@@ -157,7 +157,7 @@ void bindPath(AstVisitor *visitor, AstNode *node)
         else {
             AstNode *func =
                 findEnclosingFunction(ctx->env, NULL, keyword, NULL);
-            if (func == NULL) {
+            if (func == NULL || func->funcDecl.this_ == NULL) {
                 logError(ctx->L,
                          &base->loc,
                          "'{s}' keyword must be used inside a member function",
@@ -165,27 +165,12 @@ void bindPath(AstVisitor *visitor, AstNode *node)
                 return;
             }
 
-            AstNode *parent =
-                findEnclosingClassOrStruct(ctx->env, NULL, keyword, NULL);
-            base->pathElement.enclosure = parent;
+            base->pathElement.resolvesTo = func->funcDecl.this_;
             base->flags |= (func->flags & flgConst);
-            if (parent == NULL) {
-                logError(ctx->L,
-                         &base->loc,
-                         "'{s}' keyword must be used inside a member function",
-                         (FormatArg[]){{.s = keyword}});
-                return;
-            }
 
             if (keyword == S_super) {
-                if (!nodeIs(parent, ClassDecl) && !nodeIs(parent, StructDecl)) {
-                    logError(ctx->L,
-                             &base->loc,
-                             "keyword 'super' can only be used inside a class "
-                             "member function",
-                             (FormatArg[]){{.s = keyword}});
-                    return;
-                }
+                AstNode *parent =
+                    findEnclosingClassOrStruct(ctx->env, NULL, keyword, NULL);
                 if (parent->classDecl.base == NULL) {
                     logError(ctx->L,
                              &base->loc,
@@ -243,8 +228,18 @@ void bindFunctionDecl(AstVisitor *visitor, AstNode *node)
     BindContext *ctx = getAstVisitorContext(visitor);
     pushScope(ctx->env, node);
 
-    if (node->funcDecl.target)
-        astVisit(visitor, node->funcDecl.target);
+    if (findEnclosingClassOrStruct(ctx->env, NULL, S_this, NULL) &&
+        findAttribute(node, S_static) == NULL) {
+        node->funcDecl.this_ =
+            makeFunctionParam(ctx->pool,
+                              &node->loc,
+                              S_this,
+                              NULL,
+                              NULL,
+                              node->flags & flgConst,
+                              node->funcDecl.signature->params);
+        defineSymbol(ctx->env, ctx->L, node->funcParam.name, node);
+    }
 
     astVisit(visitor, node->funcDecl.signature->ret);
     astVisitManyNodes(visitor, node->funcDecl.signature->params);
@@ -556,8 +551,12 @@ void bindMemberExpr(AstVisitor *visitor, AstNode *node)
 
 void bindProgram(AstVisitor *visitor, AstNode *node)
 {
+    BindContext *ctx = getAstVisitorContext(visitor);
+    ctx->root.parent = node;
     AstNode *decl = node->program.decls;
     for (; decl; decl = decl->next) {
+        ctx->root.previous = ctx->root.current;
+        ctx->root.current = decl;
         astVisit(visitor, decl);
     }
 }
@@ -565,7 +564,7 @@ void bindProgram(AstVisitor *visitor, AstNode *node)
 void withParentScope(Visitor func, AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
-    if (node && ctx->env->scope) {
+    if (node && ctx->env->scope && !nodeIs(node, Program)) {
         node->parentScope = ctx->env->scope->node;
     }
 

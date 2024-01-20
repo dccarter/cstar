@@ -207,6 +207,7 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
 
         field->fieldExpr.value->parentScope = field;
         field->type = member->type;
+        field->fieldExpr.value->type = member->type;
         const Type *type = checkType(visitor, field->fieldExpr.value);
         if (!isTypeAssignableFrom(member->type, type)) {
             logError(ctx->L,
@@ -302,15 +303,16 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
     if (typeIs(node->type, Error))
         goto checkStructMembersError;
 
-    ((Type *)this)->_this.that = makeStructType(ctx->types,
-                                               getDeclarationName(node),
-                                               members,
-                                               membersCount,
-                                               node,
-                                               base,
-                                               implements,
-                                               implementsCount,
-                                               node->flags & flgTypeApplicable);
+    ((Type *)this)->_this.that =
+        makeStructType(ctx->types,
+                       getDeclarationName(node),
+                       members,
+                       membersCount,
+                       node,
+                       base,
+                       implements,
+                       implementsCount,
+                       node->flags & flgTypeApplicable);
     node->type = this;
 
     implementClassOrStructBuiltins(visitor, node);

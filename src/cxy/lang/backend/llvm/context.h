@@ -21,13 +21,16 @@ struct LLVMContext {
         void *loopEnd{nullptr};
         void *result{nullptr};
         void *funcEnd{nullptr};
+        AstNode *currentFunction{nullptr};
     };
+    
     bool unreachable{false};
-
     Log *L{nullptr};
     MemPool *pool{nullptr};
     TypeTable *types{nullptr};
     StrPool *strings{nullptr};
+
+    explicit LLVMContext(CompilerDriver *driver, const char *fname);
 
     inline llvm::LLVMContext &context() { return *_context; }
     inline llvm::Module &module() { return *_module; }
@@ -38,18 +41,23 @@ struct LLVMContext {
     inline Stack &stack() { return _stack; }
     inline void setStack(Stack stack) { _stack = stack; }
 
-    explicit LLVMContext(CompilerDriver *driver, const char *fname);
-
     void dumpIR();
     void dumpIR(std::string fname);
     llvm::Type *getLLVMType(const Type *type);
 
+    inline llvm::Value *createUndefined(const Type *type)
+    {
+        return llvm::UndefValue::get(getLLVMType(type));
+    }
+
     llvm::AllocaInst *createStackVariable(const Type *type,
                                           const char *name = "");
 
+    std::string makeTypeName(const AstNode *node);
     static LLVMContext &from(AstVisitor *visitor);
 
 private:
+    void makeTypeName(llvm::raw_string_ostream &ss, const AstNode *node);
     llvm::Type *convertToLLVMType(const Type *type);
     std::unique_ptr<llvm::LLVMContext> _context{nullptr};
     std::unique_ptr<llvm::Module> _module{nullptr};

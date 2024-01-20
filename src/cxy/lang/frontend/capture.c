@@ -90,3 +90,17 @@ cstring getCapturedNodeName(const AstNode *node)
         unreachable("Only variables and function params can be captured");
     }
 }
+
+AstNode *getCapturedNodeType(const AstNode *node)
+{
+    switch (node->tag) {
+    case astVarDecl:
+        return node->varDecl.type;
+    case astFuncParam:
+        return node->funcParam.type;
+    case astField:
+        return node->structField.type;
+    default:
+        unreachable("Only variables and function params can be captured");
+    }
+}

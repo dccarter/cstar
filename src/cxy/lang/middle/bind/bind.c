@@ -9,7 +9,6 @@
 #include "lang/frontend/flag.h"
 #include "lang/frontend/strings.h"
 
-
 static cstring getAliasName(const AstNode *node)
 {
     if (!hasFlag(node, Native))

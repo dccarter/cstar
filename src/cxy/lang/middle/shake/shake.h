@@ -7,6 +7,27 @@
 
 #include "lang/frontend/ast.h"
 
+typedef struct {
+    Log *L;
+    MemPool *pool;
+    struct StrPool *strPool;
+    struct {
+        AstNode *current;
+        AstNode *previous;
+        AstNode *self;
+    } block;
+    union {
+        struct {
+            bool inClassOrStruct;
+        };
+        struct {
+            bool inClassOrStruct;
+        } stack;
+    };
+} ShakeAstContext;
+
 AstNode *createClassOrStructBuiltins(MemPool *pool, AstNode *node);
+
+void shakeClosureExpr(struct AstVisitor *visitor, AstNode *node);
 
 #endif // CXY_SHAKE_H

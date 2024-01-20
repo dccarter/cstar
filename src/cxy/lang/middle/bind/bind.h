@@ -6,11 +6,14 @@
 
 #include "lang/operations.h"
 
+#include "lang/frontend/visitor.h"
+
 typedef struct {
     Log *L;
     MemPool *pool;
     StrPool *strings;
     Env *env;
+    AstModifier root;
     union {
         struct {
             bool isComptimeContext;
