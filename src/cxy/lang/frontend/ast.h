@@ -633,6 +633,29 @@ AstNode *makeUnsignedIntegerLiteral(MemPool *pool,
                                     u64 value,
                                     AstNode *next,
                                     const Type *type);
+AstNode *makeCharLiteral(MemPool *pool,
+                         const FileLoc *loc,
+                         i32 value,
+                         AstNode *next,
+                         const Type *type);
+
+AstNode *makeBoolLiteral(MemPool *pool,
+                         const FileLoc *loc,
+                         bool value,
+                         AstNode *next,
+                         const Type *type);
+
+AstNode *makeFloatLiteral(MemPool *pool,
+                          const FileLoc *loc,
+                          f64 value,
+                          AstNode *next,
+                          const Type *type);
+
+AstNode *makeNullLiteral(MemPool *pool,
+                         const FileLoc *loc,
+                         AstNode *next,
+                         const Type *type);
+
 AstNode *makeStringLiteral(MemPool *pool,
                            const FileLoc *loc,
                            cstring value,

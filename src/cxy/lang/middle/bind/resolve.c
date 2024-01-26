@@ -28,23 +28,23 @@ static inline bool shouldCaptureSymbol(const AstNode *closure,
                        nodeIs(symbol, Field));
 }
 
-static void captureSymbol(AstNode *closure, AstNode *node, AstNode *symbol)
+static bool captureSymbol(AstNode *closure, AstNode *node, AstNode *symbol)
 {
     if (!shouldCaptureSymbol(closure, symbol))
-        return;
+        return false;
 
     AstNode *root = node->path.elements;
     AstNode *parent = symbol->parentScope;
 
     if (nodeIs(symbol, FuncParam) && parent == closure)
-        return;
+        return false;
 
     parent = node->parentScope;
     Capture *prev = NULL;
     while (parent && parent != symbol->parentScope) {
         if (nodeIs(parent, ClosureExpr)) {
             if (nodeIs(symbol, FuncParam) && symbol->parentScope == parent)
-                return;
+                break;
 
             // capture in current set
             if (prev)
@@ -57,6 +57,8 @@ static void captureSymbol(AstNode *closure, AstNode *node, AstNode *symbol)
         }
         parent = parent->parentScope;
     }
+
+    return true;
 }
 
 static AstNode *resolvePathBaseUpChain(BindContext *ctx, AstNode *path)
@@ -138,7 +140,9 @@ void bindPath(AstVisitor *visitor, AstNode *node)
 
         // capture symbol if in closure
         base->pathElement.resolvesTo = resolved;
-        captureSymbol(ctx->currentClosure, node, base->pathElement.resolvesTo);
+        if (captureSymbol(
+                ctx->currentClosure, node, base->pathElement.resolvesTo))
+            node->flags |= flgAddThis;
     }
     else {
         cstring keyword = base->pathElement.name;
@@ -579,7 +583,7 @@ void withParentScope(Visitor func, AstVisitor *visitor, AstNode *node)
 
 void bindAstPhase2(CompilerDriver *driver, Env *env, AstNode *node)
 {
-    BindContext context = {.env = env, .L = driver->L, .pool = &driver->pool};
+    BindContext context = {.env = env, .L = driver->L, .pool = driver->pool};
 
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context, {

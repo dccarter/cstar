@@ -64,7 +64,7 @@ typedef union {
     size_t len;
 } FormatArg;
 
-typedef struct {
+typedef struct FormatState {
     FormatBuf *currentBuf;
     FormatBuf *firstBuf;
     bool ignoreStyle;

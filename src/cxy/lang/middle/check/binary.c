@@ -77,7 +77,7 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
     const Type *left = checkType(visitor, node->binaryExpr.lhs),
                *left_ = stripAll(left);
 
-    if ((typeIs(left_, Struct) && !hasFlag(left_->tStruct.decl, Native)) ||
+    if ((typeIs(left_, Struct) && !hasFlag(left_->tStruct.decl, Extern)) ||
         typeIs(left_, Class)) {
         if (!nodeIs(node->binaryExpr.rhs, NullLit) || !isPointerType(left)) {
             checkBinaryOperatorOverload(visitor, node);

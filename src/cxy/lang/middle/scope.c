@@ -6,6 +6,7 @@
 
 #include "lang/frontend/flag.h"
 
+#include "builtins.h"
 #include "core/alloc.h"
 
 #include <string.h>
@@ -218,6 +219,12 @@ AstNode *findSymbol(const Env *env,
                                          compareSymbols);
         if (symbol)
             return symbol->node;
+    }
+
+    if (isBuiltinsInitialized()) {
+        AstNode *node = findBuiltinDecl(name);
+        if (node)
+            return node;
     }
 
     if (L) {

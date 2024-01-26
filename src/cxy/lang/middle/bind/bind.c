@@ -11,7 +11,7 @@
 
 static cstring getAliasName(const AstNode *node)
 {
-    if (!hasFlag(node, Native))
+    if (!hasFlag(node, Extern))
         return NULL;
     const AstNode *alias = findAttribute(node, S_alias);
 

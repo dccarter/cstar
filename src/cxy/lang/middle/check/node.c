@@ -19,19 +19,19 @@ static AstNode *makeStructInitializerForDefaults(TypingContext *ctx,
     AstNode *member = decl ? decl->structDecl.members : NULL;
     AstNodeList init = {};
     for (; member; member = member->next) {
-        if (!nodeIs(member, Field) ||          //
-            hasFlag(member, Static) ||         //
-            member->structField.value == NULL) //
-        {
+        if (!nodeIs(member, Field) || hasFlag(member, Static)) {
             continue;
         }
+        AstNode *value =
+            member->structField.value
+                ? deepCloneAstNode(ctx->pool, member->structField.value)
+                : makeDefaultValue(ctx->pool, member->type, &node->loc);
         insertAstNode(&init,
                       makeFieldExpr(ctx->pool,
                                     &member->loc,
                                     member->structField.name,
-                                    member->structField.value->flags,
-                                    deepCloneAstNode(ctx->pool,
-                                                     member->structField.value),
+                                    value->flags,
+                                    value,
                                     NULL));
     }
     return init.first;
@@ -266,7 +266,7 @@ bool transformOptionalNone(AstVisitor *visitor, AstNode *node, const Type *type)
 bool transformOptionalType(AstVisitor *visitor, AstNode *node, const Type *type)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    AstNode *optional = (AstNode *)findBuiltinDecl(S_Optional);
+    AstNode *optional = (AstNode *)findBuiltinDecl(S___Optional);
     csAssert0(optional);
 
     clearAstBody(node);

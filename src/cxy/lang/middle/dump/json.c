@@ -885,7 +885,7 @@ static void visitFallback(ConstAstVisitor *visitor, const AstNode *node)
 AstNode *dumpAstJson(CompilerDriver *driver, AstNode *node, FILE *file)
 {
     JsonConverterContext ctx = {
-        .pool = &driver->pool,
+        .pool = driver->pool,
         .config = {.withNamedEnums = driver->options.dev.withNamedEnums,
                    .withoutAttrs = driver->options.dev.withoutAttrs,
                    .withLocation = driver->options.dev.withLocation}};

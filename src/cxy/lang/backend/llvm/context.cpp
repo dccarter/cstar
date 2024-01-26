@@ -9,54 +9,14 @@ extern "C" {
 #include "lang/frontend/visitor.h"
 }
 
-LLVMContext::LLVMContext(CompilerDriver *driver, const char *fname)
+LLVMContext::LLVMContext(std::shared_ptr<llvm::LLVMContext> context,
+                         CompilerDriver *driver,
+                         const char *fname)
+    : _context{std::move(context)}, L{driver->L}, types{driver->typeTable},
+      strings{driver->strings}, pool{driver->pool}
 {
-    this->L = driver->L;
-    this->types = driver->typeTable;
-    this->pool = &driver->pool;
-    this->strings = &driver->strPool;
-
-    _context = std::make_unique<llvm::LLVMContext>();
     _module = std::make_unique<llvm::Module>(fname, *_context);
     _builder = std::make_unique<llvm::IRBuilder<>>(*_context);
-
-    updateType(types->primitiveTypes[prtBool],
-               llvm::Type::getInt1Ty(*_context));
-    updateType(types->primitiveTypes[prtI8], llvm::Type::getInt8Ty(*_context));
-    updateType(types->primitiveTypes[prtI16],
-               llvm::Type::getInt16Ty(*_context));
-    updateType(types->primitiveTypes[prtI32],
-               llvm::Type::getInt32Ty(*_context));
-    updateType(types->primitiveTypes[prtI64],
-               llvm::Type::getInt64Ty(*_context));
-    updateType(types->primitiveTypes[prtU8], llvm::Type::getInt8Ty(*_context));
-    updateType(types->primitiveTypes[prtU16],
-               llvm::Type::getInt16Ty(*_context));
-    updateType(types->primitiveTypes[prtU32],
-               llvm::Type::getInt32Ty(*_context));
-    updateType(types->primitiveTypes[prtU64],
-               llvm::Type::getInt64Ty(*_context));
-    updateType(types->primitiveTypes[prtCChar],
-               llvm::Type::getInt8Ty(*_context));
-    updateType(types->primitiveTypes[prtChar],
-               llvm::Type::getInt32Ty(*_context));
-    updateType(types->primitiveTypes[prtF32],
-               llvm::Type::getFloatTy(*_context));
-    updateType(types->primitiveTypes[prtF64],
-               llvm::Type::getDoubleTy(*_context));
-    updateType(types->stringType,
-               llvm::Type::getInt8Ty(*_context)->getPointerTo());
-    updateType(types->voidType, llvm::Type::getVoidTy(*_context));
-}
-
-void LLVMContext::dumpIR() { _module->print(llvm::errs(), nullptr); }
-
-void LLVMContext::dumpIR(std::string fname)
-{
-    std::error_code ec;
-    llvm::raw_fd_ostream os(fname, ec);
-    _module->print(os, nullptr);
-    os.close();
 }
 
 LLVMContext &LLVMContext::from(AstVisitor *visitor)
@@ -80,6 +40,10 @@ llvm::Type *LLVMContext::convertToLLVMType(const Type *type)
                                     type->array.len);
     case typThis:
         return getLLVMType(type->_this.that);
+    case typTuple:
+        return createTupleType(type);
+    case typFunc:
+        return createFunctionType(type);
     default:
         return nullptr;
     }
@@ -101,6 +65,16 @@ llvm::AllocaInst *LLVMContext::createStackVariable(const Type *type,
     llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(),
                                  func->getEntryBlock().begin());
     return tmpBuilder.CreateAlloca(getLLVMType(type), nullptr, name);
+}
+
+llvm::Value *LLVMContext::createLoad(const Type *type, llvm::Value *value)
+{
+    if (!_stack.loadVariable())
+        return value;
+    else if (typeIs(type, Func))
+        return builder().CreateLoad(getLLVMType(type)->getPointerTo(), value);
+    else
+        return builder().CreateLoad(getLLVMType(type), value);
 }
 
 std::string LLVMContext::makeTypeName(const AstNode *node)
@@ -125,4 +99,44 @@ void LLVMContext::makeTypeName(llvm::raw_string_ostream &ss,
     if (node->type) {
         ss << node->type->name;
     }
+}
+
+std::string LLVMContext::makeTypeName(const Type *type)
+{
+    std::string str;
+    llvm::raw_string_ostream ss{str};
+    if (type->ns) {
+        ss << type->ns << "_";
+    }
+    ss << type->name;
+    return str;
+}
+
+llvm::Type *LLVMContext::createTupleType(const Type *type)
+{
+    std::vector<llvm::Type *> members{};
+    for (u64 i = 0; i < type->tuple.count; i++) {
+        if (typeIs(type->tuple.members[i], Func))
+            members.push_back(
+                getLLVMType(type->tuple.members[i])->getPointerTo());
+        else
+            members.push_back(getLLVMType(type->tuple.members[i]));
+    }
+
+    auto structType =
+        llvm::StructType::create(context(), members, makeTypeName(type));
+
+    return structType;
+}
+
+llvm::Type *LLVMContext::createFunctionType(const Type *type)
+{
+    std::vector<llvm::Type *> params;
+
+    for (u64 i = 0; i < type->func.paramsCount; i++) {
+        params.push_back(getLLVMType(type->func.params[i]));
+    }
+
+    return llvm::FunctionType::get(
+        getLLVMType(type->func.retType), params, false);
 }

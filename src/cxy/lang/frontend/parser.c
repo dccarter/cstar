@@ -48,11 +48,11 @@ static AstNode *variable(
 
 static AstNode *funcDecl(Parser *P, u64 flags);
 
-static AstNode *aliasDecl(Parser *P, bool isPublic, bool isNative);
+static AstNode *aliasDecl(Parser *P, bool isPublic, bool isExtern);
 
 static AstNode *enumDecl(Parser *P, bool isPublic);
 
-static AstNode *classOrStructDecl(Parser *P, bool isPublic, bool isNative);
+static AstNode *classOrStructDecl(Parser *P, bool isPublic, bool isExtern);
 
 static AstNode *attributes(Parser *P);
 
@@ -1222,7 +1222,7 @@ static AstNode *define(Parser *P)
 
     consume0(P, tokColon);
     type = parseType(P);
-    type->flags |= flgNative;
+    type->flags |= flgExtern;
 
     AstNode *container = NULL;
     if (match(P, tokAs))
@@ -1256,11 +1256,11 @@ static AstNode *parseMultipleVariables(Parser *P)
 }
 
 static AstNode *variable(
-    Parser *P, bool isPublic, bool isNative, bool isExpression, bool woInit)
+    Parser *P, bool isPublic, bool isExtern, bool isExpression, bool woInit)
 {
     Token tok = *current(P);
     uint64_t flags = isPublic ? flgPublic : flgNone;
-    flags |= isNative ? flgNative : flgNone;
+    flags |= isExtern ? flgExtern : flgNone;
     flags |= tok.tag == tokConst ? flgConst : flgNone;
     bool isComptime = previous(P)->tag == tokHash ||
                       previous(P)->tag == tokSubstitutue ||
@@ -1275,14 +1275,14 @@ static AstNode *variable(
     if (!isExpression && (match(P, tokColon) != NULL))
         type = parseType(P);
 
-    if (!isNative && !woInit) {
+    if (!isExtern && !woInit) {
         if (tok.tag == tokConst)
             consume0(P, tokAssign);
         if (tok.tag == tokConst || match(P, tokAssign) || isExpression)
             init = expression(P, true);
     }
 
-    if (!(isExpression || woInit || isNative)) {
+    if (!(isExpression || woInit || isExtern)) {
         if (init && init->tag == astClosureExpr)
             match(P, tokSemicolon);
         else
@@ -1457,9 +1457,9 @@ static AstNode *funcDecl(Parser *P, u64 flags)
     }
 
     if (match(P, tokLBracket)) {
-        if (flags & flgNative)
+        if (flags & flgExtern)
             reportUnexpectedToken(
-                P, "a '(', native functions cannot have generic parameters");
+                P, "a '(', extern functions cannot have generic parameters");
 
         gParams = parseAtLeastOne(
             P, "generic params", tokRBracket, tokComma, parseGenericParam);
@@ -2107,14 +2107,14 @@ static AstNode *comptime(Parser *P, AstNode *(*parser)(Parser *))
     unreachable("");
 }
 
-static AstNode *classOrStructDecl(Parser *P, bool isPublic, bool isNative)
+static AstNode *classOrStructDecl(Parser *P, bool isPublic, bool isExtern)
 {
     AstNode *base = NULL, *gParams = NULL, *implements = NULL;
     AstNodeList members = {NULL};
     Token tok = *match(P, tokClass, tokStruct);
     cstring name = getTokenString(P, consume0(P, tokIdent), false);
 
-    if (!isNative) {
+    if (!isExtern) {
         if (match(P, tokLBracket)) {
             gParams = parseAtLeastOne(P,
                                       "generic type params",
@@ -2139,7 +2139,7 @@ static AstNode *classOrStructDecl(Parser *P, bool isPublic, bool isNative)
         implements = NULL;
     }
 
-    if (!isNative || check(P, tokLBrace)) {
+    if (!isExtern || check(P, tokLBrace)) {
         consume0(P, tokLBrace);
         while (!check(P, tokRBrace, tokEoF)) {
             listAddAstNode(&members, comptime(P, parseClassOrStructMember));
@@ -2152,7 +2152,7 @@ static AstNode *classOrStructDecl(Parser *P, bool isPublic, bool isNative)
         &tok.fileLoc.begin,
         &(AstNode){.tag = tok.tag == tokClass ? astClassDecl : astStructDecl,
                    .flags = ((isPublic ? flgPublic : flgNone) |
-                             (isNative ? flgNative : flgNone)),
+                             (isExtern ? flgExtern : flgNone)),
                    .classDecl = {.name = name,
                                  .members = members.first,
                                  .implements = implements,
@@ -2243,14 +2243,14 @@ static AstNode *enumDecl(Parser *P, bool isPublic)
             .enumDecl = {.options = options, .name = name, .base = base}});
 }
 
-static AstNode *aliasDecl(Parser *P, bool isPublic, bool isNative)
+static AstNode *aliasDecl(Parser *P, bool isPublic, bool isExtern)
 {
     AstNode *alias = NULL;
     Token tok = *consume0(P, tokType);
     u64 flags = isPublic ? flgPublic : flgNone;
-    flags |= isNative ? flgNative : flgNone;
+    flags |= isExtern ? flgExtern : flgNone;
     cstring name = getTokenString(P, consume0(P, tokIdent), false);
-    if (!isNative) {
+    if (!isExtern) {
         if (match(P, tokAssign))
             alias = parseType(P);
         else {
@@ -2306,8 +2306,8 @@ static AstNode *declaration(Parser *P)
     if (check(P, tokAt))
         attrs = attributes(P);
     bool isPublic = match(P, tokPub) != NULL;
-    bool isNative = false;
-    if (check(P, tokNative)) {
+    bool isExtern = false;
+    if (check(P, tokExtern)) {
         // do we need to consume native
         switch (peek(P, 1)->tag) {
         case tokType:
@@ -2316,7 +2316,7 @@ static AstNode *declaration(Parser *P)
         case tokFunc:
         case tokStruct:
             advance(P);
-            isNative = true;
+            isExtern = true;
             break;
         default:
             break;
@@ -2326,7 +2326,7 @@ static AstNode *declaration(Parser *P)
     switch (current(P)->tag) {
     case tokStruct:
     case tokClass:
-        decl = classOrStructDecl(P, isPublic, isNative);
+        decl = classOrStructDecl(P, isPublic, isExtern);
         break;
     case tokInterface:
         decl = interfaceDecl(P, isPublic);
@@ -2335,17 +2335,17 @@ static AstNode *declaration(Parser *P)
         decl = enumDecl(P, isPublic);
         break;
     case tokType:
-        decl = aliasDecl(P, isPublic, isNative);
+        decl = aliasDecl(P, isPublic, isExtern);
         break;
     case tokVar:
     case tokConst:
-        decl = variable(P, isPublic, isNative, false, false);
+        decl = variable(P, isPublic, isExtern, false, false);
         break;
     case tokFunc:
     case tokAsync:
         decl = funcDecl(P,
                         (isPublic ? flgPublic : flgNone) |
-                            (isNative ? flgNative | flgExtern : flgNone));
+                            (isExtern ? flgExtern : flgNone));
         break;
     case tokDefine:
         decl = define(P);
@@ -2358,7 +2358,7 @@ static AstNode *declaration(Parser *P)
                         NULL);
         decl = macroDecl(P, isPublic);
         break;
-    case tokNative:
+    case tokExtern:
         parserError(P,
                     &current(P)->fileLoc,
                     "native can only be used on top level struct, function or "
@@ -2369,7 +2369,7 @@ static AstNode *declaration(Parser *P)
         reportUnexpectedToken(P, "a declaration");
     }
 
-#undef isNative
+#undef isExtern
 
     decl->flags |= flgTopLevelDecl;
     decl->attrs = attrs;
@@ -2508,8 +2508,8 @@ Parser makeParser(Lexer *lexer, CompilerDriver *cc)
     Parser parser = {.cc = cc,
                      .lexer = lexer,
                      .L = lexer->log,
-                     .memPool = &cc->pool,
-                     .strPool = &cc->strPool};
+                     .memPool = cc->pool,
+                     .strPool = cc->strings};
     parser.ahead[0] = (Token){.tag = tokEoF};
     for (u32 i = 1; i < TOKEN_BUFFER; i++)
         parser.ahead[i] = advanceLexer(lexer);

@@ -20,6 +20,24 @@ static inline u64 getCalleeContextFlags(const AstNode *node)
     return flgNone;
 }
 
+static void reAssignCalleeType(AstNode *node, const Type *type)
+{
+    if (nodeIs(node, Path)) {
+        AstNode *elem = getLastAstNode(node->path.elements);
+        elem->type = type;
+        elem->pathElement.resolvesTo = type->func.decl;
+    }
+    else if (nodeIs(node, MemberExpr)) {
+        AstNode *member = node->memberExpr.member;
+        member->type = type;
+        if (nodeIs(member, Identifier))
+            member->ident.resolvesTo = type->func.decl;
+    }
+    else if (nodeIs(node, Identifier))
+        node->ident.resolvesTo = type->func.decl;
+    node->type = type;
+}
+
 static void checkFunctionCallEpilogue(AstVisitor *visitor,
                                       const Type *func,
                                       AstNode *node,
@@ -75,7 +93,7 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
         return;
     }
 
-    callee->type = callee_;
+    reAssignCalleeType(callee, callee_);
     node->type = callee_->func.retType;
     if (typeIs(node->type, Auto)) {
         logError(ctx->L,

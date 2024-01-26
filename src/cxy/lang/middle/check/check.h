@@ -58,6 +58,8 @@ const FileLoc *manyNodesLoc_(FileLoc *dst, AstNode *nodes);
 const FileLoc *lastNodeLoc_(FileLoc *dst, AstNode *nodes);
 #define lastNodeLoc(nodes) lastNodeLoc_(&(FileLoc){}, (nodes))
 
+AstNode *makeDefaultValue(MemPool *pool, const Type *type, FileLoc *loc);
+
 bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node);
 bool transformToAwaitOperator(AstVisitor *visitor, AstNode *node);
 bool transformToDerefOperator(AstVisitor *visitor, AstNode *node);

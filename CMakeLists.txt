@@ -64,6 +64,18 @@ cmake_policy(POP)
 
 include_directories(src/cxy)
 
+add_executable(amalgamate
+        src/tools/amalgamate.c
+        src/cxy/core/utils.c)
+
+target_compile_definitions(amalgamate PRIVATE -DNO_EXEC_UTIL)
+
+CxyAmalgamate(builtins
+        OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/generated
+        FILES
+        src/cxy/lang/builtins.cxy)
+
+
 set(CXY_3RD_PARTY_SOURCES
         src/cxy/3rdparty/cJSON.c)
 
@@ -110,6 +122,7 @@ set(CXY_MIDDLE_SOURCES
         src/cxy/lang/middle/check/check.c
         src/cxy/lang/middle/check/class.c
         src/cxy/lang/middle/check/closure.c
+        src/cxy/lang/middle/check/defaults.c
         src/cxy/lang/middle/check/enum.c
         src/cxy/lang/middle/check/for.c
         src/cxy/lang/middle/check/function.c
@@ -149,12 +162,15 @@ set(CXY_MIDDLE_SOURCES
         src/cxy/lang/middle/dump/yaml.c
 
         src/cxy/lang/middle/shake/closure.c
-        src/cxy/lang/middle/shake/shake.c)
+        src/cxy/lang/middle/shake/shake.c
+
+        src/cxy/lang/ffi/import.cpp)
 
 set(CXY_LANG_BACKEND_SOURCES
         src/cxy/lang/backend/llvm/array.cpp
+        src/cxy/lang/backend/llvm/backend.cpp
         src/cxy/lang/backend/llvm/binary.cpp
-        src/cxy/lang/backend/llvm/codegen.cpp
+        src/cxy/lang/backend/llvm/generate.cpp
         src/cxy/lang/backend/llvm/context.cpp
         src/cxy/lang/backend/llvm/for.cpp
         src/cxy/lang/backend/llvm/simplify.c)
@@ -167,6 +183,7 @@ set(CXY_DRIVER_SOURCES
 
 add_executable(cxy
         src/cxy/driver/main.c
+        ${CMAKE_CURRENT_BINARY_DIR}/generated/src/builtins.c
         ${CXY_3RD_PARTY_SOURCES}
         ${CXY_CORE_SOURCES}
         ${CXY_FRONTEND_SOURCES}
@@ -186,4 +203,25 @@ message(STATUS ${llvm_libs})
 target_link_libraries(cxy msgpack-c yaml ${llvm_libs})
 target_compile_definitions(cxy PRIVATE
         -DCXY_VERSION="${CXY_VERSION}")
+
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/stdlib)
+set(CXY_STD_LIB_SOURCES
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/dns
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/c.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/io.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/json.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/map.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/net.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/str.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/tcp.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/vector.cxy)
+
+add_custom_target(
+        cxy-stdlib ALL
+        COMMAND cp -rf ${CXY_STD_LIB_SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/stdlib/
+        DEPENDS ${CXY_STD_LIB_SOURCES}
+)
+
+add_dependencies(cxy cxy-stdlib)
+
 

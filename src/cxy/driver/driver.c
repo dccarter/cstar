@@ -1,5 +1,4 @@
 #include "driver.h"
-#include "builtins.h"
 #include "options.h"
 #include "stages.h"
 
@@ -13,6 +12,9 @@
 #include "lang/frontend/parser.h"
 #include "lang/frontend/strings.h"
 #include "lang/frontend/ttable.h"
+#include "lang/middle/builtins.h"
+
+#include "src/builtins.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -167,7 +169,8 @@ void makeDirectoryForPath(CompilerDriver *driver, cstring path)
 static inline bool hasDumpEnable(const Options *opts, const AstNode *node)
 {
     if (opts->cmd == cmdDev) {
-        return !hasFlag(node, BuiltinsModule) && opts->dev.printAst;
+        return !hasFlag(node, BuiltinsModule) &&
+               (opts->dev.printAst || opts->dev.printIR);
     }
     return false;
 }
@@ -180,7 +183,7 @@ static bool compileProgram(CompilerDriver *driver,
     bool status = true;
 
     AstNode *metadata = makeAstNode(
-        &driver->pool,
+        driver->pool,
         builtinLoc(),
         &(AstNode){.tag = astMetadata,
                    .flags = program->flags & flgBuiltinsModule,
@@ -200,7 +203,8 @@ static bool compileProgram(CompilerDriver *driver,
     }
 
     if (hasDumpEnable(options, metadata)) {
-        metadata = executeCompilerStage(driver, ccs_Dump, metadata);
+        stage = options->dev.printIR ? ccs_DumpIR : ccs_Dump;
+        metadata = executeCompilerStage(driver, stage, metadata);
         if (metadata == NULL)
             status = false;
     }
@@ -227,22 +231,38 @@ static bool compileBuiltin(CompilerDriver *driver,
 
     program->flags |= flgBuiltinsModule;
     if (compileProgram(driver, program, fileName)) {
+        initializeBuiltins(driver->L, &program->loc, program->type);
         return true;
     }
 
     return false;
 }
 
-bool initCompilerDriver(CompilerDriver *compiler, Log *log)
+bool initCompilerDriver(CompilerDriver *compiler,
+                        MemPool *pool,
+                        StrPool *strings,
+                        Log *log)
 {
     char tmp[PATH_MAX];
-    compiler->pool = newMemPool();
-    compiler->strPool = newStrPool(&compiler->pool);
-    compiler->typeTable = newTypeTable(&compiler->pool, &compiler->strPool);
+    compiler->pool = pool;
+    compiler->strings = strings;
+    compiler->typeTable = newTypeTable(compiler->pool, compiler->strings);
     compiler->moduleCache = newHashTable(sizeof(CachedModule));
     compiler->L = log;
-    internCommonStrings(&compiler->strPool);
+    compiler->currentDir = makeString(compiler->strings, getcwd(tmp, PATH_MAX));
+    compiler->currentDirLen = strlen(compiler->currentDir);
+
+    internCommonStrings(compiler->strings);
     const Options *options = &compiler->options;
+    compiler->backend = initCompilerBackend(compiler);
+    csAssert0(compiler->backend);
+
+    if (options->cmd == cmdBuild || !options->withoutBuiltins) {
+        return compileBuiltin(compiler,
+                              CXY_BUILTINS_SOURCE,
+                              CXY_BUILTINS_SOURCE_SIZE,
+                              "__builtins.cxy");
+    }
 
     return true;
 }
@@ -260,8 +280,8 @@ static bool configureDriverSourceDir(CompilerDriver *driver, cstring *fileName)
     }
     driver->sourceDirLen = strrchr(tmp, '/') - tmp;
     driver->sourceDir =
-        makeStringSized(&driver->strPool, tmp, driver->sourceDirLen);
-    *fileName = makeString(&driver->strPool, tmp);
+        makeStringSized(driver->strings, tmp, driver->sourceDirLen);
+    *fileName = makeString(driver->strings, tmp);
     return true;
 }
 
@@ -282,7 +302,7 @@ static cstring getModuleLocation(CompilerDriver *driver, const AstNode *source)
         memcpy(&path[importedLen], modulePath + 2, modulePathLen);
         path[importedLen + modulePathLen] = '\0';
         char tmp[PATH_MAX];
-        return makeString(&driver->strPool, realpath(path, tmp));
+        return makeString(driver->strings, realpath(path, tmp));
     }
     else if (driver->options.libDir != NULL) {
         char tmp[PATH_MAX];
@@ -292,7 +312,7 @@ static cstring getModuleLocation(CompilerDriver *driver, const AstNode *source)
             path[libDirLen++] = '/';
         memcpy(&path[libDirLen], modulePath, modulePathLen);
         path[libDirLen + modulePathLen] = '\0';
-        return makeString(&driver->strPool, realpath(path, tmp));
+        return makeString(driver->strings, realpath(path, tmp));
     }
     else {
         char tmp[PATH_MAX];
@@ -301,7 +321,15 @@ static cstring getModuleLocation(CompilerDriver *driver, const AstNode *source)
             path[driver->currentDirLen] = '/';
         memcpy(&path[driver->currentDirLen + 1], modulePath, modulePathLen);
         path[driver->currentDirLen + 1 + modulePathLen] = '\0';
-        return makeString(&driver->strPool, realpath(path, tmp));
+        if (realpath(path, tmp) == NULL) {
+            logError(driver->L,
+                     &source->loc,
+                     "stdlib module '{s}' not found, perhaps import local "
+                     "module with relative path './{s}'",
+                     (FormatArg[]){{.s = modulePath}, {.s = modulePath}});
+            return NULL;
+        }
+        return makeString(driver->strings, tmp);
     }
 }
 
@@ -309,21 +337,24 @@ const Type *compileModule(CompilerDriver *driver,
                           const AstNode *source,
                           AstNode *entities)
 {
-    cstring name = getModuleLocation(driver, source);
-    AstNode *program = findCachedModule(driver, name);
+    cstring path = getModuleLocation(driver, source);
+    if (path == NULL)
+        return NULL;
+
+    AstNode *program = findCachedModule(driver, path);
     bool cached = true;
     if (program == NULL) {
         cached = false;
 
-        if (access(name, F_OK) != 0) {
+        if (access(path, F_OK) != 0) {
             logError(driver->L,
                      &source->loc,
                      "module source file '{s}' does not exist",
-                     (FormatArg[]){{.s = name}});
+                     (FormatArg[]){{.s = path}});
             return NULL;
         }
 
-        program = parseFile(driver, name);
+        program = parseFile(driver, path);
         if (program == NULL)
             return NULL;
 
@@ -331,12 +362,12 @@ const Type *compileModule(CompilerDriver *driver,
             logError(driver->L,
                      &source->loc,
                      "module source '{s}' is not declared as a module",
-                     (FormatArg[]){{.s = name}});
+                     (FormatArg[]){{.s = path}});
             return NULL;
         }
 
         program->flags |= flgImportedModule;
-        if (!compileProgram(driver, program, name))
+        if (!compileProgram(driver, program, path))
             return NULL;
     }
 
@@ -354,7 +385,7 @@ const Type *compileModule(CompilerDriver *driver,
                 driver->L,
                 &entity->loc,
                 "module {s} does not export declaration with name '{s}'",
-                (FormatArg[]){{.s = name}, {.s = entity->importEntity.name}});
+                (FormatArg[]){{.s = path}, {.s = entity->importEntity.name}});
         }
     }
 
@@ -362,7 +393,7 @@ const Type *compileModule(CompilerDriver *driver,
         return NULL;
 
     if (!cached)
-        addCachedModule(driver, name, program);
+        addCachedModule(driver, path, program);
 
     return program->type;
 }

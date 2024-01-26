@@ -65,7 +65,7 @@ void bindDeclaration(AstVisitor *visitor, AstNode *node)
 
 AstNode *bindAstPhase1(CompilerDriver *driver, Env *env, AstNode *node)
 {
-    BindContext context = {.env = env, .L = driver->L, .pool = &driver->pool};
+    BindContext context = {.env = env, .L = driver->L, .pool = driver->pool};
 
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context, {

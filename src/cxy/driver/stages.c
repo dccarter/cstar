@@ -10,6 +10,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <string.h>
+#include <sys/stat.h>
 
 typedef struct {
     const char *name;
@@ -100,6 +101,14 @@ static AstNode *executeDumpAst(CompilerDriver *driver, AstNode *node)
         return dumpAstJson(driver, node->metadata.node, file);
     else
         return dumpAstToYaml(driver, node, file);
+}
+
+static AstNode *executeDumpIR(CompilerDriver *driver, AstNode *node)
+{
+    csAssert0(nodeIs(node, Metadata));
+    node->metadata.stages |= BIT(ccs_DumpIR);
+
+    return backendDumpIR(driver, node);
 }
 
 static AstNode *executeShakeAst(CompilerDriver *driver, AstNode *node)
@@ -294,10 +303,11 @@ u64 parseCompilerStages(Log *L, cstring str)
 static CompilerStageExecutor compilerStageExecutors[ccsCOUNT] = {
     [ccsInvalid] = NULL,
     [ccs_Dump] = executeDumpAst,
+    [ccs_DumpIR] = executeDumpIR,
     [ccsShake] = executeShakeAst,
     [ccsBind] = executeBindAst,
     [ccsTypeCheck] = executeTypeCheckAst,
-//    [ccsFinalize] = executeFinalizeAst,
+    //    [ccsFinalize] = executeFinalizeAst,
     [ccsCodegen] = executeGenerateCode,
     // TODO causing issues
     // [ccsCollect] = executeCollect,

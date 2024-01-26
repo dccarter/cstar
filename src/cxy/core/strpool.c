@@ -4,6 +4,7 @@
 #include "core/utils.h"
 
 #include <assert.h>
+#include <ctype.h>
 #include <inttypes.h>
 #include <stdarg.h>
 #include <string.h>
@@ -38,9 +39,24 @@ const char *makeString(StrPool *str_pool, const char *str)
     return makeStringSized(str_pool, str, strlen(str));
 }
 
+const char *makeTrimmedString(StrPool *pool, const char *str)
+{
+    if (str == NULL)
+        return NULL;
+
+    const char *s = str;
+    while (*s && isspace(*s))
+        s++;
+    str = s;
+    while (*s && !isspace(*s))
+        s++;
+
+    return makeStringSized(pool, str, s - str - 1);
+}
+
 const char *makeStringSized(StrPool *pool, const char *str, u64 len)
 {
-    if (!str)
+    if (str == NULL)
         return NULL;
     uint32_t hash = hashRawBytes(hashInit(), str, len);
     SizedString s = {.s = str, .len = len};

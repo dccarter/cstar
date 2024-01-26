@@ -38,7 +38,7 @@
     f(cxy_range_t)              \
     f(sb)                       \
     f(StringBuilder)            \
-    f(Optional)                 \
+    f(__Optional)               \
     f(Slice)                    \
     f(String)                   \
     f(Iterator)                 \

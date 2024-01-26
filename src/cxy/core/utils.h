@@ -239,6 +239,8 @@ attr(noreturn) attr(format, printf, 1, 2) void cxyAbort(const char *fmt, ...);
         LINE_VAR(aNa);                                                         \
     })
 
+struct FormatState;
+
 static inline unsigned ilog2(uintmax_t i)
 {
     unsigned p = 0;
@@ -246,6 +248,8 @@ static inline unsigned ilog2(uintmax_t i)
         p++, i >>= 1;
     return p;
 }
+
+int exec(const char *command, struct FormatState *output);
 
 size_t convertEscapeSeq(const char *str, size_t n, u32 *res);
 size_t escapeString(const char *str, size_t n, char *dst, size_t size);

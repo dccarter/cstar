@@ -1,19 +1,16 @@
-pub native func printf(fmt: string, ...args: auto) : i32;
-pub native func read(fd: i32, buf: &void, count: u64): i64;
+import { add } from "./add.cxy"
 
-struct User {
-    name: string
-    age: i32
-    func `init`() {
-        name = "Carter"
-        this.age = 32
-    }
-}
+pub extern func printf(fmt: string, ...args: auto) : i32;
+pub extern func read(fd: i32, buf: &void, count: u64): i64;
 
 pub func main(): i32 {
-    const x = 100;
-    const y = () => x;
-    return y();
+    var x:i32? = 20;
+    if (x) {
+        printf("x? = %d", *x)
+        x = 100
+    }
+
+    return *x
 }
 
 func min[T](a: T, b: T)  => a < b? a : b

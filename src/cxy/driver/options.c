@@ -5,12 +5,14 @@
 
 #include "core/args.h"
 #include "core/log.h"
+#include "core/strpool.h"
 
+#include <ctype.h>
 #include <math.h>
 #include <stdio.h>
 
 Command(dev,
-        "development mode build, useful when developing the compiler",
+        "development mode build, useful when debugging issues",
         Positionals(),
         Str(Name("last-stage"),
             Help("the last compiler stage to execute, e.g "
@@ -36,7 +38,10 @@ Command(dev,
             Sf('o'),
             Help("path to file to generate code or print AST to (default is "
                  "stdout)"),
-            Def("")));
+            Def("")),
+        Opt(Name("print-ir"),
+            Help("prints the generate IR (on supported backends, e.g LLVM)"),
+            Def("false")), );
 
 Command(build,
         "transpiles the given cxy what file and builds it using gcc",
@@ -67,7 +72,8 @@ Command(build,
     f(dev.withLocation, Local, Option, 3, ##__VA_ARGS__)                       \
     f(dev.withoutAttrs, Local, Option, 4, ##__VA_ARGS__)                       \
     f(dev.withNamedEnums, Local, Option, 5, ##__VA_ARGS__)                     \
-    f(output, Local, String, 6, ##__VA_ARGS__)
+    f(output, Local, String, 6, ##__VA_ARGS__)                                 \
+    f(dev.printIR, Local, Option, 7, ##__VA_ARGS__)
 
 #define BUILD_CMD_LAYOUT(f, ...)                                               \
     f(output, Local, String, 0, ##__VA_ARGS__)                                 \
@@ -76,10 +82,54 @@ Command(build,
 
 // clang-format on
 
-bool parseCommandLineOptions(int *argc, char **argv, Options *options, Log *log)
+static void parseSpaceSeperatedList(DynArray *into,
+                                    StrPool *strings,
+                                    cstring str)
+{
+    if (str == NULL || str[0] == '\0')
+        return;
+    char *copy = (char *)makeString(strings, str);
+    char *it = copy;
+    do {
+        while (*it && isspace(*it))
+            it++;
+        if (*it == '\0')
+            break;
+        pushStringOnDynArray(into, it);
+        while (!isspace(*it) && *it)
+            it++;
+        if (*it == '\0')
+            break;
+        *it = '\0';
+        it++;
+    } while (true);
+}
+
+static void initializeOptions(StrPool *strings, Options *options)
+{
+    options->cflags = newDynArray(sizeof(char *));
+    options->ldflags = newDynArray(sizeof(char *));
+    options->defines = newDynArray(sizeof(char *));
+#ifdef __APPLE__
+    pushStringOnDynArray(&options->defines, "MACOS");
+    FormatState state = newFormatState(NULL, true);
+    exec("xcrun --show-sdk-path", &state);
+    char *sdkPath = formatStateToString(&state);
+    if (sdkPath && sdkPath[0] != '\0') {
+        cstring trimmedSdkPath = makeTrimmedString(strings, sdkPath);
+        pushStringOnDynArray(&options->cflags, "-isysroot");
+        pushStringOnDynArray(&options->cflags, trimmedSdkPath);
+        free(sdkPath);
+    }
+#endif
+}
+
+bool parseCommandLineOptions(
+    int *argc, char **argv, StrPool *strings, Options *options, Log *log)
 {
     bool status = true;
     int file_count = 0;
+    initializeOptions(strings, options);
 
     Parser(
         "cxy",
@@ -100,7 +150,11 @@ bool parseCommandLineOptions(int *argc, char **argv, Options *options, Log *log)
         Opt(Name("no-color"),
             Help("disable colored output when formatting outputs")),
         Opt(Name("without-builtins"),
-            Help("Disable building builtins (does not for build command)")));
+            Help("Disable building builtins (does not for build command)")),
+        Str(Name("cflags"),
+            Help("C compiler flags to add to the c compiler when importing C "
+                 "files"),
+            Def("")));
 
     int selected = argparse(argc, &argv, parser);
 
@@ -141,6 +195,9 @@ bool parseCommandLineOptions(int *argc, char **argv, Options *options, Log *log)
         options->cmd = cmdBuild;
         UnloadCmd(cmd, options, BUILD_CMD_LAYOUT);
     }
+
+    cstring str = getGlobalString(cmd, 5);
+    parseSpaceSeperatedList(&options->cflags, strings, str);
 
     file_count = *argc - 1;
 

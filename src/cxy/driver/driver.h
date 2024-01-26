@@ -8,8 +8,8 @@
 
 typedef struct CompilerDriver {
     Options options;
-    MemPool pool;
-    StrPool strPool;
+    MemPool *pool;
+    StrPool *strings;
     HashTable moduleCache;
     HashTable nativeSources;
     HashTable linkLibraries;
@@ -21,6 +21,7 @@ typedef struct CompilerDriver {
     CompilerStats stats;
     Log *L;
     TypeTable *typeTable;
+    void *backend;
 } CompilerDriver;
 
 typedef struct {
@@ -39,7 +40,10 @@ void makeDirectoryForPath(CompilerDriver *driver, cstring path);
 cstring getFilePathAsRelativeToCxySource(StrPool *strings,
                                          cstring cxySource,
                                          cstring file);
-bool initCompilerDriver(CompilerDriver *compiler, Log *log);
+bool initCompilerDriver(CompilerDriver *compiler,
+                        MemPool *pool,
+                        StrPool *strings,
+                        Log *log);
 bool compileFile(const char *fileName, CompilerDriver *driver);
 bool generateBuiltinSources(CompilerDriver *driver);
 
@@ -47,6 +51,9 @@ bool compileString(CompilerDriver *driver,
                    cstring source,
                    u64 size,
                    cstring filename);
+
 const Type *compileModule(CompilerDriver *driver,
                           const AstNode *source,
                           AstNode *entities);
+
+void *initCompilerBackend(CompilerDriver *driver);

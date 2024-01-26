@@ -210,6 +210,63 @@ AstNode *makeUnsignedIntegerLiteral(MemPool *pool,
                                   .intLiteral = {.uValue = value}});
 }
 
+AstNode *makeCharLiteral(MemPool *pool,
+                         const FileLoc *loc,
+                         i32 value,
+                         AstNode *next,
+                         const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astCharLit,
+                                  .flags = flgNone,
+                                  .next = next,
+                                  .type = type,
+                                  .charLiteral = {.value = value}});
+}
+
+AstNode *makeBoolLiteral(MemPool *pool,
+                         const FileLoc *loc,
+                         bool value,
+                         AstNode *next,
+                         const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astBoolLit,
+                                  .flags = flgNone,
+                                  .next = next,
+                                  .type = type,
+                                  .boolLiteral = {.value = value}});
+}
+
+AstNode *makeNullLiteral(MemPool *pool,
+                         const FileLoc *loc,
+                         AstNode *next,
+                         const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){
+            .tag = astNullLit, .flags = flgNone, .next = next, .type = type});
+}
+
+AstNode *makeFloatLiteral(MemPool *pool,
+                          const FileLoc *loc,
+                          f64 value,
+                          AstNode *next,
+                          const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astFloatLit,
+                                  .flags = flgNone,
+                                  .next = next,
+                                  .type = type,
+                                  .floatLiteral = {.value = value}});
+}
+
 AstNode *makeStringLiteral(MemPool *pool,
                            const FileLoc *loc,
                            cstring value,
@@ -1365,6 +1422,8 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
         CLONE_ONE(funcParam, def);
         break;
     case astFuncDecl:
+        if (clone->funcDecl.this_)
+            CLONE_ONE(funcDecl, this_);
         clone->funcDecl.signature = makeFunctionSignature(
             config->pool,
             &(FunctionSignature){
@@ -1374,6 +1433,8 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
                 .typeParams = node->funcDecl.signature->typeParams});
         CLONE_ONE(funcDecl, body);
         CLONE_MANY(funcDecl, opaqueParams)
+        if (clone->funcDecl.this_)
+            clone->funcDecl.this_->next = clone->funcDecl.signature->params;
         break;
     case astMacroDecl:
         CLONE_MANY(macroDecl, params);

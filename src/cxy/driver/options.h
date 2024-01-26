@@ -1,9 +1,11 @@
 
 #pragma once
 
+#include "core/array.h"
 #include <core/utils.h>
 
 typedef struct Log Log;
+struct StrPool;
 
 typedef enum { cmdDev, cmdBuild } Command;
 
@@ -13,9 +15,13 @@ typedef struct Options {
     const char *libDir;
     const char *buildDir;
     const char *rest;
+    DynArray cflags;
+    DynArray ldflags;
+    DynArray defines;
     bool withoutBuiltins;
     struct {
         bool printAst;
+        bool printIR;
         bool cleanAst;
         bool withLocation;
         bool withoutAttrs;
@@ -34,5 +40,6 @@ typedef struct Options {
 /// contain the arguments that were not parsed.
 bool parseCommandLineOptions(int *argc,
                              char **argv,
+                             struct StrPool *strings,
                              Options *options,
                              Log *log);

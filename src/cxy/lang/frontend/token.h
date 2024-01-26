@@ -87,6 +87,7 @@
     f(Const, "const")               \
     f(Type, "type")                 \
     f(Native, "native")             \
+    f(Extern, "extern")             \
     f(Struct, "struct")             \
     f(Enum, "enum")                 \
     f(Pub, "pub")                   \

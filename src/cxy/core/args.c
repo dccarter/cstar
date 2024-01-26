@@ -775,8 +775,11 @@ i32 parseCommandLineArguments_(int *pargc, char ***pargv, CmdParser *P)
         }
 
         if (flag->def != NULL) {
-            if (flag->def[0] != '\0' &&
-                !flag->validator(P, &flag->val, flag->def, flag->name))
+            if (flag->def[0] == '\0') {
+                flag->val.state = cmdString;
+                flag->val.str = NULL;
+            }
+            else if (!flag->validator(P, &flag->val, flag->def, flag->name))
                 return -1;
         }
         else {

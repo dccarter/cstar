@@ -1,5 +1,6 @@
 #include "core/utils.h"
 #include "core/alloc.h"
+#include "format.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -245,3 +246,22 @@ void cxyAbort(const char *fmt, ...)
 
     abort();
 }
+
+#ifndef NO_EXEC_UTIL
+
+int exec(const char *command, FormatState *output)
+{
+    FILE *pipe = popen(command, "r");
+    csAssert(
+        pipe != NULL, "failed to execute '%s': %s\n", command, strerror(errno));
+
+    char buffer[128];
+    while (fgets(buffer, sizeof buffer, pipe)) {
+        append(output, buffer, strlen(buffer));
+    }
+
+    int status = pclose(pipe);
+    return WEXITSTATUS(status);
+}
+
+#endif

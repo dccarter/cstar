@@ -11,14 +11,18 @@ int main(int argc, char **argv)
     FormatState state = newFormatState("    ", !isColorSupported(stderr));
     CompilerDriver driver = {0};
     Log log = newLog(&state);
+    MemPool pool = newMemPool();
+    StrPool strings = newStrPool(&pool);
+
     bool status = true;
 
-    if (!parseCommandLineOptions(&argc, argv, &driver.options, &log)) {
+    if (!parseCommandLineOptions(
+            &argc, argv, &strings, &driver.options, &log)) {
         status = false;
         goto exit;
     }
 
-    if (!initCompilerDriver(&driver, &log)) {
+    if (!initCompilerDriver(&driver, &pool, &strings, &log)) {
         status = false;
         goto exit;
     }

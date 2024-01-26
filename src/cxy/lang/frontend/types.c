@@ -922,7 +922,7 @@ AstNode *findMemberDeclInType(const Type *type, cstring name)
     const NamedTypeMember *member;
     switch (type->tag) {
     case typThis:
-        return findMemberDeclInType(type, name);
+        return findMemberDeclInType(type->_this.that, name);
     case typStruct:
         member = findStructMember(type, name);
         return member ? (AstNode *)member->decl : NULL;

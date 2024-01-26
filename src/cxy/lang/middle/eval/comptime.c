@@ -435,7 +435,7 @@ static AstNode *isCover(EvalContext *ctx, const FileLoc *loc, AstNode *node)
         loc,
         &(AstNode){.tag = astBoolLit,
                    .boolLiteral.value =
-                       isClassOrStructType(type) && hasFlag(decl, Native)});
+                       isClassOrStructType(type) && hasFlag(decl, Extern)});
 }
 
 static AstNode *isField(EvalContext *ctx, const FileLoc *loc, AstNode *node)

@@ -59,15 +59,14 @@
     f(Transient,            46)                 \
     f(Static,               47)                 \
     f(SyncCall,             48)                 \
-    f(Bound,                49)                 \
-    f(CodegenAfter,         50)
+    f(Bound,                49)
 
 // clang-format on
 static const u64 flgNone = 0;
 #define f(name, bit) static const u64 flg##name = BIT(bit);
 CXY_LANG_FLAGS(f)
 #undef f
-static const u64 flgTypeApplicable = (flgNative | flgConst | flgOptional |
+static const u64 flgTypeApplicable = (flgExtern | flgConst | flgOptional |
                                       flgClosure | flgSlice | flgFuncTypeParam);
 
 typedef u64 Flags;

@@ -642,7 +642,7 @@ static void shakeStringExpr(AstVisitor *visitor, AstNode *node)
 AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
 {
     ShakeAstContext context = {
-        .L = driver->L, .pool = &driver->pool, .strPool = &driver->strPool};
+        .L = driver->L, .pool = driver->pool, .strPool = driver->strings};
 
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context, {

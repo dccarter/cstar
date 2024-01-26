@@ -17,3 +17,4 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node);
 AstNode *finalizeAst(CompilerDriver *driver, AstNode *node);
 AstNode *generateCode(CompilerDriver *driver, AstNode *node);
 AstNode *collectAst(CompilerDriver *driver, AstNode *node);
+AstNode *backendDumpIR(CompilerDriver *driver, AstNode *node);

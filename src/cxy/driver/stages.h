@@ -12,6 +12,7 @@ struct CompilerDriver;
 #define CXY_COMPILER_STAGES(f)                         \
     f(_Parse,           "Parse")                       \
     f(_Dump,            "Dump Ast")                    \
+    f(_DumpIR,          "Dump IR")                     \
     f(_First,           "First Marker")                \
     f(Shake,            "Shake")                       \
     f(Bind,             "Bind")                        \

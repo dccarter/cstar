@@ -337,6 +337,6 @@ void astModifierAdd(AstModifier *ctx, AstNode *node)
 void astModifierAddAsNext(AstModifier *ctx, AstNode *node)
 {
     csAssert0(ctx->current);
-    node->next = ctx->current->next;
+    getLastAstNode(node)->next = ctx->current->next;
     ctx->current->next = node;
 }

@@ -55,7 +55,8 @@ const Type *matchOverloadedFunctionPerfectMatch(TypingContext *ctx,
 
         declarations++;
 
-        argsCount = MIN(argsCount, paramsCount - isVariadic);
+        argsCount =
+            isVariadic ? MIN(argsCount, paramsCount - isVariadic) : argsCount;
         if (argsCount < requiredCount || argsCount > paramsCount)
             continue;
 
@@ -141,9 +142,10 @@ bool checkMemberFunctions(AstVisitor *visitor,
     bool retype = false;
     for (u64 i = 0; member; member = member->next, i++) {
         if (nodeIs(member, FuncDecl)) {
-            if (member->funcDecl.this_)
+            if (member->funcDecl.this_) {
                 member->funcDecl.this_->type = makePointerType(
                     ctx->types, node->type, member->flags & flgConst);
+            }
             const Type *type = checkFunctionBody(visitor, member);
             if (typeIs(type, Error)) {
                 node->type = ERROR_TYPE(ctx);
@@ -187,7 +189,7 @@ void checkFunctionParam(AstVisitor *visitor, AstNode *node)
         type_ = makeWrappedType(ctx->types, type_, flgConst);
 
     if (typeIs(type_, Func) && !hasFlag(parent, Pure) &&
-        !hasFlag(parent, Native)) //
+        !hasFlag(parent, Extern)) //
     {
         type->funcType.params = makeFunctionParam(
             ctx->pool,

@@ -43,51 +43,15 @@ pub ## (
     SEEK_END
 ) : i32
 
-pub ##(
-    malloc
-): func(size: u64) -> &void
-
-pub ##(
-    free
-): func(ptr: &void) -> void
-
-pub ##(
-    calloc
-): func(nitems: u64, size: u64) -> &void
-
-pub ##(
-    realloc
-): func(ptr: &void, size: u64) -> &void
-
-pub ##(
-    open
-): func(pathname: &const char, flags: i32, mode: i32 = 0666) -> i32
-
-pub ##(
-    openat
-): func(dirfd: i32, pathname: &const char, flags: i32, mode: i32 = 0666) -> i32
-
-pub ##(
-    close
-): func(fd: i32) -> i32
-
-pub ##(
-    write
-): func(fd: i32, buf: &const void, count: u64) -> i32
-
-pub ##(
-    read
-): func(fd: i32, buf: &void, count: u64) -> i32
-
-pub ##(
-    fcntl
-): func(fd: i32, cmd: i32, args: i32 = 0) -> i32
-
-pub ##(
-    lseek
-): func(fd: i32, offset: i64, whence: i32) -> i64
-
-pub ##(
-    strrchr
-): func(str: &const char, c: char) -> &char
-
+pub extern func malloc(size: u64) -> &void
+pub extern func free(ptr: &void) -> void
+pub extern func calloc(nitems: u64, size: u64) -> &void
+pub extern func realloc(ptr: &void, size: u64) -> &void
+pub extern func open(pathname: &const char, flags: i32, mode: i32 = 0666) -> i32
+pub extern func openat(dirfd: i32, pathname: &const char, flags: i32, mode: i32 = 0666) -> i32
+pub extern func close(fd: i32) -> i32
+pub extern func write(fd: i32, buf: &const void, count: u64) -> i32
+pub extern func read(fd: i32, buf: &void, count: u64) -> i32
+pub extern func fcntl(fd: i32, cmd: i32, args: i32 = 0) -> i32
+pub extern func lseek(fd: i32, offset: i64, whence: i32) -> i64
+pub extern func strrchr(str: &const char, c: char) -> &char

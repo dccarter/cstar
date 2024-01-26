@@ -14,7 +14,7 @@
 
 void compilerStatsSnapshot(CompilerDriver *driver)
 {
-    getMemPoolStats(&driver->pool, &driver->stats.snapshot.poolStats);
+    getMemPoolStats(driver->pool, &driver->stats.snapshot.poolStats);
     timespec_get(&driver->stats.snapshot.at, TIME_UTC);
 }
 
@@ -36,7 +36,7 @@ void compilerStatsRecord(CompilerDriver *driver, CompilerStage stage)
     struct timespec ts;
     MemPoolStats stats;
     timespec_get(&ts, TIME_UTC);
-    getMemPoolStats(&driver->pool, &stats);
+    getMemPoolStats(driver->pool, &stats);
     StatsSnapshot *snapshot = &driver->stats.snapshot;
 
     driver->stats.stages[stage].duration =

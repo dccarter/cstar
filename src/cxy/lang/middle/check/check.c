@@ -565,8 +565,8 @@ const Type *checkMaybeComptime(AstVisitor *visitor, AstNode *node)
 AstNode *checkAst(CompilerDriver *driver, AstNode *node)
 {
     TypingContext context = {.L = driver->L,
-                             .pool = &driver->pool,
-                             .strings = &driver->strPool,
+                             .pool = driver->pool,
+                             .strings = driver->strings,
                              .types = driver->typeTable};
 
     // clang-format off
@@ -640,8 +640,8 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
     // clang-format on
 
     EvalContext evalContext = {.L = driver->L,
-                               .pool = &driver->pool,
-                               .strings = &driver->strPool,
+                               .pool = driver->pool,
+                               .strings = driver->strings,
                                .types = driver->typeTable,
                                .typer = &visitor};
     AstVisitor evaluator;

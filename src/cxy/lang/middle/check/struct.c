@@ -207,7 +207,6 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
 
         field->fieldExpr.value->parentScope = field;
         field->type = member->type;
-        field->fieldExpr.value->type = member->type;
         const Type *type = checkType(visitor, field->fieldExpr.value);
         if (!isTypeAssignableFrom(member->type, type)) {
             logError(ctx->L,
@@ -218,6 +217,7 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
             continue;
         }
 
+        field->fieldExpr.value->type = member->type;
         field->type = member->type;
         initialized[member->decl->structField.index] = true;
     }
