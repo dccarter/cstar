@@ -3,14 +3,15 @@ import { add } from "./add.cxy"
 pub extern func printf(fmt: string, ...args: auto) : i32;
 pub extern func read(fd: i32, buf: &void, count: u64): i64;
 
+enum Nums {
+    One, Two
+}
 pub func main(): i32 {
-    var x:i32? = 20;
-    if (x) {
-        printf("x? = %d", *x)
-        x = 100
+    var a = Nums.One;
+    switch (a) {
+        case .Two => printf("Hello World!\n")
+        default => printf("What is this!\n")
     }
-
-    return *x
 }
 
 func min[T](a: T, b: T)  => a < b? a : b

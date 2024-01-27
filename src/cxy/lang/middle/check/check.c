@@ -567,7 +567,7 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
     TypingContext context = {.L = driver->L,
                              .pool = driver->pool,
                              .strings = driver->strings,
-                             .types = driver->typeTable};
+                             .types = driver->types};
 
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context, {
@@ -642,7 +642,7 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
     EvalContext evalContext = {.L = driver->L,
                                .pool = driver->pool,
                                .strings = driver->strings,
-                               .types = driver->typeTable,
+                               .types = driver->types,
                                .typer = &visitor};
     AstVisitor evaluator;
     initEvalVisitor(&evaluator, &evalContext);

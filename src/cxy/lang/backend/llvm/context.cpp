@@ -12,7 +12,7 @@ extern "C" {
 LLVMContext::LLVMContext(std::shared_ptr<llvm::LLVMContext> context,
                          CompilerDriver *driver,
                          const char *fname)
-    : _context{std::move(context)}, L{driver->L}, types{driver->typeTable},
+    : _context{std::move(context)}, L{driver->L}, types{driver->types},
       strings{driver->strings}, pool{driver->pool}
 {
     _module = std::make_unique<llvm::Module>(fname, *_context);
@@ -33,6 +33,8 @@ llvm::Type *LLVMContext::convertToLLVMType(const Type *type)
     case typString:
         unreachable("Already converted in constructor");
         break;
+    case typEnum:
+        return getLLVMType(type->tEnum.base);
     case typPointer:
         return getLLVMType(type->pointer.pointed)->getPointerTo();
     case typArray:

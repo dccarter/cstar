@@ -20,7 +20,7 @@ typedef struct CompilerDriver {
     u64 sourceDirLen;
     CompilerStats stats;
     Log *L;
-    TypeTable *typeTable;
+    TypeTable *types;
     void *backend;
 } CompilerDriver;
 

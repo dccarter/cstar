@@ -251,14 +251,20 @@ static void visitMemberExpr(AstVisitor *visitor, AstNode *node)
 
     auto member = node->memberExpr.member;
     if (nodeIs(member, Identifier)) {
-        auto field = member->ident.resolvesTo;
-        csAssert0(nodeIs(field, Field));
+        auto resolvesTo = member->ident.resolvesTo;
 
-        value = ctx.builder().CreateStructGEP(
-            ctx.getLLVMType(stripPointer(target->type)),
-            value,
-            field->fieldExpr.index,
-            field->fieldExpr.name);
+        if (nodeIs(resolvesTo, Field)) {
+            value = ctx.builder().CreateStructGEP(
+                ctx.getLLVMType(stripPointer(target->type)),
+                value,
+                resolvesTo->fieldExpr.index,
+                resolvesTo->fieldExpr.name);
+        }
+        else if (nodeIs(resolvesTo, EnumOption)) {
+            value = static_cast<llvm::ConstantInt *>(resolvesTo->codegen);
+            ctx.returnValue(value);
+            return;
+        }
     }
     else {
         csAssert0(nodeIs(member, IntegerLit));
@@ -624,6 +630,39 @@ void visitWhileStmt(AstVisitor *visitor, AstNode *node)
     ctx.returnValue(builder.getInt32(0));
 }
 
+void visitSwitchStmt(AstVisitor *visitor, AstNode *node)
+{
+    auto &ctx = LLVMContext::from(visitor);
+    auto condition = codegen(visitor, node->switchStmt.cond);
+    AstNode *case_ = node->switchStmt.cases;
+    std::vector<std::pair<llvm::ConstantInt *, llvm::BasicBlock *>> cases{};
+    llvm::BasicBlock *defaultBB = nullptr;
+    for (; case_; case_ = case_->next) {
+        llvm::ConstantInt *value = nullptr;
+        if (case_->caseStmt.match) {
+            value = llvm::cast<llvm::ConstantInt>(
+                codegen(visitor, case_->caseStmt.match));
+        }
+        auto bb = llvm::BasicBlock::Create(ctx.context());
+        ctx.builder().SetInsertPoint(bb);
+        codegen(visitor, case_->caseStmt.body);
+        if (case_->caseStmt.match) {
+            cases.emplace_back(value, bb);
+        }
+        else {
+            csAssert0(defaultBB == nullptr);
+            defaultBB = bb;
+        }
+    }
+
+    auto switchInst = ctx.builder().CreateSwitch(condition, defaultBB);
+    for (auto &[value, block] : cases) {
+        switchInst->addCase(value, block);
+    }
+
+    ctx.returnValue(switchInst);
+}
+
 void visitVariableDecl(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
@@ -756,6 +795,15 @@ void visitStructDecl(AstVisitor *visitor, AstNode *node)
     }
 }
 
+void visitEnumDecl(AstVisitor *visitor, AstNode *node)
+{
+    auto &ctx = LLVMContext::from(visitor);
+    auto option = node->enumDecl.options;
+    for (; option; option = option->next) {
+        option->codegen = codegen(visitor, option->enumOption.value);
+    }
+}
+
 llvm::Value *codegen(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
@@ -800,11 +848,13 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
         [astIfStmt] = visitIfStmt,
         [astWhileStmt] = visitWhileStmt,
         [astForStmt] = visitForStmt,
+        [astSwitchStmt] = visitSwitchStmt,
         [astContinueStmt] = visitContinueStmt,
         [astBreakStmt] = visitBreakStmt,
         [astVarDecl] = visitVariableDecl,
         [astFuncDecl] = visitFuncDecl,
         [astStructDecl] = visitStructDecl,
+        [astEnumDecl] = visitEnumDecl,
         [astGenericDecl] = astVisitSkip,
         [astImportDecl] = astVisitSkip,
     }, .fallback = astVisitFallbackVisitAll, .dispatch = dispatch);

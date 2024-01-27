@@ -166,7 +166,7 @@ static void visitFuncDecl(AstVisitor *visitor, AstNode *node)
 void simplifyAst(CompilerDriver *driver, AstNode *node)
 {
     SimplifyContext context = {.L = driver->L,
-                               .types = driver->typeTable,
+                               .types = driver->types,
                                .strings = driver->strings,
                                .pool = driver->pool};
 

@@ -75,8 +75,8 @@ const Type *checkMember(AstVisitor *visitor, const Type *parent, AstNode *node)
             flags |= flgEnumLiteral;
         }
         else {
-            resolved =
-                expectInType(ctx->types, parent, ctx->L, name, &node->loc);
+            decl = resolveMember(ctx, parent, node, &flags, name);
+            resolved = decl ? decl->type : NULL;
             flags = flgEnumLiteral;
         }
         break;

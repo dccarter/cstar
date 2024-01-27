@@ -8,7 +8,6 @@
 
 #include "core/alloc.h"
 
-
 static int compareEnumOptionsByValue(const void *lhs, const void *rhs)
 {
     return (int)(((EnumOption *)lhs)->value - ((EnumOption *)rhs)->value);
@@ -43,21 +42,38 @@ void checkEnumDecl(AstVisitor *visitor, AstNode *node)
 
     EnumOption *options = mallocOrDie(sizeof(EnumOption) * numOptions);
     for (u64 i = 0; option; option = option->next, i++) {
+        const Type *type = checkType(visitor, option->enumOption.value);
+        if (!isTypeAssignableFrom(base, type)) {
+            logError(ctx->L,
+                     &option->loc,
+                     "enum value with type '{t}' is not assignable to enum "
+                     "base type '{t}'",
+                     (FormatArg[]){{.t = type}, {.t = base}});
+            node->type = ERROR_TYPE(ctx);
+        }
         options[i] =
             (EnumOption){.value = option->enumOption.value->intLiteral.value,
-                         .name = option->enumOption.name};
+                         .name = option->enumOption.name,
+                         .decl = option};
     }
 
-    qsort(options, numOptions, sizeof(EnumOption), compareEnumOptionsByValue);
+    if (!typeIs(node->type, Error)) {
+        qsort(
+            options, numOptions, sizeof(EnumOption), compareEnumOptionsByValue);
 
-    node->type = makeEnum(ctx->types,
-                          &(Type){.tag = typEnum,
-                                  .name = node->enumDecl.name,
-                                  .flags = node->flags,
-                                  .tEnum = {.base = base,
-                                            .options = options,
-                                            .optionsCount = numOptions,
-                                            .decl = node}});
+        node->type = makeEnum(ctx->types,
+                              &(Type){.tag = typEnum,
+                                      .name = node->enumDecl.name,
+                                      .flags = node->flags,
+                                      .tEnum = {.base = base,
+                                                .options = options,
+                                                .optionsCount = numOptions,
+                                                .decl = node}});
+        option = node->enumDecl.options;
+        for (u64 i = 0; option; option = option->next, i++) {
+            option->type = node->type;
+        }
+    }
 
     free(options);
 }

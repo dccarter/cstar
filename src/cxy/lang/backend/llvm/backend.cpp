@@ -13,7 +13,7 @@ extern "C" {
 LLVMBackend::LLVMBackend(CompilerDriver *driver)
     : _context{std::make_shared<llvm::LLVMContext>()}, driver{driver}
 {
-    auto types = driver->typeTable;
+    auto types = driver->types;
 
     updateType(types->primitiveTypes[prtBool],
                llvm::Type::getInt1Ty(*_context));

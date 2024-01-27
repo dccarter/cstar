@@ -3,6 +3,10 @@
         "*.thin": "typescript",
         "type_traits": "c",
         "types.h": "c",
-        "stdarg.h": "c"
+        "stdarg.h": "c",
+        "array": "cpp",
+        "string": "cpp",
+        "string_view": "cpp",
+        "vector": "cpp"
     }
 }

@@ -113,6 +113,7 @@ typedef struct GenericParam {
 typedef struct EnumOption {
     const char *name;
     i64 value;
+    AstNode *decl;
 } EnumOption;
 
 typedef struct AppliedTypeParams {

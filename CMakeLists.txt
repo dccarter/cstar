@@ -162,9 +162,7 @@ set(CXY_MIDDLE_SOURCES
         src/cxy/lang/middle/dump/yaml.c
 
         src/cxy/lang/middle/shake/closure.c
-        src/cxy/lang/middle/shake/shake.c
-
-        src/cxy/lang/ffi/import.cpp)
+        src/cxy/lang/middle/shake/shake.c)
 
 set(CXY_LANG_BACKEND_SOURCES
         src/cxy/lang/backend/llvm/array.cpp

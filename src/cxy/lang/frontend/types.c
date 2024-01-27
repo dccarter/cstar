@@ -926,18 +926,19 @@ AstNode *findMemberDeclInType(const Type *type, cstring name)
     case typStruct:
         member = findStructMember(type, name);
         return member ? (AstNode *)member->decl : NULL;
-        break;
     case typInterface:
         member = findInterfaceMember(type, name);
         return member ? (AstNode *)member->decl : NULL;
-        break;
     case typModule:
         member = findModuleMember(type, name);
         return member ? (AstNode *)member->decl : NULL;
-        break;
     case typClass:
         member = findClassMember(type, name);
         return member ? (AstNode *)member->decl : NULL;
+    case typEnum: {
+        const EnumOption *option = findEnumOption(type, name);
+        return option ? (AstNode *)option->decl : NULL;
+    }
     default:
         return NULL;
     }

@@ -246,7 +246,7 @@ bool initCompilerDriver(CompilerDriver *compiler,
     char tmp[PATH_MAX];
     compiler->pool = pool;
     compiler->strings = strings;
-    compiler->typeTable = newTypeTable(compiler->pool, compiler->strings);
+    compiler->types = newTypeTable(compiler->pool, compiler->strings);
     compiler->moduleCache = newHashTable(sizeof(CachedModule));
     compiler->L = log;
     compiler->currentDir = makeString(compiler->strings, getcwd(tmp, PATH_MAX));
