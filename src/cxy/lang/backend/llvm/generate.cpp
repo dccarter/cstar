@@ -71,6 +71,25 @@ static llvm::Function *generateFunctionProto(AstVisitor *visitor, AstNode *node)
     return func;
 }
 
+static llvm::Value *castFromUnion(AstVisitor *visitor,
+                                  const Type *to,
+                                  AstNode *node,
+                                  u64 idx)
+{
+    auto &ctx = LLVMContext::from(visitor);
+    auto load = ctx.stack().loadVariable(false);
+    auto value = codegen(visitor, node);
+    ctx.stack().loadVariable(load);
+    auto type =
+        static_cast<llvm::Type *>(node->type->tUnion.members[idx].codegen);
+    // TODO assert/throw if type mis-match
+    value = ctx.builder().CreateBitCast(value, type->getPointerTo());
+    value = ctx.builder().CreateStructGEP(type, value, 1);
+    if (load)
+        value = ctx.builder().CreateLoad(ctx.getLLVMType(to), value);
+    return value;
+}
+
 static void visitPrefixUnaryExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
@@ -114,7 +133,8 @@ static void visitPrefixUnaryExpr(AstVisitor *visitor, AstNode *node)
 
 static llvm::Value *generateCastExpr(AstVisitor *visitor,
                                      const Type *to,
-                                     AstNode *expr)
+                                     AstNode *expr,
+                                     u64 idx = 0)
 {
     auto &ctx = LLVMContext::from(visitor);
     auto from = unwrapType(expr->type, nullptr);
@@ -122,7 +142,10 @@ static llvm::Value *generateCastExpr(AstVisitor *visitor,
     if (to == from)
         return value;
 
-    if (isFloatType(to)) {
+    if (typeIs(from, Union)) {
+        return castFromUnion(visitor, to, expr, idx);
+    }
+    else if (isFloatType(to)) {
         auto s1 = getPrimitiveTypeSize(to), s2 = getPrimitiveTypeSize(from);
         if (isFloatType(from)) {
             if (s1 < s2)
@@ -282,7 +305,8 @@ static void visitCastExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
     auto to = unwrapType(node->castExpr.to->type, nullptr);
-    auto value = generateCastExpr(visitor, to, node->castExpr.expr);
+    auto value =
+        generateCastExpr(visitor, to, node->castExpr.expr, node->castExpr.idx);
     ctx.returnValue(value);
 }
 
@@ -482,6 +506,20 @@ static void visitTupleExpr(AstVisitor *visitor, AstNode *node)
     }
 }
 
+static void visitUnionValue(AstVisitor *visitor, AstNode *node)
+{
+    auto &ctx = LLVMContext::from(visitor);
+    auto obj = ctx.createUndefined(static_cast<llvm::Type *>(
+        node->type->tUnion.members[node->unionValue.idx].codegen));
+    obj = ctx.builder().CreateInsertValue(
+        obj, ctx.builder().getInt8(node->unionValue.idx), 0);
+    obj = ctx.builder().CreateInsertValue(
+        obj, codegen(visitor, node->unionValue.value), 1);
+    obj = ctx.builder().CreateBitCast(obj, ctx.getLLVMType(node->type));
+    
+    ctx.returnValue(obj);
+}
+
 void visitReturnStmt(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
@@ -630,36 +668,103 @@ void visitWhileStmt(AstVisitor *visitor, AstNode *node)
     ctx.returnValue(builder.getInt32(0));
 }
 
-void visitSwitchStmt(AstVisitor *visitor, AstNode *node)
+static void visitSwitchStmt(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
+    auto func = ctx.builder().GetInsertBlock()->getParent();
+    auto current = ctx.builder().GetInsertBlock();
     auto condition = codegen(visitor, node->switchStmt.cond);
     AstNode *case_ = node->switchStmt.cases;
+
     std::vector<std::pair<llvm::ConstantInt *, llvm::BasicBlock *>> cases{};
     llvm::BasicBlock *defaultBB = nullptr;
-    for (; case_; case_ = case_->next) {
+    auto end = llvm::BasicBlock::Create(ctx.context(), "switch.end");
+    for (u64 i = 0; case_; case_ = case_->next, i++) {
         llvm::ConstantInt *value = nullptr;
+        llvm::BasicBlock *bb = nullptr;
         if (case_->caseStmt.match) {
             value = llvm::cast<llvm::ConstantInt>(
                 codegen(visitor, case_->caseStmt.match));
-        }
-        auto bb = llvm::BasicBlock::Create(ctx.context());
-        ctx.builder().SetInsertPoint(bb);
-        codegen(visitor, case_->caseStmt.body);
-        if (case_->caseStmt.match) {
+            bb = llvm::BasicBlock::Create(ctx.context(),
+                                          "switch.case." + std::to_string(i));
             cases.emplace_back(value, bb);
         }
         else {
             csAssert0(defaultBB == nullptr);
+            bb = llvm::BasicBlock::Create(ctx.context(), "switch.default");
             defaultBB = bb;
         }
+
+        func->insert(func->end(), bb);
+        ctx.builder().SetInsertPoint(bb);
+        codegen(visitor, case_->caseStmt.body);
+        // branch to the end
+        ctx.builder().CreateBr(end);
     }
 
-    auto switchInst = ctx.builder().CreateSwitch(condition, defaultBB);
+    ctx.builder().SetInsertPoint(current);
+    auto switchInst = ctx.builder().CreateSwitch(condition, defaultBB ?: end);
     for (auto &[value, block] : cases) {
         switchInst->addCase(value, block);
     }
 
+    func->insert(func->end(), end);
+    ctx.builder().SetInsertPoint(end);
+    ctx.returnValue(switchInst);
+}
+
+static void visitMatchStmt(AstVisitor *visitor, AstNode *node)
+{
+    auto &ctx = LLVMContext::from(visitor);
+    auto func = ctx.builder().GetInsertBlock()->getParent();
+    auto current = ctx.builder().GetInsertBlock();
+    auto load = ctx.stack().loadVariable(false);
+    auto unionValue = codegen(visitor, node->matchStmt.expr);
+    ctx.stack().loadVariable(load);
+    auto condition = ctx.builder().CreateStructGEP(
+        ctx.getLLVMType(node->matchStmt.expr->type), unionValue, 0);
+    condition = ctx.builder().CreateLoad(llvm::Type::getInt8Ty(ctx.context()),
+                                         condition);
+
+    AstNode *case_ = node->matchStmt.cases;
+
+    std::vector<std::pair<llvm::ConstantInt *, llvm::BasicBlock *>> cases{};
+    llvm::BasicBlock *defaultBB = nullptr;
+    auto end = llvm::BasicBlock::Create(ctx.context(), "match.end");
+    for (u64 i = 0; case_; case_ = case_->next, i++) {
+        llvm::ConstantInt *value = nullptr;
+        llvm::BasicBlock *bb = nullptr;
+        if (case_->caseStmt.match) {
+            value = ctx.builder().getInt8(case_->caseStmt.idx);
+            bb = llvm::BasicBlock::Create(ctx.context(),
+                                          "match.case." + std::to_string(i));
+            cases.emplace_back(value, bb);
+        }
+        else {
+            csAssert0(defaultBB == nullptr);
+            bb = llvm::BasicBlock::Create(ctx.context(), "match.default");
+            defaultBB = bb;
+        }
+
+        func->insert(func->end(), bb);
+        ctx.builder().SetInsertPoint(bb);
+        if (case_->caseStmt.variable) {
+            // visit the variable before generate code
+            codegen(visitor, case_->caseStmt.variable);
+        }
+        codegen(visitor, case_->caseStmt.body);
+        // branch to the end
+        ctx.builder().CreateBr(end);
+    }
+
+    ctx.builder().SetInsertPoint(current);
+    auto switchInst = ctx.builder().CreateSwitch(condition, defaultBB ?: end);
+    for (auto &[value, block] : cases) {
+        switchInst->addCase(value, block);
+    }
+
+    func->insert(func->end(), end);
+    ctx.builder().SetInsertPoint(end);
     ctx.returnValue(switchInst);
 }
 
@@ -844,11 +949,13 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
         [astIndexExpr] = visitIndexExpr,
         [astStructExpr] = visitStructExpr,
         [astTupleExpr] = visitTupleExpr,
+        [astUnionValue] = visitUnionValue,
         [astReturnStmt] = visitReturnStmt,
         [astIfStmt] = visitIfStmt,
         [astWhileStmt] = visitWhileStmt,
         [astForStmt] = visitForStmt,
         [astSwitchStmt] = visitSwitchStmt,
+        [astMatchStmt] = visitMatchStmt,
         [astContinueStmt] = visitContinueStmt,
         [astBreakStmt] = visitBreakStmt,
         [astVarDecl] = visitVariableDecl,

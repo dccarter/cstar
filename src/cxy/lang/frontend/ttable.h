@@ -80,7 +80,7 @@ static inline const Type *makeOpaqueType(TypeTable *table,
     return makeOpaqueTypeWithFlags(table, name, decl, 0);
 }
 
-const Type *makeUnionType(TypeTable *table, const Type **members, u64 count);
+const Type *makeUnionType(TypeTable *table, UnionMember *members, u64 count);
 
 const Type *makeTupleType(TypeTable *table,
                           const Type **members,

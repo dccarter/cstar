@@ -45,7 +45,7 @@ static inline AstNode *makeDefaultUnionValue(MemPool *pool,
         pool,
         loc,
         flgNone,
-        makeDefaultValue(pool, type->tUnion.members[0], loc),
+        makeDefaultValue(pool, type->tUnion.members[0].type, loc),
         0,
         NULL,
         type);

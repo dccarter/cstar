@@ -58,6 +58,11 @@ struct LLVMContext {
         return llvm::UndefValue::get(getLLVMType(type));
     }
 
+    inline llvm::Value *createUndefined(llvm::Type *type)
+    {
+        return llvm::UndefValue::get(type);
+    }
+
     llvm::AllocaInst *createStackVariable(const Type *type,
                                           const char *name = "");
 
@@ -75,9 +80,10 @@ struct LLVMContext {
 private:
     llvm::Type *createTupleType(const Type *type);
     llvm::Type *createFunctionType(const Type *type);
+    llvm::Type *createUnionType(const Type *type);
 
     void makeTypeName(llvm::raw_string_ostream &ss, const AstNode *node);
-    static std::string makeTypeName(const Type *type);
+    static std::string makeTypeName(const Type *type, const char *alt = "");
     llvm::Type *convertToLLVMType(const Type *type);
 
     std::shared_ptr<llvm::LLVMContext> _context{nullptr};

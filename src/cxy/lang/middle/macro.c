@@ -674,7 +674,7 @@ static AstNode *makeTypeAtIdxNode(AstVisitor *visitor,
         return NULL;
     case typUnion:
         if (idx < type->tUnion.count) {
-            atIndex = type->tUnion.members[idx];
+            atIndex = type->tUnion.members[idx].type;
             break;
         }
 

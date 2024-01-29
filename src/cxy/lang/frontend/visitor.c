@@ -228,14 +228,15 @@
         break;                                                                 \
     case astSwitchStmt:                                                        \
         MODE##Visit(visitor, node->switchStmt.cond);                           \
-        MODE##Visit(visitor, node->switchStmt.cases);                          \
+        MODE##VisitManyNodes(visitor, node->switchStmt.cases);                 \
         break;                                                                 \
     case astMatchStmt:                                                         \
         MODE##Visit(visitor, node->matchStmt.expr);                            \
-        MODE##Visit(visitor, node->matchStmt.cases);                           \
+        MODE##VisitManyNodes(visitor, node->matchStmt.cases);                  \
         break;                                                                 \
     case astCaseStmt:                                                          \
         MODE##Visit(visitor, node->caseStmt.match);                            \
+        MODE##Visit(visitor, node->caseStmt.variable);                         \
         MODE##Visit(visitor, node->caseStmt.body);                             \
         break;                                                                 \
     default:                                                                   \

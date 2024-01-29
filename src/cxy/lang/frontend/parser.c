@@ -1655,8 +1655,15 @@ static AstNode *matchCaseStatement(Parser *P)
         match = parseType(P);
         P->inCase = false;
         if (!isMulti && !check(P, tokComma) && match(P, tokAs)) {
+            tok = *current(P);
             bool isPointer = match(P, tokBAnd);
             variable = parseIdentifier(P);
+            variable =
+                newAstNode(P,
+                           &tok.fileLoc.begin,
+                           &(AstNode){.tag = astVarDecl,
+                                      .varDecl = {.name = variable->ident.value,
+                                                  .names = variable}});
             variable->flags |= (isPointer ? flgReference : flgNone);
         }
     }

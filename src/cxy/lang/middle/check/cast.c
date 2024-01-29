@@ -80,8 +80,10 @@ static void castLiteral(TypingContext *ctx, AstNode *node)
             replaceAstNodeWith(node, expr);
         }
         else if (isFloatType(node->type)) {
-            expr->tag = astFloatLit;
-            expr->floatLiteral.value = (f64)integerLiteralValue(expr);
+            if (!nodeIs(expr, FloatLit)) {
+                expr->floatLiteral.value = (f64)integerLiteralValue(expr);
+                expr->tag = astFloatLit;
+            }
             if (node->type->primitive.id == prtF32)
                 expr->floatLiteral.value = (f32)(expr->floatLiteral.value);
             replaceAstNodeWith(node, expr);

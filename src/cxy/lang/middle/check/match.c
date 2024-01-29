@@ -10,7 +10,6 @@
 
 #include "core/alloc.h"
 
-
 static inline bool isSameCase(const AstNode *lhs, const AstNode *rhs)
 {
     if (lhs->caseStmt.match == rhs->caseStmt.match)
@@ -25,6 +24,7 @@ void checkMatchCaseStmt(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *match = node->caseStmt.match, *body = node->caseStmt.body;
     if (match) {
+        AstNode *condition = node->parentScope->matchStmt.expr;
         const Type *match_ = checkType(visitor, match);
         if (typeIs(match_, Error)) {
             node->type = ERROR_TYPE(ctx);
@@ -32,8 +32,7 @@ void checkMatchCaseStmt(AstVisitor *visitor, AstNode *node)
         }
 
         u64 flags = flgNone;
-        const Type *sumType =
-            stripOnce(node->parentScope->matchStmt.expr->type, &flags);
+        const Type *sumType = stripOnce(condition->type, &flags);
         node->caseStmt.idx = findUnionTypeIndex(sumType, match_);
         if (node->caseStmt.idx == UINT32_MAX) {
             logError(ctx->L,
@@ -45,14 +44,22 @@ void checkMatchCaseStmt(AstVisitor *visitor, AstNode *node)
         }
 
         if (node->caseStmt.variable) {
-            node->caseStmt.variable->flags |= (flags & flgConst);
-            if (hasFlag(node->caseStmt.variable, Reference))
-                node->caseStmt.variable->type =
-                    makePointerType(ctx->types,
-                                    match_,
-                                    node->caseStmt.variable->flags & flgConst);
+            AstNode *variable = node->caseStmt.variable;
+            variable->flags |= (flags & flgConst);
+            if (hasFlag(variable, Reference))
+                variable->type = makePointerType(
+                    ctx->types, match_, variable->flags & flgConst);
             else
-                node->caseStmt.variable->type = match_;
+                variable->type = match_;
+            variable->varDecl.init =
+                makeCastExpr(ctx->pool,
+                             &variable->loc,
+                             flgNone,
+                             shallowCloneAstNode(ctx->pool, condition),
+                             makeTypeReferenceNode(
+                                 ctx->pool, variable->type, &variable->loc),
+                             NULL,
+                             variable->type);
         }
     }
 

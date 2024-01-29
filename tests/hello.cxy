@@ -1,17 +1,26 @@
-import { add } from "./add.cxy"
+// import { add } from "./add.cxy"
 
 pub extern func printf(fmt: string, ...args: auto) : i32;
-pub extern func read(fd: i32, buf: &void, count: u64): i64;
 
-enum Nums {
-    One, Two
-}
-pub func main(): i32 {
-    var a = Nums.One;
-    switch (a) {
-        case .Two => printf("Hello World!\n")
-        default => printf("What is this!\n")
+type Value = f64 | i64 | bool;
+
+func println(arg: Value) {
+    match(arg) {
+    case bool as v => printf("%s", v? "true" : "false")
+    case i64 as v => printf("%d", v)
+    case f64 as v => printf("%g", v)
     }
+
+    printf("\n")
+}
+
+pub func main(): i32 {
+    println(true)
+    println(false)
+    println(10.0089:f64)
+    println(1000:i64)
+
+    return 0
 }
 
 func min[T](a: T, b: T)  => a < b? a : b

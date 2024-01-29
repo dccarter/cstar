@@ -21,6 +21,15 @@ static HashCode hashTypes(HashCode hash, const Type **types, u64 count)
     return hash;
 }
 
+static HashCode hashUnionMembers(HashCode hash,
+                                 const UnionMember *types,
+                                 u64 count)
+{
+    for (u64 i = 0; i < count; i++)
+        hash = hashUint64(hash, types[i].type->tag);
+    return hash;
+}
+
 static HashCode hashType(HashCode hash, const Type *type)
 {
     hash = hashUint32(hash, type->tag);
@@ -62,6 +71,8 @@ static HashCode hashType(HashCode hash, const Type *type)
         hash = hashType(hash, type->optional.target);
         break;
     case typUnion:
+        hash = hashUnionMembers(hash, type->tUnion.members, type->tuple.count);
+        break;
     case typTuple:
         hash = hashTypes(hash, type->tuple.members, type->tuple.count);
         break;
@@ -107,6 +118,17 @@ static bool compareManyTypes(const Type **left, const Type **right, u64 count)
     return true;
 }
 
+static bool compareUnionMembers(const UnionMember *left,
+                                const UnionMember *right,
+                                u64 count)
+{
+    for (u64 i = 0; i < count; i++) {
+        if (!compareTypes(left[i].type, right[i].type))
+            return false;
+    }
+    return true;
+}
+
 static bool compareTypes(const Type *lhs, const Type *rhs)
 {
     u64 lhsFlags = flgNone, rhsFlags = flgNone;
@@ -147,9 +169,9 @@ static bool compareTypes(const Type *lhs, const Type *rhs)
     case typTuple:
     case typUnion:
         return (left->tUnion.count == right->tUnion.count) &&
-               compareManyTypes(left->tUnion.members,
-                                right->tUnion.members,
-                                left->tUnion.count);
+               compareUnionMembers(left->tUnion.members,
+                                   right->tUnion.members,
+                                   left->tUnion.count);
     case typFunc:
         if (left->name != right->name)
             return false;
@@ -564,14 +586,17 @@ const Type *makeOpaqueTypeWithFlags(TypeTable *table,
     return getOrInsertType(table, &type).s;
 }
 
-const Type *makeUnionType(TypeTable *table, const Type **members, u64 count)
+const Type *makeUnionType(TypeTable *table, UnionMember *members, u64 count)
 {
     Type type = make(
         Type, .tag = typUnion, .tUnion = {.members = members, .count = count});
 
     GetOrInset ret = getOrInsertType(table, &type);
     if (!ret.f) {
-        ((Type *)ret.s)->tUnion.members = copyTypes(table, members, count);
+        UnionMember *dest =
+            allocFromMemPool(table->memPool, sizeof(UnionMember) * count);
+        memcpy(dest, members, sizeof(UnionMember) * count);
+        ((Type *)ret.s)->tUnion.members = dest;
     }
 
     return ret.s;

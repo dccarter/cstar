@@ -116,6 +116,11 @@ typedef struct EnumOption {
     AstNode *decl;
 } EnumOption;
 
+typedef struct UnionMember {
+    const Type *type;
+    void *codegen;
+} UnionMember;
+
 typedef struct AppliedTypeParams {
     const Type **params;
     u64 count;
@@ -189,7 +194,7 @@ typedef struct Type {
 
         struct {
             u64 count;
-            const Type **members;
+            UnionMember *members;
         } tUnion;
 
         struct {

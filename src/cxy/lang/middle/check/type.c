@@ -10,20 +10,21 @@
 
 #include "core/alloc.h"
 
-static u64 addUnionDecl(const Type **members, const Type *member, u64 count)
+static u64 addUnionDecl(UnionMember *members, const Type *member, u64 count)
 {
     if (typeIs(member, Union)) {
         for (u64 i = 0; i < member->tUnion.count; i++) {
-            count = addUnionDecl(members, member->tUnion.members[i], count);
+            count =
+                addUnionDecl(members, member->tUnion.members[i].type, count);
         }
         return count;
     }
 
     for (u64 i = 0; i < count; i++) {
-        if (members[i] == member)
+        if (members[i].type == member)
             return count;
     }
-    members[count++] = member;
+    members[count++] = (UnionMember){.type = member};
     return count;
 }
 
@@ -126,7 +127,7 @@ void checkUnionDecl(AstVisitor *visitor, AstNode *node)
     if (typeIs(node->type, Error))
         return;
 
-    const Type **members_ = mallocOrDie(sizeof(Type *) * count);
+    UnionMember *members_ = mallocOrDie(sizeof(UnionMember) * count);
     u64 i = 0;
     member = node->unionDecl.members;
     for (; member; member = member->next) {

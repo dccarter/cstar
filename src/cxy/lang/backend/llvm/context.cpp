@@ -46,6 +46,8 @@ llvm::Type *LLVMContext::convertToLLVMType(const Type *type)
         return createTupleType(type);
     case typFunc:
         return createFunctionType(type);
+    case typUnion:
+        return createUnionType(type);
     default:
         return nullptr;
     }
@@ -103,14 +105,17 @@ void LLVMContext::makeTypeName(llvm::raw_string_ostream &ss,
     }
 }
 
-std::string LLVMContext::makeTypeName(const Type *type)
+std::string LLVMContext::makeTypeName(const Type *type, const char *alt)
 {
     std::string str;
     llvm::raw_string_ostream ss{str};
     if (type->ns) {
         ss << type->ns << "_";
     }
-    ss << type->name;
+    if (type->name)
+        ss << type->name;
+    else
+        ss << alt << type->index;
     return str;
 }
 
@@ -125,8 +130,8 @@ llvm::Type *LLVMContext::createTupleType(const Type *type)
             members.push_back(getLLVMType(type->tuple.members[i]));
     }
 
-    auto structType =
-        llvm::StructType::create(context(), members, makeTypeName(type));
+    auto structType = llvm::StructType::create(
+        context(), members, makeTypeName(type, "tuple."));
 
     return structType;
 }
@@ -141,4 +146,27 @@ llvm::Type *LLVMContext::createFunctionType(const Type *type)
 
     return llvm::FunctionType::get(
         getLLVMType(type->func.retType), params, false);
+}
+
+llvm::Type *LLVMContext::createUnionType(const Type *type)
+{
+    llvm::Type *bigger = nullptr;
+    u64 maxSize = 0;
+    auto str = makeTypeName(type, "Union.");
+    for (u64 i = 0; i < type->tUnion.count; i++) {
+        auto member = getLLVMType(type->tUnion.members[i].type);
+        auto size = module().getDataLayout().getTypeAllocSize(member);
+        if (size >= maxSize) {
+            bigger = member;
+            maxSize = size;
+        }
+
+        type->tUnion.members[i].codegen =
+            llvm::StructType::create(context(),
+                                     {llvm::Type::getInt8Ty(context()), member},
+                                     str + "." + std::to_string(i));
+    }
+
+    return llvm::StructType::create(
+        context(), {llvm::Type::getInt8Ty(context()), bigger}, str);
 }

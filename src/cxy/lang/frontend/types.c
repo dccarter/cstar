@@ -234,7 +234,7 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
 
     case typUnion:
         for (u64 i = 0; i < to->tUnion.count; i++) {
-            if (to->tUnion.members[i] == from)
+            if (to->tUnion.members[i].type == from)
                 return true;
         }
         return false;
@@ -727,7 +727,11 @@ void printType(FormatState *state, const Type *type)
         format(state, ")", NULL);
         break;
     case typUnion:
-        printManyTypes(state, type->tUnion.members, type->tUnion.count, " | ");
+        for (u64 i = 0; i < type->tUnion.count; i++) {
+            if (i != 0)
+                format(state, " | ", NULL);
+            printType(state, type->tUnion.members[i].type);
+        }
         break;
     case typFunc:
         printKeyword(state, "func");
@@ -1023,7 +1027,7 @@ u32 findUnionTypeIndex(const Type *tagged, const Type *type)
     if (!typeIs(tagged, Union))
         return UINT32_MAX;
     for (u32 i = 0; i < tagged->tUnion.count; i++) {
-        if (tagged->tUnion.members[i] == type)
+        if (tagged->tUnion.members[i].type == type)
             return i;
     }
     return UINT32_MAX;

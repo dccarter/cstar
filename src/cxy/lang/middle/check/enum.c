@@ -72,6 +72,7 @@ void checkEnumDecl(AstVisitor *visitor, AstNode *node)
         option = node->enumDecl.options;
         for (u64 i = 0; option; option = option->next, i++) {
             option->type = node->type;
+            option->enumOption.value->type = base;
         }
     }
 
