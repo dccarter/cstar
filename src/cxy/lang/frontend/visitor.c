@@ -27,6 +27,7 @@
     case astModuleDecl:                                                        \
     case astIdentifier:                                                        \
     case astDestructorRef:                                                     \
+    case astExternDecl:                                                        \
         break;                                                                 \
     case astAttr:                                                              \
         MODE##VisitManyNodes(visitor, node->attr.args);                        \

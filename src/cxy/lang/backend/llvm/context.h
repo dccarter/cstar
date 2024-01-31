@@ -13,6 +13,8 @@ extern "C" {
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 
+#include <set>
+
 struct Stack {
 private:
 #define DEFINE_STACK_VAR(TYPE, NAME, ...)                                      \
@@ -63,7 +65,13 @@ struct LLVMContext {
         return llvm::UndefValue::get(type);
     }
 
-    llvm::AllocaInst *createStackVariable(const Type *type,
+    inline llvm::AllocaInst *createStackVariable(const Type *type,
+                                                 const char *name = "")
+    {
+        return createStackVariable(getLLVMType(type), name);
+    }
+
+    llvm::AllocaInst *createStackVariable(llvm::Type *type,
                                           const char *name = "");
 
     llvm::Value *createLoad(const Type *type, llvm::Value *value);
@@ -75,12 +83,17 @@ struct LLVMContext {
         return std::exchange(_module, nullptr);
     }
 
+    llvm::Function *findOrCreateFunctionDecl(const Type *type);
+
+    void addFunctionDecl(AstNode *decl, llvm::Function *func);
+
     static LLVMContext &from(AstVisitor *visitor);
 
 private:
     llvm::Type *createTupleType(const Type *type);
     llvm::Type *createFunctionType(const Type *type);
     llvm::Type *createUnionType(const Type *type);
+    llvm::Type *createClassType(const Type *type);
 
     void makeTypeName(llvm::raw_string_ostream &ss, const AstNode *node);
     static std::string makeTypeName(const Type *type, const char *alt = "");
@@ -89,8 +102,10 @@ private:
     std::shared_ptr<llvm::LLVMContext> _context{nullptr};
     std::unique_ptr<llvm::Module> _module{nullptr};
     std::unique_ptr<llvm::IRBuilder<>> _builder{nullptr};
+    llvm::DenseMap<AstNode *, llvm::Function *> _functions{};
     llvm::Value *_value = {nullptr};
     Stack _stack{};
+    const char *_sourceFilename{nullptr};
 };
 
 llvm::Value *codegen(AstVisitor *visitor, AstNode *node);

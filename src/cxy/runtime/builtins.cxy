@@ -1,0 +1,359 @@
+pub extern func strlen(s: string) : u64
+pub extern func sprintf(s: &i8, fmt: string, ...args: auto) : i64;
+pub extern func memmove(dst: &void, src: &const void, num: u64) : &void;
+pub extern func malloc(s: u64): &void
+pub extern func realloc(ptr: &void, s: u64): &void
+pub extern func free(ptr: &void): void
+
+@[pure, inline]
+pub func __cxy_alloc(size: u64) => malloc(size)
+@[pure, inline]
+pub func __cxy_realloc(ptr: &void, size: u64) => realloc(ptr, size)
+pub func __cxy_free(ptr: &void) { free(ptr) }
+
+/* Builtin Optional Type */
+struct __Optional[T] {
+    /* @note: Do not change the order of these members */
+    - ok: bool = false;
+    - val: T
+
+    @inline func `init`() { ok = false }
+    @inline func `init`(value: T) { val = value; ok = true }
+
+    @inline func `!!`() => ok
+    @inline func `deref`() { return val }
+}
+
+/* Creates a valid optional value */
+@inline
+pub func Some[T](@transient value: T) => __Optional[T](value)
+
+/* Creates an invalid optional value */
+@inline
+pub func None[T]() => __Optional[T]()
+
+pub type Hash = u32
+#const FNV_32_PRIME = 0x01000193
+
+@inline
+pub func hash_fnv1a_uint8(h: Hash, x: u8) : Hash
+{
+    return (h ^ x) * #{FNV_32_PRIME}
+}
+
+pub func hash_fnv1a_uint16(h: Hash, x: u16) =>
+    hash_fnv1a_uint8(hash_fnv1a_uint8(h, <u8>(x & 0xff)), <u8>(x >> 8))
+
+pub func hash_fnv1a_uint32(h: Hash, x: u32) =>
+    hash_fnv1a_uint16(hash_fnv1a_uint16(h, <u16>(x & 0xffff)), <u16>(x >> 16))
+
+pub func hash_fnv1a_uint64(h: Hash, x: u64) =>
+    hash_fnv1a_uint32(hash_fnv1a_uint32(h, <u32>(x & 0xffffffff)), <u32>(x >> 32))
+
+pub func hash_fnv1a_ptr(h: Hash, ptr: &const void) =>
+    hash_fnv1a_uint64(h, ptr !: u64)
+
+pub func hash_fnv1a_string(h: Hash, str: string)
+{
+    var i = 0;
+    while (str.[i] != '\0') {
+        h = hash_fnv1a_uint8(h, <u8>str.[i]);
+        i++
+    }
+    return h;
+}
+
+pub func hash_fnv1a_bytes(h: Hash,
+                         ptr: &const void,
+                         size: u64)
+{
+    const p = ptr: &const u8;
+    for (const i: 0..size-1)
+        h = hash_fnv1a_uint8(h, p.[i]);
+    return h
+}
+
+pub func hash[T](val: const T, init: Hash = #{FNV_32_PRIME}) : Hash {
+    #if (#T == #string) {
+        return hash_fnv1a_string(init, val)
+    }
+    else #if (#T == #i8 || #T == #u8) {
+        return hash_fnv1a_uint8(init, <u8>val)
+    }
+    else #if (#T == #i16 || #T == #u16) {
+        return hash_fnv1a_uint16(init, <u16>val)
+    }
+    else #if (#T == #i32 || #T == #u32) {
+        return hash_fnv1a_uint32(init, <u32>val)
+    }
+    else #if (T.isFloat || #T == #i64 || #T == #u64) {
+        return hash_fnv1a_uint64(init, <u64>val)
+    }
+    else #if (T.isEnum) {
+        return hash_fnv1a_uint64(init, <u64>val)
+    }
+    else #if (T.isTuple) {
+        var code = #{FNV_32_PRIME};
+        #for (const i: 0..T.membersCount) {
+            code = hash(val.#{i}, code)
+        }
+        return code
+    }
+    else #if (T.isArray || T.isSlice) {
+        var code = #{FNV_32_PRIME};
+        for (const x: val) {
+            code = hash(x, code)
+        }
+        return code
+    }
+    else #if (T.isUnion) {
+        var code = #{FNV_32_PRIME};
+        match (val) {
+            #for (const i: 0..#{T.membersCount}) {
+                case #{typeat!(T, i)} as y => {
+                    code = hash(#{i}, code)
+                    code = hash(y, code)
+                }
+            }
+        }
+        return code;
+    }
+    else {
+        // this will fail if T does not implement hash function
+        return val.op__hash()
+    }
+}
+
+
+pub struct String {
+    - str: string
+    - count: u64
+
+    func `init`(str: string) {
+        this.str = str
+        count = strlen(str)
+    }
+
+    func `init`(str: string, count: u64) {
+        this.str = str
+        this.count = count
+    }
+
+    @inline
+    func `deref`() => str
+
+    @inline
+    func `deinit`() {
+        str = null
+        count = 0
+    }
+
+    const func compare(other: const This) {
+        if (count != other.count)
+            return <i32>(count - other.count)
+
+        for (const i : 0..count) {
+            if (str.[i] != other.str.[i])
+                return <i32>str.[i] - <i32>other.str.[i]
+        }
+
+        return <i32>0
+    }
+
+    @inline
+    const func `==`(other: const This) => compare(other) == 0
+
+    @inline
+    const func `!=`(other: const This) => compare(other) != 0
+
+    @inline
+    const func `<`(other: const This) => compare(other) < 0
+
+    @inline
+    const func `>`(other: const This) => compare(other) > 0
+
+    @inline
+    const func `<=`(other: const This) => compare(other) <= 0
+
+    @inline
+    const func `>=`(other: const This) => compare(other) >= 0
+
+    @inline
+    const func `hash`() => hash_fnv1a_bytes(#{FNV_32_PRIME}, str, count)
+}
+
+
+#const CXY_STRING_BUILDER_DEFAULT_CAPACITY = 32:i32
+
+class StringBuilder {
+    - capacity: u64 = 0;
+    - size: u64 = 0;
+    - data: &i8 = null;
+
+    - func grow(growSize: u64) {
+        const newSize = size + growSize;
+        if (this.data == null) {
+            this.data = <&i8> __cxy_alloc(growSize + 1)
+            this.capacity = growSize
+        }
+        else if (this.capacity < newSize) {
+            while (this.capacity < newSize) {
+                this.capacity <<= 1
+            }
+            this.data = <&i8> __cxy_realloc(this.data !: &void, this.capacity+1)
+        }
+    }
+
+    @inline
+    func `init`() {
+        grow(#{CXY_STRING_BUILDER_DEFAULT_CAPACITY})
+    }
+
+    @inline
+    func `deinit`() => {
+        if (data)
+            __cxy_free(this.data)
+    }
+
+    func appendString(str: &const i8, len: u64) {
+        if (len) {
+            var p = this.data + this.size;
+            memmove(p, str, len)
+            this.size += len
+            this.data.[this.size] = <i8>'\0'
+        }
+    }
+
+    @inline
+    func appendString(s: String) {
+        appendString(s.str: &const i8, s.count)
+    }
+
+    @inline
+    func appendString(s: string) {
+        appendString(s: &const i8, strlen(s))
+    }
+
+    func appendSignedInt(num: i64) {
+        var buf: [i8, 32];
+        const len = sprintf(buf, "%lld", num);
+        appendString(buf: &const i8, len)
+    }
+
+    func appendUnSignedInt(num: u64) {
+        var buf: [i8, 32];
+        const len = sprintf(buf, "%llu", num);
+        appendString(buf: &const i8, len)
+    }
+
+    func appendFloat(num: f64) {
+        var data: [i8, 32];
+        const len = sprintf(data, "%g", num);
+        appendString(data: &const i8, len)
+    }
+
+    func appendChar(ch: wchar) {
+        if (ch < 0x80) {
+            grow(1);
+            this.data.[this.size++] = <i8> ch
+        }
+        else if (ch < 0x800) {
+            grow(2);
+            this.data.[this.size++] = <i8> (0xC0 | (ch >> 6))
+            this.data.[this.size++] = <i8> (0x80 | (ch & 0x3f))
+        }
+        else if (ch < 0x10000) {
+            grow(3);
+            this.data.[this.size++] = <i8> (0xE0 | (ch >> 12))
+            this.data.[this.size++] = <i8> (0x80 | ((ch >> 6) & 0x3f))
+            this.data.[this.size++] = <i8> (0x80 | (ch & 0x3f))
+        }
+        else if (ch < 0x200000) {
+            grow(4);
+            this.data.[this.size++] = <i8> (0xF0 | (ch >> 16))
+            this.data.[this.size++] = <i8> (0x80 | ((ch >> 12) & 0x3f))
+            this.data.[this.size++] = <i8> (0x80 | ((ch >> 6) & 0x3f))
+            this.data.[this.size++] = <i8> (0x80 | (ch & 0x3f))
+        }
+        else {
+            // TODO raise OutOfRangeException()
+        }
+        this.data.[this.size] = <i8>'\0'
+    }
+
+
+    @inline
+    func appendBool(val: bool) {
+        if (val)
+            appendString("true": &const i8, 4)
+        else
+            appendString("false": &const i8, 5)
+    }
+
+    func appendPointer[T](ptr: &const T) {
+        var data: [i8, 32];
+        const len = sprintf(data, "%p", ptr: &const void);
+        appendString(data: &const i8, len)
+    }
+
+    @inline
+    func `<<`[U](val: const U) : StringBuilder {
+        #if (U.isString)
+            appendString(val)
+        else #if (U.isInteger)
+            appendSignedInt(<i64>val)
+        else #if (U.isFloat)
+            appendFloat(val)
+        else #if (U.isBoolean)
+            appendBool(val)
+        else #if (#U == #wchar)
+             appendChar(val)
+        else #if (U.isEnum)
+            appendString(val.__name)
+        else #if (U.isStruct || U.isClass)
+            val.op__str(this)
+        else #if (U.isTuple) {
+            this.appendChar('(')
+            #for (const i: 0..U.membersCount) {
+                #if (i != 0)
+                    this.appendString(", ")
+                this << val.#{i}
+            }
+            this.appendChar(')')
+        }
+        else #if (U.isArray || U.isSlice) {
+            this.appendChar('[')
+            for (const i: 0..len!(val)) {
+                if (i != 0)
+                    this.appendString(", ")
+                this << val.[i]
+            }
+            this.appendChar(']')
+        }
+        else #if (U.isUnion) {
+            match (val) {
+                #for (const i: 0..#{U.membersCount}) {
+                    case #{typeat!(U, i)} as y => this << y
+                }
+            }
+        }
+        return this
+    }
+
+    func `str`(sb: StringBuilder) {
+        appendPointer[void](sb: &const void)
+    }
+
+    @inline
+    const func `hash`() => hash_fnv1a_ptr(#{FNV_32_PRIME}, this: &const void)
+
+    @inline
+    func release() {
+        this.capacity = 0
+        var tmp = String(this.data !: string, this.size);
+        this.data = null
+        this.size = 0
+
+        return tmp
+    }
+}

@@ -61,6 +61,15 @@ static void generateLogicAndOr(AstVisitor *visitor, AstNode *node)
     ctx.returnValue(phi);
 }
 
+static llvm::Value *generatePointerArithmetic(LLVMContext &ctx,
+                                              AstNode *node,
+                                              llvm::Value *lhs,
+                                              llvm::Value *rhs)
+{
+    return ctx.builder().CreateInBoundsGEP(
+        ctx.getLLVMType(node->type), lhs, {rhs});
+}
+
 void visitBinaryExpr(AstVisitor *visitor, AstNode *node)
 {
     auto op = node->binaryExpr.op;
@@ -76,7 +85,7 @@ void visitBinaryExpr(AstVisitor *visitor, AstNode *node)
     auto lhs = codegen(visitor, left);
     auto rhs = codegen(visitor, right);
 
-    if (left->type != right->type) {
+    if (left->type != right->type && !typeIs(left->type, Pointer)) {
         // implicitly cast to the bigger type
         if (isPrimitiveTypeBigger(left->type, right->type)) {
             if (isFloatType(left->type))
@@ -108,7 +117,10 @@ void visitBinaryExpr(AstVisitor *visitor, AstNode *node)
 
     switch (node->binaryExpr.op) {
     case opAdd:
-        CREATE_TYPE_SPECIFIC_OP(Add);
+        if (typeIs(right->type, Pointer))
+            ctx.returnValue(generatePointerArithmetic(ctx, node, lhs, rhs));
+        else
+            CREATE_TYPE_SPECIFIC_OP(Add);
         break;
     case opSub:
         CREATE_TYPE_SPECIFIC_OP(Sub);

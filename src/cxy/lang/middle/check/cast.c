@@ -146,7 +146,7 @@ void checkTypedExpr(AstVisitor *visitor, AstNode *node)
     const Type *expr = checkType(visitor, node->typedExpr.expr);
     const Type *type = checkType(visitor, node->typedExpr.type);
     if (isTypeCastAssignable(type, expr) ||
-        (isPointerType(expr) && isPointerType(type))) {
+        (isPointerType(expr) && (isPointerType(type) || isIntegerType(type)))) {
         node->type = type;
     }
     else {

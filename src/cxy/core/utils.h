@@ -273,6 +273,7 @@ static inline int binarySearchWithRef(const void *arr,
 }
 
 int compareStrings(const void *lhs, const void *rhs);
+bool comparePointers(const void *lhs, const void *rhs);
 
 static inline bool isIgnoreVar(cstring s)
 {

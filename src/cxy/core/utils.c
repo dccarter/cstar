@@ -237,6 +237,11 @@ int compareStrings(const void *lhs, const void *rhs)
     return strcmp((cstring)lhs, (cstring)rhs);
 }
 
+bool comparePointers(const void *lhs, const void *rhs)
+{
+    return *((void **)lhs) == *((void **)rhs);
+}
+
 void cxyAbort(const char *fmt, ...)
 {
     va_list args;

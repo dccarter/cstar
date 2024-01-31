@@ -13,7 +13,7 @@ LLVMContext::LLVMContext(std::shared_ptr<llvm::LLVMContext> context,
                          CompilerDriver *driver,
                          const char *fname)
     : _context{std::move(context)}, L{driver->L}, types{driver->types},
-      strings{driver->strings}, pool{driver->pool}
+      strings{driver->strings}, pool{driver->pool}, _sourceFilename{fname}
 {
     _module = std::make_unique<llvm::Module>(fname, *_context);
     _builder = std::make_unique<llvm::IRBuilder<>>(*_context);
@@ -48,6 +48,8 @@ llvm::Type *LLVMContext::convertToLLVMType(const Type *type)
         return createFunctionType(type);
     case typUnion:
         return createUnionType(type);
+    case typClass:
+        return createClassType(type);
     default:
         return nullptr;
     }
@@ -62,13 +64,13 @@ llvm::Type *LLVMContext::getLLVMType(const Type *type)
         type->codegen ?: updateType(type, convertToLLVMType(type)));
 }
 
-llvm::AllocaInst *LLVMContext::createStackVariable(const Type *type,
+llvm::AllocaInst *LLVMContext::createStackVariable(llvm::Type *type,
                                                    const char *name)
 {
     auto func = builder().GetInsertBlock()->getParent();
     llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(),
                                  func->getEntryBlock().begin());
-    return tmpBuilder.CreateAlloca(getLLVMType(type), nullptr, name);
+    return tmpBuilder.CreateAlloca(type, nullptr, name);
 }
 
 llvm::Value *LLVMContext::createLoad(const Type *type, llvm::Value *value)
@@ -136,9 +138,31 @@ llvm::Type *LLVMContext::createTupleType(const Type *type)
     return structType;
 }
 
+llvm::Type *LLVMContext::createClassType(const Type *type)
+{
+    std::vector<llvm::Type *> members{};
+    for (u64 i = 0; i < type->tClass.members->count; i++) {
+        NamedTypeMember *member = &type->tClass.members->members[i];
+        if (!nodeIs(member->decl, Field))
+            continue;
+
+        if (typeIs(member->type, Func))
+            members.push_back(getLLVMType(member->type)->getPointerTo());
+        else
+            members.push_back(getLLVMType(member->type));
+    }
+
+    auto classType = llvm::StructType::create(
+        context(), members, makeTypeName(type, "Class."));
+
+    return classType;
+}
+
 llvm::Type *LLVMContext::createFunctionType(const Type *type)
 {
     std::vector<llvm::Type *> params;
+    if (type->func.decl && type->func.decl->funcDecl.this_)
+        params.push_back(getLLVMType(type->func.decl->funcDecl.this_->type));
 
     for (u64 i = 0; i < type->func.paramsCount; i++) {
         params.push_back(getLLVMType(type->func.params[i]));
@@ -169,4 +193,12 @@ llvm::Type *LLVMContext::createUnionType(const Type *type)
 
     return llvm::StructType::create(
         context(), {llvm::Type::getInt8Ty(context()), bigger}, str);
+}
+
+void LLVMContext::addFunctionDecl(AstNode *decl, llvm::Function *func)
+{
+    if (decl == nullptr || _functions.contains(decl))
+        return;
+
+    _functions.try_emplace(decl, func);
 }

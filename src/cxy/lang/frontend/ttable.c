@@ -167,6 +167,10 @@ static bool compareTypes(const Type *lhs, const Type *rhs)
         return typeIs(right, This) ? (left == right)
                                    : left->_this.that == right;
     case typTuple:
+        return (left->tuple.count == right->tuple.count) &&
+               compareManyTypes(left->tuple.members,
+                                right->tuple.members,
+                                left->tuple.count);
     case typUnion:
         return (left->tUnion.count == right->tUnion.count) &&
                compareUnionMembers(left->tUnion.members,

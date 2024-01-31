@@ -5,6 +5,7 @@
 #include "backend.h"
 
 #include <llvm/IR/Verifier.h>
+#include <llvm/Linker/Linker.h>
 
 extern "C" {
 #include "lang/frontend/ttable.h"
@@ -42,6 +43,7 @@ LLVMBackend::LLVMBackend(CompilerDriver *driver)
     updateType(types->stringType,
                llvm::Type::getInt8Ty(*_context)->getPointerTo());
     updateType(types->voidType, llvm::Type::getVoidTy(*_context));
+    updateType(types->nullType, llvm::Type::getVoidTy(*_context));
 }
 
 bool LLVMBackend::addModule(std::unique_ptr<llvm::Module> module)
@@ -55,9 +57,32 @@ bool LLVMBackend::addModule(std::unique_ptr<llvm::Module> module)
     return false;
 }
 
+bool LLVMBackend::linkModules()
+{
+    if (_linkedModule)
+        return true;
+
+    _linkedModule = std::make_unique<llvm::Module>("", *_context);
+    llvm::Linker linker(*_linkedModule);
+
+    for (auto &module : modules) {
+        bool error = linker.linkInModule(std::move(module));
+        if (error) {
+            logError(driver->L, nullptr, "linking modules failed", nullptr);
+            _linkedModule = nullptr;
+            return false;
+        }
+    }
+    modules.clear();
+
+    return true;
+}
+
 void LLVMBackend::dumpMainModuleIR(cstring output_path)
 {
-    auto &mainModule = modules.back();
+    if (!linkModules())
+        return;
+
     if (output_path) {
         std::error_code ec;
         llvm::raw_fd_stream fs(output_path, ec);
@@ -68,10 +93,10 @@ void LLVMBackend::dumpMainModuleIR(cstring output_path)
                      (FormatArg[]){{.s = ec.message().c_str()}});
             return;
         }
-        mainModule->print(fs, nullptr);
+        _linkedModule->print(fs, nullptr);
     }
     else
-        mainModule->print(llvm::outs(), nullptr);
+        _linkedModule->print(llvm::outs(), nullptr);
 }
 
 void *initCompilerBackend(CompilerDriver *driver)

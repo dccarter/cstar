@@ -152,8 +152,8 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
                      "non-numeric "
                      "type '{t}'",
                      (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
-            return;
             node->type = ERROR_TYPE(ctx);
+            return;
         }
         node->type = getPrimitiveType(ctx->types, prtBool);
         break;

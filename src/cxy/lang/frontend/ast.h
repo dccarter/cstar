@@ -19,6 +19,7 @@ struct StrPool;
     f(Deleted)              \
     f(ComptimeOnly)         \
     f(ClosureCapture)       \
+    f(ExternDecl)           \
     f(Program)              \
     f(Metadata)             \
     f(CCode)                \
@@ -349,6 +350,10 @@ struct AstNode {
             u16 super;
             bool isKeyword;
         } pathElement;
+
+        struct {
+            AstNode *func;
+        } externDecl;
 
         struct {
             struct AstNode *elements;

@@ -8,6 +8,9 @@
 
 static AstNode *getArrayDimension(AstNode *node)
 {
+    if (node == NULL)
+        return node;
+    
     switch (node->tag) {
     case astCastExpr:
         return node->castExpr.expr;

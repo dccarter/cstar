@@ -18,6 +18,7 @@ typedef struct SimplifyContext {
     StrPool *strings;
     MemPool *pool;
     AstModifier root;
+    HashTable functions;
     struct {
         struct {
             AstNode *currentFunction;
@@ -27,6 +28,18 @@ typedef struct SimplifyContext {
         } stack;
     };
 } SimplifyContext;
+
+static bool addFunctionDecl(SimplifyContext *ctx, AstNode *decl)
+{
+    if (nodeIs(decl, FuncDecl)) {
+        return insertInHashTable(&ctx->functions,
+                                 &decl,
+                                 hashPtr(hashInit(), decl),
+                                 sizeof(void *),
+                                 comparePointers);
+    }
+    return false;
+}
 
 static void visitProgram(AstVisitor *visitor, AstNode *node)
 {
@@ -76,6 +89,25 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
     node->callExpr.callee = call;
 }
 
+static void visitIdentifier(AstVisitor *visitor, AstNode *node)
+{
+    SimplifyContext *ctx = getAstVisitorContext(visitor);
+    AstNode *target = node->ident.resolvesTo;
+    if (nodeIs(target, FuncDecl)) {
+        if (addFunctionDecl(ctx, target)) {
+            // new function declaration added, add extern
+            AstNode *decl = makeAstNode(ctx->pool,
+                                        builtinLoc(),
+                                        &(AstNode){.tag = astExternDecl,
+                                                   .type = target->type,
+                                                   .externDecl.func = target});
+
+            astModifierAdd(&ctx->root, decl);
+            node->ident.resolvesTo = decl;
+        }
+    }
+}
+
 static void visitPathElement(AstVisitor *visitor, AstNode *node)
 {
     AstNode copy = *node;
@@ -83,6 +115,7 @@ static void visitPathElement(AstVisitor *visitor, AstNode *node)
     node->ident.value = copy.pathElement.name;
     node->ident.resolvesTo = copy.pathElement.resolvesTo;
     node->ident.super = copy.pathElement.super;
+    astVisit(visitor, node);
 }
 
 static void visitPathExpr(AstVisitor *visitor, AstNode *node)
@@ -94,9 +127,13 @@ static void visitPathExpr(AstVisitor *visitor, AstNode *node)
         AstNode *base = node->path.elements;
         node->path.elements = makeResolvedPath(
             ctx->pool, &node->loc, S_this, flgNone, this, base, this->type);
-        base->pathElement.resolvesTo =
-            findMemberDeclInType(stripAll(this->type), base->pathElement.name);
-        csAssert0(base->pathElement.resolvesTo);
+
+        if (!hasFlag(node, Generated)) {
+            // it already resolves to correct member
+            base->pathElement.resolvesTo = findMemberDeclInType(
+                stripAll(this->type), base->pathElement.name);
+            csAssert0(base->pathElement.resolvesTo);
+        }
     }
 
     AstNode *elem = node->path.elements;
@@ -159,6 +196,7 @@ static void visitFuncDecl(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
     ctx->currentFunction = node;
+    addFunctionDecl(ctx, node);
     astVisitFallbackVisitAll(visitor, node);
     ctx->currentFunction = NULL;
 }
@@ -168,19 +206,24 @@ void simplifyAst(CompilerDriver *driver, AstNode *node)
     SimplifyContext context = {.L = driver->L,
                                .types = driver->types,
                                .strings = driver->strings,
-                               .pool = driver->pool};
+                               .pool = driver->pool,
+                               .functions = newHashTable(sizeof(void *))};
 
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context, {
         [astProgram] = visitProgram,
         [astPath] = visitPathExpr,
         [astPathElem] = visitPathElement,
+        [astIdentifier] = visitIdentifier,
         [astCallExpr] = visitCallExpr,
         [astStructDecl] = visitStructDecl,
+        [astClassDecl] = visitStructDecl,
         [astFuncDecl] = visitFuncDecl,
         [astGenericDecl] = astVisitSkip
     }, .fallback = astVisitFallbackVisitAll);
     // clang-format on
 
     astVisit(&visitor, node);
+
+    freeHashTable(&context.functions);
 }

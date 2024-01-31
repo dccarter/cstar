@@ -50,7 +50,10 @@ static llvm::Function *generateFunctionProto(AstVisitor *visitor, AstNode *node)
     for (u64 i = 0; param; param = param->next, i++) {
         if (hasFlag(node, Variadic) && hasFlag(param, Variadic))
             break;
-        params.push_back(ctx.getLLVMType(param->type));
+        auto paramType = ctx.getLLVMType(param->type);
+        if (typeIs(param->type, Func))
+            paramType = paramType->getPointerTo();
+        params.push_back(paramType);
     }
 
     auto funcType = llvm::FunctionType::get(
@@ -195,6 +198,29 @@ static llvm::Value *generateCastExpr(AstVisitor *visitor,
     }
 }
 
+static void visitNullLit(AstVisitor *visitor, AstNode *node)
+{
+    auto &ctx = LLVMContext::from(visitor);
+    AstNode *parent = node->parentScope;
+    if (nodeIs(parent, AssignExpr))
+        ctx.returnValue(llvm::ConstantPointerNull::get(
+            llvm::dyn_cast<llvm::PointerType>(ctx.getLLVMType(parent->type))));
+    else if (nodeIs(parent, BinaryExpr)) {
+        if (parent->binaryExpr.rhs == node)
+            ctx.returnValue(llvm::ConstantPointerNull::get(
+                llvm::dyn_cast<llvm::PointerType>(
+                    ctx.getLLVMType(parent->binaryExpr.lhs->type))));
+        else
+            ctx.returnValue(llvm::ConstantPointerNull::get(
+                llvm::dyn_cast<llvm::PointerType>(
+                    ctx.getLLVMType(parent->binaryExpr.rhs->type))));
+    }
+    else {
+        ctx.returnValue(llvm::ConstantPointerNull::get(
+            llvm::dyn_cast<llvm::PointerType>(ctx.getLLVMType(node->type))));
+    }
+}
+
 static void visitBoolLit(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
@@ -255,7 +281,7 @@ static void visitIdentifierExpr(AstVisitor *visitor, AstNode *node)
     auto target = node->ident.resolvesTo;
     auto value = static_cast<llvm::Value *>(target->codegen);
 
-    if (!nodeIs(target, FuncDecl)) {
+    if (!(nodeIs(target, FuncDecl) || nodeIs(target, ExternDecl))) {
         value = ctx.createLoad(node->type, value);
     }
 
@@ -369,11 +395,21 @@ static void visitIndexExpr(AstVisitor *visitor, AstNode *node)
 static void visitTypedExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
-    auto value =
-        ctx.builder().CreateCast(llvm::Instruction::BitCast,
-                                 codegen(visitor, node->castExpr.expr),
-                                 ctx.getLLVMType(node->castExpr.to->type));
-    value->mutateType(ctx.getLLVMType(node->type));
+    auto to = node->castExpr.to->type, from = node->castExpr.expr->type;
+    llvm::Value *value = codegen(visitor, node->castExpr.expr);
+    if (typeIs(from, Pointer)) {
+        if (typeIs(to, Pointer)) {
+            value = ctx.builder().CreatePointerCast(
+                codegen(visitor, node->castExpr.expr), ctx.getLLVMType(to));
+        }
+        else if (isIntegerType(to)) {
+            csAssert0(to->primitive.id == prtU64);
+            value = ctx.builder().CreatePtrToInt(value, ctx.getLLVMType(to));
+        }
+    }
+    else {
+        value->mutateType(ctx.getLLVMType(node->type));
+    }
     ctx.returnValue(value);
 }
 
@@ -453,12 +489,10 @@ static void visitUnaryExpr(AstVisitor *visitor, AstNode *node)
 static void visitCallExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
-    auto func =
-        static_cast<llvm::FunctionType *>(node->callExpr.callee->type->codegen);
-    auto load = ctx.stack().loadVariable();
-    // ctx.stack().loadVariable = false;
+    auto type = node->callExpr.callee->type;
+
     auto callee = codegen(visitor, node->callExpr.callee);
-    ctx.stack().loadVariable(load);
+    auto func = llvm::dyn_cast<llvm::FunctionType>(ctx.getLLVMType(type));
     csAssert0(callee);
 
     std::vector<llvm::Value *> args;
@@ -509,14 +543,21 @@ static void visitTupleExpr(AstVisitor *visitor, AstNode *node)
 static void visitUnionValue(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
-    auto obj = ctx.createUndefined(static_cast<llvm::Type *>(
-        node->type->tUnion.members[node->unionValue.idx].codegen));
+    auto unionType = ctx.getLLVMType(node->type);
+    auto type = static_cast<llvm::Type *>(
+        node->type->tUnion.members[node->unionValue.idx].codegen);
+    auto tmp = ctx.createStackVariable(type);
+
+    auto obj = ctx.createUndefined(type);
     obj = ctx.builder().CreateInsertValue(
         obj, ctx.builder().getInt8(node->unionValue.idx), 0);
     obj = ctx.builder().CreateInsertValue(
         obj, codegen(visitor, node->unionValue.value), 1);
-    obj = ctx.builder().CreateBitCast(obj, ctx.getLLVMType(node->type));
-    
+    ctx.builder().CreateStore(obj, tmp);
+
+    obj = ctx.builder().CreateBitCast(tmp, unionType->getPointerTo());
+    obj = ctx.builder().CreateLoad(unionType, obj);
+
     ctx.returnValue(obj);
 }
 
@@ -718,6 +759,7 @@ static void visitMatchStmt(AstVisitor *visitor, AstNode *node)
     auto &ctx = LLVMContext::from(visitor);
     auto func = ctx.builder().GetInsertBlock()->getParent();
     auto current = ctx.builder().GetInsertBlock();
+
     auto load = ctx.stack().loadVariable(false);
     auto unionValue = codegen(visitor, node->matchStmt.expr);
     ctx.stack().loadVariable(load);
@@ -877,6 +919,26 @@ void visitFuncDecl(AstVisitor *visitor, AstNode *node)
     ctx.returnValue(func);
 }
 
+void visitExternDecl(AstVisitor *visitor, AstNode *node)
+{
+    auto &ctx = LLVMContext::from(visitor);
+    auto type = static_cast<llvm::FunctionType *>(node->type->codegen);
+    if (type == nullptr) {
+        node->codegen = generateFunctionProto(visitor, node->externDecl.func);
+    }
+    else {
+        auto func =
+            static_cast<llvm::Function *>(node->externDecl.func->codegen);
+        csAssert0(func);
+
+        node->codegen =
+            llvm::Function::Create(type,
+                                   llvm::GlobalValue::ExternalLinkage,
+                                   func->getName(),
+                                   &ctx.module());
+    }
+}
+
 void visitStructDecl(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = LLVMContext::from(visitor);
@@ -894,6 +956,29 @@ void visitStructDecl(AstVisitor *visitor, AstNode *node)
     updateType(node->type, structType);
 
     member = node->structDecl.members;
+    for (; member; member = member->next) {
+        if (!nodeIs(member, Field))
+            codegen(visitor, member);
+    }
+}
+
+void visitClassDecl(AstVisitor *visitor, AstNode *node)
+{
+    auto &ctx = LLVMContext::from(visitor);
+    auto member = node->classDecl.members;
+    std::vector<llvm::Type *> members;
+    for (; member; member = member->next) {
+        if (nodeIs(member, Field)) {
+            members.push_back(ctx.getLLVMType(member->type));
+        }
+    }
+
+    auto structType = llvm::StructType::create(
+        ctx.context(), members, ctx.makeTypeName(node));
+    node->codegen = structType;
+    updateType(node->type, structType);
+
+    member = node->classDecl.members;
     for (; member; member = member->next) {
         if (!nodeIs(member, Field))
             codegen(visitor, member);
@@ -932,6 +1017,7 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
     AstVisitor visitor = makeAstVisitor(&context, {
         [astIdentifier] = visitIdentifierExpr,
         [astIntegerLit] = visitIntegerLit,
+        [astNullLit] = visitNullLit,
         [astBoolLit] = visitBoolLit,
         [astCharLit] = visitCharLit,
         [astFloatLit] = visitFloatLit,
@@ -960,7 +1046,9 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
         [astBreakStmt] = visitBreakStmt,
         [astVarDecl] = visitVariableDecl,
         [astFuncDecl] = visitFuncDecl,
+        [astExternDecl] = visitExternDecl,
         [astStructDecl] = visitStructDecl,
+        [astClassDecl] = visitClassDecl,
         [astEnumDecl] = visitEnumDecl,
         [astGenericDecl] = astVisitSkip,
         [astImportDecl] = astVisitSkip,

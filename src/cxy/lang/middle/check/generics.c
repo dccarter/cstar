@@ -253,6 +253,13 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
 
         // check signature first in case there is recursion in the body
         node->type = checkFunctionSignature(visitor, substitute);
+        if (substitute->funcDecl.this_) {
+            AstNode *parent = ctx->currentStruct ?: ctx->currentClass;
+            csAssert0(parent && parent->type);
+            substitute->funcDecl.this_->type = makePointerType(
+                ctx->types, parent->type, substitute->flags & flgConst);
+            substitute->flags |= flgAddThis;
+        }
         if (!typeIs(node->type, Error))
             node->type = checkFunctionBody(visitor, substitute);
     }

@@ -16,8 +16,10 @@ public:
     bool addModule(std::unique_ptr<llvm::Module> module);
     std::shared_ptr<llvm::LLVMContext> context() { return _context; }
     void dumpMainModuleIR(cstring output_path);
+    bool linkModules();
 
 private:
+    std::unique_ptr<llvm::Module> _linkedModule{nullptr};
     std::vector<std::unique_ptr<llvm::Module>> modules{};
     std::shared_ptr<llvm::LLVMContext> _context{nullptr};
     CompilerDriver *driver{nullptr};

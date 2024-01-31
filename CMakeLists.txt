@@ -73,7 +73,7 @@ target_compile_definitions(amalgamate PRIVATE -DNO_EXEC_UTIL)
 CxyAmalgamate(builtins
         OUTDIR ${CMAKE_CURRENT_BINARY_DIR}/generated
         FILES
-        src/cxy/lang/builtins.cxy)
+        src/cxy/runtime/builtins.cxy)
 
 
 set(CXY_3RD_PARTY_SOURCES
@@ -194,6 +194,7 @@ add_executable(cxy
 llvm_map_components_to_libnames(llvm_libs
         Analysis
         Core
+        Linker
         TransformUtils
 )
 
