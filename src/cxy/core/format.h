@@ -75,8 +75,9 @@ typedef struct FormatState {
 static const FormatStyle resetStyle = {STYLE_NORMAL, COLOR_NORMAL};
 static const FormatStyle errorStyle = {STYLE_BOLD, COLOR_RED};
 static const FormatStyle literalStyle = {STYLE_NORMAL, COLOR_MAGENTA};
+static const FormatStyle stringStyle = {STYLE_NORMAL, COLOR_GREEN};
 static const FormatStyle keywordStyle = {STYLE_BOLD, COLOR_BLUE};
-static const FormatStyle commentStyle = {STYLE_NORMAL, COLOR_GREEN};
+static const FormatStyle commentStyle = {STYLE_DIM, COLOR_GREEN};
 static const FormatStyle ellipsisStyle = {STYLE_NORMAL, COLOR_WHITE};
 static const FormatStyle locStyle = {STYLE_BOLD, COLOR_WHITE};
 

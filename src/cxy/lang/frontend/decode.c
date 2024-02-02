@@ -201,10 +201,10 @@ static void unpackNodeBody(AstNodeUnpackContext *ctx, AstNode *node)
         node->funcDecl.operatorOverload = unpackU64(ctx);
         node->funcDecl.index = unpackU64(ctx);
         node->funcDecl.name = unpackString(ctx);
-        node->funcDecl.signature = makeFunctionSignature(
-            ctx->pool,
-            &(FunctionSignature){.params = unpackManyNodes(ctx, NULL),
-                                 .ret = unpackNode(ctx)});
+        node->funcDecl.signature =
+            nodeMakeSignature(ctx->pool,
+                              &(Signature){.params = unpackManyNodes(ctx, NULL),
+                                           .ret = unpackNode(ctx)});
         node->funcDecl.body = unpackNode(ctx);
         break;
     case astMacroDecl:
@@ -307,7 +307,7 @@ static void unpackNodeBody(AstNodeUnpackContext *ctx, AstNode *node)
         break;
     case astBlockStmt:
         node->blockStmt.stmts = unpackManyNodes(ctx, NULL);
-        node->blockStmt.last = getLastAstNode(node->blockStmt.last);
+        node->blockStmt.last = nodeListGetLast(node->blockStmt.last);
         break;
     case astForStmt:
         node->forStmt.var = unpackNode(ctx);
@@ -327,7 +327,7 @@ static void unpackNodeBody(AstNodeUnpackContext *ctx, AstNode *node)
         node->caseStmt.body = unpackNode(ctx);
         break;
     default:
-        unreachable("UNKNOWN NODE ast%s", getAstNodeName(node));
+        unreachable("UNKNOWN NODE ast%s", nodeGetString(node));
     }
 }
 

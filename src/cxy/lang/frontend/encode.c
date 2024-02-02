@@ -32,7 +32,7 @@ attr(always_inline) static void nodeToBinary(ConstAstVisitor *visitor,
 static void manyNodesToBinary(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
-    u64 count = countAstNodes(node);
+    u64 count = nodeListCount(node);
     msgpack_pack_array(&ctx->packer, count);
     for (const AstNode *it = node; it; it = it->next)
         astConstVisit(visitor, it);

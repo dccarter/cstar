@@ -20,10 +20,10 @@ typedef struct MemPool MemPool;
 typedef struct StrPool StrPool;
 typedef struct Lexer Lexer;
 typedef struct AstNode AstNode;
-typedef struct CompilerDriver CompilerDriver;
+typedef struct CompilerConfig CompilerConfig;
 
 typedef struct {
-    CompilerDriver *cc;
+    CompilerConfig *cc;
     Lexer *lexer;
     Log *L;
     MemPool *memPool;
@@ -32,5 +32,5 @@ typedef struct {
     Token ahead[TOKEN_BUFFER];
 } Parser;
 
-Parser makeParser(Lexer *, CompilerDriver *);
+Parser makeParser(Lexer *, CompilerConfig *);
 AstNode *parseProgram(Parser *);

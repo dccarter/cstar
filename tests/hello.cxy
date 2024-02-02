@@ -1,10 +1,8 @@
-// import { add } from "./add.cxy"
+import { add, sub } from "./add.cxy"
 
 pub extern func printf(fmt: string, ...args: auto) : i32;
 
 pub func main(): i32 {
+    var x = 0b100;
     return 0
 }
-
-func min[T](a: T, b: T)  => a < b? a : b
-func max[T](a: T, b: T)  => a > b? a : b

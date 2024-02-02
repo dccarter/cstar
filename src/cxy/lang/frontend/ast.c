@@ -4,7 +4,6 @@
 #include "capture.h"
 #include "flag.h"
 #include "strings.h"
-#include "ttable.h"
 
 #include <memory.h>
 
@@ -13,16 +12,16 @@ typedef struct {
     AstNode *to;
 } AstNodeMapping;
 
-AstNode *cloneManyAstNodes(CloneAstConfig *config, const AstNode *nodes)
+AstNode *cloneManyAstNodes(AstNodeCloneConfig *config, const AstNode *nodes)
 {
     AstNode *first = NULL, *prev = NULL;
     while (nodes) {
         if (!first) {
-            first = cloneAstNode(config, nodes);
+            first = nodeClone(config, nodes);
             prev = first;
         }
         else {
-            prev->next = cloneAstNode(config, nodes);
+            prev->next = nodeClone(config, nodes);
             prev = prev->next;
         }
         nodes = nodes->next;
@@ -55,7 +54,7 @@ static void replaceWithCorrespondingNode(HashTable *mapping, AstNode **node)
     }
 }
 
-static void recordClonedAstNode(CloneAstConfig *config,
+static void recordClonedAstNode(AstNodeCloneConfig *config,
                                 const AstNode *from,
                                 AstNode *to)
 {
@@ -77,7 +76,7 @@ static void recordClonedAstNode(CloneAstConfig *config,
     case astIdentifier:
     case astClosureExpr:
     case astMatchStmt:
-        mapAstNode(&config->mapping, from, to);
+        nodeAddMapping(&config->mapping, from, to);
         break;
     default:
         break;
@@ -89,7 +88,7 @@ static void recordClonedAstNode(CloneAstConfig *config,
     }
 }
 
-static void postCloneAstNode(CloneAstConfig *config,
+static void postCloneAstNode(AstNodeCloneConfig *config,
                              const AstNode *from,
                              AstNode *to)
 {
@@ -152,7 +151,7 @@ static void unmapAstNode(HashTable *mapping, const AstNode *node)
         removeFromHashTable(mapping, found, sizeof(AstNodeMapping));
 }
 
-static SortedNodes *copySortedNodes(CloneAstConfig *config,
+static SortedNodes *copySortedNodes(AstNodeCloneConfig *config,
                                     const SortedNodes *src)
 {
     if (src == NULL)
@@ -171,21 +170,21 @@ static SortedNodes *copySortedNodes(CloneAstConfig *config,
     return sortedNodes;
 }
 
-AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *init)
+AstNode *nodeNew(MemPool *pool, const FileLoc *loc, const AstNode *tmpl)
 {
     AstNode *node = allocFromCacheOrPool(pool, memAstNode, sizeof(AstNode));
-    memcpy(node, init, sizeof(AstNode));
+    memcpy(node, tmpl, sizeof(AstNode));
     node->loc = *loc;
     return node;
 }
 
-AstNode *makeIntegerLiteral(MemPool *pool,
+AstNode *nodeMakeIntegerLit(MemPool *pool,
                             const FileLoc *loc,
                             i64 value,
                             AstNode *next,
                             const Type *type)
 {
-    return makeAstNode(
+    return nodeNew(
         pool,
         loc,
         &(AstNode){.tag = astIntegerLit,
@@ -195,57 +194,57 @@ AstNode *makeIntegerLiteral(MemPool *pool,
                    .intLiteral = {.value = value, .isNegative = value < 0}});
 }
 
-AstNode *makeUnsignedIntegerLiteral(MemPool *pool,
-                                    const FileLoc *loc,
-                                    u64 value,
-                                    AstNode *next,
-                                    const Type *type)
+AstNode *nodeMakeUnsignedIntLit(MemPool *pool,
+                                const FileLoc *loc,
+                                u64 value,
+                                AstNode *next,
+                                const Type *type)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astIntegerLit,
-                                  .flags = flgNone,
-                                  .next = next,
-                                  .type = type,
-                                  .intLiteral = {.uValue = value}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astIntegerLit,
+                              .flags = flgNone,
+                              .next = next,
+                              .type = type,
+                              .intLiteral = {.uValue = value}});
 }
 
-AstNode *makeCharLiteral(MemPool *pool,
+AstNode *nodeMakeCharLit(MemPool *pool,
                          const FileLoc *loc,
                          i32 value,
                          AstNode *next,
                          const Type *type)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astCharLit,
-                                  .flags = flgNone,
-                                  .next = next,
-                                  .type = type,
-                                  .charLiteral = {.value = value}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astCharLit,
+                              .flags = flgNone,
+                              .next = next,
+                              .type = type,
+                              .charLiteral = {.value = value}});
 }
 
-AstNode *makeBoolLiteral(MemPool *pool,
+AstNode *nodeMakeBoolLit(MemPool *pool,
                          const FileLoc *loc,
                          bool value,
                          AstNode *next,
                          const Type *type)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astBoolLit,
-                                  .flags = flgNone,
-                                  .next = next,
-                                  .type = type,
-                                  .boolLiteral = {.value = value}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astBoolLit,
+                              .flags = flgNone,
+                              .next = next,
+                              .type = type,
+                              .boolLiteral = {.value = value}});
 }
 
-AstNode *makeNullLiteral(MemPool *pool,
+AstNode *nodeMakeNullLit(MemPool *pool,
                          const FileLoc *loc,
                          AstNode *next,
                          const Type *type)
 {
-    return makeAstNode(
+    return nodeNew(
         pool,
         loc,
         &(AstNode){
@@ -258,121 +257,121 @@ AstNode *makeFloatLiteral(MemPool *pool,
                           AstNode *next,
                           const Type *type)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astFloatLit,
-                                  .flags = flgNone,
-                                  .next = next,
-                                  .type = type,
-                                  .floatLiteral = {.value = value}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astFloatLit,
+                              .flags = flgNone,
+                              .next = next,
+                              .type = type,
+                              .floatLiteral = {.value = value}});
 }
 
-AstNode *makeStringLiteral(MemPool *pool,
+AstNode *nodeMakeStringLit(MemPool *pool,
                            const FileLoc *loc,
                            cstring value,
                            AstNode *next,
                            const Type *type)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astStringLit,
-                                  .flags = flgNone,
-                                  .next = next,
-                                  .type = type,
-                                  .stringLiteral = {.value = value}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astStringLit,
+                              .flags = flgNone,
+                              .next = next,
+                              .type = type,
+                              .stringLiteral = {.value = value}});
 }
 
-AstNode *makeIdentifier(MemPool *pool,
-                        const FileLoc *loc,
-                        cstring name,
-                        u32 super,
-                        AstNode *next,
-                        const Type *type)
-{
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astIdentifier,
-                                  .flags = flgNone,
-                                  .next = next,
-                                  .type = type,
-                                  .ident = {.value = name, .super = super}});
-}
-
-AstNode *makeResolvedIdentifier(MemPool *pool,
-                                const FileLoc *loc,
-                                cstring name,
-                                u32 super,
-                                AstNode *resolvesTo,
-                                AstNode *next,
-                                const Type *type)
-{
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astIdentifier,
-                                  .flags = flgNone,
-                                  .next = next,
-                                  .type = type,
-                                  .ident = {.value = name,
-                                            .super = super,
-                                            .resolvesTo = resolvesTo}});
-}
-
-AstNode *makePointerAstNode(MemPool *pool,
+AstNode *nodeMakeIdentifier(MemPool *pool,
                             const FileLoc *loc,
-                            u64 flags,
-                            AstNode *pointed,
+                            cstring name,
+                            u32 super,
                             AstNode *next,
                             const Type *type)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astPointerType,
-                                  .flags = flags,
-                                  .next = next,
-                                  .type = type,
-                                  .pointerType = {.pointed = pointed}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astIdentifier,
+                              .flags = flgNone,
+                              .next = next,
+                              .type = type,
+                              .ident = {.value = name, .super = super}});
 }
 
-AstNode *makeVoidAstNode(MemPool *pool,
+AstNode *nodeMakeResolvedIdentifier(MemPool *pool,
+                                    const FileLoc *loc,
+                                    cstring name,
+                                    u32 super,
+                                    AstNode *resolvesTo,
+                                    AstNode *next,
+                                    const Type *type)
+{
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astIdentifier,
+                              .flags = flgNone,
+                              .next = next,
+                              .type = type,
+                              .ident = {.value = name,
+                                        .super = super,
+                                        .resolvesTo = resolvesTo}});
+}
+
+AstNode *nodeMakePointer(MemPool *pool,
                          const FileLoc *loc,
                          u64 flags,
+                         AstNode *pointed,
                          AstNode *next,
                          const Type *type)
 {
-    return makeAstNode(
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astPointerType,
+                              .flags = flags,
+                              .next = next,
+                              .type = type,
+                              .pointerType = {.pointed = pointed}});
+}
+
+AstNode *nodeMakeVoid(MemPool *pool,
+                      const FileLoc *loc,
+                      u64 flags,
+                      AstNode *next,
+                      const Type *type)
+{
+    return nodeNew(
         pool,
         loc,
         &(AstNode){
             .tag = astVoidType, .flags = flags, .next = next, .type = type});
 }
 
-AstNode *makeVoidPointerAstNode(MemPool *pool,
-                                const FileLoc *loc,
-                                u64 flags,
-                                AstNode *next)
+AstNode *nodeMakeVoidPointer(MemPool *pool,
+                             const FileLoc *loc,
+                             u64 flags,
+                             AstNode *next)
 {
-    return makePointerAstNode(pool,
-                              loc,
-                              flags,
-                              makeVoidAstNode(pool, loc, flgNone, NULL, NULL),
-                              next,
-                              NULL);
+    return nodeMakePointer(pool,
+                           loc,
+                           flags,
+                           nodeMakeVoid(pool, loc, flgNone, NULL, NULL),
+                           next,
+                           NULL);
 }
 
-AstNode *makePath(MemPool *pool,
-                  const FileLoc *loc,
-                  cstring name,
-                  u64 flags,
-                  const Type *type)
+AstNode *nodeMakePath(MemPool *pool,
+                      const FileLoc *loc,
+                      cstring name,
+                      u64 flags,
+                      const Type *type)
 {
-    return makeAstNode(
+    return nodeNew(
         pool,
         loc,
         &(AstNode){
             .tag = astPath,
             .flags = flags,
             .type = type,
-            .path.elements = makeAstNode(
+            .path.elements = nodeNew(
                 pool,
                 loc,
                 &(AstNode){.flags = flags,
@@ -384,150 +383,146 @@ AstNode *makePath(MemPool *pool,
                                                          name == S_super)}})});
 }
 
-AstNode *makeResolvedPath(MemPool *pool,
-                          const FileLoc *loc,
-                          cstring name,
-                          u64 flags,
-                          AstNode *resolvesTo,
-                          AstNode *next,
-                          const Type *type)
+AstNode *nodeMakeResolvedPath(MemPool *pool,
+                              const FileLoc *loc,
+                              cstring name,
+                              u64 flags,
+                              AstNode *resolvesTo,
+                              AstNode *next,
+                              const Type *type)
 {
-    return makeAstNode(
-        pool,
-        loc,
-        &(AstNode){
-            .tag = astPath,
-            .flags = flags,
-            .type = type,
-            .next = next,
-            .path.elements = makeAstNode(
-                pool,
-                loc,
-                &(AstNode){.flags = flags,
-                           .type = type,
-                           .tag = astPathElem,
-                           .pathElement = {.name = name,
-                                           .isKeyword = (name == S_this ||
-                                                         name == S_This ||
-                                                         name == S_super),
-                                           .resolvesTo = resolvesTo}})});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astPath,
+                              .flags = flags,
+                              .type = type,
+                              .next = next,
+                              .path.elements = nodeNew(
+                                  pool,
+                                  loc,
+                                  &(AstNode){.flags = flags,
+                                             .type = type,
+                                             .tag = astPathElem,
+                                             .pathElement = {
+                                                 .name = name,
+                                                 .isKeyword = (name == S_this ||
+                                                               name == S_This ||
+                                                               name == S_super),
+                                                 .resolvesTo = resolvesTo}})});
 }
 
-AstNode *makeResolvedPathWithArgs(MemPool *pool,
+AstNode *nodeMakeResolvedPathWithArgs(MemPool *pool,
+                                      const FileLoc *loc,
+                                      cstring name,
+                                      u64 flags,
+                                      AstNode *resolvesTo,
+                                      AstNode *genericArgs,
+                                      const Type *type)
+{
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astPath,
+                              .flags = flags,
+                              .type = type,
+                              .path.elements = nodeNew(
+                                  pool,
+                                  loc,
+                                  &(AstNode){.flags = flags,
+                                             .type = type,
+                                             .tag = astPathElem,
+                                             .pathElement = {
+                                                 .name = name,
+                                                 .isKeyword = (name == S_this ||
+                                                               name == S_This ||
+                                                               name == S_super),
+                                                 .resolvesTo = resolvesTo,
+                                                 .args = genericArgs}})});
+}
+
+AstNode *nodeMakePathWithElems(MemPool *pool,
+                               const FileLoc *loc,
+                               u64 flags,
+                               AstNode *elements,
+                               AstNode *next)
+{
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astPath,
+                              .flags = flags,
+                              .type = nodeListGetLast(elements)->type,
+                              .next = next,
+                              .path.elements = elements});
+}
+
+AstNode *nodeMakeResolvedPathElem(MemPool *pool,
                                   const FileLoc *loc,
                                   cstring name,
                                   u64 flags,
                                   AstNode *resolvesTo,
-                                  AstNode *genericArgs,
+                                  AstNode *next,
                                   const Type *type)
 {
-    return makeAstNode(
-        pool,
-        loc,
-        &(AstNode){
-            .tag = astPath,
-            .flags = flags,
-            .type = type,
-            .path.elements = makeAstNode(
-                pool,
-                loc,
-                &(AstNode){.flags = flags,
-                           .type = type,
-                           .tag = astPathElem,
-                           .pathElement = {.name = name,
-                                           .isKeyword = (name == S_this ||
-                                                         name == S_This ||
-                                                         name == S_super),
-                                           .resolvesTo = resolvesTo,
-                                           .args = genericArgs}})});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.flags = flags,
+                              .type = type,
+                              .tag = astPathElem,
+                              .next = next,
+                              .pathElement = {.name = name,
+                                              .isKeyword = (name == S_this ||
+                                                            name == S_This ||
+                                                            name == S_super),
+                                              .resolvesTo = resolvesTo}});
 }
 
-AstNode *makePathWithElements(MemPool *pool,
-                              const FileLoc *loc,
-                              u64 flags,
-                              AstNode *elements,
-                              AstNode *next)
+AstNode *nodeMakeResolvedPathElemWithArgs(MemPool *pool,
+                                          const FileLoc *loc,
+                                          cstring name,
+                                          u64 flags,
+                                          AstNode *resolvesTo,
+                                          AstNode *next,
+                                          AstNode *genericArgs,
+                                          const Type *type)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astPath,
-                                  .flags = flags,
-                                  .type = getLastAstNode(elements)->type,
-                                  .next = next,
-                                  .path.elements = elements});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.flags = flags,
+                              .type = type,
+                              .tag = astPathElem,
+                              .next = next,
+                              .pathElement = {.name = name,
+                                              .isKeyword = (name == S_this ||
+                                                            name == S_This ||
+                                                            name == S_super),
+                                              .resolvesTo = resolvesTo,
+                                              .args = genericArgs}});
 }
 
-AstNode *makeResolvedPathElement(MemPool *pool,
-                                 const FileLoc *loc,
-                                 cstring name,
-                                 u64 flags,
-                                 AstNode *resolvesTo,
-                                 AstNode *next,
-                                 const Type *type)
+AstNode *nodeMakeFieldExpr(MemPool *pool,
+                           const FileLoc *loc,
+                           cstring name,
+                           u64 flags,
+                           AstNode *value,
+                           AstNode *next)
 {
-    return makeAstNode(
-        pool,
-        loc,
-        &(AstNode){
-            .flags = flags,
-            .type = type,
-            .tag = astPathElem,
-            .next = next,
-            .pathElement = {.name = name,
-                            .isKeyword = (name == S_this || name == S_This ||
-                                          name == S_super),
-                            .resolvesTo = resolvesTo}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astFieldExpr,
+                              .flags = flags,
+                              .type = value->type,
+                              .next = next,
+                              .fieldExpr = {.name = name, .value = value}});
 }
 
-AstNode *makeResolvedPathElementWithArgs(MemPool *pool,
-                                         const FileLoc *loc,
-                                         cstring name,
-                                         u64 flags,
-                                         AstNode *resolvesTo,
-                                         AstNode *next,
-                                         AstNode *genericArgs,
-                                         const Type *type)
-{
-    return makeAstNode(
-        pool,
-        loc,
-        &(AstNode){
-            .flags = flags,
-            .type = type,
-            .tag = astPathElem,
-            .next = next,
-            .pathElement = {.name = name,
-                            .isKeyword = (name == S_this || name == S_This ||
-                                          name == S_super),
-                            .resolvesTo = resolvesTo,
-                            .args = genericArgs}});
-}
-
-AstNode *makeFieldExpr(MemPool *pool,
+AstNode *nodeMakeField(MemPool *pool,
                        const FileLoc *loc,
                        cstring name,
                        u64 flags,
-                       AstNode *value,
+                       AstNode *type,
+                       AstNode *def,
                        AstNode *next)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astFieldExpr,
-                                  .flags = flags,
-                                  .type = value->type,
-                                  .next = next,
-                                  .fieldExpr = {.name = name, .value = value}});
-}
-
-AstNode *makeStructField(MemPool *pool,
-                         const FileLoc *loc,
-                         cstring name,
-                         u64 flags,
-                         AstNode *type,
-                         AstNode *def,
-                         AstNode *next)
-{
-    return makeAstNode(
+    return nodeNew(
         pool,
         loc,
         &(AstNode){.tag = astField,
@@ -537,19 +532,19 @@ AstNode *makeStructField(MemPool *pool,
                    .structField = {.name = name, .type = type, .value = def}});
 }
 
-AstNode *makeGroupExpr(
-    MemPool *pool, const FileLoc *loc, u64 flags, AstNode *exprs, AstNode *next)
+AstNode *nodeMakeGroupExpr(
+    MemPool *pool, const FileLoc *loc, u64 flags, AstNode *expr, AstNode *next)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astGroupExpr,
-                                  .flags = flags,
-                                  .type = exprs->type,
-                                  .next = next,
-                                  .groupExpr = {.expr = exprs}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astGroupExpr,
+                              .flags = flags,
+                              .type = expr->type,
+                              .next = next,
+                              .groupExpr = {.expr = expr}});
 }
 
-AstNode *makeUnionValueExpr(MemPool *pool,
+AstNode *nodeMakeUnionValue(MemPool *pool,
                             const FileLoc *loc,
                             u64 flags,
                             AstNode *value,
@@ -557,147 +552,143 @@ AstNode *makeUnionValueExpr(MemPool *pool,
                             AstNode *next,
                             const Type *type)
 {
-    csAssert0(typeIs(type, Union));
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astUnionValue,
-                                  .flags = flags,
-                                  .type = type,
-                                  .next = next,
-                                  .unionValue = {.value = value, .idx = idx}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astUnionValue,
+                              .flags = flags,
+                              .type = type,
+                              .next = next,
+                              .unionValue = {.value = value, .idx = idx}});
 }
 
-AstNode *makeCastExpr(MemPool *pool,
-                      const FileLoc *loc,
-                      u64 flags,
-                      AstNode *expr,
-                      AstNode *target,
-                      AstNode *next,
-                      const Type *type)
-{
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astCastExpr,
-                                  .flags = flags,
-                                  .type = type,
-                                  .next = next,
-                                  .castExpr = {.expr = expr, .to = target}});
-}
-
-AstNode *makeAddrOffExpr(MemPool *pool,
-                         const FileLoc *loc,
-                         u64 flags,
-                         AstNode *operand,
-                         AstNode *next,
-                         const Type *type)
-{
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astAddressOf,
-                                  .flags = flags,
-                                  .type = type,
-                                  .next = next,
-                                  .unaryExpr = {.operand = operand,
-                                                .op = opAddrOf,
-                                                .isPrefix = true}});
-}
-
-AstNode *makeTypedExpr(MemPool *pool,
-                       const FileLoc *loc,
-                       u64 flags,
-                       AstNode *expr,
-                       AstNode *target,
-                       AstNode *next,
-                       const Type *type)
-{
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astTypedExpr,
-                                  .flags = flags,
-                                  .type = type,
-                                  .next = next,
-                                  .typedExpr = {.expr = expr, .type = target}});
-}
-
-AstNode *makeTupleExpr(MemPool *pool,
-                       const FileLoc *loc,
-                       u64 flags,
-                       AstNode *members,
-                       AstNode *next,
-                       const Type *type)
-{
-    return makeAstNode(
-        pool,
-        loc,
-        &(AstNode){
-            .tag = astTupleExpr,
-            .flags = flags,
-            .type = type,
-            .next = next,
-            .tupleExpr = {.elements = members, .len = countAstNodes(members)}});
-}
-
-AstNode *makeTupleTypeAst(MemPool *pool,
+AstNode *nodeMakeCastExpr(MemPool *pool,
                           const FileLoc *loc,
                           u64 flags,
-                          AstNode *members,
+                          AstNode *expr,
+                          AstNode *target,
                           AstNode *next,
                           const Type *type)
 {
-    return makeAstNode(
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astCastExpr,
+                              .flags = flags,
+                              .type = type,
+                              .next = next,
+                              .castExpr = {.expr = expr, .to = target}});
+}
+
+AstNode *nodeMakeAddrOffExpr(MemPool *pool,
+                             const FileLoc *loc,
+                             u64 flags,
+                             AstNode *expr,
+                             AstNode *next,
+                             const Type *type)
+{
+    return nodeNew(
         pool,
         loc,
         &(AstNode){
-            .tag = astTupleType,
+            .tag = astAddressOf,
             .flags = flags,
             .type = type,
             .next = next,
-            .tupleType = {.elements = members, .len = countAstNodes(members)}});
+            .unaryExpr = {.operand = expr, .op = opAddrOf, .isPrefix = true}});
 }
 
-AstNode *makeCallExpr(MemPool *pool,
-                      const FileLoc *loc,
-                      AstNode *callee,
-                      AstNode *args,
-                      u64 flags,
-                      AstNode *next,
-                      const Type *type)
+AstNode *nodeMakeTypedExpr(MemPool *pool,
+                           const FileLoc *loc,
+                           u64 flags,
+                           AstNode *expr,
+                           AstNode *target,
+                           AstNode *next,
+                           const Type *type)
 {
-    return makeAstNode(
-        pool,
-        loc,
-        &(AstNode){.tag = astCallExpr,
-                   .flags = flags,
-                   .type = type,
-                   .next = next,
-                   .callExpr = {.callee = callee, .args = args}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astTypedExpr,
+                              .flags = flags,
+                              .type = type,
+                              .next = next,
+                              .typedExpr = {.expr = expr, .type = target}});
 }
 
-AstNode *makeSpreadExpr(MemPool *pool,
-                        const FileLoc *loc,
-                        u64 flags,
-                        AstNode *expr,
-                        AstNode *next,
-                        const Type *type)
+AstNode *nodeMakeTupleExpr(MemPool *pool,
+                           const FileLoc *loc,
+                           u64 flags,
+                           AstNode *members,
+                           AstNode *next,
+                           const Type *type)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astSpreadExpr,
-                                  .flags = flags,
-                                  .type = type,
-                                  .next = next,
-                                  .spreadExpr = {.expr = expr}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astTupleExpr,
+                              .flags = flags,
+                              .type = type,
+                              .next = next,
+                              .tupleExpr = {.elements = members,
+                                            .len = nodeListCount(members)}});
 }
 
-AstNode *makeMemberExpr(MemPool *pool,
-                        const FileLoc *loc,
-                        u64 flags,
-                        AstNode *target,
-                        AstNode *member,
-                        AstNode *next,
-                        const Type *type)
+AstNode *nodeMakeTupleType(MemPool *pool,
+                           const FileLoc *loc,
+                           u64 flags,
+                           AstNode *members,
+                           AstNode *next,
+                           const Type *type)
 {
-    return makeAstNode(
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astTupleType,
+                              .flags = flags,
+                              .type = type,
+                              .next = next,
+                              .tupleType = {.elements = members,
+                                            .len = nodeListCount(members)}});
+}
+
+AstNode *nodeMakeCallExpr(MemPool *pool,
+                          const FileLoc *loc,
+                          AstNode *callee,
+                          AstNode *args,
+                          u64 flags,
+                          AstNode *next,
+                          const Type *type)
+{
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astCallExpr,
+                              .flags = flags,
+                              .type = type,
+                              .next = next,
+                              .callExpr = {.callee = callee, .args = args}});
+}
+
+AstNode *nodeMakeSpreadExpr(MemPool *pool,
+                            const FileLoc *loc,
+                            u64 flags,
+                            AstNode *expr,
+                            AstNode *next,
+                            const Type *type)
+{
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astSpreadExpr,
+                              .flags = flags,
+                              .type = type,
+                              .next = next,
+                              .spreadExpr = {.expr = expr}});
+}
+
+AstNode *nodeMakeMemberExpr(MemPool *pool,
+                            const FileLoc *loc,
+                            u64 flags,
+                            AstNode *target,
+                            AstNode *member,
+                            AstNode *next,
+                            const Type *type)
+{
+    return nodeNew(
         pool,
         loc,
         &(AstNode){.tag = astMemberExpr,
@@ -707,48 +698,48 @@ AstNode *makeMemberExpr(MemPool *pool,
                    .memberExpr = {.target = target, .member = member}});
 }
 
-AstNode *makeExprStmt(MemPool *pool,
-                      const FileLoc *loc,
-                      u64 flags,
-                      AstNode *expr,
-                      AstNode *next,
-                      const Type *type)
+AstNode *nodeMakeExprStmt(MemPool *pool,
+                          const FileLoc *loc,
+                          u64 flags,
+                          AstNode *expr,
+                          AstNode *next,
+                          const Type *type)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astExprStmt,
-                                  .flags = flags,
-                                  .type = type,
-                                  .next = next,
-                                  .exprStmt.expr = expr});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astExprStmt,
+                              .flags = flags,
+                              .type = type,
+                              .next = next,
+                              .exprStmt.expr = expr});
 }
 
-AstNode *makeStmtExpr(MemPool *pool,
-                      const FileLoc *loc,
-                      u64 flags,
-                      AstNode *stmt,
-                      AstNode *next,
-                      const Type *type)
+AstNode *nodeMakeStmtExpr(MemPool *pool,
+                          const FileLoc *loc,
+                          u64 flags,
+                          AstNode *stmt,
+                          AstNode *next,
+                          const Type *type)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astStmtExpr,
-                                  .flags = flags,
-                                  .type = type,
-                                  .next = next,
-                                  .stmtExpr.stmt = stmt});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astStmtExpr,
+                              .flags = flags,
+                              .type = type,
+                              .next = next,
+                              .stmtExpr.stmt = stmt});
 }
 
-AstNode *makeUnaryExpr(MemPool *pool,
-                       const FileLoc *loc,
-                       u64 flags,
-                       bool isPrefix,
-                       Operator op,
-                       AstNode *operand,
-                       AstNode *next,
-                       const Type *type)
+AstNode *nodeMakeUnaryExpr(MemPool *pool,
+                           const FileLoc *loc,
+                           u64 flags,
+                           bool isPrefix,
+                           Operator op,
+                           AstNode *operand,
+                           AstNode *next,
+                           const Type *type)
 {
-    return makeAstNode(
+    return nodeNew(
         pool,
         loc,
         &(AstNode){
@@ -759,64 +750,62 @@ AstNode *makeUnaryExpr(MemPool *pool,
             .unaryExpr = {.isPrefix = isPrefix, .op = op, .operand = operand}});
 }
 
-AstNode *makeBlockStmt(MemPool *pool,
-                       const FileLoc *loc,
-                       AstNode *stmts,
-                       AstNode *next,
-                       const Type *type)
+AstNode *nodeMakeBlockStmt(MemPool *pool,
+                           const FileLoc *loc,
+                           AstNode *stmts,
+                           AstNode *next,
+                           const Type *type)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astBlockStmt,
-                                  .type = type,
-                                  .next = next,
-                                  .blockStmt.stmts = stmts});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astBlockStmt,
+                              .type = type,
+                              .next = next,
+                              .blockStmt.stmts = stmts});
 }
 
-AstNode *makeWhileStmt(MemPool *pool,
-                       const FileLoc *loc,
-                       u64 flags,
-                       AstNode *condition,
-                       AstNode *body,
-                       AstNode *next,
-                       const Type *type)
+AstNode *nodeMakeWhileStmt(MemPool *pool,
+                           const FileLoc *loc,
+                           u64 flags,
+                           AstNode *condition,
+                           AstNode *body,
+                           AstNode *next,
+                           const Type *type)
 {
-    return makeAstNode(
-        pool,
-        loc,
-        &(AstNode){.tag = astWhileStmt,
-                   .type = type,
-                   .next = next,
-                   .whileStmt = {.cond = condition, .body = body}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astWhileStmt,
+                              .type = type,
+                              .next = next,
+                              .whileStmt = {.cond = condition, .body = body}});
 }
 
-AstNode *makeFunctionDecl(MemPool *pool,
-                          const FileLoc *loc,
-                          cstring name,
-                          AstNode *params,
-                          AstNode *returnType,
-                          AstNode *body,
-                          u64 flags,
-                          AstNode *next,
-                          const Type *type)
+AstNode *nodeMakeFucDecl(MemPool *pool,
+                         const FileLoc *loc,
+                         cstring name,
+                         AstNode *params,
+                         AstNode *returnType,
+                         AstNode *body,
+                         u64 flags,
+                         AstNode *next,
+                         const Type *type)
 {
-    return makeAstNode(
-        pool,
-        loc,
-        &(AstNode){.tag = astFuncDecl,
-                   .type = type,
-                   .next = next,
-                   .flags = flags,
-                   .funcDecl = {.operatorOverload = opInvalid,
-                                .name = name,
-                                .signature = makeFunctionSignature(
-                                    pool,
-                                    &(FunctionSignature){.params = params,
-                                                         .ret = returnType}),
-                                .body = body}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astFuncDecl,
+                              .type = type,
+                              .next = next,
+                              .flags = flags,
+                              .funcDecl = {.operatorOverload = opInvalid,
+                                           .name = name,
+                                           .signature = nodeMakeSignature(
+                                               pool,
+                                               &(Signature){.params = params,
+                                                            .ret = returnType}),
+                                           .body = body}});
 }
 
-AstNode *makeFunctionParam(MemPool *pool,
+AstNode *nodeMakeFuncParam(MemPool *pool,
                            const FileLoc *loc,
                            cstring name,
                            AstNode *paramType,
@@ -824,18 +813,18 @@ AstNode *makeFunctionParam(MemPool *pool,
                            u64 flags,
                            AstNode *next)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astFuncParam,
-                                  .type = paramType ? paramType->type : NULL,
-                                  .next = next,
-                                  .flags = flags,
-                                  .funcParam = {.name = name,
-                                                .def = defaultValue,
-                                                .type = paramType}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astFuncParam,
+                              .type = paramType ? paramType->type : NULL,
+                              .next = next,
+                              .flags = flags,
+                              .funcParam = {.name = name,
+                                            .def = defaultValue,
+                                            .type = paramType}});
 }
 
-AstNode *makeOperatorOverload(MemPool *pool,
+AstNode *nodeMakeOperatorFunc(MemPool *pool,
                               const FileLoc *loc,
                               Operator op,
                               AstNode *params,
@@ -845,110 +834,107 @@ AstNode *makeOperatorOverload(MemPool *pool,
                               AstNode *next,
                               const Type *type)
 {
-    return makeAstNode(
-        pool,
-        loc,
-        &(AstNode){.tag = astFuncDecl,
-                   .type = type,
-                   .next = next,
-                   .flags = flags,
-                   .funcDecl = {.operatorOverload = op,
-                                .name = getOpOverloadName(op),
-                                .signature = makeFunctionSignature(
-                                    pool,
-                                    &(FunctionSignature){.params = params,
-                                                         .ret = returnType}),
-                                .body = body}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astFuncDecl,
+                              .type = type,
+                              .next = next,
+                              .flags = flags,
+                              .funcDecl = {.operatorOverload = op,
+                                           .name = getOpOverloadName(op),
+                                           .signature = nodeMakeSignature(
+                                               pool,
+                                               &(Signature){.params = params,
+                                                            .ret = returnType}),
+                                           .body = body}});
 }
 
-AstNode *makeNewExpr(MemPool *pool,
-                     const FileLoc *loc,
-                     u64 flags,
-                     AstNode *target,
-                     AstNode *init,
-                     AstNode *next,
-                     const Type *type)
+AstNode *nodeMakeNewExpr(MemPool *pool,
+                         const FileLoc *loc,
+                         u64 flags,
+                         AstNode *target,
+                         AstNode *init,
+                         AstNode *next,
+                         const Type *type)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astNewExpr,
-                                  .type = type,
-                                  .next = next,
-                                  .flags = flags,
-                                  .newExpr = {.type = target, .init = init}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astNewExpr,
+                              .type = type,
+                              .next = next,
+                              .flags = flags,
+                              .newExpr = {.type = target, .init = init}});
 }
 
-AstNode *makeStructExpr(MemPool *pool,
-                        const FileLoc *loc,
-                        u64 flags,
-                        AstNode *left,
-                        AstNode *fields,
-                        AstNode *next,
-                        const Type *type)
+AstNode *nodeMakeStructExpr_(MemPool *pool,
+                             const FileLoc *loc,
+                             u64 flags,
+                             AstNode *left,
+                             AstNode *fields,
+                             AstNode *next,
+                             const Type *type)
 {
-    return makeAstNode(
-        pool,
-        loc,
-        &(AstNode){.tag = astStructExpr,
-                   .type = type,
-                   .next = next,
-                   .flags = flags,
-                   .structExpr = {.left = left, .fields = fields}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astStructExpr,
+                              .type = type,
+                              .next = next,
+                              .flags = flags,
+                              .structExpr = {.left = left, .fields = fields}});
 }
 
-AstNode *makeStructExprFromType(MemPool *pool,
-                                const FileLoc *loc,
-                                u64 flags,
-                                AstNode *fields,
-                                AstNode *next,
-                                const Type *type)
+AstNode *nodeMakeStructExpr(MemPool *pool,
+                            const FileLoc *loc,
+                            u64 flags,
+                            AstNode *fields,
+                            AstNode *next,
+                            const Type *type)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astStructExpr,
-                                  .type = type,
-                                  .next = next,
-                                  .flags = flags,
-                                  .structExpr = {.left = makeTypeReferenceNode(
-                                                     pool, type, loc),
-                                                 .fields = fields}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astStructExpr,
+                              .type = type,
+                              .next = next,
+                              .flags = flags,
+                              .structExpr = {.left = makeTypeReferenceNode(
+                                                 pool, loc, flgNone, type),
+                                             .fields = fields}});
 }
 
-AstNode *makeVarDecl(MemPool *pool,
-                     const FileLoc *loc,
-                     u64 flags,
-                     cstring name,
-                     AstNode *varType,
-                     AstNode *init,
-                     AstNode *next,
-                     const Type *type)
+AstNode *nodeMakeVarDecl(MemPool *pool,
+                         const FileLoc *loc,
+                         u64 flags,
+                         cstring name,
+                         AstNode *varType,
+                         AstNode *init,
+                         AstNode *next,
+                         const Type *type)
 {
-    return makeAstNode(
-        pool,
-        loc,
-        &(AstNode){
-            .tag = astVarDecl,
-            .flags = flags,
-            .type = type,
-            .next = next,
-            .varDecl = {.name = name,
-                        .type = varType,
-                        .names = makeAstNode(pool,
-                                             loc,
-                                             &(AstNode){.tag = astIdentifier,
-                                                        .ident.value = name}),
-                        .init = init}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astVarDecl,
+                              .flags = flags,
+                              .type = type,
+                              .next = next,
+                              .varDecl = {.name = name,
+                                          .type = varType,
+                                          .names = nodeNew(
+                                              pool,
+                                              loc,
+                                              &(AstNode){.tag = astIdentifier,
+                                                         .ident.value = name}),
+                                          .init = init}});
 }
 
-AstNode *makeArrayTypeAstNode(MemPool *pool,
-                              const FileLoc *loc,
-                              u64 flags,
-                              AstNode *elementType,
-                              u64 len,
-                              AstNode *next,
-                              const Type *type)
+AstNode *nodeMakeArrayType(MemPool *pool,
+                           const FileLoc *loc,
+                           u64 flags,
+                           AstNode *elementType,
+                           u64 len,
+                           AstNode *next,
+                           const Type *type)
 {
-    return makeAstNode(
+    return nodeNew(
         pool,
         loc,
         &(AstNode){.tag = astArrayType,
@@ -956,20 +942,20 @@ AstNode *makeArrayTypeAstNode(MemPool *pool,
                    .type = type,
                    .next = next,
                    .arrayType = {.elementType = elementType,
-                                 .dim = makeIntegerLiteral(
+                                 .dim = nodeMakeIntegerLit(
                                      pool, loc, (i64)len, NULL, NULL)}});
 }
 
-AstNode *makeBinaryExpr(MemPool *pool,
-                        const FileLoc *loc,
-                        u64 flags,
-                        AstNode *lhs,
-                        Operator op,
-                        AstNode *rhs,
-                        AstNode *next,
-                        const Type *type)
+AstNode *nodeMakeBinaryExpr(MemPool *pool,
+                            const FileLoc *loc,
+                            u64 flags,
+                            AstNode *lhs,
+                            Operator op,
+                            AstNode *rhs,
+                            AstNode *next,
+                            const Type *type)
 {
-    return makeAstNode(
+    return nodeNew(
         pool,
         loc,
         &(AstNode){.tag = astBinaryExpr,
@@ -979,16 +965,16 @@ AstNode *makeBinaryExpr(MemPool *pool,
                    .binaryExpr = {.lhs = lhs, .op = op, .rhs = rhs}});
 }
 
-AstNode *makeAssignExpr(MemPool *pool,
-                        const FileLoc *loc,
-                        u64 flags,
-                        AstNode *lhs,
-                        Operator op,
-                        AstNode *rhs,
-                        AstNode *next,
-                        const Type *type)
+AstNode *nodeMakeAssignExpr(MemPool *pool,
+                            const FileLoc *loc,
+                            u64 flags,
+                            AstNode *lhs,
+                            Operator op,
+                            AstNode *rhs,
+                            AstNode *next,
+                            const Type *type)
 {
-    return makeAstNode(
+    return nodeNew(
         pool,
         loc,
         &(AstNode){.tag = astAssignExpr,
@@ -998,63 +984,62 @@ AstNode *makeAssignExpr(MemPool *pool,
                    .assignExpr = {.lhs = lhs, .op = op, .rhs = rhs}});
 }
 
-AstNode *makeIndexExpr(MemPool *pool,
-                       const FileLoc *loc,
-                       u64 flags,
-                       AstNode *target,
-                       AstNode *index,
-                       AstNode *next,
-                       const Type *type)
+AstNode *nodeMakeIndexExpr(MemPool *pool,
+                           const FileLoc *loc,
+                           u64 flags,
+                           AstNode *target,
+                           AstNode *index,
+                           AstNode *next,
+                           const Type *type)
 {
-    return makeAstNode(
-        pool,
-        loc,
-        &(AstNode){.tag = astIndexExpr,
-                   .flags = flags,
-                   .type = type,
-                   .next = next,
-                   .indexExpr = {.target = target, .index = index}});
+    return nodeNew(pool,
+                   loc,
+                   &(AstNode){.tag = astIndexExpr,
+                              .flags = flags,
+                              .type = type,
+                              .next = next,
+                              .indexExpr = {.target = target, .index = index}});
 }
 
-AstNode *makeAstClosureCapture(MemPool *pool, AstNode *captured)
+AstNode *nodeMakeClosureCapture(MemPool *pool, AstNode *captured)
 {
-    return makeAstNode(pool,
-                       &captured->loc,
-                       &(AstNode){.tag = astIndexExpr,
-                                  .flags = captured->flags,
-                                  .type = captured->type,
-                                  .capture = {.captured = captured}});
+    return nodeNew(pool,
+                   &captured->loc,
+                   &(AstNode){.tag = astIndexExpr,
+                              .flags = captured->flags,
+                              .type = captured->type,
+                              .capture = {.captured = captured}});
 }
 
-AstNode *makeAstNop(MemPool *pool, const FileLoc *loc)
+AstNode *nodeMakeNop(MemPool *pool, const FileLoc *loc)
 {
-    return makeAstNode(pool, loc, &(AstNode){.tag = astNop});
+    return nodeNew(pool, loc, &(AstNode){.tag = astNop});
 }
 
-AstNode *makePathFromIdent(MemPool *pool, const AstNode *ident)
+AstNode *nodeMakePathFromIdent(MemPool *pool, const AstNode *ident)
 {
-    return makePath(
+    return nodeMakePath(
         pool, &ident->loc, ident->ident.value, ident->flags, ident->type);
 }
 
-AstNode *makeGenIdent(MemPool *pool,
-                      StrPool *strPool,
-                      const FileLoc *loc,
-                      const Type *type)
+AstNode *nodeGenerateIdent(MemPool *pool,
+                           struct StrPool *strPool,
+                           const FileLoc *loc,
+                           const Type *type)
 {
-    return makeAstNode(
+    return nodeNew(
         pool,
         loc,
         &(AstNode){.tag = astIdentifier,
-                   .ident.value = makeAnonymousVariable(strPool, "__gen_var")});
+                   .ident.value = makeAnonymousVariable(strPool, "_gv")});
 }
 
-void clearAstBody(AstNode *node)
+void nodeClearBody(AstNode *node)
 {
     memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);
 }
 
-AstNode *copyAstNode(MemPool *pool, const AstNode *node)
+AstNode *nodeCopy(const AstNode *node, MemPool *pool)
 {
     if (node == NULL)
         return NULL;
@@ -1066,7 +1051,7 @@ AstNode *copyAstNode(MemPool *pool, const AstNode *node)
     return copy;
 }
 
-AstNode *duplicateAstNode(MemPool *pool, const AstNode *node)
+AstNode *nodeDuplicate(const AstNode *node, MemPool *pool)
 {
     if (node == NULL)
         return NULL;
@@ -1076,7 +1061,7 @@ AstNode *duplicateAstNode(MemPool *pool, const AstNode *node)
     return copy;
 }
 
-bool isTuple(const AstNode *node)
+bool nodeIsTuple(const AstNode *node)
 {
     if (node->tag != astTupleExpr)
         return false;
@@ -1085,13 +1070,13 @@ bool isTuple(const AstNode *node)
     return true;
 }
 
-bool isAssignableExpr(attr(unused) const AstNode *node)
+bool nodeIsAssignableExpr(attr(unused) const AstNode *node)
 {
     csAssert(node->type, "expression must have been type-checked first");
     return false;
 }
 
-bool isLiteralExpr(const AstNode *node)
+bool nodeIsLiteralExpr(const AstNode *node)
 {
     if (node == NULL)
         return false;
@@ -1105,20 +1090,18 @@ bool isLiteralExpr(const AstNode *node)
         return true;
     case astTypedExpr:
     case astCastExpr:
-        return isLiteralExpr(node->castExpr.expr);
+        return nodeIsLiteralExpr(node->castExpr.expr);
     case astGroupExpr:
-        return isLiteralExpr(node->groupExpr.expr);
+        return nodeIsLiteralExpr(node->groupExpr.expr);
     case astUnaryExpr:
-        return isLiteralExpr(node->unaryExpr.operand);
+        return nodeIsLiteralExpr(node->unaryExpr.operand);
     default:
-        return isEnumLiteral(node);
+        return nodeIsEnumLiteral(node);
     }
 }
 
-bool isEnumLiteral(const AstNode *node)
+bool nodeIsEnumLiteral(const AstNode *node)
 {
-    if (!typeIs(node->type, Enum))
-        return false;
     switch (node->tag) {
     case astPath:
         return hasFlag(node->path.elements->next, EnumLiteral);
@@ -1129,7 +1112,7 @@ bool isEnumLiteral(const AstNode *node)
     }
 }
 
-bool isIntegralLiteral(const AstNode *node)
+bool nodeIsIntegerLit(const AstNode *node)
 {
     switch (node->tag) {
     case astIntegerLit:
@@ -1138,11 +1121,11 @@ bool isIntegralLiteral(const AstNode *node)
     case astCharLit:
         return true;
     default:
-        return isEnumLiteral(node);
+        return nodeIsEnumLiteral(node);
     }
 }
 
-bool isTypeExpr(const AstNode *node)
+bool nodeIsTypeExpr(const AstNode *node)
 {
     switch (node->tag) {
     case astVoidType:
@@ -1163,13 +1146,13 @@ bool isTypeExpr(const AstNode *node)
     case astGenericParam:
         return true;
     case astRef:
-        return isTypeExpr(node->reference.target);
+        return nodeIsTypeExpr(node->reference.target);
     default:
         return false;
     }
 }
 
-bool isBuiltinTypeExpr(const AstNode *node)
+bool nodeIsBuiltinTypeExpr(const AstNode *node)
 {
     switch (node->tag) {
     case astVoidType:
@@ -1183,7 +1166,7 @@ bool isBuiltinTypeExpr(const AstNode *node)
     }
 }
 
-u64 countAstNodes(const AstNode *node)
+u64 nodeListCount(const AstNode *node)
 {
     u64 len = 0;
     for (; node; node = node->next)
@@ -1191,30 +1174,14 @@ u64 countAstNodes(const AstNode *node)
     return len;
 }
 
-u64 countProgramDecls(const AstNode *node)
-{
-    u64 len = 0;
-    for (; node; node = node->next) {
-        if (nodeIs(node, ImportDecl))
-            continue;
-        if (nodeIs(node, Define)) {
-            len += (node->define.container ? 1
-                                           : countAstNodes(node->define.names));
-        }
-        else
-            len++;
-    }
-    return len;
-}
-
-AstNode *getLastAstNode(AstNode *node)
+AstNode *nodeListGetLast(AstNode *node)
 {
     while (node && node->next)
         node = node->next;
     return node;
 }
 
-AstNode *getNodeAtIndex(AstNode *node, u64 index)
+AstNode *nodeListGetAtIndex(AstNode *node, u64 index)
 {
     u64 i = 0;
     while (node) {
@@ -1226,7 +1193,7 @@ AstNode *getNodeAtIndex(AstNode *node, u64 index)
     return NULL;
 }
 
-AstNode *findEnumOptionByName(AstNode *node, cstring name)
+AstNode *nodeFindOptionByName(AstNode *node, cstring name)
 {
     AstNode *member = node->enumDecl.options;
     while (member) {
@@ -1237,9 +1204,9 @@ AstNode *findEnumOptionByName(AstNode *node, cstring name)
     return NULL;
 }
 
-cstring getMemberName(const AstNode *member)
+cstring nodeGetMemberName(const AstNode *node)
 {
-    switch (member->tag) {
+    switch (node->tag) {
     case astFuncDecl:
     case astField:
     case astGenericDecl:
@@ -1247,24 +1214,24 @@ cstring getMemberName(const AstNode *member)
     case astUnionDecl:
     case astTypeDecl:
     case astEnumDecl:
-        return member->_namedNode.name;
+        return node->_namedNode.name;
     default:
         return NULL;
     }
 }
 
-AstNode *findMemberByName(AstNode *node, cstring name)
+AstNode *nodeFindMemberByName(AstNode *node, cstring name)
 {
     AstNode *member = node->structDecl.members;
     while (member) {
-        if (getMemberName(member) == name)
+        if (nodeGetMemberName(member) == name)
             return member;
         member = member->next;
     }
     return NULL;
 }
 
-AstNode *getParentScopeWithTag(AstNode *node, AstTag tag)
+AstNode *nodeGetParentScope(AstNode *node, AstTag tag)
 {
     AstNode *parentScope = node->parentScope;
     while (parentScope && parentScope->tag != tag)
@@ -1272,14 +1239,14 @@ AstNode *getParentScopeWithTag(AstNode *node, AstTag tag)
     return parentScope;
 }
 
-const AstNode *getLastAstNodeConst(const AstNode *node)
+const AstNode *nodeListGetLastConst(const AstNode *node)
 {
     while (node->next)
         node = node->next;
     return node;
 }
 
-const AstNode *getConstNodeAtIndex(const AstNode *node, u64 index)
+const AstNode *nodeListGetAtIndexConst(const AstNode *node, u64 index)
 {
     u64 i = 0;
     while (node) {
@@ -1291,7 +1258,7 @@ const AstNode *getConstNodeAtIndex(const AstNode *node, u64 index)
     return NULL;
 }
 
-const AstNode *getParentScopeWithTagConst(const AstNode *node, AstTag tag)
+const AstNode *nodeGetParentScopeConst(const AstNode *node, AstTag tag)
 {
     const AstNode *parentScope = node->parentScope;
     while (parentScope && parentScope->tag != tag)
@@ -1299,20 +1266,20 @@ const AstNode *getParentScopeWithTagConst(const AstNode *node, AstTag tag)
     return parentScope;
 }
 
-AstNode *replaceAstNode(AstNode *node, const AstNode *with)
+AstNode *nodeReplace(AstNode *node, const AstNode *with)
 {
     AstNode *next = node->next, *parent = node->parentScope;
     *node = *with;
     node->parentScope = parent;
-    getLastAstNode(node)->next = next;
+    nodeListGetLast(node)->next = next;
 
     return node;
 }
 
-void replaceAstNodeInList(AstNode **list, const AstNode *node, AstNode *with)
+void nodeReplaceInList(const AstNode *node, AstNode **list, AstNode *with)
 {
     if (*list == node) {
-        getLastAstNode(with)->next = (*list)->next;
+        nodeListGetLast(with)->next = (*list)->next;
         *list = with;
     }
     else {
@@ -1332,13 +1299,13 @@ AstNode *replaceAstNodeWith(AstNode *node, const AstNode *with)
     __typeof(node->_head) head = node->_head;
     *node = *with;
     node->flags |= head.flags;
-    getLastAstNode(node)->next = head.next;
+    nodeListGetLast(node)->next = head.next;
     node->parentScope = head.parentScope;
 
     return node;
 }
 
-bool mapAstNode(HashTable *mapping, const AstNode *from, AstNode *to)
+bool nodeAddMapping(HashTable *mapping, const AstNode *from, AstNode *to)
 {
     return insertInHashTable(mapping,
                              &(AstNodeMapping){.from = from, .to = to},
@@ -1347,33 +1314,33 @@ bool mapAstNode(HashTable *mapping, const AstNode *from, AstNode *to)
                              compareAstNodes);
 }
 
-void initCloneAstNodeMapping(CloneAstConfig *config)
+void nodeCloneConfigInit(AstNodeCloneConfig *config)
 {
     if (config->createMapping) {
         config->mapping = newHashTable(sizeof(AstNodeMapping));
     }
 }
 
-void deinitCloneAstNodeConfig(CloneAstConfig *config)
+void nodeCloneConfigDeinit(AstNodeCloneConfig *config)
 {
     if (config->createMapping) {
         freeHashTable(&config->mapping);
     }
 }
 
-AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
+AstNode *nodeClone(AstNodeCloneConfig *config, const AstNode *node)
 {
     if (node == NULL)
         return NULL;
 
-    AstNode *clone = copyAstNode(config->pool, node);
+    AstNode *clone = nodeCopy(node, config->pool);
     if (config->createMapping)
         recordClonedAstNode(config, node, clone);
 
 #define CLONE_MANY(AST, MEMBER)                                                \
     clone->AST.MEMBER = cloneManyAstNodes(config, node->AST.MEMBER);
 #define CLONE_ONE(AST, MEMBER)                                                 \
-    clone->AST.MEMBER = cloneAstNode(config, node->AST.MEMBER);
+    clone->AST.MEMBER = nodeClone(config, node->AST.MEMBER);
 
 #define COPY_SORTED(AST, MEMBER)                                               \
     if (config->createMapping)                                                 \
@@ -1424,10 +1391,10 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
     case astFuncDecl:
         if (clone->funcDecl.this_)
             CLONE_ONE(funcDecl, this_);
-        clone->funcDecl.signature = makeFunctionSignature(
+        clone->funcDecl.signature = nodeMakeSignature(
             config->pool,
-            &(FunctionSignature){
-                .ret = cloneAstNode(config, node->funcDecl.signature->ret),
+            &(Signature){
+                .ret = nodeClone(config, node->funcDecl.signature->ret),
                 .params =
                     cloneManyAstNodes(config, node->funcDecl.signature->params),
                 .typeParams = node->funcDecl.signature->typeParams});
@@ -1615,47 +1582,47 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
     return clone;
 }
 
-AstNode *cloneGenericDeclaration(MemPool *pool, const AstNode *node)
+AstNode *nodeGenericDeclClone(const AstNode *node, MemPool *pool)
 {
     AstNode *param = node->genericDecl.params;
     AstNode *decl = node->genericDecl.decl;
     AstNode *params = NULL, *it = NULL;
-    CloneAstConfig config = {.pool = pool, .createMapping = true};
+    AstNodeCloneConfig config = {.pool = pool, .createMapping = true};
 
-    initCloneAstNodeMapping(&config);
+    nodeCloneConfigInit(&config);
 
     for (; param; param = param->next) {
-        AstNode *clone = cloneAstNode(&config, param);
+        AstNode *clone = nodeClone(&config, param);
         if (params == NULL)
             params = it = clone;
         else
             it = it->next = clone;
     }
 
-    decl = cloneAstNode(&config, decl);
-    setGenericDeclarationParams(decl, params);
+    decl = nodeClone(&config, decl);
+    nodeSetGenericDeclParams(decl, params);
     decl->attrs = node->attrs;
     decl->parentScope = node->parentScope;
-    deinitCloneAstNodeConfig(&config);
+    nodeCloneConfigDeinit(&config);
     return decl;
 }
 
-AstNode *deepCloneAstNode(MemPool *pool, const AstNode *node)
+AstNode *nodeDeepClone(const AstNode *node, MemPool *pool)
 {
-    CloneAstConfig config = {.pool = pool, .createMapping = true};
-    initCloneAstNodeMapping(&config);
-    AstNode *cloned = cloneAstNode(&config, node);
-    deinitCloneAstNodeConfig(&config);
+    AstNodeCloneConfig config = {.pool = pool, .createMapping = true};
+    nodeCloneConfigInit(&config);
+    AstNode *cloned = nodeClone(&config, node);
+    nodeCloneConfigDeinit(&config);
     return cloned;
 }
 
-void insertAstNodeAfter(AstNode *before, AstNode *after)
+void nodeListInsertAfter(AstNode *before, AstNode *after)
 {
-    getLastAstNode(after)->next = before->next;
+    nodeListGetLast(after)->next = before->next;
     before->next = after;
 }
 
-AstNode *insertAstNode(AstNodeList *list, AstNode *node)
+AstNode *nodeListInsert(AstNodeList *list, AstNode *node)
 {
     if (node == NULL)
         return NULL;
@@ -1666,11 +1633,11 @@ AstNode *insertAstNode(AstNodeList *list, AstNode *node)
     else {
         list->last->next = node;
     }
-    list->last = getLastAstNode(node);
+    list->last = nodeListGetLast(node);
     return list->last;
 }
 
-void unlinkAstNode(AstNode **head, AstNode *prev, AstNode *node)
+void nodeListUnlink(AstNode **head, AstNode *prev, AstNode *node)
 {
     if (prev == node)
         *head = node->next;
@@ -1678,7 +1645,7 @@ void unlinkAstNode(AstNode **head, AstNode *prev, AstNode *node)
         prev->next = node->next;
 }
 
-const AstNode *findAttribute(const AstNode *node, cstring name)
+const AstNode *nodeFindAttr(const AstNode *node, cstring name)
 {
     const AstNode *attr = node->attrs;
     while (attr) {
@@ -1690,7 +1657,7 @@ const AstNode *findAttribute(const AstNode *node, cstring name)
     return attr;
 }
 
-const AstNode *findAttributeArgument(const AstNode *attr, cstring name)
+const AstNode *nodeFindAttrArgument(const AstNode *attr, cstring name)
 {
     const AstNode *arg = attr->attr.args;
     while (arg) {
@@ -1720,7 +1687,7 @@ const char *getDeclKeyword(AstTag tag)
     }
 }
 
-const char *getDeclarationName(const AstNode *node)
+const char *nodeGetDeclName(const AstNode *node)
 {
     node = nodeIs(node, GenericDecl) ? node->genericDecl.decl : node;
 
@@ -1743,11 +1710,11 @@ const char *getDeclarationName(const AstNode *node)
     case astVarDecl:
         return node->varDecl.name;
     default:
-        csAssert(false, "%s is not a declaration", getAstNodeName(node));
+        csAssert(false, "%s is not a declaration", nodeGetString(node));
     }
 }
 
-void setDeclarationName(AstNode *node, cstring name)
+void nodeSetDeclName(AstNode *node, cstring name)
 {
     switch (node->tag) {
     case astFuncDecl:
@@ -1770,11 +1737,11 @@ void setDeclarationName(AstNode *node, cstring name)
         node->interfaceDecl.name = name;
         break;
     default:
-        csAssert(false, "%s is not a declaration", getAstNodeName(node));
+        csAssert(false, "%s is not a declaration", nodeGetString(node));
     }
 }
 
-void setForwardDeclDefinition(AstNode *node, AstNode *definition)
+void nodeSetDefinition(AstNode *node, AstNode *definition)
 {
     csAssert0(hasFlag(node, ForwardDecl));
     switch (node->tag) {
@@ -1788,11 +1755,11 @@ void setForwardDeclDefinition(AstNode *node, AstNode *definition)
         node->typeDecl.definition = definition;
         break;
     default:
-        csAssert(false, "%s is not a declaration", getAstNodeName(node));
+        csAssert(false, "%s is not a declaration", nodeGetString(node));
     }
 }
 
-AstNode *getForwardDeclDefinition(AstNode *node)
+AstNode *nodeGetDefinition(AstNode *node)
 {
     switch (node->tag) {
     case astFuncDecl:
@@ -1806,7 +1773,7 @@ AstNode *getForwardDeclDefinition(AstNode *node)
     }
 }
 
-AstNode *getGenericDeclarationParams(AstNode *node)
+AstNode *nodeGetGenericDeclParams(AstNode *node)
 {
     switch (node->tag) {
     case astFuncDecl:
@@ -1821,11 +1788,11 @@ AstNode *getGenericDeclarationParams(AstNode *node)
     case astInterfaceDecl:
         return node->interfaceDecl.typeParams;
     default:
-        csAssert(false, "%s is not a declaration", getAstNodeName(node));
+        csAssert(false, "%s is not a declaration", nodeGetString(node));
     }
 }
 
-void setGenericDeclarationParams(AstNode *node, AstNode *params)
+void nodeSetGenericDeclParams(AstNode *node, AstNode *params)
 {
     switch (node->tag) {
     case astFuncDecl:
@@ -1845,11 +1812,11 @@ void setGenericDeclarationParams(AstNode *node, AstNode *params)
         node->interfaceDecl.typeParams = params;
         break;
     default:
-        csAssert(false, "%s is not a declaration", getAstNodeName(node));
+        csAssert(false, "%s is not a declaration", nodeGetString(node));
     }
 }
 
-cstring getAstNodeName(const AstNode *node)
+cstring nodeGetString(const AstNode *node)
 {
     switch (node->tag) {
 #define f(name)                                                                \
@@ -1862,15 +1829,14 @@ cstring getAstNodeName(const AstNode *node)
     }
 }
 
-FunctionSignature *makeFunctionSignature(MemPool *pool,
-                                         const FunctionSignature *from)
+Signature *nodeMakeSignature(MemPool *pool, const Signature *from)
 {
-    FunctionSignature *signature = allocFromMemPool(pool, sizeof *from);
+    Signature *signature = allocFromMemPool(pool, sizeof *from);
     *signature = *from;
     return signature;
 }
 
-AstNode *getParentScope(AstNode *node)
+AstNode *nodeResolveParentScope(AstNode *node)
 {
     if (nodeIs(node->parentScope, GenericDecl)) {
         return node->parentScope->parentScope;
@@ -1878,67 +1844,37 @@ AstNode *getParentScope(AstNode *node)
     return node->parentScope;
 }
 
-AstNode *getMemberParentScope(AstNode *node)
-{
-    AstNode *parent = node->parentScope;
-    if (nodeIs(parent, BlockStmt)) {
-        parent = parent->parentScope;
-    }
-
-    if (nodeIs(parent, IfStmt) || nodeIs(parent, ForStmt)) {
-        if (!hasFlag(parent, Comptime))
-            return false;
-        parent = parent->parentScope;
-    }
-
-    if (nodeIs(parent, GenericDecl)) {
-        parent = parent->parentScope;
-    }
-
-    return parent;
-}
-
-AstNode *makeTypeReferenceNode(MemPool *pool,
-                               const Type *type,
-                               const FileLoc *loc)
-{
-    return makeAstNode(
-        pool,
-        loc,
-        &(AstNode){.tag = astTypeRef, .flags = type->flags, .type = type});
-}
-
-AstNode *makeTypeReferenceNode2(MemPool *pool,
-                                const Type *type,
+AstNode *nodeMakeTypeReference_(MemPool *pool,
                                 const FileLoc *loc,
+                                u64 flags,
+                                const Type *type,
                                 AstNode *next)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astTypeRef,
-                                  .flags = type->flags,
-                                  .type = type,
-                                  .next = next});
+    return nodeNew(
+        pool,
+        loc,
+        &(AstNode){
+            .tag = astTypeRef, .flags = flags, .type = type, .next = next});
 }
 
-AstNode *findInAstNode(AstNode *node, cstring name)
+AstNode *nodeFindByName(AstNode *node, cstring name)
 {
-    node = underlyingDeclaration(node);
+    node = nodeGetUnderlyingDecl(node);
     switch (node->tag) {
     case astStructDecl:
-        return findMemberByName(node->structDecl.members, name);
+        return nodeFindMemberByName(node->structDecl.members, name);
     case astInterfaceDecl:
-        return findMemberByName(node->interfaceDecl.members, name);
+        return nodeFindMemberByName(node->interfaceDecl.members, name);
     case astUnionDecl:
-        return findMemberByName(node->unionDecl.members, name);
+        return nodeFindMemberByName(node->unionDecl.members, name);
     case astEnumDecl:
-        return findMemberByName(node->enumDecl.options, name);
+        return nodeFindMemberByName(node->enumDecl.options, name);
     default:
         unreachable("NOT SUPPORTED");
     }
 }
 
-AstNode *resolvePath(const AstNode *path)
+AstNode *nodeResolvePath(const AstNode *path)
 {
     if (path == NULL)
         return NULL;
@@ -1952,7 +1888,7 @@ AstNode *resolvePath(const AstNode *path)
     AstNode *elem = base->next;
     for (; elem && resolved; elem = elem->next) {
         if (elem->pathElement.resolvesTo == NULL) {
-            elem->pathElement.resolvesTo = findInAstNode(
+            elem->pathElement.resolvesTo = nodeFindByName(
                 resolved, elem->pathElement.alt ?: elem->pathElement.name);
         }
         resolved = elem->pathElement.resolvesTo;
@@ -1960,7 +1896,7 @@ AstNode *resolvePath(const AstNode *path)
     return resolved;
 }
 
-AstNode *getResolvedPath(const AstNode *path)
+AstNode *nodeGetResolved(const AstNode *path)
 {
     if (!nodeIs(path, Path))
         return NULL;
@@ -1979,7 +1915,7 @@ static int isInInheritanceChain_(const AstNode *node,
 {
     if (!nodeIs(node, ClassDecl) || node->classDecl.base == NULL)
         return 0;
-    const AstNode *base = resolvePath(node->classDecl.base);
+    const AstNode *base = nodeResolvePath(node->classDecl.base);
     if (base == NULL)
         return 0;
     if (base == parent)
@@ -1987,28 +1923,28 @@ static int isInInheritanceChain_(const AstNode *node,
     return isInInheritanceChain_(base, parent, depth + 1);
 }
 
-int isInInheritanceChain(const AstNode *node, const AstNode *parent)
+int nodeIsInheritanceChain(const AstNode *node, const AstNode *parent)
 {
     return isInInheritanceChain_(node, parent, 1);
 }
 
-AstNode *getBaseClassAtLevel(AstNode *node, u64 level)
+AstNode *nodeBaseAtLevel(AstNode *node, u64 level)
 {
     int i = 0;
     do {
         if (i == level)
             return node;
 
-        node = underlyingDeclaration(resolvePath(node->classDecl.base));
+        node = nodeGetUnderlyingDecl(nodeResolvePath(node->classDecl.base));
         i++;
     } while (node);
     return node;
 }
 
-AstNode *getBaseClassByName(AstNode *node, cstring name)
+AstNode *nodeFindBase(AstNode *node, cstring name)
 {
     for (;;) {
-        node = underlyingDeclaration(resolvePath(node->classDecl.base));
+        node = nodeGetUnderlyingDecl(nodeResolvePath(node->classDecl.base));
         if (node == NULL)
             return NULL;
 
@@ -2017,25 +1953,25 @@ AstNode *getBaseClassByName(AstNode *node, cstring name)
     }
 }
 
-int compareNamedAstNodes(const void *lhs, const void *rhs)
+int nodeCompareByName(const void *lhs, const void *rhs)
 {
     cstring left = (*((const AstNode **)lhs))->_namedNode.name,
             right = (*((const AstNode **)rhs))->_namedNode.name;
     return left == right ? 0 : strcmp(left, right);
 }
 
-SortedNodes *makeSortedNodes(MemPool *pool,
-                             AstNode *nodes,
-                             int (*compare)(const void *, const void *))
+SortedNodes *nodeMakeSorted(MemPool *pool,
+                            AstNode *nodes,
+                            int (*compare)(const void *, const void *))
 {
-    u64 count = countAstNodes(nodes);
+    u64 count = nodeListCount(nodes);
     if (count == 0)
         return NULL;
     SortedNodes *sortedNodes = allocFromMemPool(
         pool, sizeof(SortedNodes) + (sizeof(AstNode *) * count));
     csAssert0(sortedNodes);
     sortedNodes->count = count;
-    sortedNodes->compare = compare ?: compareNamedAstNodes;
+    sortedNodes->compare = compare ?: nodeCompareByName;
 
     AstNode *node = nodes;
     for (u64 i = 0; node; node = node->next, i++)
@@ -2045,7 +1981,7 @@ SortedNodes *makeSortedNodes(MemPool *pool,
     return sortedNodes;
 }
 
-AstNode *findInSortedNodes(SortedNodes *sorted, cstring name)
+AstNode *nodeFindInSortedNodes(SortedNodes *sorted, cstring name)
 {
     if (sorted == NULL)
         return NULL;
@@ -2061,21 +1997,7 @@ AstNode *findInSortedNodes(SortedNodes *sorted, cstring name)
     return sorted->nodes[found];
 }
 
-CCodeKind getCCodeKind(TokenTag tag)
-{
-    switch (tag) {
-    case tokCInclude:
-        return cInclude;
-    case tokCDefine:
-        return cDefine;
-    case tokCSources:
-        return cSources;
-    default:
-        unreachable();
-    }
-}
-
-bool isLValueAstNode(const AstNode *node)
+bool nodeIsLValue(const AstNode *node)
 {
     switch (node->tag) {
     case astPath:

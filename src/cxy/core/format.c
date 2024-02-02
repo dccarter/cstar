@@ -1,6 +1,5 @@
 #include "core/format.h"
 #include "core/alloc.h"
-#include "lang/frontend/types.h"
 
 #include <assert.h>
 #include <inttypes.h>
@@ -180,7 +179,7 @@ static const char *formatArg(FormatState *state,
         n = snprintf(bufPtr, MAX_FORMAT_CHARS, "%p", arg->p);
         break;
     case 't':
-        printType(state, arg->t);
+        // printType(state, arg->t);
         break;
     default:
         assert(false && "unknown formatting command");

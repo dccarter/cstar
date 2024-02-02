@@ -5,6 +5,7 @@
 #include "operator.h"
 #include "flag.h"
 #include "strings.h"
+#include "token.h"
 
 const char *getUnaryOpString(Operator op)
 {
@@ -96,18 +97,6 @@ int getBinaryOpPrecedence(Operator op)
     }
 }
 
-bool isAssignmentOperator(TokenTag tag)
-{
-    switch (tag) {
-#define f(O, P, T, ...) case tok##T##Equal:
-        AST_ASSIGN_EXPR_LIST(f)
-#undef f
-        return true;
-    default:
-        return false;
-    }
-}
-
 Operator tokenToUnaryOperator(TokenTag tag)
 {
     switch (tag) {
@@ -165,7 +154,7 @@ bool isPrefixOpKeyword(Operator op)
     switch (op) {
 #define f(O, T, ...)                                                           \
     case op##O:                                                                \
-        return isKeyword(tok##T);
+        return tokenIsKeyword(tok##T);
         AST_PREFIX_EXPR_LIST(f)
 #undef f
     default:

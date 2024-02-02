@@ -505,15 +505,3 @@ Token advanceLexer(Lexer *lexer)
         return makeInvalidToken(lexer, &begin, "invalid token");
     }
 }
-
-bool isKeyword(TokenTag tag)
-{
-    switch (tag) {
-#define f(T, ...) case tok##T:
-        KEYWORD_LIST(f)
-#undef f
-        return true;
-    default:
-        return false;
-    }
-}

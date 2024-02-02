@@ -73,3 +73,6 @@ typedef u64 Flags;
 
 void appendFlagsAsString(FormatState *state, u64 flags);
 char *flagsToString(u64 flags);
+
+#define hasFlag(ITEM, FLG) ((ITEM) && ((ITEM)->flags & (flg##FLG)))
+#define hasFlags(ITEM, FLAGS) ((ITEM) && ((ITEM)->flags & (FLAGS)))
