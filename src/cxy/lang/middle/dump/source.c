@@ -117,6 +117,16 @@ static void dumpFuncParam(ConstAstVisitor *visitor, const AstNode *node)
     }
 }
 
+static void dumpGenericParam(ConstAstVisitor *visitor, const AstNode *node)
+{
+    DumpContext *ctx = getConstAstVisitorContext(visitor);
+    format(ctx->state, "{s}", (FormatArg[]){{.s = node->genericParam.name}});
+    if (node->genericParam.constraints) {
+        format(ctx->state, ": ", NULL);
+        dumpManyAstNodes(visitor, node->genericParam.constraints, " | ");
+    }
+}
+
 static void dumpNullLit(ConstAstVisitor *visitor, const AstNode *node)
 {
     DumpContext *ctx = getConstAstVisitorContext(visitor);
@@ -173,11 +183,16 @@ static void dumpFloatLit(ConstAstVisitor *visitor, const AstNode *node)
 static void dumpStringLit(ConstAstVisitor *visitor, const AstNode *node)
 {
     DumpContext *ctx = getConstAstVisitorContext(visitor);
-    format(ctx->state,
-           "{$}\"{s}\"{$}",
-           (FormatArg[]){{.style = stringStyle},
-                         {.s = node->stringLiteral.value},
-                         {.style = resetStyle}});
+    //    format(ctx->state,
+    //           "{$}\"{s}\"{$}",
+    //           (FormatArg[]){{.style = stringStyle},
+    //                         {.s = node->stringLiteral.value},
+    //                         {.style = resetStyle}});
+    format(ctx->state, "{$}\"", (FormatArg[]){{.style = stringStyle}});
+    cstring p = node->stringLiteral.value;
+    while (*p)
+        format(ctx->state, "{cE}", (FormatArg[]){{.c = *p++}});
+    format(ctx->state, "\"{$}", (FormatArg[]){{.style = resetStyle}});
 }
 
 static void dumpPrimitiveType(ConstAstVisitor *visitor, const AstNode *node)
@@ -359,7 +374,7 @@ static void dumpIndexExpr(ConstAstVisitor *visitor, const AstNode *node)
 static void dumpCallExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     astConstVisit(visitor, node->callExpr.callee);
-    dumpManyAstNodesEnclosed(visitor, node->callExpr.args, "(", ",", ")");
+    dumpManyAstNodesEnclosed(visitor, node->callExpr.args, "(", ", ", ")");
 }
 
 static void dumpMacroCallExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -388,7 +403,7 @@ static void dumpIfStmt(ConstAstVisitor *visitor, const AstNode *node)
     printKeyword(ctx->state, "if");
     format(ctx->state, " (", NULL);
     astConstVisit(visitor, node->ifStmt.cond);
-    format(ctx->state, ")\n", NULL);
+    format(ctx->state, ") ", NULL);
     if (!nodeIs(node->ifStmt.body, BlockStmt)) {
         format(ctx->state, "{{{>}\n", NULL);
         astConstVisit(visitor, node->ifStmt.body);
@@ -632,7 +647,9 @@ static void dumpFuncDeclWithParams(ConstAstVisitor *visitor,
 
         astConstVisit(visitor, node->funcDecl.body);
     }
-    AddNewLine();
+
+    if (node->next)
+        AddNewLine();
 }
 
 static void dumpFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
@@ -671,15 +688,83 @@ static void dumpTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
     dumpTypeDeclWithParams(visitor, node, NULL);
 }
 
+static void dumpStructField(ConstAstVisitor *visitor, const AstNode *node)
+{
+    DumpContext *ctx = getConstAstVisitorContext(visitor);
+    if (hasFlag(node, Private))
+        format(ctx->state, "- ", NULL);
+
+    format(ctx->state, "{s}", (FormatArg[]){{.s = node->structField.name}});
+
+    if (node->structField.type) {
+        format(ctx->state, ": ", NULL);
+        astConstVisit(visitor, node->structField.type);
+    }
+
+    if (node->structField.value) {
+        format(ctx->state, " = ", NULL);
+        astConstVisit(visitor, node->structField.value);
+    }
+}
+
+static void dumpStructDeclWithParams(ConstAstVisitor *visitor,
+                                     const AstNode *node,
+                                     const AstNode *params)
+{
+    DumpContext *ctx = getConstAstVisitorContext(visitor);
+    if (hasFlag(node, Public)) {
+        printKeyword(ctx->state, "pub");
+        AddSpace();
+    }
+
+    if (hasFlag(node, Extern)) {
+        printKeyword(ctx->state, "extern");
+        AddSpace();
+    }
+
+    printKeyword(ctx->state, "struct");
+    AddSpace();
+    format(ctx->state, "{s}", (FormatArg[]){{.s = node->structDecl.name}});
+    if (params)
+        dumpManyAstNodesEnclosed(visitor, params, "[", ", ", "]");
+
+    if (node->structDecl.base || node->structDecl.implements)
+        format(ctx->state, ":", NULL);
+
+    if (node->structDecl.base) {
+        AddSpace();
+        astConstVisit(visitor, node->structDecl.base);
+    }
+
+    if (node->structDecl.implements) {
+        format(ctx->state, ": ", NULL);
+        dumpManyAstNodes(visitor, node->structDecl.implements, ", ");
+    }
+
+    if (node->structDecl.members == NULL)
+        return;
+
+    format(ctx->state, " {{{>}\n", NULL);
+    dumpManyAstNodes(visitor, node->structDecl.members, "\n");
+    format(ctx->state, "{<}\n}", NULL);
+    AddNewLine();
+}
+
+static void dumpStructDecl(ConstAstVisitor *visitor, const AstNode *node)
+{
+    dumpStructDeclWithParams(visitor, node, NULL);
+}
+
 static void dumpGenericDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     const AstNode *decl = node->genericDecl.decl;
     if (nodeIs(decl, FuncDecl))
         dumpFuncDeclWithParams(visitor, decl, node->genericDecl.params);
     else if (nodeIs(decl, TypeDecl)) {
-        dumpTypeDeclWithParams(visitor, node, node->genericDecl.params);
+        dumpTypeDeclWithParams(visitor, decl, node->genericDecl.params);
     }
     else if (nodeIs(decl, StructDecl)) {
+        dumpStructDeclWithParams(visitor, decl, node->genericDecl.params);
     }
     else if (nodeIs(decl, ClassDecl)) {
     }
@@ -702,7 +787,7 @@ static void dumpProgram(ConstAstVisitor *visitor, const AstNode *node)
         AddNewLine();
     }
 
-    astConstVisitManyNodes(visitor, node->program.decls);
+    dumpManyAstNodes(visitor, node->program.decls, "\n");
 }
 
 static void dispatch(ConstVisitor func,
@@ -732,6 +817,7 @@ void dumpCxySource(FormatState *output, AstNode *node)
         [astIdentifier] = dumpIdentifier,
         [astAttr] = dumpAttribute,
         [astFuncParam] = dumpFuncParam,
+        [astGenericParam] = dumpGenericParam,
         [astImportEntity] = dumpImportEntity,
         [astNullLit] = dumpNullLit,
         [astBoolLit] = dumpBoolLit,
@@ -772,6 +858,8 @@ void dumpCxySource(FormatState *output, AstNode *node)
         [astMatchStmt] = dumpMatchStmt,
         [astVarDecl] = dumpVarDecl,
         [astTypeDecl] = dumpTypeDecl,
+        [astField] = dumpStructField,
+        [astStructDecl] = dumpStructDecl,
         [astModuleDecl] = dumpModuleDecl,
         [astImportDecl] = dumpImportDecl,
         [astFuncDecl] = dumpFuncDecl,

@@ -2,7 +2,10 @@ import { add, sub } from "./add.cxy"
 
 pub extern func printf(fmt: string, ...args: auto) : i32;
 
+pub extern struct User
+
 pub func main(): i32 {
     var x = 0b100;
+    printf("Hello %d\n", x)
     return 0
 }

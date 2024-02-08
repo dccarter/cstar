@@ -2368,13 +2368,10 @@ static void synchronize(Parser *P)
 static AstNode *parseImportEntity(Parser *P)
 {
     Token tok = *consume0(P, tokIdent);
-    cstring name = getTokenString(P, &tok, false), alias;
+    cstring name = getTokenString(P, &tok, false), alias = NULL;
     if (match(P, tokAs)) {
         Token *aliasTok = consume0(P, tokIdent);
         alias = getTokenString(P, aliasTok, false);
-    }
-    else {
-        alias = name;
     }
 
     return nodeNew(P->memPool,

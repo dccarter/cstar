@@ -107,8 +107,10 @@ Log newLog(DiagnosticHandler handler, void *ctx)
                   .handler = handler,
                   .handlerCtx = ctx,
                   .maxErrors = SIZE_MAX};
-    if (handler == printDiagnosticToConsole)
-        L.handlerCtx = ctx;
+    if (handler == printDiagnosticToConsole) {
+        L.handlerCtx = NULL;
+        L.handler = NULL;
+    }
     return L;
 }
 
