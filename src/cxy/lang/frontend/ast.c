@@ -61,10 +61,10 @@ static void recordClonedAstNode(CloneAstConfig *config,
 {
     switch (from->tag) {
     case astFuncDecl:
-    case astFuncParam:
+    case astFuncParamDecl:
     case astStructDecl:
     case astClassDecl:
-    case astField:
+    case astFieldDecl:
     case astInterfaceDecl:
     case astUnionDecl:
     case astTypeDecl:
@@ -72,7 +72,7 @@ static void recordClonedAstNode(CloneAstConfig *config,
     case astDefine:
     case astGenericDecl:
     case astEnumDecl:
-    case astEnumOption:
+    case astEnumOptionDecl:
     case astVarDecl:
     case astIdentifier:
     case astClosureExpr:
@@ -530,7 +530,7 @@ AstNode *makeStructField(MemPool *pool,
     return makeAstNode(
         pool,
         loc,
-        &(AstNode){.tag = astField,
+        &(AstNode){.tag = astFieldDecl,
                    .flags = flags,
                    .type = type ? type->type : NULL,
                    .next = next,
@@ -560,7 +560,7 @@ AstNode *makeUnionValueExpr(MemPool *pool,
     csAssert0(typeIs(type, Union));
     return makeAstNode(pool,
                        loc,
-                       &(AstNode){.tag = astUnionValue,
+                       &(AstNode){.tag = astUnionValueExpr,
                                   .flags = flags,
                                   .type = type,
                                   .next = next,
@@ -779,15 +779,16 @@ AstNode *makeWhileStmt(MemPool *pool,
                        AstNode *condition,
                        AstNode *body,
                        AstNode *next,
-                       const Type *type)
+                       AstNode *update)
 {
     return makeAstNode(
         pool,
         loc,
-        &(AstNode){.tag = astWhileStmt,
-                   .type = type,
-                   .next = next,
-                   .whileStmt = {.cond = condition, .body = body}});
+        &(AstNode){
+            .tag = astWhileStmt,
+            .type = body ? body->type : NULL,
+            .next = next,
+            .whileStmt = {.cond = condition, .body = body, .update = update}});
 }
 
 AstNode *makeFunctionDecl(MemPool *pool,
@@ -826,7 +827,7 @@ AstNode *makeFunctionParam(MemPool *pool,
 {
     return makeAstNode(pool,
                        loc,
-                       &(AstNode){.tag = astFuncParam,
+                       &(AstNode){.tag = astFuncParamDecl,
                                   .type = paramType ? paramType->type : NULL,
                                   .next = next,
                                   .flags = flags,
@@ -1016,6 +1017,23 @@ AstNode *makeIndexExpr(MemPool *pool,
                    .indexExpr = {.target = target, .index = index}});
 }
 
+AstNode *makeBackendCallExpr(MemPool *pool,
+                             const FileLoc *loc,
+                             u64 flags,
+                             BackendFuncId func,
+                             AstNode *args,
+                             const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astBackendCall,
+                   .flags = flags,
+                   .type = type,
+                   .next = NULL,
+                   .backendCallExpr = {.func = func, .args = args}});
+}
+
 AstNode *makeAstClosureCapture(MemPool *pool, AstNode *captured)
 {
     return makeAstNode(pool,
@@ -1028,7 +1046,7 @@ AstNode *makeAstClosureCapture(MemPool *pool, AstNode *captured)
 
 AstNode *makeAstNop(MemPool *pool, const FileLoc *loc)
 {
-    return makeAstNode(pool, loc, &(AstNode){.tag = astNop});
+    return makeAstNode(pool, loc, &(AstNode){.tag = astNoop});
 }
 
 AstNode *makePathFromIdent(MemPool *pool, const AstNode *ident)
@@ -1183,6 +1201,30 @@ bool isBuiltinTypeExpr(const AstNode *node)
     }
 }
 
+bool isMemberFunction(const AstNode *node)
+{
+    if (!nodeIs(node, FuncDecl))
+        return false;
+    if (node->funcDecl.this_)
+        return true;
+    return hasFlag(node, Generated) &&
+           node->funcDecl.signature->params != NULL &&
+           node->funcDecl.signature->params->funcParam.name == S_this;
+}
+
+AstNode *getMemberFunctionThis(AstNode *node)
+{
+    if (!nodeIs(node, FuncDecl))
+        return NULL;
+    if (node->funcDecl.this_)
+        return node->funcDecl.this_;
+    return (hasFlag(node, Generated) &&
+            node->funcDecl.signature->params != NULL &&
+            node->funcDecl.signature->params->funcParam.name == S_this)
+               ? node->funcDecl.signature->params
+               : NULL;
+}
+
 u64 countAstNodes(const AstNode *node)
 {
     u64 len = 0;
@@ -1241,7 +1283,7 @@ cstring getMemberName(const AstNode *member)
 {
     switch (member->tag) {
     case astFuncDecl:
-    case astField:
+    case astFieldDecl:
     case astGenericDecl:
     case astStructDecl:
     case astUnionDecl:
@@ -1417,7 +1459,7 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
         CLONE_ONE(funcType, ret);
         CLONE_MANY(funcType, params);
         break;
-    case astFuncParam:
+    case astFuncParamDecl:
         CLONE_ONE(funcParam, type);
         CLONE_ONE(funcParam, def);
         break;
@@ -1469,7 +1511,7 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
         CLONE_MANY(interfaceDecl, members);
         break;
 
-    case astEnumOption:
+    case astEnumOptionDecl:
         CLONE_ONE(enumOption, value);
         break;
 
@@ -1479,7 +1521,7 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
         COPY_SORTED(enumDecl, sortedOptions);
         break;
 
-    case astField:
+    case astFieldDecl:
         CLONE_ONE(structField, value)
         CLONE_ONE(structField, type)
         break;
@@ -1541,7 +1583,7 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
         CLONE_MANY(tupleExpr, elements);
         break;
 
-    case astUnionValue:
+    case astUnionValueExpr:
         CLONE_MANY(unionValue, value);
         break;
 
@@ -2075,7 +2117,7 @@ CCodeKind getCCodeKind(TokenTag tag)
     }
 }
 
-bool isLValueAstNode(const AstNode *node)
+bool nodeIsLeftValue(const AstNode *node)
 {
     switch (node->tag) {
     case astPath:
@@ -2085,4 +2127,11 @@ bool isLValueAstNode(const AstNode *node)
     default:
         return false;
     }
+}
+
+bool nodeIsNoop(const AstNode *node)
+{
+    if (nodeIs(node, ExprStmt))
+        return nodeIsNoop(node->exprStmt.expr);
+    return nodeIs(node, Noop);
 }

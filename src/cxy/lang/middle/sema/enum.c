@@ -10,7 +10,8 @@
 
 static int compareEnumOptionsByValue(const void *lhs, const void *rhs)
 {
-    return (int)(((EnumOption *)lhs)->value - ((EnumOption *)rhs)->value);
+    return (int)(((EnumOptionDecl *)lhs)->value -
+                 ((EnumOptionDecl *)rhs)->value);
 }
 
 void checkEnumDecl(AstVisitor *visitor, AstNode *node)
@@ -40,7 +41,7 @@ void checkEnumDecl(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    EnumOption *options = mallocOrDie(sizeof(EnumOption) * numOptions);
+    EnumOptionDecl *options = mallocOrDie(sizeof(EnumOptionDecl) * numOptions);
     for (u64 i = 0; option; option = option->next, i++) {
         const Type *type = checkType(visitor, option->enumOption.value);
         if (!isTypeAssignableFrom(base, type)) {
@@ -51,15 +52,17 @@ void checkEnumDecl(AstVisitor *visitor, AstNode *node)
                      (FormatArg[]){{.t = type}, {.t = base}});
             node->type = ERROR_TYPE(ctx);
         }
-        options[i] =
-            (EnumOption){.value = option->enumOption.value->intLiteral.value,
-                         .name = option->enumOption.name,
-                         .decl = option};
+        options[i] = (EnumOptionDecl){
+            .value = option->enumOption.value->intLiteral.value,
+            .name = option->enumOption.name,
+            .decl = option};
     }
 
     if (!typeIs(node->type, Error)) {
-        qsort(
-            options, numOptions, sizeof(EnumOption), compareEnumOptionsByValue);
+        qsort(options,
+              numOptions,
+              sizeof(EnumOptionDecl),
+              compareEnumOptionsByValue);
 
         node->type = makeEnum(ctx->types,
                               &(Type){.tag = typEnum,

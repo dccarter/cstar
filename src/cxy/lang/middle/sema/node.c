@@ -19,7 +19,7 @@ static AstNode *makeStructInitializerForDefaults(TypingContext *ctx,
     AstNode *member = decl ? decl->structDecl.members : NULL;
     AstNodeList init = {};
     for (; member; member = member->next) {
-        if (!nodeIs(member, Field) || hasFlag(member, Static)) {
+        if (!nodeIs(member, FieldDecl) || hasFlag(member, Static)) {
             continue;
         }
         AstNode *value =

@@ -10,7 +10,7 @@ int main(int argc, char **argv)
 {
     FormatState state = newFormatState("    ", !isColorSupported(stderr));
     CompilerDriver driver = {0};
-    Log log = newLog(&state);
+    Log log = newLog(NULL, NULL);
     MemPool pool = newMemPool();
     StrPool strings = newStrPool(&pool);
 

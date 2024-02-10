@@ -98,12 +98,20 @@ static WarningId parseNextWarningId(Log *L, char *start, char *end)
     return warning->value;
 }
 
-Log newLog(FormatState *state)
+Log newLog(DiagnosticHandler handler, void *ctx)
 {
-    return (Log){.fileCache = newHashTable(sizeof(FileEntry)),
-                 .showDiagnostics = true,
-                 .state = state,
-                 .maxErrors = SIZE_MAX};
+    handler = handler ?: printDiagnosticToConsole;
+
+    Log L = (Log){.fileCache = newHashTable(sizeof(FileEntry)),
+                  .showDiagnostics = true,
+                  .handler = handler,
+                  .handlerCtx = ctx,
+                  .maxErrors = SIZE_MAX};
+    if (handler == printDiagnosticToConsole) {
+        L.handlerCtx = NULL;
+        L.handler = NULL;
+    }
+    return L;
 }
 
 void freeLog(Log *log)
@@ -227,7 +235,10 @@ static bool isMultilineFileLoc(const FileLoc *fileLoc)
     return fileLoc->begin.row != fileLoc->end.row;
 }
 
-static void printDiagnostic(Log *log, FormatStyle style, const FileLoc *fileLoc)
+static void printDiagnostic(Log *log,
+                            FormatState *state,
+                            FormatStyle style,
+                            const FileLoc *fileLoc)
 {
     FILE *file =
         fileLoc->fileName ? getCachedFile(log, fileLoc->fileName) : NULL;
@@ -238,42 +249,41 @@ static void printDiagnostic(Log *log, FormatStyle style, const FileLoc *fileLoc)
     size_t lineNumberLen = countDigits(fileLoc->end.row);
     size_t beginOffset = findLineBegin(file, fileLoc->begin.byteOffset);
 
-    printEmptySpace(log->state, lineNumberLen + 1);
-    format(log->state,
+    printEmptySpace(state, lineNumberLen + 1);
+    format(state,
            "{$}|{$}\n",
            (FormatArg[]){{.style = style}, {.style = resetStyle}});
 
-    printEmptySpace(log->state,
-                    lineNumberLen - countDigits(fileLoc->begin.row));
-    format(log->state,
+    printEmptySpace(state, lineNumberLen - countDigits(fileLoc->begin.row));
+    format(state,
            "{$}{u}{$} {$}|{$}",
            (FormatArg[]){{.style = locStyle},
                          {.u = fileLoc->begin.row},
                          {.style = resetStyle},
                          {.style = style},
                          {.style = resetStyle}});
-    printFileLine(log->state, beginOffset, file);
+    printFileLine(state, beginOffset, file);
 
-    printEmptySpace(log->state, lineNumberLen + 1);
-    format(log->state,
+    printEmptySpace(state, lineNumberLen + 1);
+    format(state,
            "{$}|{$}",
            (FormatArg[]){{.style = style}, {.style = resetStyle}});
 
-    printEmptySpace(log->state, fileLoc->begin.byteOffset - beginOffset);
+    printEmptySpace(state, fileLoc->begin.byteOffset - beginOffset);
     if (isMultilineFileLoc(fileLoc)) {
-        printLineMarkers(log->state,
+        printLineMarkers(state,
                          style,
                          findLineEnd(file, fileLoc->begin.byteOffset) -
                              fileLoc->begin.byteOffset);
 
         if (fileLoc->begin.row + 1 < fileLoc->end.row) {
-            printEmptySpace(log->state, lineNumberLen);
-            format(log->state,
+            printEmptySpace(state, lineNumberLen);
+            format(state,
                    "{$}...{$}\n",
                    (FormatArg[]){{.style = locStyle}, {.style = resetStyle}});
         }
 
-        format(log->state,
+        format(state,
                "{$}{u}{$} {$}|{$}",
                (FormatArg[]){{.style = locStyle},
                              {.u = fileLoc->end.row},
@@ -281,67 +291,81 @@ static void printDiagnostic(Log *log, FormatStyle style, const FileLoc *fileLoc)
                              {.style = style},
                              {.style = resetStyle}});
         size_t end_offset = findLineBegin(file, fileLoc->end.byteOffset);
-        printFileLine(log->state, end_offset, file);
+        printFileLine(state, end_offset, file);
 
-        printEmptySpace(log->state, lineNumberLen + 1);
-        format(log->state,
+        printEmptySpace(state, lineNumberLen + 1);
+        format(state,
                "{$}|{$}",
                (FormatArg[]){{.style = style}, {.style = resetStyle}});
 
-        printLineMarkers(
-            log->state, style, fileLoc->end.byteOffset - end_offset);
+        printLineMarkers(state, style, fileLoc->end.byteOffset - end_offset);
     }
     else
-        printLineMarkers(log->state,
-                         style,
-                         fileLoc->end.byteOffset - fileLoc->begin.byteOffset);
+        printLineMarkers(
+            state, style, fileLoc->end.byteOffset - fileLoc->begin.byteOffset);
 }
 
-static void printMessage(Log *log,
-                         LogMsgType msg_type,
-                         const FileLoc *fileLoc,
-                         const char *format_str,
-                         const FormatArg *args)
+static void printDiagnosticToState(FormatState *state,
+                                   const Diagnostic *diag,
+                                   void *ctx)
 {
-    if (msg_type == LOG_ERROR)
+    Log *log = ctx;
+    if (diag->kind == dkError)
         log->errorCount++;
-    else if (msg_type == LOG_WARNING)
+    else if (diag->kind == dkWarning)
         log->warningCount++;
 
     if (log->errorCount >= log->maxErrors)
         return;
 
-    if ((msg_type == LOG_ERROR || msg_type == LOG_WARNING) &&
+    if ((diag->kind == dkError || diag->kind == dkWarning) &&
         log->errorCount + log->warningCount > 1)
-        format(log->state, "\n", NULL);
+        format(state, "\n", NULL);
 
     static const FormatStyle header_styles[] = {{STYLE_BOLD, COLOR_RED},
                                                 {STYLE_BOLD, COLOR_YELLOW},
                                                 {STYLE_BOLD, COLOR_CYAN}};
     static const char *headers[] = {"error", "warning", "note"};
 
-    format(log->state,
+    format(state,
            "{$}{s}{$}: ",
-           (FormatArg[]){{.style = header_styles[msg_type]},
-                         {.s = headers[msg_type]},
+           (FormatArg[]){{.style = header_styles[diag->kind]},
+                         {.s = headers[diag->kind]},
                          {.style = resetStyle}});
-    format(log->state, format_str, args);
-    format(log->state, "\n", NULL);
-    if (fileLoc && fileLoc->fileName) {
-        format(log->state,
-               memcmp(&fileLoc->begin, &fileLoc->end, sizeof(fileLoc->begin))
+    format(state, diag->fmt, diag->args);
+    format(state, "\n", NULL);
+    if (diag->loc.fileName) {
+        format(state,
+               memcmp(&diag->loc.begin, &diag->loc.end, sizeof(diag->loc.begin))
                    ? "  in {$}{s}:{u32}:{u32} (to {u32}:{u32}){$}\n"
                    : "  in {$}{s}:{u32}:{u32}{$}\n",
-               (FormatArg[]){
-                   {.style = locStyle},
-                   {.s = fileLoc->fileName ? fileLoc->fileName : "<unknown>"},
-                   {.u32 = fileLoc->begin.row},
-                   {.u32 = fileLoc->begin.col},
-                   {.u32 = fileLoc->end.row},
-                   {.u32 = fileLoc->end.col},
-                   {.style = resetStyle}});
+               (FormatArg[]){{.style = locStyle},
+                             {.s = diag->loc.fileName},
+                             {.u32 = diag->loc.begin.row},
+                             {.u32 = diag->loc.begin.col},
+                             {.u32 = diag->loc.end.row},
+                             {.u32 = diag->loc.end.col},
+                             {.style = resetStyle}});
         if (log->showDiagnostics)
-            printDiagnostic(log, header_styles[msg_type], fileLoc);
+            printDiagnostic(log, state, header_styles[diag->kind], &diag->loc);
+    }
+}
+
+static void printMessage(Log *log,
+                         DiagnosticKind msg_type,
+                         const FileLoc *fileLoc,
+                         const char *format_str,
+                         const FormatArg *args)
+{
+    Diagnostic diag = {.loc = fileLoc ? *fileLoc : (FileLoc){},
+                       .kind = msg_type,
+                       .fmt = format_str,
+                       .args = args};
+    if (log->handler) {
+        log->handler(&diag, log->handlerCtx);
+    }
+    else {
+        printDiagnosticToConsole(&diag, log);
     }
 }
 
@@ -350,7 +374,7 @@ void logError(Log *log,
               const char *format_str,
               const FormatArg *args)
 {
-    printMessage(log, LOG_ERROR, fileLoc, format_str, args);
+    printMessage(log, dkError, fileLoc, format_str, args);
 }
 
 void logWarning(Log *log,
@@ -358,7 +382,7 @@ void logWarning(Log *log,
                 const char *format_str,
                 const FormatArg *args)
 {
-    printMessage(log, LOG_WARNING, fileLoc, format_str, args);
+    printMessage(log, dkWarning, fileLoc, format_str, args);
 }
 
 void logWarningWithId(Log *log,
@@ -368,7 +392,26 @@ void logWarningWithId(Log *log,
                       const FormatArg *args)
 {
     if (log->enabledWarnings.num & (1 << warningId))
-        printMessage(log, LOG_WARNING, fileLoc, format_str, args);
+        printMessage(log, dkWarning, fileLoc, format_str, args);
+}
+
+void printDiagnosticToConsole(const Diagnostic *diag, void *ctx)
+{
+    Log *log = ctx;
+    FormatState state = newFormatState("", log->ignoreStyles);
+    printDiagnosticToState(&state, diag, ctx);
+    char *msg = formatStateToString(&state);
+    if (diag->kind == dkError)
+        fputs(msg, stderr);
+    else
+        fputs(msg, stdout);
+    freeFormatState(&state);
+}
+
+void printDiagnosticToMemory(const Diagnostic *diag, void *ctx)
+{
+    DiagnosticMemoryPrintCtx *memoryPrintCtx = ctx;
+    printDiagnosticToState(memoryPrintCtx->state, diag, memoryPrintCtx->L);
 }
 
 u64 parseWarningLevels(Log *L, cstring str)
@@ -417,7 +460,7 @@ void logNote(Log *log,
              const char *format_str,
              const FormatArg *args)
 {
-    printMessage(log, LOG_NOTE, fileLoc, format_str, args);
+    printMessage(log, dkNote, fileLoc, format_str, args);
 }
 
 const FileLoc *builtinLoc(void)

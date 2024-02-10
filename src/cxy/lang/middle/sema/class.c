@@ -63,7 +63,7 @@ static void evalClassMembers(AstVisitor *visitor, AstNode *node)
                 node->type = ERROR_TYPE(ctx);
                 return;
             }
-            if (nodeIs(member, Nop)) {
+            if (nodeIs(member, Noop)) {
                 if (prev == NULL) {
                     node->structDecl.members = member->next;
                 }
@@ -94,7 +94,7 @@ static void preCheckClassMembers(AstNode *node, NamedTypeMember *members)
     AstNode *member = node->classDecl.members;
 
     for (u64 i = 0; member; member = member->next, i++) {
-        if (nodeIs(member, Field)) {
+        if (nodeIs(member, FieldDecl)) {
             members[i] = (NamedTypeMember){.name = member->structField.name,
                                            .type = member->type,
                                            .decl = member};
@@ -246,14 +246,14 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
         goto checkClassMembersError;
 
     ((Type *)this)->_this.that = makeClassType(ctx->types,
-                                              getDeclarationName(node),
-                                              members,
-                                              membersCount,
-                                              node,
-                                              base,
-                                              implements,
-                                              implementsCount,
-                                              node->flags & flgTypeApplicable);
+                                               getDeclarationName(node),
+                                               members,
+                                               membersCount,
+                                               node,
+                                               base,
+                                               implements,
+                                               implementsCount,
+                                               node->flags & flgTypeApplicable);
     node->type = this;
 
     implementClassOrStructBuiltins(visitor, node);

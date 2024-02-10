@@ -24,8 +24,9 @@ static inline bool isCallableDecl(AstNode *node)
 static inline bool shouldCaptureSymbol(const AstNode *closure,
                                        const AstNode *symbol)
 {
-    return closure && (nodeIs(symbol, VarDecl) || nodeIs(symbol, FuncParam) ||
-                       nodeIs(symbol, Field));
+    return closure &&
+           (nodeIs(symbol, VarDecl) || nodeIs(symbol, FuncParamDecl) ||
+            nodeIs(symbol, FieldDecl));
 }
 
 static bool captureSymbol(AstNode *closure, AstNode *node, AstNode *symbol)
@@ -36,14 +37,15 @@ static bool captureSymbol(AstNode *closure, AstNode *node, AstNode *symbol)
     AstNode *root = node->path.elements;
     AstNode *parent = symbol->parentScope;
 
-    if (nodeIs(symbol, FuncParam) && parent == closure)
+    if (nodeIs(symbol, FuncParamDecl) && parent == closure)
         return false;
 
     parent = node->parentScope;
     Capture *prev = NULL;
+    bool status = false;
     while (parent && parent != symbol->parentScope) {
         if (nodeIs(parent, ClosureExpr)) {
-            if (nodeIs(symbol, FuncParam) && symbol->parentScope == parent)
+            if (nodeIs(symbol, FuncParamDecl) && symbol->parentScope == parent)
                 break;
 
             // capture in current set
@@ -52,13 +54,14 @@ static bool captureSymbol(AstNode *closure, AstNode *node, AstNode *symbol)
 
             prev = addClosureCapture(&parent->closureExpr.captureSet, symbol);
             root->flags |= flgMember;
-            if (nodeIs(symbol, Field))
+            if (nodeIs(symbol, FieldDecl))
                 prev->flags |= flgMember;
+            status = true;
         }
         parent = parent->parentScope;
     }
 
-    return true;
+    return status;
 }
 
 static AstNode *resolvePathBaseUpChain(BindContext *ctx, AstNode *path)
@@ -595,13 +598,13 @@ void bindAstPhase2(CompilerDriver *driver, Env *env, AstNode *node)
         [astFuncType] = bindFuncType,
         [astFuncDecl] = bindFunctionDecl,
         [astMacroDecl] = bindMacroDecl,
-        [astFuncParam] = bindFuncParam,
+        [astFuncParamDecl] = bindFuncParam,
         [astVarDecl] = bindVarDecl,
         [astTypeDecl] = bindTypeDecl,
         [astUnionDecl] = bindUnionDecl,
-        [astEnumOption] = bindEnumOption,
+        [astEnumOptionDecl] = bindEnumOption,
         [astEnumDecl] = bindEnumDecl,
-        [astField] = bindStructField,
+        [astFieldDecl] = bindStructField,
         [astStructDecl] = bindStructOrClassDecl,
         [astClassDecl] = bindStructOrClassDecl,
         [astInterfaceDecl] = bindInterfaceDecl,

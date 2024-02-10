@@ -12,24 +12,80 @@ struct StrPool;
 
 // clang-format off
 
+#define CXY_LANG_AST_EXP_TAGS(f)            \
+    f(GroupExpr)                            \
+    f(UnaryExpr)                            \
+    f(AddressOf)                            \
+    f(BinaryExpr)                           \
+    f(AssignExpr)                           \
+    f(TernaryExpr)                          \
+    f(StmtExpr)                             \
+    f(StringExpr)                           \
+    f(TypedExpr)                            \
+    f(CastExpr)                             \
+    f(CallExpr)                             \
+    f(MacroCallExpr)                        \
+    f(ClosureExpr)                          \
+    f(ArrayExpr)                            \
+    f(IndexExpr)                            \
+    f(TupleExpr)                            \
+    f(FieldExpr)                            \
+    f(StructExpr)                           \
+    f(MemberExpr)                           \
+    f(RangeExpr)                            \
+    f(NewExpr)                              \
+    f(SpreadExpr)                           \
+    f(BackendCall)                          \
+    f(UnionValueExpr)
+
+#define CXY_LANG_AST_STMT_TAGS(f)           \
+    f(ExprStmt)                             \
+    f(BreakStmt)                            \
+    f(ContinueStmt)                         \
+    f(DeferStmt)                            \
+    f(ReturnStmt)                           \
+    f(BlockStmt)                            \
+    f(IfStmt)                               \
+    f(ForStmt)                              \
+    f(WhileStmt)                            \
+    f(SwitchStmt)                           \
+    f(MatchStmt)                            \
+    f(CaseStmt)
+
+#define CXY_LANG_AST_DECL_TAGS(f)           \
+    f(FuncDecl)                             \
+    f(MacroDecl)                            \
+    f(VarDecl)                              \
+    f(TypeDecl)                             \
+    f(ForwardDecl)                          \
+    f(UnionDecl)                            \
+    f(StructDecl)                           \
+    f(ClassDecl)                            \
+    f(InterfaceDecl)                        \
+    f(ModuleDecl)                           \
+    f(ImportDecl)                           \
+    f(EnumDecl)                             \
+    f(FieldDecl)                            \
+    f(ExternDecl)                           \
+    f(GenericDecl)                          \
+    f(FuncParamDecl)                        \
+    f(EnumOptionDecl)                       \
+
 #define CXY_LANG_AST_TAGS(f) \
     f(Error)                 \
-    f(Nop)                  \
+    f(Noop)                  \
     f(Ref)                  \
     f(Deleted)              \
     f(ComptimeOnly)         \
     f(ClosureCapture)       \
-    f(ExternDecl)           \
     f(Program)              \
     f(Metadata)             \
     f(CCode)                \
     f(Define)               \
     f(Attr)                 \
-    f(PathElem)             \
     f(Path)                 \
-    f(UnionValue)           \
+    f(PathElem)             \
     f(GenericParam)         \
-    f(GenericDecl)          \
     f(Identifier)           \
     f(ImportEntity)         \
     f(DestructorRef)        \
@@ -50,58 +106,9 @@ struct StrPool;
     f(IntegerLit)           \
     f(FloatLit)             \
     f(StringLit)            \
-    f(Declarations)         \
-    f(FuncParam)            \
-    f(FuncDecl)             \
-    f(MacroDecl)            \
-    f(VarDecl)              \
-    f(TypeDecl)             \
-    f(ForwardDecl)           \
-    f(UnionDecl)            \
-    f(EnumOption)           \
-    f(EnumDecl)             \
-    f(Field)                \
-    f(StructDecl)           \
-    f(ClassDecl)            \
-    f(InterfaceDecl)        \
-    f(ModuleDecl)           \
-    f(ImportDecl)           \
-    f(Expressions)          \
-    f(GroupExpr)            \
-    f(UnaryExpr)            \
-    f(AddressOf)            \
-    f(BinaryExpr)           \
-    f(AssignExpr)           \
-    f(TernaryExpr)          \
-    f(StmtExpr)             \
-    f(StringExpr)           \
-    f(TypedExpr)            \
-    f(CastExpr)             \
-    f(CallExpr)             \
-    f(MacroCallExpr)        \
-    f(ClosureExpr)          \
-    f(ArrayExpr)            \
-    f(IndexExpr)            \
-    f(TupleExpr)            \
-    f(FieldExpr)            \
-    f(StructExpr)           \
-    f(MemberExpr)           \
-    f(RangeExpr)            \
-    f(NewExpr)              \
-    f(SpreadExpr)           \
-    f(Statements)           \
-    f(ExprStmt)             \
-    f(BreakStmt)            \
-    f(ContinueStmt)         \
-    f(DeferStmt)            \
-    f(ReturnStmt)           \
-    f(BlockStmt)            \
-    f(IfStmt)               \
-    f(ForStmt)              \
-    f(WhileStmt)            \
-    f(SwitchStmt)           \
-    f(MatchStmt)            \
-    f(CaseStmt)
+    CXY_LANG_AST_EXP_TAGS(f)    \
+    CXY_LANG_AST_STMT_TAGS(f)   \
+    CXY_LANG_AST_DECL_TAGS(f)
 
 // clang-format on
 
@@ -139,6 +146,18 @@ typedef struct {
     MemPool *pool;
     HashTable mapping;
 } CloneAstConfig;
+
+// clang-format off
+#define BACKEND_FUNC_IDS(f)    \
+    f(SizeOf)
+
+// clang-format on
+
+typedef enum {
+#define f(NN) bfi##NN
+    BACKEND_FUNC_IDS(f)
+#undef f
+} BackendFuncId;
 
 #define CXY_AST_NODE_HEAD                                                      \
     AstTag tag;                                                                \
@@ -374,7 +393,6 @@ struct AstNode {
                 struct AstNode *body;
                 struct AstNode *definition;
             };
-            struct AstNode *coroEntry;
         } funcDecl;
 
         struct {
@@ -509,6 +527,11 @@ struct AstNode {
             EvaluateMacro evaluator;
             u32 overload;
         } callExpr, macroCallExpr;
+
+        struct {
+            BackendFuncId func;
+            struct AstNode *args;
+        } backendCallExpr;
 
         struct {
             union {
@@ -880,7 +903,7 @@ AstNode *makeWhileStmt(MemPool *pool,
                        AstNode *condition,
                        AstNode *body,
                        AstNode *next,
-                       const Type *type);
+                       AstNode *update);
 
 AstNode *makeFunctionDecl(MemPool *pool,
                           const FileLoc *loc,
@@ -976,6 +999,13 @@ AstNode *makeIndexExpr(MemPool *pool,
                        AstNode *next,
                        const Type *type);
 
+AstNode *makeBackendCallExpr(MemPool *pool,
+                             const FileLoc *loc,
+                             u64 flags,
+                             BackendFuncId func,
+                             AstNode *args,
+                             const Type *type);
+
 AstNode *makeAstClosureCapture(MemPool *pool, AstNode *captured);
 
 AstNode *makeAstNop(MemPool *pool, const FileLoc *loc);
@@ -1014,18 +1044,13 @@ static inline bool nodeIs_(const AstNode *node, AstTag tag)
 #define hasFlags(ITEM, FLGS) ((ITEM) && ((ITEM)->flags & (FLGS)))
 
 bool isTuple(const AstNode *node);
-
 bool isAssignableExpr(const AstNode *node);
-
 bool isLiteralExpr(const AstNode *node);
-
 bool isEnumLiteral(const AstNode *node);
-
 bool isIntegralLiteral(const AstNode *node);
-
 bool isTypeExpr(const AstNode *node);
-
 bool isBuiltinTypeExpr(const AstNode *node);
+bool isMemberFunction(const AstNode *node);
 
 bool comptimeCompareTypes(const AstNode *lhs, const AstNode *rhs);
 
@@ -1096,6 +1121,7 @@ AstNode *makeTypeReferenceNode2(MemPool *pool,
 AstNode *findInAstNode(AstNode *node, cstring name);
 AstNode *resolvePath(const AstNode *path);
 AstNode *getResolvedPath(const AstNode *path);
+AstNode *getMemberFunctionThis(AstNode *node);
 
 int isInInheritanceChain(const AstNode *node, const AstNode *parent);
 AstNode *getBaseClassAtLevel(AstNode *node, u64 level);
@@ -1136,6 +1162,6 @@ static bool isStructDeclaration(AstNode *node)
                isStructDeclaration(node->genericDecl.decl);
 }
 
-bool isLValueAstNode(const AstNode *node);
-
+bool nodeIsLeftValue(const AstNode *node);
+bool nodeIsNoop(const AstNode *node);
 CCodeKind getCCodeKind(TokenTag tag);

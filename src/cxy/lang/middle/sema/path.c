@@ -151,8 +151,7 @@ static const Type *checkBasePathElement(AstVisitor *visitor,
     else {
         csAssert0(node->pathElement.resolvesTo);
         AstNode *target = node->pathElement.resolvesTo;
-        if (nodeIs(target, Field) ||
-            (nodeIs(target, FuncDecl) && target->funcDecl.this_))
+        if (nodeIs(target, FieldDecl) || isMemberFunction(target))
             node->flags |= (flgMember | flgAddThis);
         return node->type =
                    target->type ?: checkTypeShallow(visitor, target, true);

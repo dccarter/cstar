@@ -15,7 +15,7 @@ void checkTupleExpr(AstVisitor *visitor, AstNode *node)
 
     AstNode *prev = NULL;
     for (u64 i = 0; element; element = element->next, i++) {
-        if (nodeIs(element, Nop)) {
+        if (nodeIs(element, Noop)) {
             if (prev == NULL)
                 node->tupleExpr.elements = element->next;
             else

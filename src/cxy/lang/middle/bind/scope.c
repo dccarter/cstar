@@ -2,12 +2,12 @@
 // Created by Carter on 2023-03-31.
 //
 
-#include "scope.h"
+#include "lang/middle/scope.h"
 
 #include "lang/frontend/flag.h"
 
-#include "builtins.h"
 #include "core/alloc.h"
+#include "lang/middle/builtins.h"
 
 #include <string.h>
 

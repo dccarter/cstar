@@ -85,7 +85,7 @@ static AstNode *getName(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 
     cstring name = NULL;
     switch (node->tag) {
-    case astField:
+    case astFieldDecl:
         name = node->structField.name;
         break;
     case astStructDecl:
@@ -98,7 +98,7 @@ static AstNode *getName(EvalContext *ctx, const FileLoc *loc, AstNode *node)
     case astFuncDecl:
         name = node->funcDecl.name;
         break;
-    case astFuncParam:
+    case astFuncParamDecl:
         name = node->funcParam.name;
         break;
     case astPrimitiveType:
@@ -170,7 +170,7 @@ static AstNode *getTypeInfo(EvalContext *ctx,
                             AstNode *node)
 {
     switch (node->tag) {
-    case astFuncParam:
+    case astFuncParamDecl:
         if (hasFlag(node, Variadic))
             return comptimeWrapped(ctx,
                                    &node->loc,
@@ -440,10 +440,11 @@ static AstNode *isCover(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 
 static AstNode *isField(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 {
-    return makeAstNode(ctx->pool,
-                       loc,
-                       &(AstNode){.tag = astBoolLit,
-                                  .boolLiteral.value = nodeIs(node, Field)});
+    return makeAstNode(
+        ctx->pool,
+        loc,
+        &(AstNode){.tag = astBoolLit,
+                   .boolLiteral.value = nodeIs(node, FieldDecl)});
 }
 
 static void initDefaultMembers(EvalContext *ctx)
@@ -559,7 +560,7 @@ AstNode *evalAstNodeMemberAccess(EvalContext *ctx,
     case astStructDecl:
         table = &structDeclMembers;
         break;
-    case astField:
+    case astFieldDecl:
         table = &fieldDeclMembers;
         break;
     default:

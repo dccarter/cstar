@@ -35,7 +35,7 @@ static i64 getEnumValue(const AstNode *node)
     else
         unreachable("UNSUPPORTED");
 
-    const EnumOption *option = findEnumOption(node->type, name);
+    const EnumOptionDecl *option = findEnumOption(node->type, name);
     csAssert0(option);
 
     return option->value;

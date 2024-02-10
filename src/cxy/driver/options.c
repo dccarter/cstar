@@ -10,38 +10,52 @@
 #include <ctype.h>
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 
-Command(dev,
-        "development mode build, useful when debugging issues",
-        Positionals(),
-        Str(Name("last-stage"),
-            Help("the last compiler stage to execute, e.g "
-                 "'Codegen'"),
-            Def("Codegen")),
-        Opt(Name("print-ast"),
-            Help("prints the AST to standard output or given output file after "
-                 "compilation"),
-            Def("false")),
-        Opt(Name("clean-ast"),
-            Help("Prints the AST exactly as generated without any comments"),
-            Def("false")),
-        Opt(Name("with-location"),
-            Help("Include the node location on the dumped AST"),
-            Def("false")),
-        Opt(Name("without-attrs"),
-            Help("Exclude node attributes when dumping AST"),
-            Def("false")),
-        Opt(Name("with-named-enums"),
-            Help("Use named enums on the when dumping AST"),
-            Def("true")),
-        Str(Name("output"),
-            Sf('o'),
-            Help("path to file to generate code or print AST to (default is "
-                 "stdout)"),
-            Def("")),
-        Opt(Name("print-ir"),
-            Help("prints the generate IR (on supported backends, e.g LLVM)"),
-            Def("false")), );
+typedef struct {
+    cstring name;
+    u64 value;
+} EnumOptionMap;
+
+static EnumOptionMap dumpModes[] = {
+#define ff(NN) {#NN, dmp##NN},
+    DUMP_OPTIONS(ff)
+#undef ff
+};
+#define DUMP_OPTIONS_COUNT (sizeof(dumpModes) / sizeof(EnumOptionMap))
+
+Command(
+    dev,
+    "development mode build, useful when debugging issues",
+    Positionals(),
+    Str(Name("last-stage"),
+        Help("the last compiler stage to execute, e.g "
+             "'Codegen'"),
+        Def("Codegen")),
+    Str(Name("dump-ast"),
+        Help("Dumps the the AST as either JSON, YAML or CXY. Supported values: "
+             "JSON|YAML|CXY"),
+        Def("NONE")),
+    Opt(Name("clean-ast"),
+        Help("Prints the AST exactly as generated without any comments"),
+        Def("false")),
+    Opt(Name("with-location"),
+        Help("Include the node location on the dumped AST"),
+        Def("false")),
+    Opt(Name("without-attrs"),
+        Help("Exclude node attributes when dumping AST"),
+        Def("false")),
+    Opt(Name("with-named-enums"),
+        Help("Use named enums on the when dumping AST"),
+        Def("true")),
+    Str(Name("output"),
+        Sf('o'),
+        Help("path to file to generate code or print AST to (default is "
+             "stdout)"),
+        Def("")),
+    Opt(Name("print-ir"),
+        Help("prints the generate IR (on supported backends, e.g LLVM)"),
+        Def("false")));
 
 Command(build,
         "transpiles the given cxy what file and builds it using gcc",
@@ -67,7 +81,7 @@ Command(build,
 
 #define DEV_CMD_LAYOUT(f, ...)                                                 \
     f(dev.lastStage.str, Local, String, 0, ##__VA_ARGS__)                      \
-    f(dev.printAst, Local, Option, 1, ##__VA_ARGS__)                           \
+    f(dev.dump, Local, String, 1, ##__VA_ARGS__)                                \
     f(dev.cleanAst, Local, Option, 2, ##__VA_ARGS__)                           \
     f(dev.withLocation, Local, Option, 3, ##__VA_ARGS__)                       \
     f(dev.withoutAttrs, Local, Option, 4, ##__VA_ARGS__)                       \
@@ -124,6 +138,23 @@ static void initializeOptions(StrPool *strings, Options *options)
 #endif
 }
 
+static u64 parseEnumOption(
+    Log *L, cstring str, EnumOptionMap *values, u64 len, u64 def)
+{
+    while (*str == '\0')
+        str++;
+    u64 size = 0;
+    while (str[size])
+        size++;
+
+    for (u64 i = 0; i < len; i++) {
+        if (strncmp(str, values[i].name, size) == 0)
+            return values[i].value;
+    }
+
+    return def;
+}
+
 bool parseCommandLineOptions(
     int *argc, char **argv, StrPool *strings, Options *options, Log *log)
 {
@@ -171,7 +202,7 @@ bool parseCommandLineOptions(
     CmdCommand *cmd = parser.cmds[selected];
 
     log->maxErrors = getGlobalInt(cmd, 0);
-    log->state->ignoreStyle = getGlobalOption(cmd, 3);
+    log->ignoreStyles = getGlobalOption(cmd, 3);
 
     if (getGlobalOption(cmd, 2))
         log->enabledWarnings.num = wrnAll;
@@ -190,6 +221,10 @@ bool parseCommandLineOptions(
             return false;
         }
         options->dev.lastStage.num = (u64)log2((f64)options->dev.lastStage.num);
+
+        // parse dump mode
+        options->dev.dumpMode = parseEnumOption(
+            log, options->dev.dump, dumpModes, DUMP_OPTIONS_COUNT, dmpNONE);
     }
     else if (cmd->id == CMD_build) {
         options->cmd = cmdBuild;

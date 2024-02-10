@@ -1,0 +1,77 @@
+// Cxy dump - source: /Users/dccarter/projects/cxy/tests/lang/closure.cxy
+
+
+pub func StringBuilder_op__lshift10(this: StringBuilder, val: i8): StringBuilder {
+  
+  StringBuilder_appendSignedInt(&this, <i64>val)
+  return this
+}
+
+struct __Closure11 {
+  - b: string
+  - x: i8
+}
+
+func __Closure11_op__call(this: __Closure11): String {
+  return ({
+    var sb = ({
+      var s9 = newClass6()
+      StringBuilder_op__init(&s9)
+      s9
+    })
+    StringBuilder_op__lshift10(&StringBuilder_op__lshift7(&StringBuilder_op__lshift7(&sb, this.b), " -> "), this.x)
+    StringBuilder_release(&sb)
+  })
+}
+
+struct __Closure13 {
+  - b: string
+  - x: i8
+}
+
+func __Closure13_op__call(this: __Closure13): String {
+  return ({
+    var sb = ({
+      var s12 = newClass6()
+      StringBuilder_op__init(&s12)
+      s12
+    })
+    StringBuilder_op__lshift10(&StringBuilder_op__lshift7(&StringBuilder_op__lshift7(&sb, this.b), " -> "), this.x)
+    StringBuilder_release(&sb)
+  })
+}
+
+struct __Closure14 {
+  - b: string
+  - x: i8
+}
+
+func __Closure14_op__call(this: __Closure14) {
+  const g = __Closure13{b = b, x = x}
+}
+
+struct __Closure15{ }
+
+func __Closure15_op__call(this: __Closure15) { }
+
+
+func __Closure15__fwd(ptr: &void): void => __Closure15_op__call(<&__Closure15>ptr)
+
+struct __Closure16{ }
+
+func __Closure16_op__call(this: __Closure16) { }
+
+
+func __Closure16__fwd(ptr: &void, msg: string): void => __Closure16_op__call(<&__Closure16>ptr, msg)
+
+func main(args: [string]) {
+  const one = __Closure4{}
+  __Closure4_op__call(&one)
+  __Closure8_op__call(&(__Closure8{}), "User")
+  var x = 100
+  var b = "Hello"
+  __Closure11_op__call(&(__Closure11{b = b, x = x}))
+  const f = __Closure14{b = b, x = x}
+  closureArg0((<&void>&__Closure15{}, __Closure15__fwd))
+  closureArg2((<&void>&__Closure16{}, __Closure16__fwd))
+}

@@ -1,0 +1,20 @@
+// Cxy dump - source: /Users/dccarter/projects/cxy/tests/lang/varargs.cxy
+
+func varargs4(...args: (i8, string, wchar, f64)) { }
+
+
+func add6(...nums: (f32, f64, f64)) {
+  var sum: f32 = 0
+  sum += nums.0
+  sum += nums.1
+  sum += nums.2
+}
+
+func many5(x: i32, ...rest: (f64, f64)) {
+  add6((<f32>x, rest.0, rest.1))
+}
+
+func main(args: [string]) {
+  varargs4((10, "Hello", 'c', 2.000600e+03))
+  many5(10, (1.000000e+01, 1.006000e+02))
+}

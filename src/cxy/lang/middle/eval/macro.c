@@ -8,7 +8,7 @@
  * @date 2023-04-21
  */
 
-#include "macro.h"
+#include "lang/middle/macro.h"
 #include "lang/middle/eval/eval.h"
 
 #include "lang/middle/builtins.h"
@@ -48,7 +48,7 @@ static inline bool validateMacroArgumentCount(EvalContext *ctx,
 }
 
 static void staticLog(AstVisitor *visitor,
-                      LogMsgType lvl,
+                      DiagnosticKind lvl,
                       attr(unused) const AstNode *node,
                       attr(unused) AstNode *args)
 {
@@ -100,13 +100,13 @@ static void staticLog(AstVisitor *visitor,
     }
 
     switch (lvl) {
-    case LOG_NOTE:
+    case dkNote:
         logNote(ctx->L, &node->loc, args->stringLiteral.value, params);
         break;
-    case LOG_ERROR:
+    case dkError:
         logError(ctx->L, &node->loc, args->stringLiteral.value, params);
         break;
-    case LOG_WARNING:
+    case dkWarning:
         logWarning(ctx->L, &node->loc, args->stringLiteral.value, params);
         break;
     }
@@ -118,7 +118,7 @@ static AstNode *makeAstLogErrorNode(AstVisitor *visitor,
                                     attr(unused) const AstNode *node,
                                     attr(unused) AstNode *args)
 {
-    staticLog(visitor, LOG_ERROR, node, args);
+    staticLog(visitor, dkError, node, args);
     return NULL;
 }
 
@@ -126,8 +126,8 @@ static AstNode *makeAstLogWarningNode(AstVisitor *visitor,
                                       attr(unused) const AstNode *node,
                                       attr(unused) AstNode *args)
 {
-    staticLog(visitor, LOG_WARNING, node, args);
-    args->tag = astNop;
+    staticLog(visitor, dkWarning, node, args);
+    args->tag = astNoop;
     return args;
 }
 
@@ -135,8 +135,8 @@ static AstNode *makeAstLogNoteNode(AstVisitor *visitor,
                                    attr(unused) const AstNode *node,
                                    attr(unused) AstNode *args)
 {
-    staticLog(visitor, LOG_NOTE, node, args);
-    args->tag = astNop;
+    staticLog(visitor, dkNote, node, args);
+    args->tag = astNoop;
     return args;
 }
 
@@ -197,26 +197,17 @@ static AstNode *makeSizeofNode(AstVisitor *visitor,
     if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
         return NULL;
 
-    AstNode *sizeOf = findBuiltinDecl(S_CXY__builtins_sizeof);
-    csAssert0(sizeOf);
     const Type *type = args->type ?: evalType(ctx, args);
     csAssert0(type);
     args->tag = astTypeRef;
-    args->type = type;
+    args->type = makeTypeInfo(ctx->types, type);
 
-    return makeCallExpr(ctx->pool,
-                        &node->loc,
-                        makeResolvedPath(ctx->pool,
-                                         &node->loc,
-                                         S_CXY__builtins_sizeof,
-                                         node->callExpr.callee->flags,
-                                         sizeOf,
-                                         NULL,
-                                         sizeOf->type),
-                        args,
-                        node->flags,
-                        NULL,
-                        sizeOf->type->func.retType);
+    return makeBackendCallExpr(ctx->pool,
+                               &node->loc,
+                               flgNone,
+                               bfiSizeOf,
+                               args,
+                               getPrimitiveType(ctx->types, prtU64));
 }
 
 static AstNode *makeAstIdentifierNode(AstVisitor *visitor,
@@ -395,7 +386,7 @@ static AstNode *makeLenNode(AstVisitor *visitor,
 
     case typStruct: {
         const NamedTypeMember *symbol = findStructMember(raw, S_len);
-        if (symbol && nodeIs(symbol->decl, Field) &&
+        if (symbol && nodeIs(symbol->decl, FieldDecl) &&
             isUnsignedType(symbol->type)) {
             return makeAstNode(
                 ctx->pool,
@@ -548,7 +539,7 @@ static AstNode *makeUncheckedNode(AstVisitor *visitor,
                     .expr = expr,
                     .to = makeAstNode(ctx->pool,
                                       &expr->loc,
-                                      &(AstNode){.tag = astNop,
+                                      &(AstNode){.tag = astNoop,
                                                  .type = type->info.target})}});
 
     return expr;
@@ -800,8 +791,8 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "is_struct", makeIsStructNode},
     {.name = "len", makeLenNode},
     {.name = "line", makeLineNumberNode},
-    {.name = "mkIdent", makeAstIdentifierNode},
-    {.name = "mkInteger", makeAstIntegerNode},
+    {.name = "mk_ident", makeAstIdentifierNode},
+    {.name = "mk_integer", makeAstIntegerNode},
     {.name = "ptroff", makePointerOfNode},
     {.name = "sizeof", makeSizeofNode},
     {.name = "typeat", makeTypeAtIdxNode},

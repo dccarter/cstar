@@ -62,11 +62,15 @@ FetchContent_MakeAvailable(libyaml)
 
 cmake_policy(POP)
 
-include_directories(src/cxy)
+include_directories(
+        src/cxy
+        src/3rdParty
+)
 
 add_executable(amalgamate
         src/tools/amalgamate.c
-        src/cxy/core/utils.c)
+        src/cxy/core/utils.c
+)
 
 target_compile_definitions(amalgamate PRIVATE -DNO_EXEC_UTIL)
 
@@ -77,7 +81,7 @@ CxyAmalgamate(builtins
 
 
 set(CXY_3RD_PARTY_SOURCES
-        src/cxy/3rdparty/cJSON.c)
+        src/3rdParty/cJSON.c)
 
 set(CXY_CORE_SOURCES
         src/cxy/core/args.c
@@ -93,7 +97,7 @@ set(CXY_CORE_SOURCES
         src/cxy/core/utils.c)
 
 set(CXY_3RD_PARTY_SOURCES
-        src/cxy/3rdParty/cJSON.c)
+        src/3rdParty/cJSON.c)
 
 set(CXY_FRONTEND_SOURCES
         src/cxy/lang/frontend/ast.c
@@ -110,38 +114,38 @@ set(CXY_FRONTEND_SOURCES
 
 set(CXY_MIDDLE_SOURCES
         src/cxy/lang/middle/builtins.c
-        src/cxy/lang/middle/macro.c
-        src/cxy/lang/middle/scope.c
+        src/cxy/lang/middle/eval/macro.c
+        src/cxy/lang/middle/bind/scope.c
 
-        src/cxy/lang/middle/check/array.c
-        src/cxy/lang/middle/check/assign.c
-        src/cxy/lang/middle/check/binary.c
-        src/cxy/lang/middle/check/builtins.c
-        src/cxy/lang/middle/check/call.c
-        src/cxy/lang/middle/check/cast.c
-        src/cxy/lang/middle/check/check.c
-        src/cxy/lang/middle/check/class.c
-        src/cxy/lang/middle/check/closure.c
-        src/cxy/lang/middle/check/defaults.c
-        src/cxy/lang/middle/check/enum.c
-        src/cxy/lang/middle/check/for.c
-        src/cxy/lang/middle/check/function.c
-        src/cxy/lang/middle/check/generics.c
-        src/cxy/lang/middle/check/if.c
-        src/cxy/lang/middle/check/index.c
-        src/cxy/lang/middle/check/interface.c
-        src/cxy/lang/middle/check/match.c
-        src/cxy/lang/middle/check/member.c
-        src/cxy/lang/middle/check/module.c
-        src/cxy/lang/middle/check/new.c
-        src/cxy/lang/middle/check/node.c
-        src/cxy/lang/middle/check/path.c
-        src/cxy/lang/middle/check/struct.c
-        src/cxy/lang/middle/check/switch.c
-        src/cxy/lang/middle/check/tuple.c
-        src/cxy/lang/middle/check/type.c
-        src/cxy/lang/middle/check/unary.c
-        src/cxy/lang/middle/check/variables.c
+        src/cxy/lang/middle/sema/array.c
+        src/cxy/lang/middle/sema/assign.c
+        src/cxy/lang/middle/sema/binary.c
+        src/cxy/lang/middle/sema/builtins.c
+        src/cxy/lang/middle/sema/call.c
+        src/cxy/lang/middle/sema/cast.c
+        src/cxy/lang/middle/sema/check.c
+        src/cxy/lang/middle/sema/class.c
+        src/cxy/lang/middle/sema/closure.c
+        src/cxy/lang/middle/sema/defaults.c
+        src/cxy/lang/middle/sema/enum.c
+        src/cxy/lang/middle/sema/for.c
+        src/cxy/lang/middle/sema/function.c
+        src/cxy/lang/middle/sema/generics.c
+        src/cxy/lang/middle/sema/if.c
+        src/cxy/lang/middle/sema/index.c
+        src/cxy/lang/middle/sema/interface.c
+        src/cxy/lang/middle/sema/match.c
+        src/cxy/lang/middle/sema/member.c
+        src/cxy/lang/middle/sema/module.c
+        src/cxy/lang/middle/sema/new.c
+        src/cxy/lang/middle/sema/node.c
+        src/cxy/lang/middle/sema/path.c
+        src/cxy/lang/middle/sema/struct.c
+        src/cxy/lang/middle/sema/switch.c
+        src/cxy/lang/middle/sema/tuple.c
+        src/cxy/lang/middle/sema/type.c
+        src/cxy/lang/middle/sema/unary.c
+        src/cxy/lang/middle/sema/variables.c
 
         src/cxy/lang/middle/eval/binary.c
         src/cxy/lang/middle/eval/comptime.c
@@ -160,18 +164,18 @@ set(CXY_MIDDLE_SOURCES
 
         src/cxy/lang/middle/dump/json.c
         src/cxy/lang/middle/dump/yaml.c
+        src/cxy/lang/middle/dump/cxy.c
 
         src/cxy/lang/middle/shake/closure.c
-        src/cxy/lang/middle/shake/shake.c)
+        src/cxy/lang/middle/shake/shake.c
+
+        src/cxy/lang/middle/simplify/simplify.c)
 
 set(CXY_LANG_BACKEND_SOURCES
-        src/cxy/lang/backend/llvm/array.cpp
-        src/cxy/lang/backend/llvm/backend.cpp
-        src/cxy/lang/backend/llvm/binary.cpp
+        src/cxy/lang/backend/init.cpp
+
         src/cxy/lang/backend/llvm/generate.cpp
-        src/cxy/lang/backend/llvm/context.cpp
-        src/cxy/lang/backend/llvm/for.cpp
-        src/cxy/lang/backend/llvm/simplify.c)
+)
 
 set(CXY_DRIVER_SOURCES
         src/cxy/driver/driver.c

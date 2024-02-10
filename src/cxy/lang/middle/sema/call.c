@@ -74,7 +74,7 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
     if (typeIs(node->type, Error))
         return;
 
-    if (nodeIs(node->callExpr.args, Nop))
+    if (nodeIs(node->callExpr.args, Noop))
         node->callExpr.args = args->next;
     args = node->callExpr.args;
     u64 argsCount = countAstNodes(args);
@@ -137,14 +137,6 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
             arg->next = copyAstNode(ctx->pool, param->funcParam.def);
             arg = arg->next;
         }
-    }
-
-    if (hasFlag(callee_->func.decl, Async)) {
-        AstNode *decl = callee_->func.decl;
-        bool callSync = hasFlag(node, SyncCall);
-        //        if (!callSync && decl->funcDecl.coroEntry != NULL) {
-        //            makeAsyncLaunchCall(visitor, callee_, node);
-        //        }
     }
 }
 

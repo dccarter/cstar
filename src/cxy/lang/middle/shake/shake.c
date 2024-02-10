@@ -32,10 +32,9 @@ static AstNode *makeTupleMemberExpr(ShakeAstContext *ctx, AstNode *tuple, u64 i)
         return NULL;
 
     if (nodeIs(tuple, TupleExpr)) {
-        AstNode *arg = tuple->tupleExpr.elements;
-        tuple->tupleExpr.elements = arg->next;
-        arg->next = NULL;
-        return arg;
+        // TODO collect
+        AstNode *arg = getNodeAtIndex(tuple->tupleExpr.elements, i);
+        return duplicateAstNode(ctx->pool, arg);
     }
 
     AstNode *target = NULL;

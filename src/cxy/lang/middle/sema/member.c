@@ -30,7 +30,7 @@ static const Type *determineMemberTargetType(TypingContext *ctx,
         break;
     case astCaseStmt:
         return determineMemberTargetType(ctx, parent->parentScope, node);
-    case astFuncParam:
+    case astFuncParamDecl:
         type = parent->funcParam.type->type;
         break;
     case astFieldExpr:

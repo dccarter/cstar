@@ -208,7 +208,7 @@ static void checkDeferStmt(AstVisitor *visitor, AstNode *node)
     if (!block->blockStmt.returned) {
         expr->flags |= flgDeferred;
         insertAstNode(&block->blockStmt.epilogue, expr);
-        node->tag = astNop;
+        node->tag = astNoop;
         clearAstBody(node);
     }
 
@@ -316,7 +316,7 @@ static void checkSpreadExpr(AstVisitor *visitor, AstNode *node)
     }
 
     if (type->tuple.count == 0) {
-        node->tag = astNop;
+        node->tag = astNoop;
         // node->type = makeTupleType(ctx->types, NULL, 0, flgNone);
         return;
     }
@@ -351,7 +351,8 @@ static void checkSpreadExpr(AstVisitor *visitor, AstNode *node)
 
     it->next = node->next;
     *node = *parts;
-    addBlockLevelDeclaration(ctx, variable);
+    if (variable != expr)
+        addBlockLevelDeclaration(ctx, variable);
 }
 
 static void checkExprStmt(AstVisitor *visitor, AstNode *node)
@@ -592,13 +593,13 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astIdentifier] = checkIdentifier,
         [astPath] = checkPath,
         [astFuncDecl] = checkFunctionDecl,
-        [astFuncParam] = checkFunctionParam,
+        [astFuncParamDecl] = checkFunctionParam,
         [astVarDecl] = checkVarDecl,
         [astTypeDecl] = checkTypeDecl,
         [astUnionDecl] = checkUnionDecl,
         [astEnumDecl] = checkEnumDecl,
         [astGenericDecl] = checkGenericDecl,
-        [astField] = checkField,
+        [astFieldDecl] = checkField,
         [astStructDecl] = checkStructDecl,
         [astClassDecl] = checkClassDecl,
         [astInterfaceDecl] = checkInterfaceDecl,

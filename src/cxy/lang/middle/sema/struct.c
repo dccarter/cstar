@@ -23,7 +23,7 @@ static void evaluateStructMembers(AstVisitor *visitor, AstNode *node)
                 node->type = ERROR_TYPE(ctx);
                 return;
             }
-            if (nodeIs(member, Nop)) {
+            if (nodeIs(member, Noop)) {
                 if (prev == NULL) {
                     node->structDecl.members = member->next;
                 }
@@ -64,7 +64,7 @@ static void preCheckStructMembers(AstNode *node, NamedTypeMember *members)
 {
     AstNode *member = node->structDecl.members;
     for (u64 i = 0; member; member = member->next, i++) {
-        if (nodeIs(member, Field)) {
+        if (nodeIs(member, FieldDecl)) {
             members[i] = (NamedTypeMember){.name = member->structField.name,
                                            .type = member->type,
                                            .decl = member};
@@ -195,7 +195,7 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
             continue;
         }
 
-        if (!nodeIs(member->decl, Field)) {
+        if (!nodeIs(member->decl, FieldDecl)) {
             logError(
                 ctx->L,
                 &field->loc,
@@ -227,7 +227,7 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
 
     for (u64 i = 0; i < striped->tStruct.members->count; i++) {
         const AstNode *targetField = striped->tStruct.members->members[i].decl;
-        if (initialized[i] || !nodeIs(targetField, Field))
+        if (initialized[i] || !nodeIs(targetField, FieldDecl))
             continue;
 
         if (targetField->structField.value == NULL) {

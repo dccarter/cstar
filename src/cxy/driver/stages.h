@@ -18,8 +18,7 @@ struct CompilerDriver;
     f(Bind,             "Bind")                        \
     f(ConstCheck,       "Const Check")                 \
     f(TypeCheck,        "Type Check")                  \
-    f(Desugar,          "De-sugar")                    \
-    f(Optimization,     "Optimization")                \
+    f(Simplify,         "Simplify")                    \
     f(MemoryMgmt,       "Memory Management")           \
     f(Finalize,         "Finalize")                    \
     f(Codegen,          "Code Gen")                    \

@@ -357,3 +357,6 @@ class StringBuilder {
         return tmp
     }
 }
+
+@inline
+pub func newClass[T]() => __cxy_alloc(sizeof!(#T)) : T

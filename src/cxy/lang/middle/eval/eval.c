@@ -5,8 +5,8 @@
 #include "eval.h"
 
 #include "lang/frontend/flag.h"
-#include "lang/frontend/ttable.h"
 #include "lang/frontend/strings.h"
+#include "lang/frontend/ttable.h"
 
 static bool comptimeCompareManyTypes(const AstNode *lhs, const AstNode *rhs)
 {
@@ -115,7 +115,7 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
                               ?: makeAstNop(ctx->pool, &replacement->loc);
         replacement->parentScope = node->parentScope;
         clearAstBody(node);
-        node->tag = astNop;
+        node->tag = astNoop;
         node->flags &= ~flgComptime;
         node->next = replacement;
         getLastAstNode(replacement)->next = next;
@@ -130,7 +130,7 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
         // select next statement, reclaim if branch
         replacement->parentScope = node->parentScope;
         clearAstBody(node);
-        node->tag = astNop;
+        node->tag = astNoop;
         node->flags &= ~flgComptime;
         node->next = replacement;
         getLastAstNode(replacement)->next = next;
@@ -138,7 +138,7 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
     else {
         // select next statement, reclaim if branch
         clearAstBody(node);
-        node->tag = astNop;
+        node->tag = astNoop;
         node->flags &= ~flgComptime;
     }
 
@@ -181,7 +181,7 @@ void evalAssignExpr(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    node->tag = astNop;
+    node->tag = astNoop;
     if (node->assignExpr.op == opAssign) {
         resolved->varDecl.init = right;
         return;

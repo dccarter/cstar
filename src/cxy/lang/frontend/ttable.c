@@ -302,8 +302,8 @@ static int sortCompareStructMember(const void *lhs, const void *rhs)
 
 static int sortCompareEnumOption(const void *lhs, const void *rhs)
 {
-    const EnumOption *left = *((const EnumOption **)lhs),
-                     *right = *((const EnumOption **)rhs);
+    const EnumOptionDecl *left = *((const EnumOptionDecl **)lhs),
+                         *right = *((const EnumOptionDecl **)rhs);
     return left->name == right->name ? 0 : strcmp(left->name, right->name);
 }
 
@@ -656,19 +656,20 @@ const Type *makeEnum(TypeTable *table, const Type *init)
     if (!ret.f) {
         Type *tEnum = (Type *)ret.s;
         tEnum->tEnum.options = allocFromMemPool(
-            table->memPool, sizeof(EnumOption) * init->tEnum.optionsCount);
+            table->memPool, sizeof(EnumOptionDecl) * init->tEnum.optionsCount);
         memcpy(tEnum->tEnum.options,
                init->tEnum.options,
-               sizeof(EnumOption) * init->tEnum.optionsCount);
+               sizeof(EnumOptionDecl) * init->tEnum.optionsCount);
 
         tEnum->tEnum.sortedOptions = allocFromMemPool(
-            table->memPool, sizeof(EnumOption *) * init->tEnum.optionsCount);
+            table->memPool,
+            sizeof(EnumOptionDecl *) * init->tEnum.optionsCount);
         for (u64 i = 0; i < init->tEnum.optionsCount; i++)
             tEnum->tEnum.sortedOptions[i] = &tEnum->tEnum.options[i];
 
         qsort(tEnum->tEnum.sortedOptions,
               tEnum->tEnum.optionsCount,
-              sizeof(EnumOption *),
+              sizeof(EnumOptionDecl *),
               sortCompareEnumOption);
     }
 

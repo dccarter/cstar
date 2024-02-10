@@ -75,6 +75,7 @@ typedef struct FormatState {
 static const FormatStyle resetStyle = {STYLE_NORMAL, COLOR_NORMAL};
 static const FormatStyle errorStyle = {STYLE_BOLD, COLOR_RED};
 static const FormatStyle literalStyle = {STYLE_NORMAL, COLOR_MAGENTA};
+static const FormatStyle stringStyle = {STYLE_NORMAL, COLOR_GREEN};
 static const FormatStyle keywordStyle = {STYLE_BOLD, COLOR_BLUE};
 static const FormatStyle commentStyle = {STYLE_NORMAL, COLOR_GREEN};
 static const FormatStyle ellipsisStyle = {STYLE_NORMAL, COLOR_WHITE};
@@ -88,6 +89,7 @@ void append(FormatState *, const char *s, size_t bytes);
 void printWithStyle(FormatState *, const char *, FormatStyle);
 void printKeyword(FormatState *, const char *);
 void printUtf8(FormatState *state, uint32_t, bool);
+void printEscapedChar(FormatState *state, char chr);
 void writeFormatState(const FormatState *, FILE *);
 char *formatStateToString(FormatState *);
 

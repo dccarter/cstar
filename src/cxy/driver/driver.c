@@ -170,7 +170,7 @@ static inline bool hasDumpEnable(const Options *opts, const AstNode *node)
 {
     if (opts->cmd == cmdDev) {
         return !hasFlag(node, BuiltinsModule) &&
-               (opts->dev.printAst || opts->dev.printIR);
+               ((opts->dev.dumpMode != dmpCOUNT) || opts->dev.printIR);
     }
     return false;
 }

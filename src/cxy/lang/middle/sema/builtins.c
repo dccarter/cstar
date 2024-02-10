@@ -123,7 +123,7 @@ static void implementStructCopyFunction(AstVisitor *visitor,
     AstNodeList stmts = {NULL};
     bool refMembers = false;
     for (; member; member = member->next) {
-        if (!nodeIs(member, Field))
+        if (!nodeIs(member, FieldDecl))
             continue;
 
         const Type *type = member->type;
@@ -211,7 +211,7 @@ static void implementDestructorFunction(AstVisitor *visitor,
     }
 
     for (; member; member = member->next) {
-        if (!nodeIs(member, Field))
+        if (!nodeIs(member, FieldDecl))
             continue;
 
         const Type *type = member->type;

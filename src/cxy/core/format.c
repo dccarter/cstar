@@ -170,6 +170,8 @@ static const char *formatArg(FormatState *state,
             ptr++;
             write(state, arg->s, args[(*index)++].len);
         }
+        else if (*ptr == 'E') {
+        }
         else
             writeStr(state, arg->s);
         break;
@@ -330,6 +332,35 @@ void printWithStyle(FormatState *state, const char *str, FormatStyle style)
 void printKeyword(FormatState *state, const char *keyword)
 {
     printWithStyle(state, keyword, keywordStyle);
+}
+
+void printEscapedChar(FormatState *state, char chr)
+{
+    switch (chr) {
+    case '\0':
+        writeStr(state, "\\0");
+        return;
+    case '\n':
+        writeStr(state, "\\n");
+        return;
+    case '\t':
+        writeStr(state, "\\t");
+        return;
+    case '\v':
+        writeStr(state, "\\v");
+        return;
+    case '\r':
+        writeStr(state, "\\r");
+        return;
+    case '\a':
+        writeStr(state, "\\a");
+        return;
+    case '\b':
+        writeStr(state, "\\b");
+        return;
+    default:
+        writeChar(state, chr);
+    }
 }
 
 void printUtf8(FormatState *state, uint32_t chr, bool escaped)
