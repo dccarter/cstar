@@ -195,6 +195,7 @@ typedef struct Type {
         struct {
             u64 count;
             UnionMember *members;
+            void *codegenTag;
         } tUnion;
 
         struct {
@@ -294,6 +295,7 @@ bool isVoidPointer(const Type *type);
 bool isClassType(const Type *type);
 bool isStructType(const Type *type);
 bool isTupleType(const Type *type);
+bool isUnionType(const Type *type);
 bool isConstType(const Type *type);
 
 bool hasReferenceMembers(const Type *type);

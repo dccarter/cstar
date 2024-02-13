@@ -167,7 +167,7 @@ static AstNode *makeLineNumberNode(AstVisitor *visitor,
 
     return makeAstNode(
         ctx->pool,
-        builtinLoc(),
+        &node->loc,
         &(AstNode){.tag = astIntegerLit,
                    .type = getPrimitiveType(ctx->types, prtU64),
                    .intLiteral.uValue = visitor->current->loc.begin.row});
@@ -183,7 +183,7 @@ static AstNode *makeColumnNumberNode(AstVisitor *visitor,
 
     return makeAstNode(
         ctx->pool,
-        builtinLoc(),
+        &node->loc,
         &(AstNode){.tag = astIntegerLit,
                    .type = getPrimitiveType(ctx->types, prtU64),
                    .intLiteral.uValue = visitor->current->loc.begin.col});
@@ -479,29 +479,26 @@ static AstNode *makeAssertNode(AstVisitor *visitor,
                  (FormatArg[]){{.t = type}});
     }
 
-    AstNode *builtinAssert = findBuiltinDecl(S_CXY__builtins_assert);
+    AstNode *builtinAssert = findBuiltinDecl(S___cxy_assert);
     csAssert0(builtinAssert);
     AstNode *next = args;
     next = next->next = makeFilenameNode(visitor, node, NULL);
     next = next->next = makeLineNumberNode(visitor, node, NULL);
     next->next = makeColumnNumberNode(visitor, node, NULL);
 
-    return makeAstNode(
-        ctx->pool,
-        &node->loc,
-        &(AstNode){
-            .tag = astCallExpr,
-            .flags = node->flags,
-            .type = builtinAssert->type->func.retType,
-            .callExpr = {
-                .callee = makeAstNode(
-                    ctx->pool,
-                    &node->macroCallExpr.callee->loc,
-                    &(AstNode){.tag = astIdentifier,
-                               .flags = node->macroCallExpr.callee->flags,
-                               .type = builtinAssert->type,
-                               .ident.value = S_CXY__builtins_assert}),
-                .args = args}});
+    return makeCallExpr(ctx->pool,
+                        &node->loc,
+                        makeResolvedIdentifier(ctx->pool,
+                                               &node->loc,
+                                               S___cxy_assert,
+                                               0,
+                                               builtinAssert,
+                                               NULL,
+                                               builtinAssert->type),
+                        args,
+                        node->flags,
+                        NULL,
+                        builtinAssert->type->func.retType);
 }
 
 static AstNode *makeUncheckedNode(AstVisitor *visitor,

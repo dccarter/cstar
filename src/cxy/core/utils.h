@@ -145,8 +145,8 @@ extern "C" {
 
 #define attr(A, ...) CXY_PASTE(cxy_, A)(__VA_ARGS__)
 
-#ifndef cxy_ALIGN
-#define cxy_ALIGN(S, A) (((S) + ((A)-1)) & ~((A)-1))
+#ifndef CXY_ALIGN
+#define CXY_ALIGN(S, A) (((S) + ((A)-1)) & ~((A)-1))
 #endif
 
 typedef uint8_t u8;

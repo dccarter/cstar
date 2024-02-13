@@ -16,17 +16,9 @@ static const Type *createStructForClosure(AstVisitor *visitor, AstNode *node)
 
     for (u64 i = 0; i < node->closureExpr.captureCount; i++) {
         Capture *capture = &node->closureExpr.capture[i];
-        insertAstNode(
-            &members,
-            makeStructField(ctx->pool,
-                            &capture->node->loc,
-                            getCapturedNodeName(capture->node),
-                            flgPrivate | capture->node->flags | flgMember,
-                            makeTypeReferenceNode(ctx->pool,
-                                                  capture->node->type,
-                                                  &capture->node->loc),
-                            NULL,
-                            NULL));
+        AstNode *field = capture->field;
+        capture->field = NULL;
+        insertAstNode(&members, field);
     }
 
     AstNode *func = insertAstNode(&members,
@@ -36,7 +28,7 @@ static const Type *createStructForClosure(AstVisitor *visitor, AstNode *node)
                                                    node->closureExpr.params,
                                                    node->closureExpr.ret,
                                                    node->closureExpr.body,
-                                                   flgNone,
+                                                   flgPublic,
                                                    NULL,
                                                    NULL));
 
@@ -49,20 +41,24 @@ static const Type *createStructForClosure(AstVisitor *visitor, AstNode *node)
                                                   ctx->strings, "__Closure"),
                                               .members = members.first}});
 
-    func->funcDecl.this_ =
-        makeFunctionParam(ctx->pool,
-                          &func->loc,
-                          S_this,
-                          makeResolvedPath(ctx->pool,
-                                           &func->loc,
-                                           closure->structDecl.name,
-                                           flgNone,
-                                           closure,
-                                           func->funcDecl.signature->params,
-                                           NULL),
-                          NULL,
-                          flgNone,
-                          NULL);
+    AstNode *thisType = makeResolvedPath(ctx->pool,
+                                         &func->loc,
+                                         closure->structDecl.name,
+                                         flgNone,
+                                         closure,
+                                         func->funcDecl.signature->params,
+                                         NULL);
+    func->funcDecl.this_ = makeFunctionParam(
+        ctx->pool,
+        &func->loc,
+        S_this,
+        nodeIs(closure, ClassDecl)
+            ? thisType
+            : makePointerAstNode(
+                  ctx->pool, &func->loc, flgNone, thisType, NULL, NULL),
+        NULL,
+        flgNone,
+        NULL);
     AstNode *it = members.first;
     for (; it; it = it->next) {
         it->parentScope = closure;
@@ -86,22 +82,25 @@ static void transformClosureToStructExpr(AstVisitor *visitor,
     for (u64 i = 0; i < node->closureExpr.captureCount; i++) {
         Capture *capture = &node->closureExpr.capture[i];
         cstring name = getCapturedNodeName(capture->node);
-        insertAstNode(&fields,
-                      // file: value
-                      makeFieldExpr(ctx->pool,
-                                    &capture->node->loc,
-                                    name,
-                                    flgPrivate | capture->node->flags,
-                                    // value
-                                    makeResolvedPath(ctx->pool,
-                                                     &node->loc,
-                                                     name,
-                                                     capture->node->flags |
-                                                         capture->flags,
-                                                     capture->node,
-                                                     NULL,
-                                                     capture->node->type),
-                                    NULL));
+        insertAstNode(
+            &fields,
+            // file: value
+            makeFieldExpr(ctx->pool,
+                          &capture->node->loc,
+                          name,
+                          flgPrivate | capture->node->flags,
+                          // value
+                          makeResolvedPath(
+                              ctx->pool,
+                              &node->loc,
+                              name,
+                              capture->node->flags | capture->flags |
+                                  (nodeIs(capture->node, FieldDecl) ? flgAddThis
+                                                                    : flgNone),
+                              capture->node,
+                              NULL,
+                              capture->node->type),
+                          NULL));
     }
 
     clearAstBody(node);
@@ -294,6 +293,15 @@ void checkClosureExpr(AstVisitor *visitor, AstNode *node)
         }
 
         defaultValues += (param->funcParam.def != NULL);
+    }
+
+    // Bind closed in fields
+    for (u64 i = 0; i < node->closureExpr.captureCount; i++) {
+        Capture *capture = &node->closureExpr.capture[i];
+        AstNode *field = capture->field;
+        field->structField.type = makeTypeReferenceNode(
+            ctx->pool, capture->node->type, &capture->node->loc);
+        field->type = capture->node->type;
     }
 
     if (typeIs(type, Error)) {

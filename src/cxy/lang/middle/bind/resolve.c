@@ -29,20 +29,23 @@ static inline bool shouldCaptureSymbol(const AstNode *closure,
             nodeIs(symbol, FieldDecl));
 }
 
-static bool captureSymbol(AstNode *closure, AstNode *node, AstNode *symbol)
+static AstNode *captureSymbol(BindContext *ctx,
+                              AstNode *closure,
+                              AstNode *node,
+                              AstNode *symbol)
 {
     if (!shouldCaptureSymbol(closure, symbol))
-        return false;
+        return NULL;
 
     AstNode *root = node->path.elements;
     AstNode *parent = symbol->parentScope;
 
     if (nodeIs(symbol, FuncParamDecl) && parent == closure)
-        return false;
+        return NULL;
 
     parent = node->parentScope;
     Capture *prev = NULL;
-    bool status = false;
+    AstNode *captured = NULL;
     while (parent && parent != symbol->parentScope) {
         if (nodeIs(parent, ClosureExpr)) {
             if (nodeIs(symbol, FuncParamDecl) && symbol->parentScope == parent)
@@ -56,12 +59,22 @@ static bool captureSymbol(AstNode *closure, AstNode *node, AstNode *symbol)
             root->flags |= flgMember;
             if (nodeIs(symbol, FieldDecl))
                 prev->flags |= flgMember;
-            status = true;
+            if (prev->field == NULL) {
+                prev->field = makeStructField(ctx->pool,
+                                              &symbol->loc,
+                                              getCapturedNodeName(symbol),
+                                              (symbol->flags & flgConst) |
+                                                  flgPrivate | flgMember,
+                                              NULL,
+                                              NULL,
+                                              NULL);
+            }
+            captured = prev->field;
         }
         parent = parent->parentScope;
     }
 
-    return status;
+    return captured;
 }
 
 static AstNode *resolvePathBaseUpChain(BindContext *ctx, AstNode *path)
@@ -143,9 +156,12 @@ void bindPath(AstVisitor *visitor, AstNode *node)
 
         // capture symbol if in closure
         base->pathElement.resolvesTo = resolved;
-        if (captureSymbol(
-                ctx->currentClosure, node, base->pathElement.resolvesTo))
+        resolved = captureSymbol(
+            ctx, ctx->currentClosure, node, base->pathElement.resolvesTo);
+        if (resolved) {
+            base->pathElement.resolvesTo = resolved;
             node->flags |= flgAddThis;
+        }
     }
     else {
         cstring keyword = base->pathElement.name;

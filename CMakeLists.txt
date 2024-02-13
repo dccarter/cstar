@@ -172,8 +172,10 @@ set(CXY_MIDDLE_SOURCES
         src/cxy/lang/middle/simplify/simplify.c)
 
 set(CXY_LANG_BACKEND_SOURCES
-        src/cxy/lang/backend/init.cpp
-
+        src/cxy/lang/backend/llvm/array.cpp
+        src/cxy/lang/backend/llvm/binary.cpp
+        src/cxy/lang/backend/llvm/context.cpp
+        src/cxy/lang/backend/llvm/llvm.cpp
         src/cxy/lang/backend/llvm/generate.cpp
 )
 
@@ -196,10 +198,12 @@ add_executable(cxy
 # Find the libraries that correspond to the LLVM components
 # that we wish to use
 llvm_map_components_to_libnames(llvm_libs
+        ${LLVM_TARGETS_TO_BUILD}
         Analysis
         Core
         Linker
         TransformUtils
+        CodeGen
 )
 
 message(STATUS ${llvm_libs})
@@ -226,5 +230,4 @@ add_custom_target(
 )
 
 add_dependencies(cxy cxy-stdlib)
-
-
+target_link_options(cxy PRIVATE LINKER:-no_warn_duplicate_libraries)

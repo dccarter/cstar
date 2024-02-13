@@ -1,27 +1,53 @@
 // Cxy dump - source: /Users/dccarter/projects/cxy/tests/lang/closure.cxy
 
+func closureArg0(fn: (&void, func(_: &void) -> void)) {
+  fn.1(fn.0)
+}
 
-pub func StringBuilder_op__lshift10(this: StringBuilder, val: i8): StringBuilder {
-  
-  StringBuilder_appendSignedInt(&this, <i64>val)
+func closureArg1(msg: string, fn: (&void, func(_: &void, msg: string) -> void)) {
+  fn.1(fn.0, msg)
+}
+
+func closureArg2(fn: (&void, func(_: &void, msg: string) -> void)) {
+  closureArg1("hello", fn)
+}
+
+struct __Closure6{ }
+
+pub func __Closure6_op__call(this: &__Closure6): i8 {
+  return 1
+}
+
+
+pub func allocate8(count: u32 = 0): String {
+  return (class String : __cxy_alloc(__bc(0, #String)))
+}
+
+
+pub func String_op__lshift9(this: String, val: string): String {
+  String_appendString(this, val)
   return this
 }
 
-struct __Closure11 {
-  - b: string
-  - x: i8
-}
+struct __Closure10{ }
 
-func __Closure11_op__call(this: __Closure11): String {
+
+pub func __Closure10_op__call(this: &__Closure10): String {
   return ({
     var sb = ({
-      var s9 = newClass6()
-      StringBuilder_op__init(&s9)
-      s9
+      var s7 = allocate8(<u32>0)
+      String_op__init(s7)
+      s7
     })
-    StringBuilder_op__lshift10(&StringBuilder_op__lshift7(&StringBuilder_op__lshift7(&sb, this.b), " -> "), this.x)
-    StringBuilder_release(&sb)
+    String_op__lshift9(String_op__lshift9(sb, "Hello "), name)
   })
+}
+
+
+pub func String_op__lshift12(this: String, val: i8): String {
+  
+  String_appendSignedInt(this, <i64>val)
+  return this
 }
 
 struct __Closure13 {
@@ -29,49 +55,64 @@ struct __Closure13 {
   - x: i8
 }
 
-func __Closure13_op__call(this: __Closure13): String {
+pub func __Closure13_op__call(this: &__Closure13): String {
   return ({
     var sb = ({
-      var s12 = newClass6()
-      StringBuilder_op__init(&s12)
-      s12
+      var s11 = allocate8(<u32>0)
+      String_op__init(s11)
+      s11
     })
-    StringBuilder_op__lshift10(&StringBuilder_op__lshift7(&StringBuilder_op__lshift7(&sb, this.b), " -> "), this.x)
-    StringBuilder_release(&sb)
+    String_op__lshift12(String_op__lshift9(String_op__lshift9(sb, this.b), " -> "), this.x)
   })
 }
 
-struct __Closure14 {
+struct __Closure15 {
   - b: string
   - x: i8
 }
 
-func __Closure14_op__call(this: __Closure14) {
-  const g = __Closure13{b = b, x = x}
+pub func __Closure15_op__call(this: &__Closure15): String {
+  return ({
+    var sb = ({
+      var s14 = allocate8(<u32>0)
+      String_op__init(s14)
+      s14
+    })
+    String_op__lshift12(String_op__lshift9(String_op__lshift9(sb, this.b), " -> "), this.x)
+  })
 }
 
-struct __Closure15{ }
+struct __Closure16 {
+  - b: string
+  - x: i8
+}
 
-func __Closure15_op__call(this: __Closure15) { }
+pub func __Closure16_op__call(this: &__Closure16) {
+  const g = __Closure15{b = b, x = x}
+}
+
+struct __Closure17{ }
+
+pub func __Closure17_op__call(this: &__Closure17) { }
 
 
-func __Closure15__fwd(ptr: &void): void => __Closure15_op__call(<&__Closure15>ptr)
+func __Closure17__fwd(ptr: &void): void => __Closure17_op__call(<&__Closure17>ptr)
 
-struct __Closure16{ }
+struct __Closure18{ }
 
-func __Closure16_op__call(this: __Closure16) { }
+pub func __Closure18_op__call(this: &__Closure18) { }
 
 
-func __Closure16__fwd(ptr: &void, msg: string): void => __Closure16_op__call(<&__Closure16>ptr, msg)
+func __Closure18__fwd(ptr: &void, msg: string): void => __Closure18_op__call(<&__Closure18>ptr, msg)
 
 func main(args: [string]) {
-  const one = __Closure4{}
-  __Closure4_op__call(&one)
-  __Closure8_op__call(&(__Closure8{}), "User")
+  const one = __Closure6{}
+  __Closure6_op__call(&one)
+  __Closure10_op__call(&(__Closure10{}), "User")
   var x = 100
   var b = "Hello"
-  __Closure11_op__call(&(__Closure11{b = b, x = x}))
-  const f = __Closure14{b = b, x = x}
-  closureArg0((<&void>&__Closure15{}, __Closure15__fwd))
-  closureArg2((<&void>&__Closure16{}, __Closure16__fwd))
+  __Closure13_op__call(&(__Closure13{b = b, x = x}))
+  const f = __Closure16{b = b, x = x}
+  closureArg0((<&void>&__Closure17{}, __Closure17__fwd))
+  closureArg2((<&void>&__Closure18{}, __Closure18__fwd))
 }

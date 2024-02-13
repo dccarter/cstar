@@ -43,7 +43,11 @@ cstring getFilePathAsRelativeToCxySource(StrPool *strings,
 bool initCompilerDriver(CompilerDriver *compiler,
                         MemPool *pool,
                         StrPool *strings,
-                        Log *log);
+                        Log *log,
+                        int argc,
+                        char **argv);
+void deinitCompilerDriver(CompilerDriver *driver);
+
 bool compileFile(const char *fileName, CompilerDriver *driver);
 bool generateBuiltinSources(CompilerDriver *driver);
 
@@ -56,4 +60,5 @@ const Type *compileModule(CompilerDriver *driver,
                           const AstNode *source,
                           AstNode *entities);
 
-void *initCompilerBackend(CompilerDriver *driver);
+void *initCompilerBackend(CompilerDriver *driver, int argc, char **argv);
+void deinitCompilerBackend(CompilerDriver *driver);

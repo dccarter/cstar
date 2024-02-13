@@ -1,5 +1,12 @@
-// import { add } from "./add.cxy"
+func show(s: &i32) {
+    *s = 10
+}
 
-pub func main(): i32 {
-    var a, _ ,c = (20, "Hello", true);
+pub func main(argc: i32, argv: &string) {
+    var args = Slice[string](argv, <u32>argc);
+    for (const arg, _: args) {
+        println(arg)
+    }
+
+    println(args)
 }

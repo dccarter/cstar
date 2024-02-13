@@ -309,7 +309,7 @@ static CompilerStageExecutor compilerStageExecutors[ccsCOUNT] = {
     [ccsBind] = executeBindAst,
     [ccsTypeCheck] = executeTypeCheckAst,
     [ccsSimplify] = executeSimplify,
-    // [ccsCodegen] = executeGenerateCode,
+    [ccsCodegen] = executeGenerateCode,
     // TODO causing issues
     // [ccsCollect] = executeCollect,
     // [ccsCompile] = executeTargetCompile

@@ -438,6 +438,21 @@ static AstNode *isCover(EvalContext *ctx, const FileLoc *loc, AstNode *node)
                        isClassOrStructType(type) && hasFlag(decl, Extern)});
 }
 
+static AstNode *hasDeinit(EvalContext *ctx, const FileLoc *loc, AstNode *node)
+{
+
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = unwrapType(type, NULL);
+
+    return makeAstNode(
+        ctx->pool,
+        loc,
+        &(AstNode){.tag = astBoolLit,
+                   .boolLiteral.value =
+                       isClassOrStructType(type) &&
+                       findMemberInType(type, S_DeinitOverload) != NULL});
+}
+
 static AstNode *isField(EvalContext *ctx, const FileLoc *loc, AstNode *node)
 {
     return makeAstNode(
@@ -480,6 +495,7 @@ static void initDefaultMembers(EvalContext *ctx)
     ADD_MEMBER("isEnum", isEnum);
     ADD_MEMBER("isDestructible", isDestructible);
     ADD_MEMBER("isCover", isCover);
+    ADD_MEMBER("has_deinit", hasDeinit);
 
 #undef ADD_MEMBER
 }

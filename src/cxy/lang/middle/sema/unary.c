@@ -159,6 +159,18 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
                 operand = ERROR_TYPE(ctx);
             }
         }
+        else if (isPointerType(operand)) {
+            node->tag = astIndexExpr;
+            node->type = operand->pointer.pointed;
+            node->indexExpr.target = node->unaryExpr.operand;
+            node->indexExpr.index =
+                makeUnsignedIntegerLiteral(ctx->pool,
+                                           &node->loc,
+                                           0,
+                                           NULL,
+                                           getPrimitiveType(ctx->types, prtI8));
+            operand = operand->pointer.pointed;
+        }
         else {
             logError(ctx->L,
                      &node->unaryExpr.operand->loc,

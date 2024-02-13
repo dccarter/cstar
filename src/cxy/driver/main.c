@@ -22,7 +22,7 @@ int main(int argc, char **argv)
         goto exit;
     }
 
-    if (!initCompilerDriver(&driver, &pool, &strings, &log)) {
+    if (!initCompilerDriver(&driver, &pool, &strings, &log, argc, argv)) {
         status = false;
         goto exit;
     }
@@ -31,8 +31,12 @@ int main(int argc, char **argv)
         status &= compileFile(argv[i], &driver);
 
 exit:
+
+    deinitCompilerDriver(&driver);
     writeFormatState(&state, stderr);
     freeFormatState(&state);
     freeLog(&log);
+    freeStrPool(&strings);
+    freeMemPool(&pool);
     return status ? EXIT_SUCCESS : EXIT_FAILURE;
 }

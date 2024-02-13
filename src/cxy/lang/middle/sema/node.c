@@ -71,27 +71,14 @@ void transformToMemberCallExpr(AstVisitor *visitor,
                                AstNode *args)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    AstNode *funcMember = makeAstNode(
+    AstNode *callee = makeMemberExpr(
         ctx->pool,
         &target->loc,
-        &(AstNode){.tag = astPathElem,
-                   .flags = args ? (args->flags & ~flgAddThis) : flgNone,
-                   .pathElement = {.name = member}});
-
-    AstNode *path = makeAstNode(ctx->pool,
-                                &target->loc,
-                                &(AstNode){.tag = astPath,
-                                           .flags = target->flags,
-                                           .type = NULL,
-                                           .path = {.elements = funcMember}});
-
-    AstNode *callee = makeAstNode(
-        ctx->pool,
-        &target->loc,
-        &(AstNode){.tag = astMemberExpr,
-                   .flags = target->flags,
-                   .type = NULL,
-                   .memberExpr = {.target = target, .member = path}});
+        target->flags,
+        target,
+        makeIdentifier(ctx->pool, &target->loc, member, 0, NULL, NULL),
+        NULL,
+        NULL);
 
     clearAstBody(node);
     node->tag = astCallExpr;
@@ -119,7 +106,7 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
                              makeStructInitializerForDefaults(ctx, callee),
                              NULL,
                              callee->type)
-            : makeNewClassCall(ctx, callee);
+            : makeAllocateCall(ctx, callee);
     // var name = S{}
     AstNode *varDecl = makeVarDecl(ctx->pool,
                                    &callee->loc,

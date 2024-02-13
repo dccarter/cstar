@@ -65,7 +65,9 @@ const Type *matchOverloadedFunctionPerfectMatch(TypingContext *ctx,
         for (u64 i = 0; i < argsCount; i++) {
             const Type *paramType = type->func.params[i];
             compatible = paramType == argTypes[i];
-            if (!compatible && !perfectMatch) {
+            if (compatible)
+                continue;
+            if (!perfectMatch) {
                 compatible = isTypeAssignableFrom(paramType, argTypes[i]);
                 if (compatible) {
                     score--;
@@ -143,8 +145,11 @@ bool checkMemberFunctions(AstVisitor *visitor,
     for (u64 i = 0; member; member = member->next, i++) {
         if (nodeIs(member, FuncDecl)) {
             if (member->funcDecl.this_) {
-                member->funcDecl.this_->type = makePointerType(
-                    ctx->types, node->type, member->flags & flgConst);
+                member->funcDecl.this_->type =
+                    nodeIs(node, ClassDecl)
+                        ? node->type
+                        : makePointerType(
+                              ctx->types, node->type, member->flags & flgConst);
             }
             const Type *type = checkFunctionBody(visitor, member);
             if (typeIs(type, Error)) {

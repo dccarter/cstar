@@ -1051,7 +1051,7 @@ AstNode *getTypeDecl(const Type *type)
 {
     if (type == NULL)
         return NULL;
-
+    type = unwrapType(type, NULL);
     switch (type->tag) {
     case typStruct:
         return type->tStruct.decl;

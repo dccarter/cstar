@@ -385,13 +385,14 @@ static void checkProgram(AstVisitor *visitor, AstNode *node)
     astVisit(visitor, node->program.module);
     astVisitManyNodes(visitor, node->program.top);
 
+    bool isBuiltinModule = hasFlag(node, BuiltinsModule);
     for (; decl; decl = decl->next) {
         ctx->root.previous = ctx->root.current;
         ctx->root.current = decl;
+        decl->flags |= (isBuiltinModule ? flgBuiltin : flgNone);
         astVisit(visitor, decl);
     }
 
-    bool isBuiltinModule = hasFlag(node, BuiltinsModule);
     if (isBuiltinModule || node->program.module) {
         buildModuleType(ctx, node, isBuiltinModule);
     }

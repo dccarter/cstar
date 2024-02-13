@@ -102,7 +102,7 @@ AstNode *makeDropReferenceCall(TypingContext *ctx,
                                AstNode *member,
                                const FileLoc *loc);
 
-AstNode *makeNewClassCall(TypingContext *ctx, AstNode *node);
+AstNode *makeAllocateCall(TypingContext *ctx, AstNode *node);
 
 AstNode *makeGetReferenceCall(TypingContext *ctx,
                               AstNode *member,

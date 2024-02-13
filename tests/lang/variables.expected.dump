@@ -2,9 +2,9 @@
 
 var X = 10
 const Y = ("Hello", "World")
-struct __Closure5{ }
+struct __Closure7{ }
 
-func __Closure5_op__call(this: __Closure5): (i8, i8) {
+pub func __Closure7_op__call(this: &__Closure7): (i8, i8) {
   return (20, 20)
 }
 
@@ -30,8 +30,8 @@ func main(args: [string]) {
     var b = true
     var d = 20
     var e = ' '
-    var __gen_var4 = __Closure5_op__call(&(__Closure5{}))
-    var f = __gen_var4.0
-    var g = __gen_var4.1
+    var __gen_var6 = __Closure7_op__call(&(__Closure7{}))
+    var f = __gen_var6.0
+    var g = __gen_var6.1
   }
 }

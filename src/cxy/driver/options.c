@@ -135,6 +135,7 @@ static void initializeOptions(StrPool *strings, Options *options)
         pushStringOnDynArray(&options->cflags, trimmedSdkPath);
         free(sdkPath);
     }
+    freeFormatState(&state);
 #endif
 }
 
@@ -250,4 +251,11 @@ error:
 exit:
     *argc = file_count + 1;
     return status;
+}
+
+void deinitCommandLineOptions(Options *options)
+{
+    freeDynArray(&options->cflags);
+    freeDynArray(&options->ldflags);
+    freeDynArray(&options->defines);
 }

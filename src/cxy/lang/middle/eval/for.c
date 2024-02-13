@@ -79,7 +79,7 @@ static bool evalExprForStmtVariadic(AstVisitor *visitor,
 
     const Type *tuple = unwrapType(range->type, NULL);
     if (tuple) {
-        csAssert0(nodeIs(range, FuncParamDecl));
+        csAssert0(nodeIs(range, Identifier));
         u64 count = tuple->tuple.count;
         for (u64 i = 0; i < count; i++) {
             AstNode *body = deepCloneAstNode(ctx->pool, node->forStmt.body);
@@ -89,9 +89,9 @@ static bool evalExprForStmtVariadic(AstVisitor *visitor,
                                range->flags,
                                makeResolvedIdentifier(ctx->pool,
                                                       &range->loc,
-                                                      range->funcParam.name,
+                                                      range->ident.value,
                                                       0,
-                                                      range,
+                                                      range->ident.resolvesTo,
                                                       NULL,
                                                       range->type),
                                makeUnsignedIntegerLiteral(
@@ -204,7 +204,7 @@ void evalForStmt(AstVisitor *visitor, AstNode *node)
 {
     EvalContext *ctx = getAstVisitorContext(visitor);
     FileLoc rangeLoc = node->forStmt.range->loc;
-
+    AstNode range = *node->forStmt.range;
     if (!evaluate(visitor, node->forStmt.range)) {
         node->tag = astError;
         return;
@@ -235,7 +235,11 @@ void evalForStmt(AstVisitor *visitor, AstNode *node)
             node->tag = astError;
             return;
         }
-
+        node->forStmt.range->tag = astIdentifier;
+        node->forStmt.range->ident.value =
+            range.path.elements->pathElement.name;
+        node->forStmt.range->ident.resolvesTo =
+            range.path.elements->pathElement.resolvesTo;
         if (!evalExprForStmtVariadic(visitor, node, &nodes))
             return;
         break;

@@ -362,7 +362,10 @@ void astModifierAdd(AstModifier *ctx, AstNode *node)
     csAssert0(ctx->current);
 
     node->next = ctx->current;
-    if (nodeIs(ctx->parent, Program)) {
+    if (ctx->previous) {
+        ctx->previous->next = node;
+    }
+    else if (nodeIs(ctx->parent, Program)) {
         ctx->parent->program.decls = node;
     }
     else {

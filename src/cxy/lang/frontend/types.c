@@ -615,6 +615,12 @@ bool isStructType(const Type *type)
            (typeIs(type, This) && typeIs(type->_this.that, Struct));
 }
 
+bool isUnionType(const Type *type)
+{
+    type = unwrapType(type, NULL);
+    return typeIs(type, Union);
+}
+
 bool isTupleType(const Type *type)
 {
     type = unwrapType(type, NULL);

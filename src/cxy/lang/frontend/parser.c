@@ -1674,7 +1674,9 @@ static AstNode *matchCaseStatement(Parser *P)
     }
 
     if (!match(P, tokComma)) {
-        consume0(P, tokFatArrow);
+        // either case X { or case =>
+        if (!check(P, tokLBrace))
+            consume0(P, tokFatArrow);
         if (!check(P, tokCase, tokRBrace)) {
             body = statement(P);
         }

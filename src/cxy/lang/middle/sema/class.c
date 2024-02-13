@@ -111,11 +111,11 @@ static void preCheckClassMembers(AstNode *node, NamedTypeMember *members)
         return;
 }
 
-AstNode *makeNewClassCall(TypingContext *ctx, AstNode *node)
+AstNode *makeAllocateCall(TypingContext *ctx, AstNode *node)
 {
     const Type *type = node->type;
     csAssert0(isClassType(type));
-    AstNode *new = findBuiltinDecl(S_newClass);
+    AstNode *new = findBuiltinDecl(S_allocate);
     csAssert0(new);
 
     return makeCallExpr(

@@ -10,6 +10,11 @@
 #include "lang/frontend/ttable.h"
 #include "lang/frontend/visitor.h"
 
+typedef struct {
+    AstNode *func;
+    AstNode *target;
+} FuncToExternDecl;
+
 typedef struct SimplifyContext {
     Log *L;
     TypeTable *types;
@@ -29,7 +34,36 @@ typedef struct SimplifyContext {
     };
 } SimplifyContext;
 
-static void generateForRangeStmt(AstVisitor *visitor, AstNode *node)
+bool compareFuncToExternDecl(const void *lhs, const void *rhs)
+{
+    return ((FuncToExternDecl *)lhs)->func == ((FuncToExternDecl *)rhs)->func;
+}
+
+static void addFunctionToExternDecl(SimplifyContext *ctx,
+                                    AstNode *node,
+                                    AstNode *target)
+{
+    if (nodeIs(node, FuncDecl)) {
+        insertInHashTable(
+            &ctx->functions,
+            &(FuncToExternDecl){.func = node, .target = target ?: node},
+            hashPtr(hashInit(), node),
+            sizeof(FuncToExternDecl),
+            compareFuncToExternDecl);
+    }
+}
+
+static FuncToExternDecl *getFunctionToExternDecl(SimplifyContext *ctx,
+                                                 AstNode *decl)
+{
+    return findInHashTable(&ctx->functions,
+                           &(FuncToExternDecl){.func = decl, .target = decl},
+                           hashPtr(hashInit(), decl),
+                           sizeof(FuncToExternDecl),
+                           compareFuncToExternDecl);
+}
+
+static void simplifyForRangeStmt(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
     AstNode *range = node->forStmt.range, *var = node->forStmt.var,
@@ -97,7 +131,7 @@ static void generateForRangeStmt(AstVisitor *visitor, AstNode *node)
     astVisit(visitor, node);
 }
 
-static void generateForArrayStmt(AstVisitor *visitor, AstNode *node)
+static void simplifyForArrayStmt(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
     AstNode *range = node->forStmt.range, *var = node->forStmt.var,
@@ -251,16 +285,30 @@ static void generateForArrayStmt(AstVisitor *visitor, AstNode *node)
     astVisit(visitor, node);
 }
 
-static bool addFunctionDecl(SimplifyContext *ctx, AstNode *decl)
+static void simplifyCastExpression(SimplifyContext *ctx,
+                                   AstNode *node,
+                                   const Type *type)
 {
-    if (nodeIs(decl, FuncDecl)) {
-        return insertInHashTable(&ctx->functions,
-                                 &decl,
-                                 hashPtr(hashInit(), decl),
-                                 sizeof(void *),
-                                 comparePointers);
+    const Type *from = unwrapType(node->type, NULL);
+    if (type == from)
+        return;
+
+    if (!typeIs(from, Union)) {
+        AstNode *expr = deepCloneAstNode(ctx->pool, node);
+        if (typeIs(from, Array)) {
+            node->tag = astTypedExpr;
+            node->typedExpr.expr = expr;
+            node->typedExpr.type =
+                makeTypeReferenceNode(ctx->pool, type, &node->loc);
+        }
+        else {
+            node->tag = astCastExpr;
+            node->castExpr.expr = expr;
+            node->castExpr.to =
+                makeTypeReferenceNode(ctx->pool, type, &node->loc);
+        }
+        node->type = type;
     }
-    return false;
 }
 
 static void visitProgram(AstVisitor *visitor, AstNode *node)
@@ -289,6 +337,22 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
     AstNode *func = callee->type->func.decl;
 
     astVisit(visitor, callee);
+    AstNode *arg = args, *param = nodeIs(func, FuncDecl)
+                                      ? func->funcDecl.signature->params
+                                      : func->funcType.params;
+    for (u64 i = 0; arg; arg = arg->next, i++, param = param->next) {
+        if (hasFlag(param, Variadic))
+            break;
+        if (typeIs(func->type->func.params[i], Auto))
+            continue;
+
+        const Type *left = unwrapType(func->type->func.params[i], NULL),
+                   *right = unwrapType(arg->type, NULL);
+        if (left != right) {
+            simplifyCastExpression(ctx, arg, left);
+        }
+    }
+
     astVisitManyNodes(visitor, args);
 
     csAssert0(func);
@@ -302,10 +366,11 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
 
     call->type = callee->type;
 
-    if (!typeIs(target->type, Pointer)) {
+    if (!typeIs(target->type, Pointer) && !isClassType(target->type)) {
         target = makeAddrOffExpr(
             ctx->pool, &target->loc, this->flags, target, NULL, this->type);
     }
+
     astVisitManyNodes(visitor, args);
     target->next = args;
     node->callExpr.args = target;
@@ -317,16 +382,21 @@ static void visitIdentifier(AstVisitor *visitor, AstNode *node)
     SimplifyContext *ctx = getAstVisitorContext(visitor);
     AstNode *target = node->ident.resolvesTo;
     if (nodeIs(target, FuncDecl)) {
-        if (addFunctionDecl(ctx, target)) {
+        FuncToExternDecl *f2e = getFunctionToExternDecl(ctx, target);
+        if (f2e == NULL) {
             // new function declaration added, add extern
             AstNode *decl = makeAstNode(ctx->pool,
-                                        builtinLoc(),
+                                        &target->loc,
                                         &(AstNode){.tag = astExternDecl,
                                                    .type = target->type,
                                                    .externDecl.func = target});
 
+            addFunctionToExternDecl(ctx, target, decl);
             astModifierAdd(&ctx->root, decl);
             node->ident.resolvesTo = decl;
+        }
+        else {
+            node->ident.resolvesTo = f2e->target;
         }
     }
 }
@@ -338,6 +408,7 @@ static void visitPathElement(AstVisitor *visitor, AstNode *node)
     node->ident.value = copy.pathElement.name;
     node->ident.resolvesTo = copy.pathElement.resolvesTo;
     node->ident.super = copy.pathElement.super;
+    node->next = NULL;
     astVisit(visitor, node);
 }
 
@@ -351,7 +422,7 @@ static void visitPathExpr(AstVisitor *visitor, AstNode *node)
         node->path.elements = makeResolvedPathElement(
             ctx->pool, &node->loc, S_this, flgNone, this, base, this->type);
 
-        if (!hasFlag(node, Generated)) {
+        if (base->pathElement.resolvesTo == NULL) {
             // it already resolves to correct member
             base->pathElement.resolvesTo = findMemberDeclInType(
                 stripAll(this->type), base->pathElement.name);
@@ -361,13 +432,14 @@ static void visitPathExpr(AstVisitor *visitor, AstNode *node)
     }
 
     AstNode *elem = node->path.elements;
+    AstNode *next = elem->next;
     astVisit(visitor, elem);
-    if (elem->next == NULL) {
+    if (next == NULL) {
         replaceAstNodeWith(node, elem);
         return;
     }
 
-    AstNode *target = elem, *next = elem->next;
+    AstNode *target = elem;
     for (; next;) {
         elem = next;
         next = next->next;
@@ -408,8 +480,6 @@ static void visitStructDecl(AstVisitor *visitor, AstNode *node)
         }
 
         if (nodeIs(member, FuncDecl)) {
-            if (member->funcDecl.this_)
-                member->funcDecl.signature->params = member->funcDecl.this_;
             insertAstNode(&others, member);
         }
     }
@@ -422,9 +492,9 @@ void visitForStmt(AstVisitor *visitor, AstNode *node)
 {
     AstNode *range = node->forStmt.range;
     if (nodeIs(range, RangeExpr))
-        generateForRangeStmt(visitor, node);
+        simplifyForRangeStmt(visitor, node);
     else
-        generateForArrayStmt(visitor, node);
+        simplifyForArrayStmt(visitor, node);
 }
 
 void visitBlockStmt(AstVisitor *visitor, AstNode *node)
@@ -446,11 +516,46 @@ void visitBlockStmt(AstVisitor *visitor, AstNode *node)
     node->blockStmt.last = last;
 }
 
+void visitIfStmt(AstVisitor *visitor, AstNode *node)
+{
+    SimplifyContext *ctx = getAstVisitorContext(visitor);
+
+    AstNode *cond = node->ifStmt.cond;
+    if (!isBooleanType(node->ifStmt.cond->type)) {
+        AstNode *rhs = NULL, *lhs = deepCloneAstNode(ctx->pool, cond);
+        if (isIntegerType(cond->type)) {
+            rhs =
+                makeIntegerLiteral(ctx->pool, &node->loc, 0, NULL, cond->type);
+        }
+        else if (isFloatType(cond->type)) {
+            rhs =
+                makeFloatLiteral(ctx->pool, &node->loc, 0.0, NULL, cond->type);
+        }
+        else if (isCharacterType(cond->type)) {
+            rhs = makeCharLiteral(ctx->pool, &node->loc, 0, NULL, cond->type);
+        }
+        else if (isPointerType(cond->type)) {
+            rhs = makeNullLiteral(ctx->pool, &node->loc, NULL, cond->type);
+        }
+        else {
+            unreachable("Shouldn't be a thing!");
+        }
+        cond->tag = astBinaryExpr;
+        cond->binaryExpr.op = opNe;
+        cond->binaryExpr.lhs = lhs;
+        cond->binaryExpr.rhs = rhs;
+    }
+    astVisitFallbackVisitAll(visitor, node);
+}
+
 static void visitFuncDecl(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
     ctx->currentFunction = node;
-    addFunctionDecl(ctx, node);
+    addFunctionToExternDecl(ctx, node, node);
+    if (node->funcDecl.this_) {
+        node->funcDecl.signature->params = node->funcDecl.this_;
+    }
     astVisitFallbackVisitAll(visitor, node);
     ctx->currentFunction = NULL;
 }
@@ -461,7 +566,8 @@ AstNode *simplifyAst(CompilerDriver *driver, AstNode *node)
                                .types = driver->types,
                                .strings = driver->strings,
                                .pool = driver->pool,
-                               .functions = newHashTable(sizeof(void *))};
+                               .functions =
+                                   newHashTable(sizeof(FuncToExternDecl))};
 
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context, {
@@ -472,6 +578,7 @@ AstNode *simplifyAst(CompilerDriver *driver, AstNode *node)
         [astCallExpr] = visitCallExpr,
         [astForStmt] = visitForStmt,
         [astBlockStmt] = visitBlockStmt,
+        [astIfStmt] = visitIfStmt,
         [astStructDecl] = visitStructDecl,
         [astClassDecl] = visitStructDecl,
         [astFuncDecl] = visitFuncDecl,

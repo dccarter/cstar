@@ -60,3 +60,5 @@ bool parseCommandLineOptions(int *argc,
                              struct StrPool *strings,
                              Options *options,
                              Log *log);
+
+void deinitCommandLineOptions(Options *options);

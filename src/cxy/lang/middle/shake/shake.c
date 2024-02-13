@@ -146,6 +146,10 @@ static bool validateOperatorOverloadArguments(ShakeAstContext *ctx,
         return reportIfUnexpectedNumberOfParameters(
             ctx, &node->loc, "str", count, 1);
 
+    case opHashOverload:
+        return reportIfUnexpectedNumberOfParameters(
+            ctx, &node->loc, "hash", count, 0);
+
     case opTruthy:
         return reportIfUnexpectedNumberOfParameters(
             ctx, &node->loc, "!!", count, 0);
@@ -190,29 +194,26 @@ static AstNode *shakeVariableInitializer(ShakeAstContext *ctx, AstNode *init)
 
 static AstNode *makeStrExprBuilder(ShakeAstContext *ctx, AstNode *node)
 {
-    AstNode *sb = findBuiltinDecl(S_StringBuilder);
+    AstNode *sb = findBuiltinDecl(S_String);
     csAssert0(sb);
 
-    return makeVarDecl(ctx->pool,
-                       &node->loc,
-                       flgNone,
-                       S_sb,
-                       NULL,
-                       makeCallExpr(ctx->pool,
-                                    &node->loc,
-                                    makeResolvedPath(ctx->pool,
-                                                     &node->loc,
-                                                     S_StringBuilder,
-                                                     flgNone,
-                                                     sb,
-                                                     NULL,
-                                                     sb->type),
-                                    NULL,
-                                    flgNone,
-                                    NULL,
-                                    NULL),
-                       NULL,
-                       NULL);
+    return makeVarDecl(
+        ctx->pool,
+        &node->loc,
+        flgNone,
+        S_sb,
+        NULL,
+        makeCallExpr(
+            ctx->pool,
+            &node->loc,
+            makeResolvedPath(
+                ctx->pool, &node->loc, S_String, flgNone, sb, NULL, sb->type),
+            NULL,
+            flgNone,
+            NULL,
+            NULL),
+        NULL,
+        NULL);
 }
 
 void shakeVariableDecl(AstVisitor *visitor, AstNode *node)
@@ -468,17 +469,20 @@ void shakeMatchStmt(AstVisitor *visitor, AstNode *node)
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
     AstNode *expr = node->matchStmt.expr;
     astVisit(visitor, expr);
-    AstNode *var = makeVarDecl(ctx->pool,
-                               &expr->loc,
-                               flgNone,
-                               makeAnonymousVariable(ctx->strPool, "_match"),
-                               NULL,
-                               expr,
-                               NULL,
-                               NULL);
-    node->matchStmt.expr =
-        makePath(ctx->pool, &expr->loc, var->varDecl.name, flgNone, NULL);
-    addNodeInBlock(ctx, var);
+    if (!nodeIsLeftValue(expr)) {
+        AstNode *var =
+            makeVarDecl(ctx->pool,
+                        &expr->loc,
+                        flgNone,
+                        makeAnonymousVariable(ctx->strPool, "_match"),
+                        NULL,
+                        expr,
+                        NULL,
+                        NULL);
+        node->matchStmt.expr =
+            makePath(ctx->pool, &expr->loc, var->varDecl.name, flgNone, NULL);
+        addNodeInBlock(ctx, var);
+    }
     astVisitManyNodes(visitor, node->matchStmt.cases);
 }
 
@@ -563,7 +567,9 @@ static void shakeForStmt(AstVisitor *visitor, AstNode *node)
             variable = variable->next;
         }
     }
-    variable->varDecl.name = name->ident.value;
+    else {
+        variable->varDecl.name = name->ident.value;
+    }
     astVisit(visitor, node->forStmt.range);
     astVisit(visitor, node->forStmt.body);
 }
@@ -612,26 +618,6 @@ static void shakeStringExpr(AstVisitor *visitor, AstNode *node)
     }
 
     var->next = sb;
-    sb->next = makeCallExpr(
-        ctx->pool,
-        &node->loc,
-        makePathWithElements(
-            ctx->pool,
-            &node->loc,
-            flgNone,
-            makePathElement(
-                ctx->pool,
-                &node->loc,
-                S_sb,
-                flgNone,
-                makePathElement(
-                    ctx->pool, &node->loc, S_release, flgNone, NULL, NULL),
-                NULL),
-            NULL),
-        NULL,
-        flgNone,
-        NULL,
-        NULL);
 
     node->tag = astStmtExpr;
     node->stmtExpr.stmt = makeBlockStmt(ctx->pool, &node->loc, var, NULL, NULL);

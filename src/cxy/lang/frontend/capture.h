@@ -6,6 +6,7 @@
 
 struct Capture {
     AstNode *node;
+    AstNode *field;
     u32 id;
     u64 flags;
 };

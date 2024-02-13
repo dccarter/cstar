@@ -170,7 +170,7 @@ static inline bool hasDumpEnable(const Options *opts, const AstNode *node)
 {
     if (opts->cmd == cmdDev) {
         return !hasFlag(node, BuiltinsModule) &&
-               ((opts->dev.dumpMode != dmpCOUNT) || opts->dev.printIR);
+               ((opts->dev.dumpMode != dmpNONE) || opts->dev.printIR);
     }
     return false;
 }
@@ -241,7 +241,9 @@ static bool compileBuiltin(CompilerDriver *driver,
 bool initCompilerDriver(CompilerDriver *compiler,
                         MemPool *pool,
                         StrPool *strings,
-                        Log *log)
+                        Log *log,
+                        int argc,
+                        char **argv)
 {
     char tmp[PATH_MAX];
     compiler->pool = pool;
@@ -254,7 +256,7 @@ bool initCompilerDriver(CompilerDriver *compiler,
 
     internCommonStrings(compiler->strings);
     const Options *options = &compiler->options;
-    compiler->backend = initCompilerBackend(compiler);
+    compiler->backend = initCompilerBackend(compiler, argc, argv);
     csAssert0(compiler->backend);
 
     if (options->cmd == cmdBuild || !options->withoutBuiltins) {
@@ -265,6 +267,14 @@ bool initCompilerDriver(CompilerDriver *compiler,
     }
 
     return true;
+}
+
+void deinitCompilerDriver(CompilerDriver *driver)
+{
+    deinitCompilerBackend(driver);
+    freeHashTable(&driver->moduleCache);
+    freeTypeTable(driver->types);
+    deinitCommandLineOptions(&driver->options);
 }
 
 static bool configureDriverSourceDir(CompilerDriver *driver, cstring *fileName)

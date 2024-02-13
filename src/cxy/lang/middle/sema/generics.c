@@ -214,10 +214,17 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
     free(paramTypes);
 
     if (goi.f) {
-        node->type = goi.s->applied.decl->type;
-        node->pathElement.resolvesTo = goi.s->applied.decl;
-        node->pathElement.name = getDeclarationName(goi.s->applied.decl);
-        node->pathElement.args = NULL;
+        if (nodeIs(node, PathElem)) {
+            node->type = goi.s->applied.decl->type;
+            node->pathElement.resolvesTo = goi.s->applied.decl;
+            node->pathElement.name = getDeclarationName(goi.s->applied.decl);
+            node->pathElement.args = NULL;
+        }
+        else {
+            node->type = goi.s->applied.decl->type;
+            node->ident.resolvesTo = goi.s->applied.decl;
+            node->ident.value = getDeclarationName(goi.s->applied.decl);
+        }
         return node->type;
     }
 
@@ -264,6 +271,7 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
                                       substitute->flags & flgConst);
             substitute->funcDecl.signature->params = substitute->funcDecl.this_;
             substitute->funcDecl.this_ = NULL;
+            node->flags |= flgAddThis;
         }
         if (!typeIs(node->type, Error))
             node->type = checkFunctionBody(visitor, substitute);
@@ -275,9 +283,15 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
 
     addTopLevelDeclaration(ctx, substitute);
 
-    node->pathElement.resolvesTo = substitute;
-    node->pathElement.name = getDeclarationName(substitute);
-    node->pathElement.args = NULL;
+    if (nodeIs(node, PathElem)) {
+        node->pathElement.resolvesTo = substitute;
+        node->pathElement.name = getDeclarationName(substitute);
+        node->pathElement.args = NULL;
+    }
+    else {
+        node->ident.resolvesTo = substitute;
+        node->ident.value = getDeclarationName(substitute);
+    }
 
     ctx->types->currentNamespace = namespace;
     ((Type *)substitute->type)->from = type;

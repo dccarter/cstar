@@ -1,3 +1,8 @@
-module add
 
-pub func add(a: i32, b: i32) => a + b
+
+pub func main() {
+    var x = f"Hello world ${10} 😊\n";
+    for (const c,i: x) {
+        println(i, " => ", c)
+    }
+}

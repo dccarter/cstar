@@ -435,8 +435,10 @@ u64 parseWarningLevels(Log *L, cstring str)
             start++;
 
         u64 warning = parseNextWarningId(L, start, last);
-        if (warning == wrn_Error || warning == wrnNone || warning == wrnAll)
+        if (warning == wrn_Error || warning == wrnNone || warning == wrnAll) {
+            free(copy);
             return warning;
+        }
 
         if (flip)
             warnings &= ~warning;

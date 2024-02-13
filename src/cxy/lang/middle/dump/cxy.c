@@ -63,8 +63,7 @@ static void dumpFunctionName(DumpContext *ctx, const AstNode *node)
 {
     if (ctx->isSimplified && isMemberFunction(node)) {
         const Type *type = stripAll(node->funcDecl.signature->params->type);
-        printType_(ctx->state, type, false);
-        printEscapedChar(ctx->state, '_');
+        format(ctx->state, "{s}_", (FormatArg[]){{.s = type->name}});
     }
     format(ctx->state, "{s}", (FormatArg[]){{.s = node->funcDecl.name}});
 }
@@ -521,6 +520,11 @@ static void dumpMacroCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     dumpManyAstNodesEnclosed(visitor, node->callExpr.args, "!(", ", ", ")");
 }
 
+static void dumpUnionValueExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    astConstVisit(visitor, node->unionValue.value);
+}
+
 static void dumpTupleExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     dumpManyAstNodesEnclosed(visitor, node->tupleExpr.elements, "(", ", ", ")");
@@ -579,13 +583,21 @@ static void dumpIfStmt(ConstAstVisitor *visitor, const AstNode *node)
         return;
 
     if (nodeIs(node->ifStmt.otherwise, BlockStmt)) {
-        astConstVisit(visitor, node->ifStmt.body);
+        AddNewLine();
+        printKeyword(ctx->state, "else");
+        AddSpace();
+        astConstVisit(visitor, node->ifStmt.otherwise);
     }
     else if (nodeIs(node->ifStmt.otherwise, IfStmt)) {
+        AddSpace();
+        printKeyword(ctx->state, "else");
         AddSpace();
         astConstVisit(visitor, node->ifStmt.otherwise);
     }
     else {
+        AddNewLine();
+        printKeyword(ctx->state, "else");
+        AddSpace();
         format(ctx->state, "{{{>}\n", NULL);
         astConstVisit(visitor, node->ifStmt.otherwise);
         format(ctx->state, "{<}\n}", NULL);
@@ -680,8 +692,6 @@ static void dumpCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
         AddSpace();
         printKeyword(ctx->state, "as");
         AddSpace();
-        if (hasFlag(node->caseStmt.variable, Reference))
-            format(ctx->state, "&", NULL);
         astConstVisit(visitor, node->caseStmt.variable);
     }
     if (node->caseStmt.body) {
@@ -698,8 +708,8 @@ static void dumpSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
     format(ctx->state, "(", NULL);
     astConstVisit(visitor, node->switchStmt.cond);
     format(ctx->state, ") {{\n", NULL);
-    astConstVisitManyNodes(visitor, node->switchStmt.cases);
-    format(ctx->state, "}\n", NULL);
+    dumpManyAstNodes(visitor, node->switchStmt.cases, "\n");
+    format(ctx->state, "\n}\n", NULL);
 }
 
 static void dumpMatchStmt(ConstAstVisitor *visitor, const AstNode *node)
@@ -710,8 +720,8 @@ static void dumpMatchStmt(ConstAstVisitor *visitor, const AstNode *node)
     format(ctx->state, "(", NULL);
     astConstVisit(visitor, node->matchStmt.expr);
     format(ctx->state, ") {{\n", NULL);
-    astConstVisitManyNodes(visitor, node->matchStmt.cases);
-    format(ctx->state, "}\n", NULL);
+    dumpManyAstNodes(visitor, node->matchStmt.cases, "\n");
+    format(ctx->state, "\n}\n", NULL);
 }
 
 static void dumpModuleDecl(ConstAstVisitor *visitor, const AstNode *node)
@@ -1009,6 +1019,7 @@ AstNode *dumpCxySource(CompilerDriver *driver, AstNode *node, FILE *file)
         [astFieldExpr] = dumpFieldExpr,
         [astStructExpr] = dumpStructExpr,
         [astMacroCallExpr] = dumpMacroCallExpr,
+        [astUnionValueExpr] = dumpUnionValueExpr,
         [astAddressOf] = dumpUnaryExpr,
         [astPrimitiveType] = dumpPrimitiveType,
         [astStringType] = dumpBuiltinType,
