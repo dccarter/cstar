@@ -202,6 +202,9 @@ static bool compileProgram(CompilerDriver *driver,
         }
     }
 
+    if (hasFlag(metadata, BuiltinsModule) || hasFlag(program, ImportedModule))
+        return status;
+
     if (hasDumpEnable(options, metadata)) {
         stage = options->dev.printIR ? ccs_DumpIR : ccs_Dump;
         metadata = executeCompilerStage(driver, stage, metadata);
@@ -387,16 +390,29 @@ const Type *compileModule(CompilerDriver *driver,
     for (; entity; entity = entity->next) {
         const NamedTypeMember *member =
             findModuleMember(module, entity->importEntity.name);
-        if (member) {
-            entity->importEntity.target = (AstNode *)member->decl;
-        }
-        else {
+        if (member == NULL) {
             logError(
                 driver->L,
                 &entity->loc,
                 "module {s} does not export declaration with name '{s}'",
                 (FormatArg[]){{.s = path}, {.s = entity->importEntity.name}});
+            continue;
         }
+
+        if (!hasFlag(member->decl, Public)) {
+            logError(
+                driver->L,
+                &entity->loc,
+                "module {s} member'{s}' cannot be imported, it is not public",
+                (FormatArg[]){{.s = path}, {.s = entity->importEntity.name}});
+            logNote(driver->L,
+                    &member->decl->loc,
+                    "`{s}` declared here",
+                    (FormatArg[]){{.s = entity->importEntity.name}});
+            continue;
+        }
+
+        entity->importEntity.target = (AstNode *)member->decl;
     }
 
     if (hasErrors(driver->L))

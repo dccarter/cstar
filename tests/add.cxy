@@ -1,8 +1,0 @@
-
-
-pub func main() {
-    var x = f"Hello world ${10} 😊\n";
-    for (const c,i: x) {
-        println(i, " => ", c)
-    }
-}

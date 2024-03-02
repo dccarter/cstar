@@ -145,6 +145,7 @@ typedef struct {
     bool createMapping;
     MemPool *pool;
     HashTable mapping;
+    const AstNode *root;
 } CloneAstConfig;
 
 // clang-format off

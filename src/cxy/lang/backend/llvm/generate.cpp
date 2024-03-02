@@ -347,7 +347,7 @@ static void visitAddrOfExpr(AstVisitor *visitor, AstNode *node)
 static void visitIndexExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
-    auto type = node->indexExpr.target->type;
+    auto type = unwrapType(node->indexExpr.target->type, nullptr);
 
     auto load =
         ctx.stack().loadVariable(typeIs(type, String) || typeIs(type, Pointer));
@@ -602,8 +602,8 @@ void visitIfStmt(AstVisitor *visitor, AstNode *node)
 
     builder.SetInsertPoint(then);
     auto thenRetVal = cxy::codegen(visitor, node->ifStmt.body);
-    if (thenRetVal == nullptr)
-        return;
+    //    if (thenRetVal == nullptr)
+    //        return;
 
     if (!ctx.unreachable)
         builder.CreateBr(merge);
@@ -632,7 +632,7 @@ void visitIfStmt(AstVisitor *visitor, AstNode *node)
     func->insert(func->end(), merge);
     builder.SetInsertPoint(merge);
     if (node->ifStmt.isTernary) {
-        auto phi = builder.CreatePHI(thenRetVal->getType(), 2, "iftmp");
+        auto phi = builder.CreatePHI(thenRetVal->getType(), 2, "if.tmp");
         phi->addIncoming(thenRetVal, then);
         phi->addIncoming(otherwiseRetVal, otherwise);
 
@@ -890,8 +890,8 @@ void visitFuncDecl(AstVisitor *visitor, AstNode *node)
     AstNode *param = node->funcDecl.signature->params;
     for (auto &arg : func->args()) {
         // Allocate a local variable for each argument
-        auto binding = ctx.builder.CreateAlloca(
-            arg.getType(), nullptr, param->funcParam.name);
+        auto binding =
+            ctx.createStackVariable(arg.getType(), param->funcParam.name);
         ctx.builder.CreateStore(&arg, binding);
         param->codegen = binding;
         param = param->next;
@@ -899,13 +899,16 @@ void visitFuncDecl(AstVisitor *visitor, AstNode *node)
 
     llvm::AllocaInst *result{nullptr};
     if (!typeIs(type->func.retType, Void)) {
-        result = ctx.builder.CreateAlloca(
-            ctx.getLLVMType(type->func.retType), nullptr, "res");
+        result = ctx.createStackVariable(type->func.retType, "res");
         ctx.stack().result(result);
     }
 
     ctx.stack().currentFunction(node);
-    cxy::codegen(visitor, node->funcDecl.body);
+    auto value = cxy::codegen(visitor, node->funcDecl.body);
+    if (result && !nodeIs(node->funcDecl.body, BlockStmt)) {
+        ctx.builder.CreateStore(value, result);
+    }
+
     if (!ctx.unreachable)
         ctx.builder.CreateBr(end);
     ctx.unreachable = false;
@@ -914,7 +917,7 @@ void visitFuncDecl(AstVisitor *visitor, AstNode *node)
     func->insert(func->end(), end);
     ctx.builder.SetInsertPoint(end);
     if (result) {
-        auto value =
+        value =
             ctx.builder.CreateLoad(ctx.getLLVMType(type->func.retType), result);
         ctx.builder.CreateRet(value);
     }
@@ -976,10 +979,16 @@ static void generateBackendCall(AstVisitor *visitor, AstNode *node)
         const Type *type = node->backendCallExpr.args->type;
         csAssert0(typeIs(type, Info));
         type = resolveType(type);
-        csAssert0(isClassType(type));
-        value = llvm::ConstantInt::get(
-            ctx.getLLVMType(node->type),
-            ctx.module().getDataLayout().getTypeAllocSize(ctx.classType(type)));
+        if (isClassType(type))
+            value = llvm::ConstantInt::get(
+                ctx.getLLVMType(node->type),
+                ctx.module().getDataLayout().getTypeAllocSize(
+                    ctx.classType(type)));
+        else
+            value = llvm::ConstantInt::get(
+                ctx.getLLVMType(node->type),
+                ctx.module().getDataLayout().getTypeAllocSize(
+                    ctx.getLLVMType(type)));
         break;
     }
     }

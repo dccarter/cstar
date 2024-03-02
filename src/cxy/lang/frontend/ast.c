@@ -117,28 +117,35 @@ static void postCloneAstNode(CloneAstConfig *config,
         replaceWithCorrespondingNode(&config->mapping, &to->ident.resolvesTo);
         break;
     case astPathElem:
-        replaceWithCorrespondingNode(&config->mapping,
-                                     &to->pathElement.resolvesTo);
+        if (from->pathElement.resolvesTo != config->root ||
+            from->pathElement.args == NULL) {
+            replaceWithCorrespondingNode(&config->mapping,
+                                         &to->pathElement.resolvesTo);
+        }
+        else {
+            // TODO proper fix for this
+            to->pathElement.resolvesTo = config->root->parentScope;
+        }
         break;
     case astReturnStmt:
         replaceWithCorrespondingNode(&config->mapping, &to->returnStmt.func);
         break;
-    case astClosureExpr:
-        if (from->closureExpr.capture == NULL)
-            break;
-        to->closureExpr.capture = allocFromMemPool(
-            config->pool, sizeof(Capture) * from->closureExpr.captureCount);
-        memcpy(to->closureExpr.capture,
-               from->closureExpr.capture,
-               sizeof(Capture) * from->closureExpr.captureCount);
-        for (u64 i = 0; i < from->closureExpr.captureCount; i++) {
-            replaceWithCorrespondingNode(&config->mapping,
-                                         &to->closureExpr.capture[i].node);
-        }
-        break;
     default:
         break;
     }
+}
+
+static Capture *cloneClosureCapture(CloneAstConfig *config,
+                                    const Capture *from,
+                                    u64 count)
+{
+    Capture *capture = allocFromMemPool(config->pool, sizeof(Capture) * count);
+    for (u64 i = 0; i < count; i++) {
+        capture[i] = from[i];
+        capture[i].field = cloneAstNode(config, from[i].field);
+        replaceWithCorrespondingNode(&config->mapping, &capture[i].node);
+    }
+    return capture;
 }
 
 static void unmapAstNode(HashTable *mapping, const AstNode *node)
@@ -1568,6 +1575,11 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
         CLONE_MANY(callExpr, args);
         break;
     case astClosureExpr:
+        if (node->closureExpr.captureCount)
+            clone->closureExpr.capture =
+                cloneClosureCapture(config,
+                                    node->closureExpr.capture,
+                                    node->closureExpr.captureCount);
         CLONE_ONE(closureExpr, ret);
         CLONE_MANY(closureExpr, params);
         CLONE_ONE(closureExpr, body);
@@ -1662,7 +1674,7 @@ AstNode *cloneGenericDeclaration(MemPool *pool, const AstNode *node)
     AstNode *param = node->genericDecl.params;
     AstNode *decl = node->genericDecl.decl;
     AstNode *params = NULL, *it = NULL;
-    CloneAstConfig config = {.pool = pool, .createMapping = true};
+    CloneAstConfig config = {.pool = pool, .createMapping = true, .root = decl};
 
     initCloneAstNodeMapping(&config);
 

@@ -1,0 +1,5 @@
+module math
+
+func sub(x: i32, y: i32) => x + y
+
+pub func add(x: i32, y: i32) => sub(x, y)

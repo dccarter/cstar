@@ -154,7 +154,12 @@ static bool validateOperatorOverloadArguments(ShakeAstContext *ctx,
         return reportIfUnexpectedNumberOfParameters(
             ctx, &node->loc, "!!", count, 0);
 
+    case opDeinitOverload:
+        return reportIfUnexpectedNumberOfParameters(
+            ctx, &node->loc, "deinit", count, 0);
+
     case opCallOverload:
+    case opInitOverload:
         return true;
 
     default:

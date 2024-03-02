@@ -41,24 +41,25 @@ static const Type *createStructForClosure(AstVisitor *visitor, AstNode *node)
                                                   ctx->strings, "__Closure"),
                                               .members = members.first}});
 
-    AstNode *thisType = makeResolvedPath(ctx->pool,
-                                         &func->loc,
-                                         closure->structDecl.name,
-                                         flgNone,
-                                         closure,
-                                         func->funcDecl.signature->params,
-                                         NULL);
     func->funcDecl.this_ = makeFunctionParam(
         ctx->pool,
         &func->loc,
         S_this,
-        nodeIs(closure, ClassDecl)
-            ? thisType
-            : makePointerAstNode(
-                  ctx->pool, &func->loc, flgNone, thisType, NULL, NULL),
+        makePointerAstNode(ctx->pool,
+                           &func->loc,
+                           flgNone,
+                           makeResolvedPath(ctx->pool,
+                                            &func->loc,
+                                            closure->structDecl.name,
+                                            flgNone,
+                                            closure,
+                                            func->funcDecl.signature->params,
+                                            NULL),
+                           NULL,
+                           NULL),
         NULL,
         flgNone,
-        NULL);
+        func->funcDecl.signature->params);
     AstNode *it = members.first;
     for (; it; it = it->next) {
         it->parentScope = closure;
@@ -141,7 +142,7 @@ static AstNode *makeClosureForwardFunction(AstVisitor *visitor, AstNode *node)
                                        &param->loc,
                                        param->funcParam.name,
                                        param->flags,
-                                       param,
+                                       params.last,
                                        NULL,
                                        param->type));
     }

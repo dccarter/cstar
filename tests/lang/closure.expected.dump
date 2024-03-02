@@ -25,6 +25,7 @@ pub func allocate8(count: u32 = 0): String {
 
 
 pub func String_op__lshift9(this: String, val: string): String {
+  
   String_appendString(this, val)
   return this
 }
@@ -32,7 +33,7 @@ pub func String_op__lshift9(this: String, val: string): String {
 struct __Closure10{ }
 
 
-pub func __Closure10_op__call(this: &__Closure10): String {
+pub func __Closure10_op__call(this: &__Closure10, name: string): String {
   return ({
     var sb = ({
       var s7 = allocate8(<u32>0)
@@ -100,7 +101,7 @@ func __Closure17__fwd(ptr: &void): void => __Closure17_op__call(<&__Closure17>pt
 
 struct __Closure18{ }
 
-pub func __Closure18_op__call(this: &__Closure18) { }
+pub func __Closure18_op__call(this: &__Closure18, msg: string) { }
 
 
 func __Closure18__fwd(ptr: &void, msg: string): void => __Closure18_op__call(<&__Closure18>ptr, msg)

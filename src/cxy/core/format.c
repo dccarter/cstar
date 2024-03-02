@@ -56,7 +56,8 @@ static void writeChar(FormatState *state, char c) { write(state, &c, 1); }
 
 static void writeStr(FormatState *state, const char *s)
 {
-    write(state, s, strlen(s));
+    if (s)
+        write(state, s, strlen(s));
 }
 
 static void printUtf8ManyTimes(FormatState *state,

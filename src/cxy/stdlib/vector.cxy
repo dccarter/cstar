@@ -1,6 +1,6 @@
 module vector
 
-const DEFAULT_VECTOR_CAPACITY : u64 = 16;
+#const DEFAULT_VECTOR_CAPACITY = <u64>16
 
 pub class Vector[T] {
     - data: &T
@@ -10,13 +10,13 @@ pub class Vector[T] {
     - func grow() {
         if (count >= capacity) {
             capacity += (capacity / 2)
-            data = <&T> CXY__realloc(data: &void, sizeof!(#T) * capacity, null)
+            data = <&T> __cxy_realloc(data: &void, sizeof!(#T) * capacity)
         }
     }
 
-    func `init`(initialSize: u64 = DEFAULT_VECTOR_CAPACITY) {
+    func `init`(initialSize: u64 = #{DEFAULT_VECTOR_CAPACITY}) {
         capacity = initialSize
-        data = <&T> CXY__alloc(sizeof!(#T) * capacity, null)
+        data = <&T> __cxy_alloc(sizeof!(#T) * capacity)
     }
 
     @inline
@@ -26,7 +26,7 @@ pub class Vector[T] {
                 data.[i] = null
             }
         }
-        CXY__free(data: &void)
+        __cxy_free(data: &void)
     }
 
     func push(item: T) {
@@ -50,14 +50,16 @@ pub class Vector[T] {
     }
 
     func resize(newSize: u64) {
-        data = <&T>CXY__realloc(data: &void, sizeof!(#T) * newSize, null)
+        data = <&T> __cxy_realloc(data: &void, sizeof!(#T) * newSize)
         if (newSize < count)
             count = newSize
        capacity = newSize;
     }
 
     @inline
-    func shrink() => resize(count)
+    func shrink() {
+        resize(count)
+    }
 
     func `[]`(index: i32) {
         assert!(index < count)
@@ -101,7 +103,23 @@ pub class Vector[T] {
         return vec
     }
 
-    const func `str`(sb: StringBuilder) {
+    func map[U](fun: func(item: T) -> U) {
+        var vec = Vector[U]();
+        for (var i: 0..count) {
+            vec.push(fun(data.[i]))
+        }
+        return vec
+    }
+
+    func find(predicate: func(elem: T)->bool) : T? {
+        for (var i: 0..count) {
+            if (predicate(data.[i]))
+                return data.[i]
+        }
+        return null
+    }
+
+    const func `str`(sb: String) {
         sb << '['
         for (var i: 0..count) {
             if (i != 0)

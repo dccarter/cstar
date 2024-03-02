@@ -84,7 +84,7 @@ static void simplifyForRangeStmt(AstVisitor *visitor, AstNode *node)
                        // x
                        makeResolvedIdentifier(ctx->pool,
                                               &range->loc,
-                                              var->varDecl.name,
+                                              var->varDecl.names->ident.value,
                                               0,
                                               var,
                                               NULL,
@@ -337,10 +337,11 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
     AstNode *func = callee->type->func.decl;
 
     astVisit(visitor, callee);
-    AstNode *arg = args, *param = nodeIs(func, FuncDecl)
-                                      ? func->funcDecl.signature->params
-                                      : func->funcType.params;
-    for (u64 i = 0; arg; arg = arg->next, i++, param = param->next) {
+    AstNode *arg = args,
+            *params = nodeIs(func, FuncDecl) ? func->funcDecl.signature->params
+                                             : func->funcType.params,
+            *param = params;
+    for (u64 i = 0; arg && param; arg = arg->next, i++, param = param->next) {
         if (hasFlag(param, Variadic))
             break;
         if (typeIs(func->type->func.params[i], Auto))
@@ -371,7 +372,6 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
             ctx->pool, &target->loc, this->flags, target, NULL, this->type);
     }
 
-    astVisitManyNodes(visitor, args);
     target->next = args;
     node->callExpr.args = target;
     node->callExpr.callee = call;

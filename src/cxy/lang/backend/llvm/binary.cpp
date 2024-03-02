@@ -148,7 +148,7 @@ void generateBinaryExpr(AstVisitor *visitor, AstNode *node)
         CREATE_BINARY_OP(ctx, And, lhs, rhs);
         break;
     case opBOr:
-        CREATE_BINARY_OP(ctx, And, lhs, rhs);
+        CREATE_BINARY_OP(ctx, Or, lhs, rhs);
         break;
     case opBXor:
         CREATE_BINARY_OP(ctx, Xor, lhs, rhs);

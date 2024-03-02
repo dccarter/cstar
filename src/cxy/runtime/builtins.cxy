@@ -2,6 +2,7 @@ pub extern func strlen(s: string) : u64
 pub extern func sprintf(s: &char, fmt: string, ...args: auto) : i64;
 
 pub extern func memmove(dst: &void, src: &const void, num: u64) : &void;
+pub extern func memset(ptr: &void, value: i32, num: u64) : &void;
 pub extern func malloc(s: u64): &void
 pub extern func realloc(ptr: &void, s: u64): &void
 pub extern func free(ptr: &void): void
@@ -14,7 +15,10 @@ pub func __cxy_alloc(size: u64) => malloc(size)
 @[pure, inline]
 pub func __cxy_realloc(ptr: &void, size: u64) => realloc(ptr, size)
 @[pure, inline]
+pub func __cxy_calloc(size: u64) => memset(__cxy_alloc(size), 0, size)
+@[pure, inline]
 pub func __cxy_free(ptr: &void) { free(ptr) }
+
 
 @[pure, inline]
 pub func __cxy_assert(cond: bool, file: string, line: u64, column: u64) {
@@ -172,10 +176,10 @@ class String {
 
     @inline
     func `deinit`() => {
-        //if (data != null) {
+        if (data != null) {
             __cxy_free(this.data)
             this.data = null
-        //}
+        }
     }
 
     func appendString(str: &const char, len: u64) {
@@ -258,7 +262,10 @@ class String {
     @inline
     func `<<`[U](val: const U) : String {
         #if (U.isString)
-            appendString(val)
+            #if (U.isClass)
+                appendString(val.data:  &const char, val.count)
+            else
+                appendString(val)
         else #if (U.isInteger)
             appendSignedInt(<i64>val)
         else #if (U.isFloat)
@@ -444,7 +451,7 @@ func print[T](data: const T) {
     }
 }
 
-func println(...args: auto) {
+pub func println(...args: auto) {
     var s = String();
     #for (const x: args) {
         s << #{x}
