@@ -596,6 +596,26 @@ static void shakeBlockStmt(AstVisitor *visitor, AstNode *node)
     ctx->block = block;
 }
 
+static void shakeArrayType(AstVisitor *visitor, AstNode *node)
+{
+    ShakeAstContext *ctx = getAstVisitorContext(visitor);
+    if (node->arrayType.dim == NULL) {
+        AstNode *slice = findBuiltinDecl(S_Slice);
+        csAssert0(slice);
+        node->tag = astPath;
+        node->type = NULL;
+        node->path.elements =
+            makeResolvedPathElementWithArgs(ctx->pool,
+                                            &node->loc,
+                                            S_Slice,
+                                            flgNone,
+                                            slice,
+                                            NULL,
+                                            node->arrayType.elementType,
+                                            NULL);
+    }
+}
+
 static void shakeStringExpr(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
@@ -647,7 +667,8 @@ AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
         [astClosureExpr] = shakeClosureExpr,
         [astCallExpr] = shakeCallExpr,
         [astExprStmt] = shakeExprStmt,
-        [astMatchStmt] = shakeMatchStmt
+        [astMatchStmt] = shakeMatchStmt,
+        [astArrayType] = shakeArrayType
     }, .fallback = astVisitFallbackVisitAll);
     // clang-format on
 

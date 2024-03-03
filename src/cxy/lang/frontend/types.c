@@ -137,6 +137,11 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
         to = getOptionalTargetType(to);
     }
 
+    if (isSliceType(to) && isArrayType(from)) {
+        return unwrapType(getSliceTargetType(to), NULL) ==
+               unwrapType(from->array.elementType, NULL);
+    }
+
     const Type *_to = unwrapType(to, NULL), *_from = unwrapType(from, NULL);
     if (isTypeConst(from) && !isTypeConst(to)) {
         if (typeIs(_to, Pointer))

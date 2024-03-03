@@ -146,8 +146,8 @@ static llvm::Value *generateCastExpr(AstVisitor *visitor,
     if (typeIs(from, Union))
         return castFromUnion(visitor, to, expr, idx);
 
-    auto value = cxy::codegen(visitor, expr);
     if (isFloatType(to)) {
+        auto value = cxy::codegen(visitor, expr);
         auto s1 = getPrimitiveTypeSize(to), s2 = getPrimitiveTypeSize(from);
         if (isFloatType(from)) {
             if (s1 < s2)
@@ -163,6 +163,7 @@ static llvm::Value *generateCastExpr(AstVisitor *visitor,
         }
     }
     else if (isIntegerType(to) || isCharacterType(to)) {
+        auto value = cxy::codegen(visitor, expr);
         if (isUnsignedType(from) || isCharacterType(from)) {
             return ctx.builder.CreateZExtOrTrunc(value, ctx.getLLVMType(to));
         }
@@ -184,11 +185,21 @@ static llvm::Value *generateCastExpr(AstVisitor *visitor,
     }
     else if (isPointerType(to)) {
         if (isIntegralType(from)) {
+            auto value = cxy::codegen(visitor, expr);
             csAssert0(from->primitive.id == prtU64);
             return ctx.builder.CreateIntToPtr(value, ctx.getLLVMType(to));
         }
+        else if (isArrayType(from)) {
+            auto load = ctx.stack().loadVariable(false);
+            auto value = cxy::codegen(visitor, expr);
+            ctx.stack().loadVariable(load);
+            
+            return ctx.builder.CreateInBoundsGEP(
+                ctx.getLLVMType(from), value, {ctx.builder.getInt64(0)});
+        }
         else {
             csAssert0(isPointerType(from));
+            auto value = cxy::codegen(visitor, expr);
             auto fromPointed = from->pointer.pointed,
                  toPointed = to->pointer.pointed;
             if (isUnionType(fromPointed) &&

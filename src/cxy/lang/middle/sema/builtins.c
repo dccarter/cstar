@@ -389,13 +389,13 @@ static void implementStringFunction(AstVisitor *visitor,
 
 AstNode *makeSliceConstructor(TypingContext *ctx,
                               const Type *slice,
-                              AstNode *init)
+                              AstNode *expr)
 {
     return makeCallExpr(
         ctx->pool,
-        &init->loc,
+        &expr->loc,
         makeResolvedPath(ctx->pool,
-                         &init->loc,
+                         &expr->loc,
                          slice->name,
                          flgNone,
                          slice->tStruct.decl,
@@ -403,17 +403,17 @@ AstNode *makeSliceConstructor(TypingContext *ctx,
                          slice),
         makeResolvedPath(
             ctx->pool,
-            &init->loc,
-            init->varDecl.name,
-            init->flags,
-            init,
+            &expr->loc,
+            expr->varDecl.name,
+            expr->flags,
+            expr,
             makeIntegerLiteral(ctx->pool,
-                               &init->loc,
-                               (i64)init->type->array.len,
+                               &expr->loc,
+                               (i64)expr->type->array.len,
                                NULL,
                                getPrimitiveType(ctx->types, prtU64)),
             makePointerType(
-                ctx->types, init->type->array.elementType, flgNone)),
+                ctx->types, expr->type->array.elementType, flgNone)),
         flgNone,
         NULL,
         NULL);

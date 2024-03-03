@@ -110,11 +110,14 @@ AstNode *makeGetReferenceCall(TypingContext *ctx,
 
 AstNode *makeSliceConstructor(TypingContext *ctx,
                               const Type *slice,
-                              AstNode *init);
+                              AstNode *expr);
 
 AstNode *transformArrayExprToSliceCall(TypingContext *ctx,
                                        const Type *slice,
                                        AstNode *expr);
+void transformArrayExprToSlice(AstVisitor *visitor,
+                               const Type *slice,
+                               AstNode *expr);
 
 void transformToMemberCallExpr(AstVisitor *visitor,
                                AstNode *node,
@@ -148,10 +151,6 @@ static inline const Type *matchOverloadedFunction(TypingContext *ctx,
         ctx, callee, argTypes, argsCount, loc, flags, false);
 }
 
-// const Type *makeCoroutineEntry(AstVisitor *visitor, AstNode *node);
-// const Type *makeAsyncLaunchCall(AstVisitor *visitor,
-//                                 const Type *callee,
-//                                 AstNode *node);
 AstNode *makeEnumGetName(TypingContext *ctx, AstNode *node);
 const Type *checkMember(AstVisitor *visitor, const Type *parent, AstNode *node);
 const Type *checkMaybeComptime(AstVisitor *visitor, AstNode *node);

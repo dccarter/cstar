@@ -456,9 +456,9 @@ static void dumpTypedExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     DumpContext *ctx = getConstAstVisitorContext(visitor);
     printEscapedChar(ctx->state, '(');
-    astConstVisit(visitor, node->castExpr.to);
-    append(ctx->state, " : ", 3);
     astConstVisit(visitor, node->castExpr.expr);
+    append(ctx->state, " : ", 3);
+    astConstVisit(visitor, node->castExpr.to);
     printEscapedChar(ctx->state, ')');
 }
 
@@ -528,6 +528,11 @@ static void dumpUnionValueExpr(ConstAstVisitor *visitor, const AstNode *node)
 static void dumpTupleExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     dumpManyAstNodesEnclosed(visitor, node->tupleExpr.elements, "(", ", ", ")");
+}
+
+static void dumpArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    dumpManyAstNodesEnclosed(visitor, node->tupleExpr.elements, "[", ", ", "]");
 }
 
 static void dumpFieldExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -1016,6 +1021,7 @@ AstNode *dumpCxySource(CompilerDriver *driver, AstNode *node, FILE *file)
         [astIndexExpr] = dumpIndexExpr,
         [astCallExpr] = dumpCallExpr,
         [astTupleExpr] = dumpTupleExpr,
+        [astArrayExpr] = dumpArrayExpr,
         [astFieldExpr] = dumpFieldExpr,
         [astStructExpr] = dumpStructExpr,
         [astMacroCallExpr] = dumpMacroCallExpr,

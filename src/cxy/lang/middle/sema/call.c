@@ -257,6 +257,10 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
         }
         prev = arg;
 
+        if (isSliceType(type) && isArrayType(expr)) {
+            transformArrayExprToSlice(visitor, type, arg);
+        }
+
         if (!hasFlag(type, Optional) || hasFlag(expr, Optional))
             continue;
 

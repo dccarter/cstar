@@ -3,8 +3,8 @@ const PI = 3.14159265359;
 const SOLAR_MASS = 4 * PI * PI;
 const DAYS_PER_YEAR = 365.24;
 
-pub native func sqrt(x: f32) : f32;
-pub native func puts(str: string) : i32;
+pub extern func sqrt(x: f32) : f32;
+pub extern func puts(str: string) : i32;
 
 struct Body {
     x: f64
@@ -19,6 +19,11 @@ struct Body {
         x = -px / SOLAR_MASS
         y = -py / SOLAR_MASS
         z = -pz / SOLAR_MASS
+    }
+
+    const func `hash`() :Hash => 0
+    const func `str`(sb: String) {
+        sb;
     }
 }
 
@@ -158,6 +163,6 @@ func main(args: [string])
     }
 
     for (const i: 0..5) {
-        puts(f"${bodies.[i].mass}")
+        print(f"${bodies.[i].mass}")
     }
 }

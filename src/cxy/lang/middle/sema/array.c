@@ -10,7 +10,7 @@ static AstNode *getArrayDimension(AstNode *node)
 {
     if (node == NULL)
         return node;
-    
+
     switch (node->tag) {
     case astCastExpr:
         return node->castExpr.expr;
@@ -42,6 +42,75 @@ AstNode *transformArrayExprToSliceCall(TypingContext *ctx,
         expr,
         NULL,
         NULL);
+}
+
+void transformArrayExprToSlice(AstVisitor *visitor,
+                               const Type *slice,
+                               AstNode *expr)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    AstNode *expr_ = shallowCloneAstNode(ctx->pool, expr);
+    expr_->next = NULL;
+
+    if (!nodeIsLeftValue(expr)) {
+        AstNode *variable = makeVarDecl(
+            ctx->pool,
+            &expr->loc,
+            expr->type->flags,
+            makeAnonymousVariable(ctx->strings, "arr"),
+            makeArrayTypeAstNode(
+                ctx->pool,
+                &expr->loc,
+                expr->type->flags,
+                makeTypeReferenceNode(
+                    ctx->pool, getSliceTargetType(slice), &expr->loc),
+                expr->type->array.len,
+                NULL,
+                expr->type),
+            expr_,
+            NULL,
+            expr->type);
+        addBlockLevelDeclaration(ctx, variable);
+        expr_ = makeResolvedIdentifier(ctx->pool,
+                                       &expr->loc,
+                                       variable->varDecl.name,
+                                       0,
+                                       variable,
+                                       NULL,
+                                       variable->type);
+    }
+
+    const Type *type =
+        makePointerType(ctx->types, expr->type->array.elementType, flgNone);
+
+    expr_ =
+        makeCastExpr(ctx->pool,
+                     &expr->loc,
+                     expr->type->flags,
+                     expr_,
+                     makeTypeReferenceNode(ctx->pool, type, &expr->loc),
+                     makeIntegerLiteral(ctx->pool,
+                                        &expr->loc,
+                                        (i64)expr->type->array.len,
+                                        NULL,
+                                        getPrimitiveType(ctx->types, prtU64)),
+                     type);
+
+    clearAstBody(expr);
+    expr->tag = astCallExpr;
+    expr->type = NULL;
+    expr->callExpr.callee = makeResolvedPath(ctx->pool,
+                                             &expr->loc,
+                                             slice->name,
+                                             flgNone,
+                                             slice->tStruct.decl,
+                                             NULL,
+                                             slice);
+    expr->callExpr.args = expr_;
+
+    // Lazy way of ensuring `init` is resolved correctly
+    type = checkType(visitor, expr);
+    csAssert0(!typeIs(type, Error));
 }
 
 void checkArrayType(AstVisitor *visitor, AstNode *node)

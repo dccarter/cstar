@@ -303,6 +303,9 @@ class String {
                 }
             }
         }
+        else {
+            error!("type {t} not supported by String::`<<` operator", #U)
+        }
         return this
     }
 
@@ -437,7 +440,7 @@ pub func deallocate[T](ptr: T) {
     __cxy_free(ptr: &void)
 }
 
-func print[T](data: const T) {
+pub func print[T](data: const T) {
     #if (T.isString) {
         #if (T.isClass) {
             write(0, data.data, data.count)
