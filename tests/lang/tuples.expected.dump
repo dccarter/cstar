@@ -8,7 +8,143 @@ func swap(tup: (string, i32)): (i32, string) {
   return (tup.1, tup.0)
 }
 
-func main(args: [string]) {
+struct __Optional7 {
+  - ok: bool = false
+  - val: (string, i32)
+}
+
+pub func __Optional7_op__init(this: &__Optional[(string, i32)]) {
+  this.ok = false
+}
+
+pub func __Optional7_op__init(this: &__Optional[(string, i32)], value: (string, i32)) {
+  this.val = value
+  this.ok = true
+}
+
+pub func __Optional7_op__truthy(this: &__Optional[(string, i32)]): bool {
+  return this.ok
+}
+
+pub func __Optional7_op__deref(this: &__Optional[(string, i32)]): (string, i32) {
+  return this.val
+}
+
+pub func __Optional7_op__truthy(this: const &__Optional[(string, i32)]): bool {
+  return this.ok
+}
+
+pub func __Optional7_op__deref(this: const &__Optional[(string, i32)]): (string, i32) {
+  return this.val
+}
+
+pub func Some8(value: (string, i32)): __Optional[(string, i32)] {
+  return ({
+    var s9 = __Optional7{ok = false, val = (null, 0)}
+    __Optional7_op__init(&s9, value)
+    s9
+  })
+}
+
+pub func None10(): __Optional[(string, i32)] {
+  return ({
+    var s11 = __Optional7{ok = false, val = (null, 0)}
+    __Optional7_op__init(&s11)
+    s11
+  })
+}
+
+struct __Closure12 {
+  - i: i32
+  - len: u64
+  - data: &string
+}
+
+pub func __Closure12_op__call(this: &__Closure12): __Optional7 {
+  if (this.i < this.len) {
+    return Some8((this.data.[this.i], this.i++))
+  }
+  return None10()
+}
+
+
+pub func hash13(val: string, init: Hash = 16777619): Hash {
+  return hash_fnv1a_string(init, val)
+}
+
+
+
+pub func String_op__lshift14(this: String, val: string): String {
+  
+  String_appendString(this, ({
+    var s15 = CString{s = null}
+    CString_op__init(&s15, val)
+    s15
+  }))
+  return this
+}
+
+pub struct Slice6 {
+  - data: &string
+  - len: u64
+}
+
+pub func Slice6_op__init(this: &Slice[string], data: &string, len: u64) {
+  this.data = data
+  this.len = len
+}
+
+
+pub func Slice6_op__idx_assign(this: &Slice[string], index: i64, data: string) {
+  __cxy_assert(index < this.len, "__builtins.cxy", 461, 49)
+  this.data.[index] = data
+}
+
+pub func Slice6_op__idx(this: &Slice[string], index: i64): string {
+  __cxy_assert(index < this.len, "__builtins.cxy", 467, 49)
+  return this.data.[index]
+}
+
+pub func Slice6_op__idx(this: const &Slice[string], index: i64): string {
+  __cxy_assert(index < this.len, "__builtins.cxy", 473, 49)
+  return this.data.[index]
+}
+
+pub func Slice6_op__range(this: const &Slice[string]): __Closure12 {
+  var i: i32 = 0
+  return __Closure12{i = i, len = this.len, data = this.data}
+}
+
+pub func Slice6_op__hash(this: const &Slice[string]): u32 {
+  var code: u32 = 16777619
+  {
+    const i = 0
+    while (i != this.len)
+    {
+      code = hash13(this.data.[i], code)
+    }
+  }
+  return code
+}
+
+
+
+pub func Slice6_op__str(this: const &Slice[string], sb: String) {
+  String_appendChar(sb, '[')
+  {
+    const i = 0
+    while (i != this.len)
+    {
+      if (i != 0) {
+        String_appendString(sb, ", ")
+      }
+      String_op__lshift14(sb, this.data.[i])
+    }
+  }
+  String_appendChar(sb, ']')
+}
+
+func main(args: Slice6) {
   (true, 10)
   ('a', true, 10, "Hello")
   ('a', ("World", 32, (true, 5.996000e+00)))

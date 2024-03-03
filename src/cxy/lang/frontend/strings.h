@@ -26,9 +26,11 @@
     f(wputc)                    \
     f(cxy_range_t)              \
     f(sb)                       \
+    f(s)                        \
     f(__Optional)               \
     f(Slice)                    \
     f(String)                   \
+    f(CString)                  \
     f(Iterator)                 \
     ff(_assert, "assert")       \
     f(base_of)                  \

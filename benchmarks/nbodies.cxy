@@ -1,10 +1,9 @@
 
-const PI = 3.14159265359;
-const SOLAR_MASS = 4 * PI * PI;
-const DAYS_PER_YEAR = 365.24;
+#const PI = 3.14159265359
+#const SOLAR_MASS = 4 * #{PI} * #{PI}
+#const DAYS_PER_YEAR = 365.24
 
 pub extern func sqrt(x: f32) : f32;
-pub extern func puts(str: string) : i32;
 
 struct Body {
     x: f64
@@ -16,14 +15,13 @@ struct Body {
     mass: f64
 
     func offsetMomentum(px: f64, py: f64, pz: f64) {
-        x = -px / SOLAR_MASS
-        y = -py / SOLAR_MASS
-        z = -pz / SOLAR_MASS
+        x = -px / #{SOLAR_MASS}
+        y = -py / #{SOLAR_MASS}
+        z = -pz / #{SOLAR_MASS}
     }
 
     const func `hash`() :Hash => 0
     const func `str`(sb: String) {
-        sb;
     }
 }
 
@@ -90,47 +88,46 @@ func bodiesAdvance(bodies: [&Body], count: u64, dt: f64) {
     }
 }
 
-func main(args: [string])
-{
+pub func main() {
 
     var jupiter = Body{
         x: 4.84143144246472090e+00,
         y: -1.16032004402742839e+00,
         z: -1.03622044471123109e-00,
-        vx: DAYS_PER_YEAR * 1.66007664274403694e-03,
-        vy: DAYS_PER_YEAR * 7.69901118419740425e-03,
-        vz: DAYS_PER_YEAR * -6.90460016972063023e-05,
-        mass: SOLAR_MASS * 9.54791938424326609e-04
+        vx: #{DAYS_PER_YEAR} * 1.66007664274403694e-03,
+        vy: #{DAYS_PER_YEAR} * 7.69901118419740425e-03,
+        vz: #{DAYS_PER_YEAR} * -6.90460016972063023e-05,
+        mass: #{SOLAR_MASS} * 9.54791938424326609e-04
     };
 
     var saturn = Body{
         x: 8.34336671824457987e+00,
         y: 4.12479856412430479e+00,
         z: -4.03523417114321381e-01,
-        vx: DAYS_PER_YEAR * -2.76742510726862411e-03,
-        vy: DAYS_PER_YEAR * 4.99852801234917238e-03,
-        vz: DAYS_PER_YEAR * 2.30417297573763929e-05,
-        mass: SOLAR_MASS * 2.85885980666130812e-04
+        vx: #{DAYS_PER_YEAR} * -2.76742510726862411e-03,
+        vy: #{DAYS_PER_YEAR} * 4.99852801234917238e-03,
+        vz: #{DAYS_PER_YEAR} * 2.30417297573763929e-05,
+        mass: #{SOLAR_MASS} * 2.85885980666130812e-04
     };
 
     var uranus = Body{
         x: 1.28943695621391310e+01,
         y: -1.51111514016986312e+01,
         z: -2.23307578892655734e-01,
-        vx: DAYS_PER_YEAR * 2.96460137564761618e-03,
-        vy: DAYS_PER_YEAR * 2.37847173959480950e-03,
-        vz: DAYS_PER_YEAR * -2.96589568540237556e-05,
-        mass: SOLAR_MASS * 4.36624404335156298e-05
+        vx: #{DAYS_PER_YEAR} * 2.96460137564761618e-03,
+        vy: #{DAYS_PER_YEAR} * 2.37847173959480950e-03,
+        vz: #{DAYS_PER_YEAR} * -2.96589568540237556e-05,
+        mass: #{SOLAR_MASS} * 4.36624404335156298e-05
     };
 
     var neptune = Body{
         x: 1.53796971148509165e+01,
         y: -2.59193146099879641e+01,
         z: 1.79258772950371181e-01,
-        vx: DAYS_PER_YEAR * 2.68067772490389322e-03,
-        vy: DAYS_PER_YEAR * 1.62824170038242295e-03,
-        vz: DAYS_PER_YEAR * -9.51592254519715870e-05,
-        mass: SOLAR_MASS * 5.15138902046611451e-05
+        vx: #{DAYS_PER_YEAR} * 2.68067772490389322e-03,
+        vy: #{DAYS_PER_YEAR} * 1.62824170038242295e-03,
+        vz: #{DAYS_PER_YEAR} * -9.51592254519715870e-05,
+        mass: #{SOLAR_MASS} * 5.15138902046611451e-05
     };
 
     var sun = Body{
@@ -140,7 +137,7 @@ func main(args: [string])
         vx: 0.0,
         vy: 0.0,
         vz: 0.0,
-        mass: SOLAR_MASS
+        mass: #{SOLAR_MASS}
     };
 
     var bodies = [&jupiter, &saturn, &uranus, &neptune, &sun];
@@ -158,11 +155,11 @@ func main(args: [string])
 
     bodies.[0].offsetMomentum(px, py, pz);
 
-    for(const i: 0..100000) {
+    for(const i: 0..50000000) {
         bodiesAdvance(bodies, <u64>5, 1.0e-5);
     }
 
     for (const i: 0..5) {
-        print(f"${bodies.[i].mass}")
+        print(f"${bodies.[i].mass}\n")
     }
 }

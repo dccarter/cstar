@@ -188,13 +188,14 @@ static AstNode *shakeVariableInitializer(ShakeAstContext *ctx, AstNode *init)
         return init;
 
     // Create variable for this
-    return makeAstNode(
-        ctx->pool,
-        &init->loc,
-        &(AstNode){.tag = astVarDecl,
-                   .varDecl = {.names = makeGenIdent(
-                                   ctx->pool, ctx->strPool, &init->loc, NULL),
-                               .init = init}});
+    return makeVarDecl(ctx->pool,
+                       &init->loc,
+                       init->flags,
+                       makeAnonymousVariable(ctx->strPool, "_gi"),
+                       NULL,
+                       init,
+                       NULL,
+                       NULL);
 }
 
 static AstNode *makeStrExprBuilder(ShakeAstContext *ctx, AstNode *node)

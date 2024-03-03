@@ -824,6 +824,24 @@ AstNode *makeFunctionDecl(MemPool *pool,
                                 .body = body}});
 }
 
+AstNode *makeFunctionType(MemPool *pool,
+                          const FileLoc *loc,
+                          AstNode *params,
+                          AstNode *returnType,
+                          u64 flags,
+                          AstNode *next,
+                          const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astFuncType,
+                   .type = type,
+                   .next = next,
+                   .flags = flags,
+                   .funcType = {.params = params, .ret = returnType}});
+}
+
 AstNode *makeFunctionParam(MemPool *pool,
                            const FileLoc *loc,
                            cstring name,
@@ -1071,7 +1089,7 @@ AstNode *makeGenIdent(MemPool *pool,
         pool,
         loc,
         &(AstNode){.tag = astIdentifier,
-                   .ident.value = makeAnonymousVariable(strPool, "__gen_var")});
+                   .ident.value = makeAnonymousVariable(strPool, "_gi")});
 }
 
 void clearAstBody(AstNode *node)

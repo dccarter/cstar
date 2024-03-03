@@ -6,15 +6,13 @@
 
 #include "lang/frontend/flag.h"
 #include "lang/frontend/ttable.h"
+#include "lang/middle/sema/check.h"
 
 void evalPath(AstVisitor *visitor, AstNode *node)
 {
     EvalContext *ctx = getAstVisitorContext(visitor);
     AstNode *elem = node->path.elements;
     AstNode *symbol = elem->pathElement.resolvesTo;
-    if (nodeIs(symbol, VarDecl))
-        symbol = symbol->varDecl.init;
-
     if (symbol == NULL) {
         logError(ctx->L,
                  &elem->loc,
@@ -24,6 +22,18 @@ void evalPath(AstVisitor *visitor, AstNode *node)
         node->tag = astError;
         return;
     }
+
+    if (elem->pathElement.args && typeIs(symbol->type, Generic)) {
+        const Type *type =
+            resolveGenericDecl(ctx->typer, elem->pathElement.resolvesTo, elem);
+        if (type == NULL || typeIs(type, Error)) {
+            node->tag = astError;
+            return;
+        }
+        symbol = getTypeDecl(type);
+    }
+    else if (nodeIs(symbol, VarDecl))
+        symbol = symbol->varDecl.init;
 
     if (elem->next) {
         elem = elem->next;

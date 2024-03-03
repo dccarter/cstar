@@ -16,6 +16,8 @@ if (NOT CMAKE_BUILD_TYPE)
 endif ()
 
 set(CMAKE_C_FLAGS_DEBUG "-g")
+#add_compile_options(-fsanitize=address -fno-omit-frame-pointer -g)
+#add_link_options(-fsanitize=address)
 
 # Configure path for loading project cmake scripts
 set(CMAKE_MODULE_PATH
@@ -219,7 +221,6 @@ set(CXY_STD_LIB_SOURCES
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/json.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/map.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/net.cxy
-        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/str.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/tcp.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/vector.cxy)
 

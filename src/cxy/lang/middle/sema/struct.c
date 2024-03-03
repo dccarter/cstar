@@ -82,7 +82,8 @@ bool isExplicitConstructableFrom(TypingContext *ctx,
                                  const Type *type,
                                  const Type *from)
 {
-    if (!typeIs(type, Struct))
+    type = unwrapType(resolveAndUnThisType(type), NULL);
+    if (!isClassOrStructType(type))
         return isTypeAssignableFrom(type, from);
 
     const Type *constructor = findStructMemberType(type, S_InitOverload);
@@ -100,7 +101,7 @@ bool isExplicitConstructableFrom(TypingContext *ctx,
         return false;
 
     const Type *param = constructor->func.params[0];
-    if (!typeIs(param, Struct))
+    if (!isClassOrStructType(type))
         return isTypeAssignableFrom(param, from);
 
     if (!isExplicitConstructableFrom(ctx, param, from))
@@ -113,13 +114,15 @@ bool evalExplicitConstruction(AstVisitor *visitor,
                               const Type *type,
                               AstNode *node)
 {
-    const Type *source = node->type ?: checkType(visitor, node);
+    const Type *source = unwrapType(
+        resolveAndUnThisType(node->type ?: checkType(visitor, node)), NULL);
+    type = resolveAndUnThisType(unwrapType(type, NULL));
     TypingContext *ctx = getAstVisitorContext(visitor);
 
     if (isTypeAssignableFrom(type, source))
         return true;
 
-    if (!typeIs(type, Struct))
+    if (!isClassOrStructType(type))
         return false;
 
     const NamedTypeMember *member = findStructMember(type, S_InitOverload);

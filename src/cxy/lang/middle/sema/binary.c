@@ -5,6 +5,8 @@
 #include "check.h"
 
 #include "lang/frontend/flag.h"
+#include "lang/frontend/strings.h"
+#include "lang/middle/builtins.h"
 
 typedef enum {
     optInvalid = -1,
@@ -77,6 +79,30 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
     const Type *left = checkType(visitor, node->binaryExpr.lhs),
                *left_ = stripAll(left);
 
+    Operator op = node->binaryExpr.op;
+    BinaryOperatorKind opKind = getBinaryOperatorKind(op);
+
+    if ((opKind == optComparison || opKind == optEquality) &&
+        typeIs(unwrapType(left, NULL), String)) {
+        AstNode *lhs = node->binaryExpr.lhs,
+                *cStringDecl = findBuiltinDecl(S_CString);
+        node->binaryExpr.lhs = makeStructExpr(
+            ctx->pool,
+            &lhs->loc,
+            flgNone,
+            makeResolvedPath(ctx->pool,
+                             &lhs->loc,
+                             S_CString,
+                             flgNone,
+                             cStringDecl,
+                             NULL,
+                             cStringDecl->type),
+            makeFieldExpr(ctx->pool, &lhs->loc, S_s, flgNone, lhs, NULL),
+            NULL,
+            cStringDecl->type);
+        left_ = stripAll(checkType(visitor, node->binaryExpr.lhs));
+    }
+
     if ((typeIs(left_, Struct) && !hasFlag(left_->tStruct.decl, Extern)) ||
         typeIs(left_, Class)) {
         if (!nodeIs(node->binaryExpr.rhs, NullLit) || !isPointerType(left)) {
@@ -85,10 +111,8 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
         }
     }
 
-    Operator op = node->binaryExpr.op;
     node->binaryExpr.rhs->parentScope = node;
     const Type *right = checkType(visitor, node->binaryExpr.rhs);
-    BinaryOperatorKind opKind = getBinaryOperatorKind(op);
 
     const Type *type = unwrapType(promoteType(ctx->types, left, right), NULL);
 

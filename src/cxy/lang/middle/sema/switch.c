@@ -7,6 +7,7 @@
 #include "lang/frontend/strings.h"
 
 #include "core/alloc.h"
+#include "lang/middle/eval/eval.h"
 
 #include <string.h>
 
@@ -147,7 +148,8 @@ void checkCaseStmt(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    const Type *cond = node->parentScope->switchStmt.cond->type;
+    const Type *cond =
+        getParentScopeWithTag(node, astSwitchStmt)->switchStmt.cond->type;
 
     if (node->caseStmt.match) {
         const Type *match = checkType(visitor, node->caseStmt.match);
@@ -222,8 +224,9 @@ void checkCaseStmt(AstVisitor *visitor, AstNode *node)
 void checkSwitchStmt(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    const Type *match = checkType(visitor, node->switchStmt.cond);
-    if (!isIntegralType(match) && !typeIs(match, String)) {
+    const Type *match = checkType(visitor, node->switchStmt.cond),
+               *match_ = unwrapType(match, NULL);
+    if (!isIntegralType(match_) && !typeIs(match_, String)) {
         logError(ctx->L,
                  &node->switchStmt.cond->loc,
                  "switch match expression type must be an integral or string "
@@ -234,19 +237,33 @@ void checkSwitchStmt(AstVisitor *visitor, AstNode *node)
     }
 
     AstNode *case_ = node->switchStmt.cases;
+    // On the first pass we just check types
+    for (; case_; case_ = case_->next) {
+        case_->parentScope = node;
+        if (hasFlag(case_, Comptime)) {
+            if (!evaluate(ctx->evaluator, case_)) {
+                node->type = ERROR_TYPE(ctx);
+                continue;
+            }
+        }
+        const Type *type = case_->type ?: checkType(visitor, case_);
+        if (typeIs(type, Error)) {
+            node->type = ERROR_TYPE(ctx);
+        }
+    }
+    if (typeIs(node->type, Error))
+        return;
+
     u64 count = countAstNodes(node->switchStmt.cases);
     NodeComparisonContext *matches =
         mallocOrDie(sizeof(NodeComparisonContext) * count);
 
-    const Type *type, *prevNonVoid = NULL;
+    const Type *type = NULL;
+    case_ = node->matchStmt.cases;
     u64 i = 0;
     for (; case_; case_ = case_->next) {
         case_->parentScope = node;
-        type = checkType(visitor, case_);
-        if (typeIs(type, Error)) {
-            node->type = type;
-            continue;
-        }
+        type = case_->type;
 
         if (case_->caseStmt.match)
             matches[i++] = (NodeComparisonContext){

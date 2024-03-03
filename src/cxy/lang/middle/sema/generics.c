@@ -59,7 +59,68 @@ static bool inferGenericFunctionTypes(AstVisitor *visitor,
             continue;
         }
 
-        paramTypes[index] = argTypes[param->genericParam.inferIndex - 1];
+        if (hasFlag(argTypes[param->genericParam.inferIndex - 1], Closure)) {
+            const Type *opCall = findStructMemberType(
+                argTypes[param->genericParam.inferIndex - 1], S_CallOverload);
+            const Type **funcTypeParams =
+                mallocOrDie(sizeof(Type *) * (opCall->func.paramsCount + 1));
+            funcTypeParams[0] = makeVoidPointerType(ctx->types, flgNone);
+            AstNodeList funcTypeDeclParams = {};
+            insertAstNode(
+                &funcTypeDeclParams,
+                makeFunctionParam(ctx->pool,
+                                  &param->loc,
+                                  NULL,
+                                  makeTypeReferenceNode(
+                                      ctx->pool,
+                                      makeVoidPointerType(ctx->types, flgNone),
+                                      &param->loc),
+                                  NULL,
+                                  flgNone,
+                                  NULL));
+
+            for (u64 i = 0; i < opCall->func.paramsCount; i++) {
+                funcTypeParams[i + 1] = opCall->func.params[i];
+                insertAstNode(&funcTypeDeclParams,
+                              makeFunctionParam(
+                                  ctx->pool,
+                                  &param->loc,
+                                  NULL,
+                                  makeTypeReferenceNode(ctx->pool,
+                                                        funcTypeParams[i + 1],
+                                                        &param->loc),
+                                  NULL,
+                                  funcTypeParams[i + 1]->flags,
+                                  NULL));
+            }
+
+            AstNode *funcTypeDecl = makeFunctionType(
+                ctx->pool,
+                &param->loc,
+                funcTypeDeclParams.first,
+                makeTypeReferenceNode(
+                    ctx->pool, opCall->func.retType, &param->loc),
+                opCall->flags,
+                NULL,
+                NULL);
+            funcTypeDecl->type = makeFuncType(
+                ctx->types,
+                &(Type){.tag = typFunc,
+                        .func = {.params = funcTypeParams,
+                                 .paramsCount = opCall->func.paramsCount + 1,
+                                 .retType = opCall->func.retType,
+                                 .decl = funcTypeDecl}});
+
+            paramTypes[index] = makeTupleType(
+                ctx->types,
+                (const Type *[]){makeVoidPointerType(ctx->types, flgNone),
+                                 funcTypeDecl->type},
+                2,
+                flgFuncTypeParam);
+            free(funcTypeParams);
+        }
+        else
+            paramTypes[index] = argTypes[param->genericParam.inferIndex - 1];
     }
 
     free(argTypes);

@@ -149,10 +149,6 @@ void checkMatchStmt(AstVisitor *visitor, AstNode *node)
             types[i] = case_->type;
         }
     }
-
-    if (typeIs(node->type, Error)) {
-        free(types);
-        return;
-    }
+    
     free(types);
 }

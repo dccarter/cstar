@@ -80,6 +80,11 @@ struct LLVMContext {
 
     llvm::Value *createLoad(const Type *type, llvm::Value *value);
 
+    llvm::Value *generateCastExpr(AstVisitor *visitor,
+                                  const Type *to,
+                                  AstNode *expr,
+                                  u64 idx = 0);
+
     static llvm::Value *getUnionTag(u32 tag, const llvm::Type *type);
 
     std::string makeTypeName(const AstNode *node);
@@ -88,10 +93,6 @@ struct LLVMContext {
     {
         return std::exchange(_module, nullptr);
     }
-
-    llvm::Function *findOrCreateFunctionDecl(const Type *type);
-
-    void addFunctionDecl(AstNode *decl, llvm::Function *func);
 
     static LLVMContext &from(AstVisitor *visitor);
 
@@ -102,7 +103,10 @@ private:
     llvm::Type *createTupleType(const Type *type);
     llvm::Type *createFunctionType(const Type *type);
     llvm::Type *createUnionType(const Type *type);
-
+    llvm::Value *castFromUnion(AstVisitor *visitor,
+                               const Type *to,
+                               AstNode *node,
+                               u64 idx);
     void makeTypeName(llvm::raw_string_ostream &ss, const AstNode *node);
     static std::string makeTypeName(const Type *type, const char *alt = "");
     llvm::Type *convertToLLVMType(const Type *type);

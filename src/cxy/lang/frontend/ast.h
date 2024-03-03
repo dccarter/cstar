@@ -916,6 +916,14 @@ AstNode *makeFunctionDecl(MemPool *pool,
                           AstNode *next,
                           const Type *type);
 
+AstNode *makeFunctionType(MemPool *pool,
+                          const FileLoc *loc,
+                          AstNode *params,
+                          AstNode *returnType,
+                          u64 flags,
+                          AstNode *next,
+                          const Type *type);
+
 AstNode *makeFunctionParam(MemPool *pool,
                            const FileLoc *loc,
                            cstring name,

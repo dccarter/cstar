@@ -1633,7 +1633,7 @@ static AstNode *switchStatement(Parser *P)
 
     consume0(P, tokLBrace);
     while (!check(P, tokRBrace, tokEoF)) {
-        listAddAstNode(&cases, caseStatement(P));
+        listAddAstNode(&cases, comptime(P, caseStatement));
     }
     consume0(P, tokRBrace);
 

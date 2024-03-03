@@ -1,6 +1,6 @@
 pub extern func strlen(s: string) : u64
 pub extern func sprintf(s: &char, fmt: string, ...args: auto) : i64;
-
+pub extern func strcmp(s1: const string, s2: const string): i32
 pub extern func memmove(dst: &void, src: &const void, num: u64) : &void;
 pub extern func memset(ptr: &void, value: i32, num: u64) : &void;
 pub extern func malloc(s: u64): &void
@@ -8,7 +8,7 @@ pub extern func realloc(ptr: &void, s: u64): &void
 pub extern func free(ptr: &void): void
 pub extern func abort(): void;
 
-pub extern func write(fd: i32, buf: &const void, count: u64) : i64
+pub extern func write(fd: i32, buf: &const void, len: u64) : i64
 
 @[pure, inline]
 pub func __cxy_alloc(size: u64) => malloc(size)
@@ -26,8 +26,8 @@ pub func __cxy_assert(cond: bool, file: string, line: u64, column: u64) {
         var buf: [char, 64];
         write(2, "assertion failed: ", 18)
         write(2, file, strlen(file))
-        var count = sprintf(buf, ":%u:%u\n", line, column);
-        write(2, buf, count)
+        var len = sprintf(buf, ":%u:%u\n", line, column);
+        write(2, buf, len)
         abort()
     }
 }
@@ -43,6 +43,8 @@ struct __Optional[T] {
 
     @inline func `!!`() => ok
     @inline func `deref`() { return val }
+    @inline const func `!!`() => ok
+    @inline const func `deref`() { return val }
 }
 
 /* Creates a valid optional value */
@@ -145,24 +147,39 @@ pub func hash[T](val: const T, init: Hash = #{FNV_32_PRIME}) : Hash {
     }
 }
 
+struct CString {
+    s: string = null
+
+    @inline func `init`(s: string) { this.s = s }
+    @inline const func compare(other: This) => strcmp(this.s, other.s)
+    @inline const func `==`(other: This) => compare(other) == 0
+    @inline const func `!=`(other: This) => compare(other) != 0
+    @inline const func `<`(other: This) => compare(other) < 0
+    @inline const func `<=`(other: This) => compare(other) <= 0
+    @inline const func `>`(other: This) => compare(other) > 0
+    @inline const func `>=`(other: This) => compare(other) >= 0
+    @inline const func `hash`() => hash_fnv1a_string(#{FNV_32_PRIME}, this.s)
+    @inline const func size() => strlen(s)
+}
+
 #const CXY_STRING_BUILDER_DEFAULT_CAPACITY = 32:u64
 
 class String {
-    - capacity: u64 = 0;
-    - count: u64 = 0;
-    - data: &char = null;
+    - _capacity: u64 = 0;
+    - _size: u64 = 0;
+    - _data: &char = null;
 
     - func grow(growSize: u64) {
-        const newSize = count + growSize;
-        if (this.data == null) {
-            this.data = <&char> __cxy_alloc(growSize + 1)
-            this.capacity = growSize
+        const newSize = _size + growSize;
+        if (this._data == null) {
+            this._data = <&char> __cxy_alloc(growSize + 1)
+            this._capacity = growSize
         }
-        else if (this.capacity < newSize) {
-            while (this.capacity < newSize) {
-                this.capacity <<= 1
+        else if (this._capacity < newSize) {
+            while (this._capacity < newSize) {
+                this._capacity <<= 1
             }
-            this.data = <&char> __cxy_realloc(this.data !: &void, this.capacity+1)
+            this._data = <&char> __cxy_realloc(this._data !: &void, this._capacity+1)
         }
     }
 
@@ -176,25 +193,30 @@ class String {
 
     @inline
     func `deinit`() => {
-        if (data != null) {
-            __cxy_free(this.data)
-            this.data = null
+        if (_data != null) {
+            __cxy_free(this._data)
+            this._data = null
         }
     }
 
-    func appendString(str: &const char, len: u64) {
-        if (len) {
-            grow(len)
-            var p = this.data + this.count;
-            memmove(p, str, len)
-            this.count += len
-            this.data.[this.count] = <char>'\0'
+    func appendString(str: &const char, size: u64) {
+        if (size) {
+            grow(size)
+            var p = this._data + this._size;
+            memmove(p, str, size)
+            this._size += size
+            this._data.[this._size] = <char>'\0'
         }
     }
 
     @inline
     func appendString(s: string) : void {
         appendString(s: &const char, strlen(s))
+    }
+
+    @inline
+    func appendString(s: CString) : void {
+        appendString(s.s: &const char, s.size())
     }
 
     func appendSignedInt(num: i64) {
@@ -218,30 +240,30 @@ class String {
     func appendChar(ch: wchar) {
         if (ch < 0x80) {
             grow(1);
-            this.data.[this.count++] = <char> ch
+            this._data.[this._size++] = <char> ch
         }
         else if (ch < 0x800) {
             grow(2);
-            this.data.[this.count++] = <char> (0xC0 | (ch >> 6))
-            this.data.[this.count++] = <char> (0x80 | (ch & 0x3f))
+            this._data.[this._size++] = <char> (0xC0 | (ch >> 6))
+            this._data.[this._size++] = <char> (0x80 | (ch & 0x3f))
         }
         else if (ch < 0x10000) {
             grow(3);
-            this.data.[this.count++] = <char> (0xE0 | (ch >> 12))
-            this.data.[this.count++] = <char> (0x80 | ((ch >> 6) & 0x3f))
-            this.data.[this.count++] = <char> (0x80 | (ch & 0x3f))
+            this._data.[this._size++] = <char> (0xE0 | (ch >> 12))
+            this._data.[this._size++] = <char> (0x80 | ((ch >> 6) & 0x3f))
+            this._data.[this._size++] = <char> (0x80 | (ch & 0x3f))
         }
         else if (ch < 0x200000) {
             grow(4);
-            this.data.[this.count++] = <char> (0xF0 | (ch >> 16))
-            this.data.[this.count++] = <char> (0x80 | ((ch >> 12) & 0x3f))
-            this.data.[this.count++] = <char> (0x80 | ((ch >> 6) & 0x3f))
-            this.data.[this.count++] = <char> (0x80 | (ch & 0x3f))
+            this._data.[this._size++] = <char> (0xF0 | (ch >> 16))
+            this._data.[this._size++] = <char> (0x80 | ((ch >> 12) & 0x3f))
+            this._data.[this._size++] = <char> (0x80 | ((ch >> 6) & 0x3f))
+            this._data.[this._size++] = <char> (0x80 | (ch & 0x3f))
         }
         else {
             // TODO raise OutOfRangeException()
         }
-        this.data.[this.count] = <char>'\0'
+        this._data.[this._size] = <char>'\0'
     }
 
 
@@ -263,7 +285,7 @@ class String {
     func `<<`[U](val: const U) : String {
         #if (U.isString)
             #if (U.isClass)
-                appendString(val.data:  &const char, val.count)
+                appendString(val._data:  &const char, val.size())
             else
                 appendString(val)
         else #if (U.isInteger)
@@ -274,8 +296,24 @@ class String {
             appendBool(val)
         else #if (#U == #wchar || #U == #char)
              appendChar(val)
-        else #if (U.isEnum)
-            appendString(val.__name)
+         else #if(#U == CString)
+            appendString(val.s)
+        else #if (U.isEnum) {
+             appendString(#{U.name})
+             appendChar('.')
+             switch(val) {
+                #for (const V: (#U).members) {
+                    case U.#{mk_ident!(V.name)} =>
+                        appendString(#{V.name})
+                }
+            }
+        }
+        else #if (U.isOptional) {
+            if (val)
+                this << *val
+            else
+                appendString("null")
+        }
         else #if (U.isStruct || U.isClass)
             val.op__str(this)
         else #if (U.isTuple) {
@@ -303,6 +341,9 @@ class String {
                 }
             }
         }
+        else #if (U.isPointer) {
+            this.appendPointer[#{U.pointedType}](val)
+        }
         else {
             error!("type {t} not supported by String::`<<` operator", #U)
         }
@@ -314,30 +355,38 @@ class String {
 
     @inline
     func `str`(sb: String) {
-        sb.appendString(data, count)
+        sb.appendString(_data, _size)
     }
 
     @inline
     const func `hash`() {
-        if (this.data) {
-            return hash_fnv1a_bytes(#{FNV_32_PRIME}, this.data, this.count)
+        if (this._data) {
+            return hash_fnv1a_bytes(#{FNV_32_PRIME}, this._data, this._size)
         }
         else {
             return #{FNV_32_PRIME}
         }
     }
 
-    const func compare(other: const String) {
-        if (count != other.count)
-            return <i32>(count - other.count)
+    const func compare(other: &const char, size: u64) {
+        if (_size != size)
+            return <i32>(_size - size)
 
-        for (const i : 0..count) {
-            if (data.[i] != other.data.[i])
-                return (<i32>data.[i]) - (<i32>other.data.[i])
+        for (const i : 0.._size) {
+            if (_data.[i] != other.[i])
+                return (<i32>_data.[i]) - (<i32>other.[i])
         }
 
         return <i32>0
     }
+
+    @inline
+    const func compare(other: const String) =>
+        compare(other._data, other._size)
+
+    @inline
+    const func compare(other: const string) =>
+        compare(other: &const char, strlen(other))
 
     @inline
     const func `==`(other: const String) => compare(other) == 0
@@ -358,53 +407,75 @@ class String {
     const func `>=`(other: const String) => compare(other) >= 0
 
     @inline
+    const func `==`(other: const string) => compare(other) == 0
+
+    @inline
+    const func `!=`(other: const string) => compare(other) != 0
+
+    @inline
+    const func `<`(other: const string) => compare(other) < 0
+
+    @inline
+    const func `>`(other: const string) => compare(other) > 0
+
+    @inline
+    const func `<=`(other: const string) => compare(other) <= 0
+
+    @inline
+    const func `>=`(other: const string) => compare(other) >= 0
+
+    @inline
     const func `[]`(idx: u32) {
-        __cxy_assert(idx < count, file!, line!, column!)
-        return this.data.[idx]
+        __cxy_assert(idx < _size, file!, line!, column!)
+        return this._data.[idx]
     }
 
     const func `..`() {
         var i:i32 = 0;
         return () : __Optional[(char, i32)] => {
-            if (i < count)
-                return Some((data.[i], i++))
+            if (i < _size)
+                return Some((_data.[i], i++))
             else
                 return None[(char, i32)]()
         }
     }
+
+    @inline const func size() => _size
+    @inline const func capacity() => _capacity
+    @inline const func data() => _data
 }
 
 pub struct Slice[T] {
     - data: &T
-    - count: u64
+    - len: u64
 
-    func `init`(data: &T, count: u64) {
+    func `init`(data: &T, len: u64) {
         this.data = data
-        this.count = count
+        this.len = len
     }
 
     @inline
     func `[]=`(index:  i64, data: T) {
-        __cxy_assert(index < count, file!, line!, column!)
+        __cxy_assert(index < len, file!, line!, column!)
         this.data.[index] = data
     }
 
     @inline
     func `[]`(index:  i64) {
-        __cxy_assert(index < count, file!, line!, column!)
+        __cxy_assert(index < len, file!, line!, column!)
         return this.data.[index]
     }
 
     @inline
     const func `[]`(index:  i64) {
-        __cxy_assert(index < count, file!, line!, column!)
+        __cxy_assert(index < len, file!, line!, column!)
         return this.data.[index]
     }
 
     const func `..`() {
         var i: i32 = 0;
         return () : __Optional[(T, i32)] => {
-            if (i < count)
+            if (i < len)
                 return Some((data.[i], i++))
             return None[(T, i32)]()
         }
@@ -412,7 +483,7 @@ pub struct Slice[T] {
 
     const func `hash`() {
         var code: u32 = #{FNV_32_PRIME};
-        for (const i: 0..count) {
+        for (const i: 0..len) {
             code = hash(data.[i], code)
         }
         return code
@@ -420,7 +491,7 @@ pub struct Slice[T] {
 
     const func `str`(sb: String) {
         sb.appendChar('[')
-        for (const i: 0..count) {
+        for (const i: 0..len) {
             if (i != 0)
                 sb.appendString(", ")
             sb << data.[i]
@@ -430,7 +501,7 @@ pub struct Slice[T] {
 }
 
 @inline
-pub func allocate[T](count: u32 = 0) => __cxy_alloc(sizeof!(#T)) : T
+pub func allocate[T](len: u32 = 0) => __cxy_alloc(sizeof!(#T)) : T
 
 @inline
 pub func deallocate[T](ptr: T) {
@@ -443,7 +514,7 @@ pub func deallocate[T](ptr: T) {
 pub func print[T](data: const T) {
     #if (T.isString) {
         #if (T.isClass) {
-            write(0, data.data, data.count)
+            write(0, data.data(), data.size())
         }
         else {
             write(0, data, strlen(data))
@@ -459,7 +530,7 @@ pub func println(...args: auto) {
     #for (const x: args) {
         s << #{x}
     }
-    write(0, s.data, s.count)
+    write(0, s.data(), s.size())
     write(0, "\n", 1)
 
     deallocate(s)

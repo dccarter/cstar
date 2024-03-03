@@ -143,8 +143,12 @@ static const Type *checkBasePathElement(AstVisitor *visitor,
                            : enclosure->type;
         }
         else if (keyword == S_This) {
-            return makePointerType(
-                ctx->types, enclosure->structDecl.thisType, flags & flgConst);
+            if (nodeIs(enclosure, StructDecl))
+                return enclosure->structDecl.thisType;
+            else
+                return makePointerType(ctx->types,
+                                       enclosure->structDecl.thisType,
+                                       flags & flgConst);
         }
         unreachable("unsupported keyword");
     }

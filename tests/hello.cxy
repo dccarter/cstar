@@ -1,7 +1,5 @@
-func hello(x: [i32]) {
-    println(x)
-}
-
+struct User {}
 pub func main(argc: i32, argv: &string) {
-    hello([10:i32, 20, 30, 40])
+    var f, g = (() => (20, 20))();
+    println(f, g)
 }

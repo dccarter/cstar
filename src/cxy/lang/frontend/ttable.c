@@ -399,6 +399,31 @@ const Type *resolveType(const Type *type)
     return NULL;
 }
 
+const Type *resolveAndUnThisType(const Type *type)
+{
+    while (type) {
+        switch (type->tag) {
+        case typAlias:
+            type = resolveAndUnThisType(type->alias.aliased);
+            break;
+        case typInfo:
+            type = resolveAndUnThisType(type->info.target);
+            break;
+        case typOpaque:
+            if (hasFlag(type, ForwardDecl)) {
+                return resolveAndUnThisType(type->opaque.decl->type) ?: type;
+            }
+            return type;
+        case typThis:
+            type = resolveAndUnThisType(type->_this.that);
+            break;
+        default:
+            return type;
+        }
+    }
+    return NULL;
+}
+
 const Type *stripPointer(const Type *type)
 {
     while (true) {
@@ -718,7 +743,7 @@ const Type *unwrapType(const Type *type, u64 *flags)
 const Type *flattenWrappedType(const Type *type, u64 *flags)
 {
     u64 tmp = flgNone;
-
+    type = resolveType(type);
     while (typeIs(type, Wrapped)) {
         tmp |= type->flags;
         type = type->wrapped.target;
@@ -735,10 +760,10 @@ GetOrInset makeAppliedType(TypeTable *table, const Type *init)
     if (!ret.f) {
         Type *applied = (Type *)ret.s;
         applied->applied.args = allocFromMemPool(
-            table->memPool, sizeof(Type) * init->applied.totalArgsCount);
+            table->memPool, sizeof(Type *) * init->applied.totalArgsCount);
         memcpy(applied->applied.args,
                init->applied.args,
-               sizeof(Type) * init->applied.totalArgsCount);
+               sizeof(Type *) * init->applied.totalArgsCount);
     }
 
     return ret;

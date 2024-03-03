@@ -608,7 +608,7 @@ bool isVoidPointer(const Type *type)
 
 bool isClassType(const Type *type)
 {
-    type = unwrapType(type, NULL);
+    type = unwrapType(resolveType(type), NULL);
     return typeIs(type, Class) ||
            (typeIs(type, This) && typeIs(type->_this.that, Class));
 }
@@ -662,7 +662,9 @@ bool isBuiltinType(const Type *type)
 
 void printType_(FormatState *state, const Type *type, bool keyword)
 {
-    if (type->flags & flgConst) {
+    u64 flags = flgNone;
+    type = unwrapType(type, &flags);
+    if (flags & flgConst) {
         printKeyword(state, "const ");
     }
 
@@ -850,6 +852,7 @@ u64 getPrimitiveTypeSizeFromTag(PrtId tag)
 
 IntMinMax getIntegerTypeMinMax(const Type *type)
 {
+    type = unwrapType(type, NULL);
     static IntMinMax minMaxTable[] = {
         [prtBool] = {.f = false, .s = true},
         [prtCChar] = {.f = 0, .s = 255},

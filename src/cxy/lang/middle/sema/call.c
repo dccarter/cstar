@@ -160,7 +160,9 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
 
     callee_ = flattenWrappedType(callee_, &flags);
     if (isClassOrStructType(callee_)) {
-        AstNode *symbol = callee->path.elements->pathElement.resolvesTo;
+        AstNode *symbol = nodeIs(callee, Path)
+                              ? callee->path.elements->pathElement.resolvesTo
+                              : NULL;
         if (isClassOrStructAstNode(symbol)) {
             node->type = transformToConstructCallExpr(visitor, node);
             return;

@@ -151,7 +151,7 @@ cstring getFilenameWithoutDirs(cstring fileName)
 void makeDirectoryForPath(CompilerDriver *driver, cstring path)
 {
     u64 len;
-    char dir[512];
+    char dir[PATH_MAX];
     cstring slash = strrchr(path, '/');
     if (slash == NULL)
         return;
@@ -160,7 +160,7 @@ void makeDirectoryForPath(CompilerDriver *driver, cstring path)
     if (len == 0)
         return;
 
-    int n = sprintf(dir, "mkdir -p ");
+    int n = snprintf(dir, PATH_MAX, "mkdir -p ");
     memcpy(&dir[n], path, len);
     dir[len + n] = 0;
     system(dir);

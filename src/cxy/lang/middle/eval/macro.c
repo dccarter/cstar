@@ -62,10 +62,16 @@ static void staticLog(AstVisitor *visitor,
     int i = 0;
     for (AstNode *arg = args->next; arg; i++) {
         AstNode *it = arg;
+        FileLoc loc = arg->loc;
         arg = arg->next;
 
         if (!evaluate(visitor, it)) {
-            unreachable("ABORT COMPILE");
+            if (!nodeIs(it, Error))
+                logError(ctx->L,
+                         &loc,
+                         "unable evaluate argument at compile time",
+                         NULL);
+            goto staticLogDone;
         }
 
         switch (it->tag) {
@@ -110,7 +116,7 @@ static void staticLog(AstVisitor *visitor,
         logWarning(ctx->L, &node->loc, args->stringLiteral.value, params);
         break;
     }
-
+staticLogDone:
     free(params);
 }
 

@@ -19,7 +19,7 @@ static bool evalExprForStmtIterable(AstVisitor *visitor,
     while (it) {
         AstNode *body = deepCloneAstNode(ctx->pool, node->forStmt.body);
         variable->varDecl.init = it;
-
+        body->parentScope = node->parentScope;
         const Type *type = evalType(ctx, body);
         if (type == NULL || typeIs(type, Error)) {
             node->tag = astError;
@@ -50,6 +50,7 @@ static bool evalExprForStmtArray(AstVisitor *visitor,
 
     for (; elem; elem = elem->next) {
         AstNode *body = deepCloneAstNode(ctx->pool, node->forStmt.body);
+        body->parentScope = node->parentScope;
         variable->varDecl.init = elem;
 
         const Type *type = evalType(ctx, body);
@@ -83,6 +84,7 @@ static bool evalExprForStmtVariadic(AstVisitor *visitor,
         u64 count = tuple->tuple.count;
         for (u64 i = 0; i < count; i++) {
             AstNode *body = deepCloneAstNode(ctx->pool, node->forStmt.body);
+            body->parentScope = node->parentScope;
             variable->varDecl.init =
                 makeMemberExpr(ctx->pool,
                                &range->loc,
@@ -132,6 +134,7 @@ static bool evalForStmtWithString(AstVisitor *visitor,
     u64 count = strlen(range->stringLiteral.value);
     for (u64 i = 0; i < count; i++) {
         AstNode *body = deepCloneAstNode(ctx->pool, node->forStmt.body);
+        body->parentScope = node->parentScope;
         variable->varDecl.init = makeAstNode(
             ctx->pool,
             &range->loc,

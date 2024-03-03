@@ -82,29 +82,24 @@ void generateBinaryExpr(AstVisitor *visitor, AstNode *node)
     AstNode *left = node->binaryExpr.lhs, *right = node->binaryExpr.rhs;
     const Type *type = node->type;
 
-    auto lhs = cxy::codegen(visitor, left);
-    auto rhs = cxy::codegen(visitor, right);
+    llvm::Value *lhs = NULL, *rhs = NULL;
 
     if (left->type != right->type && !typeIs(left->type, Pointer)) {
         // implicitly cast to the bigger type
         if (isPrimitiveTypeBigger(left->type, right->type)) {
-            if (isFloatType(left->type))
-                rhs = ctx.builder.CreateSIToFP(rhs, lhs->getType());
-            else if (isUnsignedType(left->type))
-                rhs = ctx.builder.CreateZExt(rhs, lhs->getType());
-            else
-                rhs = ctx.builder.CreateSExt(rhs, lhs->getType());
+            rhs = ctx.generateCastExpr(visitor, left->type, right);
+            lhs = cxy::codegen(visitor, left);
             type = left->type;
         }
         else {
-            if (isFloatType(right->type))
-                lhs = ctx.builder.CreateSIToFP(lhs, rhs->getType());
-            else if (isUnsignedType(left->type))
-                lhs = ctx.builder.CreateZExt(lhs, rhs->getType());
-            else
-                lhs = ctx.builder.CreateSExt(lhs, rhs->getType());
+            lhs = ctx.generateCastExpr(visitor, right->type, left);
+            rhs = cxy::codegen(visitor, right);
             type = right->type;
         }
+    }
+    else {
+        rhs = cxy::codegen(visitor, right);
+        lhs = cxy::codegen(visitor, left);
     }
 
 #define CREATE_TYPE_SPECIFIC_OP(Op)                                            \

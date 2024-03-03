@@ -12,108 +12,237 @@ func closureArg2(fn: (&void, func(_: &void, msg: string) -> void)) {
   closureArg1("hello", fn)
 }
 
-struct __Closure6{ }
+struct __Optional7 {
+  - ok: bool = false
+  - val: (string, i32)
+}
 
-pub func __Closure6_op__call(this: &__Closure6): i8 {
+pub func __Optional7_op__init(this: &__Optional[(string, i32)]) {
+  this.ok = false
+}
+
+pub func __Optional7_op__init(this: &__Optional[(string, i32)], value: (string, i32)) {
+  this.val = value
+  this.ok = true
+}
+
+pub func __Optional7_op__truthy(this: &__Optional[(string, i32)]): bool {
+  return this.ok
+}
+
+pub func __Optional7_op__deref(this: &__Optional[(string, i32)]): (string, i32) {
+  return this.val
+}
+
+pub func __Optional7_op__truthy(this: const &__Optional[(string, i32)]): bool {
+  return this.ok
+}
+
+pub func __Optional7_op__deref(this: const &__Optional[(string, i32)]): (string, i32) {
+  return this.val
+}
+
+pub func Some8(value: (string, i32)): __Optional[(string, i32)] {
+  return ({
+    var s9 = __Optional7{ok = false, val = (null, 0)}
+    __Optional7_op__init(&s9, value)
+    s9
+  })
+}
+
+pub func None10(): __Optional[(string, i32)] {
+  return ({
+    var s11 = __Optional7{ok = false, val = (null, 0)}
+    __Optional7_op__init(&s11)
+    s11
+  })
+}
+
+struct __Closure12 {
+  - i: i32
+  - len: u64
+  - data: &string
+}
+
+pub func __Closure12_op__call(this: &__Closure12): __Optional7 {
+  if (this.i < this.len) {
+    return Some8((this.data.[this.i], this.i++))
+  }
+  return None10()
+}
+
+
+pub func hash13(val: string, init: Hash = 16777619): Hash {
+  return hash_fnv1a_string(init, val)
+}
+
+
+
+pub func String_op__lshift14(this: String, val: string): String {
+  
+  String_appendString(this, ({
+    var s15 = CString{s = null}
+    CString_op__init(&s15, val)
+    s15
+  }))
+  return this
+}
+
+pub struct Slice6 {
+  - data: &string
+  - len: u64
+}
+
+pub func Slice6_op__init(this: &Slice[string], data: &string, len: u64) {
+  this.data = data
+  this.len = len
+}
+
+
+pub func Slice6_op__idx_assign(this: &Slice[string], index: i64, data: string) {
+  __cxy_assert(index < this.len, "__builtins.cxy", 461, 49)
+  this.data.[index] = data
+}
+
+pub func Slice6_op__idx(this: &Slice[string], index: i64): string {
+  __cxy_assert(index < this.len, "__builtins.cxy", 467, 49)
+  return this.data.[index]
+}
+
+pub func Slice6_op__idx(this: const &Slice[string], index: i64): string {
+  __cxy_assert(index < this.len, "__builtins.cxy", 473, 49)
+  return this.data.[index]
+}
+
+pub func Slice6_op__range(this: const &Slice[string]): __Closure12 {
+  var i: i32 = 0
+  return __Closure12{i = i, len = this.len, data = this.data}
+}
+
+pub func Slice6_op__hash(this: const &Slice[string]): u32 {
+  var code: u32 = 16777619
+  {
+    const i = 0
+    while (i != this.len)
+    {
+      code = hash13(this.data.[i], code)
+    }
+  }
+  return code
+}
+
+
+
+pub func Slice6_op__str(this: const &Slice[string], sb: String) {
+  String_appendChar(sb, '[')
+  {
+    const i = 0
+    while (i != this.len)
+    {
+      if (i != 0) {
+        String_appendString(sb, ", ")
+      }
+      String_op__lshift14(sb, this.data.[i])
+    }
+  }
+  String_appendChar(sb, ']')
+}
+
+struct __Closure16{ }
+
+pub func __Closure16_op__call(this: &__Closure16): i8 {
   return 1
 }
 
 
-pub func allocate8(count: u32 = 0): String {
-  return (class String : __cxy_alloc(__bc(0, #String)))
+pub func allocate18(len: u32 = 0): String {
+  return (__cxy_alloc(__bc(0, #String)) : class String)
 }
 
-
-pub func String_op__lshift9(this: String, val: string): String {
-  
-  String_appendString(this, val)
-  return this
-}
-
-struct __Closure10{ }
+struct __Closure19{ }
 
 
-pub func __Closure10_op__call(this: &__Closure10, name: string): String {
+pub func __Closure19_op__call(this: &__Closure19, name: string): String {
   return ({
     var sb = ({
-      var s7 = allocate8(<u32>0)
-      String_op__init(s7)
-      s7
+      var s17 = allocate18(<u32>0)
+      String_op__init(s17)
+      s17
     })
-    String_op__lshift9(String_op__lshift9(sb, "Hello "), name)
+    String_op__lshift14(String_op__lshift14(sb, "Hello "), name)
   })
 }
 
 
-pub func String_op__lshift12(this: String, val: i8): String {
+pub func String_op__lshift21(this: String, val: i8): String {
   
   String_appendSignedInt(this, <i64>val)
   return this
 }
 
-struct __Closure13 {
+struct __Closure22 {
   - b: string
   - x: i8
 }
 
-pub func __Closure13_op__call(this: &__Closure13): String {
+pub func __Closure22_op__call(this: &__Closure22): String {
   return ({
     var sb = ({
-      var s11 = allocate8(<u32>0)
-      String_op__init(s11)
-      s11
+      var s20 = allocate18(<u32>0)
+      String_op__init(s20)
+      s20
     })
-    String_op__lshift12(String_op__lshift9(String_op__lshift9(sb, this.b), " -> "), this.x)
+    String_op__lshift21(String_op__lshift14(String_op__lshift14(sb, this.b), " -> "), this.x)
   })
 }
 
-struct __Closure15 {
+struct __Closure24 {
   - b: string
   - x: i8
 }
 
-pub func __Closure15_op__call(this: &__Closure15): String {
+pub func __Closure24_op__call(this: &__Closure24): String {
   return ({
     var sb = ({
-      var s14 = allocate8(<u32>0)
-      String_op__init(s14)
-      s14
+      var s23 = allocate18(<u32>0)
+      String_op__init(s23)
+      s23
     })
-    String_op__lshift12(String_op__lshift9(String_op__lshift9(sb, this.b), " -> "), this.x)
+    String_op__lshift21(String_op__lshift14(String_op__lshift14(sb, this.b), " -> "), this.x)
   })
 }
 
-struct __Closure16 {
+struct __Closure25 {
   - b: string
   - x: i8
 }
 
-pub func __Closure16_op__call(this: &__Closure16) {
-  const g = __Closure15{b = b, x = x}
+pub func __Closure25_op__call(this: &__Closure25) {
+  const g = __Closure24{b = b, x = x}
 }
 
-struct __Closure17{ }
+struct __Closure26{ }
 
-pub func __Closure17_op__call(this: &__Closure17) { }
-
-
-func __Closure17__fwd(ptr: &void): void => __Closure17_op__call(<&__Closure17>ptr)
-
-struct __Closure18{ }
-
-pub func __Closure18_op__call(this: &__Closure18, msg: string) { }
+pub func __Closure26_op__call(this: &__Closure26) { }
 
 
-func __Closure18__fwd(ptr: &void, msg: string): void => __Closure18_op__call(<&__Closure18>ptr, msg)
+func __Closure26__fwd(ptr: &void): void => __Closure26_op__call(<&__Closure26>ptr)
 
-func main(args: [string]) {
-  const one = __Closure6{}
-  __Closure6_op__call(&one)
-  __Closure10_op__call(&(__Closure10{}), "User")
+struct __Closure27{ }
+
+pub func __Closure27_op__call(this: &__Closure27, msg: string) { }
+
+
+func __Closure27__fwd(ptr: &void, msg: string): void => __Closure27_op__call(<&__Closure27>ptr, msg)
+
+func main(args: Slice6) {
+  const one = __Closure16{}
+  __Closure16_op__call(&one)
+  __Closure19_op__call(&(__Closure19{}), "User")
   var x = 100
   var b = "Hello"
-  __Closure13_op__call(&(__Closure13{b = b, x = x}))
-  const f = __Closure16{b = b, x = x}
-  closureArg0((<&void>&__Closure17{}, __Closure17__fwd))
-  closureArg2((<&void>&__Closure18{}, __Closure18__fwd))
+  __Closure22_op__call(&(__Closure22{b = b, x = x}))
+  const f = __Closure25{b = b, x = x}
+  closureArg0((<&void>&__Closure26{}, __Closure26__fwd))
+  closureArg2((<&void>&__Closure27{}, __Closure27__fwd))
 }

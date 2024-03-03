@@ -24,16 +24,14 @@ static AstNode *makeSpreadVariable(TypingContext *ctx, AstNode *expr)
         return expr;
 
     // Create variable for this
-    return makeAstNode(
-        ctx->pool,
-        &expr->loc,
-        &(AstNode){
-            .tag = astVarDecl,
-            .type = expr->type,
-            .flags = expr->flags,
-            .varDecl = {.names = makeGenIdent(
-                            ctx->pool, ctx->strings, &expr->loc, expr->type),
-                        .init = expr}});
+    return makeVarDecl(ctx->pool,
+                       &expr->loc,
+                       expr->flags,
+                       makeAnonymousVariable(ctx->strings, "_gi"),
+                       NULL,
+                       expr,
+                       NULL,
+                       expr->type);
 }
 
 static void checkTypeRef(AstVisitor *visitor, AstNode *node)
