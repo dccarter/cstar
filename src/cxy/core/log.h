@@ -43,12 +43,26 @@ typedef struct {
     FilePos begin, end;
 } FileLoc;
 
+typedef enum { dkError, dkWarning, dkNote } DiagnosticKind;
+
+typedef struct Diagnostic {
+    DiagnosticKind kind;
+    FileLoc loc;
+    cstring fmt;
+    const FormatArg *args;
+} Diagnostic;
+
+typedef void (*DiagnosticHandler)(const Diagnostic *, void *);
+
 typedef struct Log {
     HashTable fileCache;
-    FormatState *state;
+    DiagnosticHandler handler;
+    void *handlerCtx;
     size_t errorCount;
     size_t warningCount;
     size_t maxErrors;
+    bool ignoreStyles;
+    FormatState *state;
     struct {
         cstring str;
         u64 num;
@@ -56,9 +70,12 @@ typedef struct Log {
     bool showDiagnostics;
 } Log;
 
-typedef enum { LOG_ERROR, LOG_WARNING, LOG_NOTE } LogMsgType;
+typedef struct DiagnosticMemoryPrintCtx {
+    FormatState *state;
+    Log *L;
+} DiagnosticMemoryPrintCtx;
 
-Log newLog(FormatState *);
+Log newLog(DiagnosticHandler handler, void *ctx);
 void freeLog(Log *);
 
 void logError(Log *, const FileLoc *, const char *, const FormatArg *);
@@ -67,10 +84,13 @@ void logWarningWithId(
     Log *, u8, const FileLoc *, const char *, const FormatArg *);
 void logNote(Log *, const FileLoc *, const char *, const FormatArg *);
 
+void printDiagnosticToConsole(const Diagnostic *diag, void *ctx);
+void printDiagnosticToMemory(const Diagnostic *diag, void *ctx);
+
 static inline bool hasErrors(Log *L) { return L->errorCount > 0; }
 
 const FileLoc *builtinLoc(void);
-static inline FileLoc locSubrange(const FileLoc *start, const FileLoc *end)
+static inline FileLoc locSubRange(const FileLoc *start, const FileLoc *end)
 {
     csAssert0(start->fileName == end->fileName);
     return (FileLoc){

@@ -35,6 +35,7 @@ TypeTable *newTypeTable(MemPool *pool, StrPool *strPool);
 void freeTypeTable(TypeTable *table);
 
 const Type *resolveType(const Type *type);
+const Type *resolveAndUnThisType(const Type *type);
 const Type *stripPointer(const Type *type);
 const Type *stripAll(const Type *type);
 const Type *stripOnce(const Type *type, u64 *flags);

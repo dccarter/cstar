@@ -97,10 +97,12 @@ static AstNode *executeDumpAst(CompilerDriver *driver, AstNode *node)
         }
     }
 
-    if (driver->options.dev.dumpJson)
+    if (driver->options.dev.dumpMode == dmpJSON)
         return dumpAstJson(driver, node->metadata.node, file);
-    else
+    else if (driver->options.dev.dumpMode == dmpYAML)
         return dumpAstToYaml(driver, node, file);
+    else
+        return dumpCxySource(driver, node, file);
 }
 
 static AstNode *executeDumpIR(CompilerDriver *driver, AstNode *node)
@@ -129,7 +131,6 @@ static AstNode *executeBindAst(CompilerDriver *driver, AstNode *node)
 
     if (hasErrors(driver->L))
         return NULL;
-    ;
 
     node->metadata.stages |= BIT(ccsBind);
     return node;
@@ -153,21 +154,21 @@ static AstNode *executeTypeCheckAst(CompilerDriver *driver, AstNode *node)
     return node;
 }
 
-static AstNode *executeFinalizeAst(CompilerDriver *driver, AstNode *node)
+static AstNode *executeSimplify(CompilerDriver *driver, AstNode *node)
 {
     csAssert0(nodeIs(node, Metadata));
     if (!(node->metadata.stages & BIT(ccsTypeCheck))) {
         logError(
-            driver->L, builtinLoc(), "cannot finalize an untyped ast", NULL);
+            driver->L, builtinLoc(), "cannot simplify an untyped ast", NULL);
         return NULL;
     }
 
-    node->metadata.node = finalizeAst(driver, node->metadata.node);
+    node->metadata.node = simplifyAst(driver, node->metadata.node);
 
     if (hasErrors(driver->L))
         return NULL;
 
-    node->metadata.stages |= BIT(ccsFinalize);
+    node->metadata.stages |= BIT(ccsSimplify);
     return node;
 }
 
@@ -307,7 +308,7 @@ static CompilerStageExecutor compilerStageExecutors[ccsCOUNT] = {
     [ccsShake] = executeShakeAst,
     [ccsBind] = executeBindAst,
     [ccsTypeCheck] = executeTypeCheckAst,
-    //    [ccsFinalize] = executeFinalizeAst,
+    [ccsSimplify] = executeSimplify,
     [ccsCodegen] = executeGenerateCode,
     // TODO causing issues
     // [ccsCollect] = executeCollect,

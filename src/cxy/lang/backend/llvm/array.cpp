@@ -8,7 +8,7 @@ extern "C" {
 #include "lang/frontend/flag.h"
 }
 
-static llvm::Constant *makeArrayLiteral(LLVMContext &ctx, AstNode *node)
+static llvm::Constant *makeArrayLiteral(cxy::LLVMContext &ctx, AstNode *node)
 {
     std::vector<llvm::Constant *> elements{};
     auto elem = node->arrayExpr.elements;
@@ -34,7 +34,7 @@ static llvm::Constant *makeArrayLiteral(LLVMContext &ctx, AstNode *node)
         }
         else if (typeIs(elem->type, String)) {
             elements.push_back(
-                ctx.builder().CreateGlobalStringPtr(elem->stringLiteral.value));
+                ctx.builder.CreateGlobalStringPtr(elem->stringLiteral.value));
         }
         else if (typeIs(elem->type, Array)) {
             elements.push_back(makeArrayLiteral(ctx, elem));
@@ -45,15 +45,15 @@ static llvm::Constant *makeArrayLiteral(LLVMContext &ctx, AstNode *node)
         llvm::dyn_cast<llvm::ArrayType>(ctx.getLLVMType(node->type)), elements);
 }
 
-void visitArrayExpr(AstVisitor *visitor, AstNode *node)
+void generateArrayExpr(AstVisitor *visitor, AstNode *node)
 {
-    auto &ctx = LLVMContext::from(visitor);
+    auto &ctx = cxy::LLVMContext::from(visitor);
     auto array = ctx.createUndefined(node->type);
 
     auto elem = node->arrayExpr.elements;
     for (u64 i = 0; elem; elem = elem->next, i++) {
-        auto value = codegen(visitor, elem);
-        array = ctx.builder().CreateInsertValue(array, value, i);
+        auto value = cxy::codegen(visitor, elem);
+        array = ctx.builder.CreateInsertValue(array, value, i);
     }
     ctx.returnValue(array);
 }

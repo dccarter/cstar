@@ -3,10 +3,8 @@ func varargs(...args: auto) {
 
 func add(...nums: f32) {
     var sum : f32 = 0;
-    #const i = 0;
     #for (const num: nums) {
-        sum += nums.#{i}
-        #{i += 1}
+        sum += #{num}
     }
 }
 

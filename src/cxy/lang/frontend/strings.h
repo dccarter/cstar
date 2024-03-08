@@ -11,18 +11,8 @@
 #define CXY_BUILTIN_NAMES(f, ff)    \
     f(main)                         \
     f(__builtins)               \
-    f(__builtin_alloc)          \
-    f(__builtin_dealloc)        \
-    f(__builtin_realloc)        \
-    f(__builtin_alloc_slice)    \
-    f(__builtin_dealloc_slice)  \
-    f(__builtin_realloc_slice)  \
-    f(__builtin_memset_slice)   \
-    f(__builtin_init_slice)     \
-    f(__builtin_free_slice)     \
-    f(CXY__builtins_assert)     \
+    f(__cxy_assert)     \
     f(CXY__builtins_sizeof)     \
-    f(__struct_copy)            \
     f(this)                     \
     f(This)                     \
     f(super)                    \
@@ -34,13 +24,13 @@
     f(strlen)                   \
     f(char)                     \
     f(wputc)                    \
-    f(toString)                 \
     f(cxy_range_t)              \
     f(sb)                       \
-    f(StringBuilder)            \
+    f(s)                        \
     f(__Optional)               \
     f(Slice)                    \
     f(String)                   \
+    f(CString)                  \
     f(Iterator)                 \
     ff(_assert, "assert")       \
     f(base_of)                  \
@@ -58,6 +48,7 @@
     f(ptroff)                   \
     f(sizeof)                   \
     f(typeof)                   \
+    f(allocate)                 \
     f(alias)                    \
     f(name)                     \
     f(None)                     \

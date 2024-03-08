@@ -19,7 +19,7 @@ static bool evalExprForStmtIterable(AstVisitor *visitor,
     while (it) {
         AstNode *body = deepCloneAstNode(ctx->pool, node->forStmt.body);
         variable->varDecl.init = it;
-
+        body->parentScope = node->parentScope;
         const Type *type = evalType(ctx, body);
         if (type == NULL || typeIs(type, Error)) {
             node->tag = astError;
@@ -50,6 +50,7 @@ static bool evalExprForStmtArray(AstVisitor *visitor,
 
     for (; elem; elem = elem->next) {
         AstNode *body = deepCloneAstNode(ctx->pool, node->forStmt.body);
+        body->parentScope = node->parentScope;
         variable->varDecl.init = elem;
 
         const Type *type = evalType(ctx, body);
@@ -79,11 +80,30 @@ static bool evalExprForStmtVariadic(AstVisitor *visitor,
 
     const Type *tuple = unwrapType(range->type, NULL);
     if (tuple) {
+        csAssert0(nodeIs(range, Identifier));
         u64 count = tuple->tuple.count;
         for (u64 i = 0; i < count; i++) {
             AstNode *body = deepCloneAstNode(ctx->pool, node->forStmt.body);
-            variable->varDecl.init = makeTypeReferenceNode(
-                ctx->pool, tuple->tuple.members[i], &range->loc);
+            body->parentScope = node->parentScope;
+            variable->varDecl.init =
+                makeMemberExpr(ctx->pool,
+                               &range->loc,
+                               range->flags,
+                               makeResolvedIdentifier(ctx->pool,
+                                                      &range->loc,
+                                                      range->ident.value,
+                                                      0,
+                                                      range->ident.resolvesTo,
+                                                      NULL,
+                                                      range->type),
+                               makeUnsignedIntegerLiteral(
+                                   ctx->pool,
+                                   &range->loc,
+                                   i,
+                                   NULL,
+                                   getPrimitiveType(ctx->types, prtU64)),
+                               NULL,
+                               tuple->tuple.members[i]);
 
             const Type *type = evalType(ctx, body);
             if (type == NULL || typeIs(type, Error)) {
@@ -114,6 +134,7 @@ static bool evalForStmtWithString(AstVisitor *visitor,
     u64 count = strlen(range->stringLiteral.value);
     for (u64 i = 0; i < count; i++) {
         AstNode *body = deepCloneAstNode(ctx->pool, node->forStmt.body);
+        body->parentScope = node->parentScope;
         variable->varDecl.init = makeAstNode(
             ctx->pool,
             &range->loc,
@@ -126,7 +147,7 @@ static bool evalForStmtWithString(AstVisitor *visitor,
             return false;
         }
 
-        if (!nodeIs(body, Nop)) {
+        if (!nodeIs(body, Noop)) {
             if (nodeIs(body, BlockStmt) &&
                 findAttribute(node, S_consistent) == NULL) {
                 insertAstNode(nodes, body->blockStmt.stmts);
@@ -186,7 +207,7 @@ void evalForStmt(AstVisitor *visitor, AstNode *node)
 {
     EvalContext *ctx = getAstVisitorContext(visitor);
     FileLoc rangeLoc = node->forStmt.range->loc;
-
+    AstNode range = *node->forStmt.range;
     if (!evaluate(visitor, node->forStmt.range)) {
         node->tag = astError;
         return;
@@ -207,7 +228,7 @@ void evalForStmt(AstVisitor *visitor, AstNode *node)
         if (!evalExprForStmtArray(visitor, node, &nodes))
             return;
         break;
-    case astFuncParam:
+    case astFuncParamDecl:
         if (!hasFlag(node->forStmt.range, Variadic)) {
             logError(ctx->L,
                      &rangeLoc,
@@ -217,7 +238,11 @@ void evalForStmt(AstVisitor *visitor, AstNode *node)
             node->tag = astError;
             return;
         }
-
+        node->forStmt.range->tag = astIdentifier;
+        node->forStmt.range->ident.value =
+            range.path.elements->pathElement.name;
+        node->forStmt.range->ident.resolvesTo =
+            range.path.elements->pathElement.resolvesTo;
         if (!evalExprForStmtVariadic(visitor, node, &nodes))
             return;
         break;
@@ -236,7 +261,7 @@ void evalForStmt(AstVisitor *visitor, AstNode *node)
     }
 
     if (nodes.first == NULL) {
-        node->tag = astNop;
+        node->tag = astNoop;
     }
     else {
         nodes.last->next = node->next;

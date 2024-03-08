@@ -9,7 +9,7 @@
     switch (node->tag) {                                                       \
     case astTypeRef:                                                           \
     case astCCode:                                                             \
-    case astNop:                                                               \
+    case astNoop:                                                              \
     case astStringType:                                                        \
     case astAutoType:                                                          \
     case astVoidType:                                                          \
@@ -122,7 +122,7 @@
         MODE##Visit(visitor, node->macroDecl.ret);                             \
         MODE##Visit(visitor, node->macroDecl.body);                            \
         break;                                                                 \
-    case astFuncParam:                                                         \
+    case astFuncParamDecl:                                                     \
         MODE##Visit(visitor, node->funcParam.type);                            \
         MODE##Visit(visitor, node->funcParam.def);                             \
         break;                                                                 \
@@ -138,17 +138,17 @@
     case astUnionDecl:                                                         \
         MODE##VisitManyNodes(visitor, node->unionDecl.members);                \
         break;                                                                 \
-    case astUnionValue:                                                        \
+    case astUnionValueExpr:                                                    \
         MODE##Visit(visitor, node->unionValue.value);                          \
         break;                                                                 \
-    case astEnumOption:                                                        \
+    case astEnumOptionDecl:                                                    \
         MODE##Visit(visitor, node->enumOption.value);                          \
         break;                                                                 \
     case astEnumDecl:                                                          \
         MODE##Visit(visitor, node->enumDecl.base);                             \
         MODE##VisitManyNodes(visitor, node->enumDecl.options);                 \
         break;                                                                 \
-    case astField:                                                             \
+    case astFieldDecl:                                                         \
         MODE##Visit(visitor, node->structField.type);                          \
         MODE##Visit(visitor, node->structField.value);                         \
         break;                                                                 \
@@ -187,6 +187,10 @@
         MODE##Visit(visitor, node->typedExpr.expr);                            \
         break;                                                                 \
     case astCallExpr:                                                          \
+        MODE##Visit(visitor, node->callExpr.callee);                           \
+        MODE##VisitManyNodes(visitor, node->callExpr.args);                    \
+        break;                                                                 \
+    case astBackendCall:                                                       \
         MODE##Visit(visitor, node->callExpr.callee);                           \
         MODE##VisitManyNodes(visitor, node->callExpr.args);                    \
         break;                                                                 \
@@ -324,15 +328,51 @@ void astConstVisitFallbackVisitAll(ConstAstVisitor *visitor,
 void astVisitSkip(AstVisitor *visitor, AstNode *node) {}
 void astConstVisitSkip(ConstAstVisitor *visitor, const AstNode *node) {}
 
+void astModifierInit(AstModifier *ctx, AstNode *node)
+{
+    ctx->parent = node;
+    ctx->previous = NULL;
+    ctx->current = NULL;
+}
+
+void astModifierNext(AstModifier *ctx, AstNode *node)
+{
+    ctx->previous = ctx->current;
+    ctx->current = node;
+}
+
+void astModifierRemoveCurrent(AstModifier *ctx)
+{
+    csAssert0(ctx->current);
+    if (ctx->previous)
+        ctx->previous->next = ctx->current->next;
+    else {
+        if (nodeIs(ctx->parent, Program)) {
+            ctx->parent->program.decls = ctx->current->next;
+        }
+        else {
+            csAssert0(nodeIs(ctx->parent, BlockStmt));
+            ctx->parent->blockStmt.stmts = ctx->current->next;
+        }
+    }
+}
+
 void astModifierAdd(AstModifier *ctx, AstNode *node)
 {
     csAssert0(ctx->current);
 
     node->next = ctx->current;
-    if (ctx->previous)
+    if (ctx->previous) {
         ctx->previous->next = node;
-    else
+    }
+    else if (nodeIs(ctx->parent, Program)) {
         ctx->parent->program.decls = node;
+    }
+    else {
+        csAssert0(nodeIs(ctx->parent, BlockStmt));
+        ctx->parent->blockStmt.stmts = node;
+    }
+
     ctx->previous = node;
 }
 

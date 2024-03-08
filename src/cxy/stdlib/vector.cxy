@@ -1,113 +1,143 @@
 module vector
 
-const DEFAULT_VECTOR_CAPACITY : u64 = 16;
+#const DEFAULT_VECTOR_CAPACITY = <u64>16
 
 pub class Vector[T] {
-    - data: &T
-    - count: u64
-    - capacity: u64
+    - _data: &T
+    - _size: u64
+    - _capacity: u64
 
     - func grow() {
-        if (count >= capacity) {
-            capacity += (capacity / 2)
-            data = <&T> CXY__realloc(data: &void, sizeof!(#T) * capacity, null)
+        if (_size >= _capacity) {
+            _capacity += (_capacity / 2)
+            _data = <&T> __cxy_realloc(_data: &void, sizeof!(#T) * _capacity)
         }
     }
 
-    func `init`(initialSize: u64 = DEFAULT_VECTOR_CAPACITY) {
-        capacity = initialSize
-        data = <&T> CXY__alloc(sizeof!(#T) * capacity, null)
+    func `init`(initialSize: u64 = #{DEFAULT_VECTOR_CAPACITY}) {
+        _capacity = initialSize
+        _data = <&T> __cxy_alloc(sizeof!(#T) * _capacity)
     }
 
     @inline
     func `deinit`() {
         #if (T.isDestructible) {
-            for (const i: 0..count) {
-                data.[i] = null
+            for (const i: 0.._size) {
+                _data.[i] = null
             }
         }
-        CXY__free(data: &void)
+        __cxy_free(_data: &void)
     }
 
     func push(item: T) {
         grow()
-        data.[count++] = item
+        _data.[_size++] = item
     }
 
     func pop() {
-        assert!(count > 0)
-        count--
-        return data.[count]
+        assert!(_size > 0)
+        _size--
+        return _data.[_size]
     }
 
     func shift() {
-        assert!(count > 0)
-        var item = data.[0];
-        var tmp = data;
-        count--
-        memmove(tmp, ptroff!(tmp + 1), sizeof!(#T) * count)
+        assert!(_size > 0)
+        var item = _data.[0];
+        var tmp = _data;
+        _size--
+        memmove(tmp, ptroff!(tmp + 1), sizeof!(#T) * _size)
         return item
     }
 
     func resize(newSize: u64) {
-        data = <&T>CXY__realloc(data: &void, sizeof!(#T) * newSize, null)
-        if (newSize < count)
-            count = newSize
-       capacity = newSize;
+        _data = <&T> __cxy_realloc(_data: &void, sizeof!(#T) * newSize)
+        if (newSize < _size)
+            _size = newSize
+       _capacity = newSize;
     }
 
     @inline
-    func shrink() => resize(count)
+    func shrink() {
+        resize(_size)
+    }
 
     func `[]`(index: i32) {
-        assert!(index < count)
-        return data.[index]
+        assert!(index < _size)
+        return _data.[index]
     }
 
     func `[]=`(index: i32, value: T) {
-        assert!(index < count)
-        data.[index] = value
+        assert!(index < _size)
+        _data.[index] = value
     }
 
     func `..`() {
         var i : i64 = 0;
         return () : (T, i64)? => {
-            if (i < count)
-                return (data.[i], i++)
+            if (i < _size)
+                return (_data.[i], i++)
             else
                 return null
         }
     }
 
     func each(cb: func(item: T) -> void) {
-        for (var i: 0..count) {
-            cb(data.[i])
+        for (var i: 0.._size) {
+            cb(_data.[i])
         }
     }
 
     func accumulate[U](fun: func(acc: U, item: T) -> U, acc: U) {
-        for (var i: 0..count) {
-            acc = fun(acc, data.[i])
+        for (var i: 0.._size) {
+            acc = fun(acc, _data.[i])
         }
         return acc
     }
 
     func filter(fun: func(item: T) -> bool) {
         var vec = Vector[T]();
-        for (var i: 0..count) {
-            if (fun(data.[i]))
-                vec.push(data.[i])
+        for (var i: 0.._size) {
+            if (fun(_data.[i]))
+                vec.push(_data.[i])
         }
         return vec
     }
 
-    const func `str`(sb: StringBuilder) {
+    func map[U](fun: func(item: T) -> U) {
+        var vec = Vector[U]();
+        for (var i: 0.._size) {
+            vec.push(fun(_data.[i]))
+        }
+        return vec
+    }
+
+    func find(predicate: func(elem: T)->bool) : T? {
+        for (var i: 0.._size) {
+            if (predicate(_data.[i]))
+                return _data.[i]
+        }
+        return null
+    }
+
+    const func indexOf(elem: T) : u64? {
+        for (var i: 0.._size) {
+            if (elem == _data.[i]))
+                return (<u64> i)
+        }
+        return null
+    }
+
+    const func `str`(sb: String) {
         sb << '['
-        for (var i: 0..count) {
+        for (var i: 0.._size) {
             if (i != 0)
                 sb << ", "
-            sb << data.[i]
+            sb << _data.[i]
         }
         sb << ']'
     }
+
+    @inline const func capacity() => _size
+    @inline const func size() => _size
+    @inline const func empty() => _size == 0
 }

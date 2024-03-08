@@ -110,11 +110,11 @@ typedef struct GenericParam {
     u32 inferIndex;
 } GenericParam;
 
-typedef struct EnumOption {
+typedef struct EnumOptionDecl {
     const char *name;
     i64 value;
     AstNode *decl;
-} EnumOption;
+} EnumOptionDecl;
 
 typedef struct UnionMember {
     const Type *type;
@@ -195,6 +195,7 @@ typedef struct Type {
         struct {
             u64 count;
             UnionMember *members;
+            void *codegenTag;
         } tUnion;
 
         struct {
@@ -225,8 +226,8 @@ typedef struct Type {
 
         struct {
             const Type *base;
-            EnumOption *options;
-            EnumOption **sortedOptions;
+            EnumOptionDecl *options;
+            EnumOptionDecl **sortedOptions;
             u64 optionsCount;
             AstNode *decl;
         } tEnum;
@@ -294,6 +295,7 @@ bool isVoidPointer(const Type *type);
 bool isClassType(const Type *type);
 bool isStructType(const Type *type);
 bool isTupleType(const Type *type);
+bool isUnionType(const Type *type);
 bool isConstType(const Type *type);
 
 bool hasReferenceMembers(const Type *type);
@@ -323,7 +325,13 @@ static inline u64 getPrimitiveTypeSize(const Type *type)
     csAssert0(typeIs_(type, typPrimitive));
     return getPrimitiveTypeSizeFromTag(type->primitive.id);
 }
-void printType(FormatState *state, const Type *type);
+
+void printType_(FormatState *state, const Type *type, bool keyword);
+
+static inline void printType(FormatState *state, const Type *type)
+{
+    printType_(state, type, true);
+}
 
 bool isSliceType(const Type *type);
 
@@ -381,11 +389,11 @@ static inline const Type *findInterfaceMemberType(const Type *type,
     return found ? found->type : NULL;
 }
 
-const EnumOption *findEnumOption(const Type *type, cstring member);
+const EnumOptionDecl *findEnumOption(const Type *type, cstring member);
 
 static inline const Type *findEnumOptionType(const Type *type, cstring member)
 {
-    const EnumOption *found = findEnumOption(type, member);
+    const EnumOptionDecl *found = findEnumOption(type, member);
     return found ? type : NULL;
 }
 

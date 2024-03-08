@@ -172,11 +172,11 @@ while [[ $# -gt 0 ]]; do
 done
 
 run_test () {
-  expected="${1%.cxy}.expected.yml"
+  expected="${1%.cxy}.expected.dump"
   test_case="${2}"
 
   echo -e "Running test case ${test_case}"
-  output=$(${CXY_COMPILER} dev "${1}" --print-ast --no-color --clean-ast --with-named-enums --last-stage=TypeCheck)
+  output=$(${CXY_COMPILER} dev "${1}" --dump-ast CXY --no-color --clean-ast --with-named-enums --last-stage=Simplify | grep -v "Cxy dump")
   [ $? -ne 0 ] && {
       echo -e "  ${Bred}FAILED${reset}: Compilation failed for test case ${test_case}"
       echo -e "${output}"
@@ -189,7 +189,7 @@ run_test () {
   fi
 
   if [ -f $expected ] ; then
-    match=$(diff <(echo "${output}") <(cat "${expected}") -U1 --label "${1}" --label "${expected}")
+    match=$(diff <(cat "${expected}") <(echo "${output}") -U1 --label "${1}" --label "${expected}")
     [ $? -ne 0 ] && {
         echo -e "  ${Bred}FAILED${reset}: AST output does not match expected output"
         echo -e "${match}"

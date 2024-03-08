@@ -688,7 +688,7 @@ static void visitMacroDecl(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "body", node->macroDecl.body);
 }
 
-static void visitFuncParam(ConstAstVisitor *visitor, const AstNode *node)
+static void visitFuncParamDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
@@ -735,7 +735,7 @@ static void visitUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
     manyNodesToYaml(visitor, "members", node->unionDecl.members);
 }
 
-static void visitEnumOption(ConstAstVisitor *visitor, const AstNode *node)
+static void visitEnumOptionDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
@@ -760,7 +760,7 @@ static void visitEnumDecl(ConstAstVisitor *visitor, const AstNode *node)
     manyNodesToYaml(visitor, "options", node->enumDecl.options);
 }
 
-static void visitStructField(ConstAstVisitor *visitor, const AstNode *node)
+static void visitFieldDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
@@ -1021,7 +1021,7 @@ AstNode *dumpAstToYaml(CompilerDriver *driver, AstNode *node, FILE *file)
    ConstAstVisitor visitor = makeConstAstVisitor(&ctx, {
        [astProgram] = visitProgram,
        [astError] = visitError,
-       [astNop] = visitNoop,
+       [astNoop] = visitNoop,
        [astAttr] = visitAttr,
        [astNullLit] = visitLiteral,
        [astBoolLit] = visitLiteral,
@@ -1056,13 +1056,13 @@ AstNode *dumpAstToYaml(CompilerDriver *driver, AstNode *node, FILE *file)
        [astPath] = visitPath,
        [astFuncDecl] = visitFuncDecl,
        [astMacroDecl] = visitMacroDecl,
-       [astFuncParam] = visitFuncParam,
+       [astFuncParamDecl] = visitFuncParamDecl,
        [astVarDecl] = visitVarDecl,
        [astTypeDecl] = visitTypeDecl,
        [astUnionDecl] = visitUnionDecl,
-       [astEnumOption] = visitEnumOption,
+       [astEnumOptionDecl] = visitEnumOptionDecl,
        [astEnumDecl] = visitEnumDecl,
-       [astField] = visitStructField,
+       [astFieldDecl] = visitFieldDecl,
        [astStructDecl] = visitClassOrStructDecl,
        [astClassDecl] = visitClassOrStructDecl,
        [astInterfaceDecl] = visitInterfaceDecl,

@@ -11,66 +11,66 @@ extern "C" {
 
 #define CREATE_BINARY_OP(ctx, OP, lhs, rhs, ...)                               \
     do {                                                                       \
-        ctx.returnValue(ctx.builder().Create##OP(lhs, rhs, #__VA_ARGS__));     \
+        ctx.returnValue(ctx.builder.Create##OP(lhs, rhs, #__VA_ARGS__));       \
     } while (false)
 
 static void generateLogicAndOr(AstVisitor *visitor, AstNode *node)
 {
-    auto &ctx = LLVMContext::from(visitor);
+    auto &ctx = cxy::LLVMContext::from(visitor);
 
-    auto &builder = ctx.builder();
+    auto &builder = ctx.builder;
     auto func = builder.GetInsertBlock()->getParent();
     auto op = node->binaryExpr.op;
 
-    auto logicLHS = llvm::BasicBlock::Create(ctx.context(),
+    auto logicLHS = llvm::BasicBlock::Create(ctx.context,
                                              op == opLAnd ? "andlhs" : "orlhs");
-    auto logicRHS = llvm::BasicBlock::Create(ctx.context(),
+    auto logicRHS = llvm::BasicBlock::Create(ctx.context,
                                              op == opLAnd ? "andrhs" : "orrhs");
-    auto logicPHI = llvm::BasicBlock::Create(ctx.context(),
+    auto logicPHI = llvm::BasicBlock::Create(ctx.context,
                                              op == opLAnd ? "andphi" : "orphi");
     builder.CreateBr(logicLHS);
 
     func->insert(func->end(), logicLHS);
     builder.SetInsertPoint(logicLHS);
-    auto lhs = codegen(visitor, node->binaryExpr.lhs);
+    auto lhs = cxy::codegen(visitor, node->binaryExpr.lhs);
     if (lhs == nullptr)
         return;
 
     if (op == opLOr)
-        ctx.builder().CreateCondBr(lhs, logicPHI, logicRHS);
+        ctx.builder.CreateCondBr(lhs, logicPHI, logicRHS);
     else
-        ctx.builder().CreateCondBr(lhs, logicRHS, logicPHI);
+        ctx.builder.CreateCondBr(lhs, logicRHS, logicPHI);
     logicLHS = builder.GetInsertBlock();
 
     // Generate right hand side and branch to phi
     func->insert(func->end(), logicRHS);
     builder.SetInsertPoint(logicRHS);
-    auto rhs = codegen(visitor, node->binaryExpr.rhs);
+    auto rhs = cxy::codegen(visitor, node->binaryExpr.rhs);
     if (rhs == nullptr)
         return;
-    ctx.builder().CreateBr(logicPHI);
+    ctx.builder.CreateBr(logicPHI);
     logicRHS = builder.GetInsertBlock();
 
     // Generate phi
     func->insert(func->end(), logicPHI);
     builder.SetInsertPoint(logicPHI);
-    auto phi = builder.CreatePHI(lhs->getType(), 2, "logicphi");
+    auto phi = builder.CreatePHI(lhs->getType(), 2, "logic.phi");
     phi->addIncoming(lhs, logicLHS);
     phi->addIncoming(rhs, logicRHS);
 
     ctx.returnValue(phi);
 }
 
-static llvm::Value *generatePointerArithmetic(LLVMContext &ctx,
+static llvm::Value *generatePointerArithmetic(cxy::LLVMContext &ctx,
                                               AstNode *node,
                                               llvm::Value *lhs,
                                               llvm::Value *rhs)
 {
-    return ctx.builder().CreateInBoundsGEP(
-        ctx.getLLVMType(node->type), lhs, {rhs});
+    return ctx.builder.CreateInBoundsGEP(
+        ctx.getLLVMType(getPointedType(node->type)), lhs, {rhs});
 }
 
-void visitBinaryExpr(AstVisitor *visitor, AstNode *node)
+void generateBinaryExpr(AstVisitor *visitor, AstNode *node)
 {
     auto op = node->binaryExpr.op;
     if (op == opLAnd || op == opLOr) {
@@ -78,33 +78,28 @@ void visitBinaryExpr(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    auto &ctx = LLVMContext::from(visitor);
+    auto &ctx = cxy::LLVMContext::from(visitor);
     AstNode *left = node->binaryExpr.lhs, *right = node->binaryExpr.rhs;
     const Type *type = node->type;
 
-    auto lhs = codegen(visitor, left);
-    auto rhs = codegen(visitor, right);
+    llvm::Value *lhs = NULL, *rhs = NULL;
 
     if (left->type != right->type && !typeIs(left->type, Pointer)) {
         // implicitly cast to the bigger type
         if (isPrimitiveTypeBigger(left->type, right->type)) {
-            if (isFloatType(left->type))
-                rhs = ctx.builder().CreateSIToFP(rhs, lhs->getType());
-            else if (isUnsignedType(left->type))
-                rhs = ctx.builder().CreateZExt(rhs, lhs->getType());
-            else
-                rhs = ctx.builder().CreateSExt(rhs, lhs->getType());
+            rhs = ctx.generateCastExpr(visitor, left->type, right);
+            lhs = cxy::codegen(visitor, left);
             type = left->type;
         }
         else {
-            if (isFloatType(right->type))
-                lhs = ctx.builder().CreateSIToFP(lhs, rhs->getType());
-            else if (isUnsignedType(left->type))
-                lhs = ctx.builder().CreateZExt(lhs, rhs->getType());
-            else
-                lhs = ctx.builder().CreateSExt(lhs, rhs->getType());
+            lhs = ctx.generateCastExpr(visitor, right->type, left);
+            rhs = cxy::codegen(visitor, right);
             type = right->type;
         }
+    }
+    else {
+        rhs = cxy::codegen(visitor, right);
+        lhs = cxy::codegen(visitor, left);
     }
 
 #define CREATE_TYPE_SPECIFIC_OP(Op)                                            \
@@ -117,7 +112,7 @@ void visitBinaryExpr(AstVisitor *visitor, AstNode *node)
 
     switch (node->binaryExpr.op) {
     case opAdd:
-        if (typeIs(right->type, Pointer))
+        if (typeIs(left->type, Pointer))
             ctx.returnValue(generatePointerArithmetic(ctx, node, lhs, rhs));
         else
             CREATE_TYPE_SPECIFIC_OP(Add);
@@ -148,7 +143,7 @@ void visitBinaryExpr(AstVisitor *visitor, AstNode *node)
         CREATE_BINARY_OP(ctx, And, lhs, rhs);
         break;
     case opBOr:
-        CREATE_BINARY_OP(ctx, And, lhs, rhs);
+        CREATE_BINARY_OP(ctx, Or, lhs, rhs);
         break;
     case opBXor:
         CREATE_BINARY_OP(ctx, Xor, lhs, rhs);

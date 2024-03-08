@@ -151,7 +151,7 @@ cstring getFilenameWithoutDirs(cstring fileName)
 void makeDirectoryForPath(CompilerDriver *driver, cstring path)
 {
     u64 len;
-    char dir[512];
+    char dir[PATH_MAX];
     cstring slash = strrchr(path, '/');
     if (slash == NULL)
         return;
@@ -160,7 +160,7 @@ void makeDirectoryForPath(CompilerDriver *driver, cstring path)
     if (len == 0)
         return;
 
-    int n = sprintf(dir, "mkdir -p ");
+    int n = snprintf(dir, PATH_MAX, "mkdir -p ");
     memcpy(&dir[n], path, len);
     dir[len + n] = 0;
     system(dir);
@@ -170,7 +170,7 @@ static inline bool hasDumpEnable(const Options *opts, const AstNode *node)
 {
     if (opts->cmd == cmdDev) {
         return !hasFlag(node, BuiltinsModule) &&
-               (opts->dev.printAst || opts->dev.printIR);
+               ((opts->dev.dumpMode != dmpNONE) || opts->dev.printIR);
     }
     return false;
 }
@@ -201,6 +201,9 @@ static bool compileProgram(CompilerDriver *driver,
             goto compileProgramDone;
         }
     }
+
+    if (hasFlag(metadata, BuiltinsModule) || hasFlag(program, ImportedModule))
+        return status;
 
     if (hasDumpEnable(options, metadata)) {
         stage = options->dev.printIR ? ccs_DumpIR : ccs_Dump;
@@ -241,7 +244,9 @@ static bool compileBuiltin(CompilerDriver *driver,
 bool initCompilerDriver(CompilerDriver *compiler,
                         MemPool *pool,
                         StrPool *strings,
-                        Log *log)
+                        Log *log,
+                        int argc,
+                        char **argv)
 {
     char tmp[PATH_MAX];
     compiler->pool = pool;
@@ -254,7 +259,7 @@ bool initCompilerDriver(CompilerDriver *compiler,
 
     internCommonStrings(compiler->strings);
     const Options *options = &compiler->options;
-    compiler->backend = initCompilerBackend(compiler);
+    compiler->backend = initCompilerBackend(compiler, argc, argv);
     csAssert0(compiler->backend);
 
     if (options->cmd == cmdBuild || !options->withoutBuiltins) {
@@ -265,6 +270,14 @@ bool initCompilerDriver(CompilerDriver *compiler,
     }
 
     return true;
+}
+
+void deinitCompilerDriver(CompilerDriver *driver)
+{
+    deinitCompilerBackend(driver);
+    freeHashTable(&driver->moduleCache);
+    freeTypeTable(driver->types);
+    deinitCommandLineOptions(&driver->options);
 }
 
 static bool configureDriverSourceDir(CompilerDriver *driver, cstring *fileName)
@@ -377,16 +390,29 @@ const Type *compileModule(CompilerDriver *driver,
     for (; entity; entity = entity->next) {
         const NamedTypeMember *member =
             findModuleMember(module, entity->importEntity.name);
-        if (member) {
-            entity->importEntity.target = (AstNode *)member->decl;
-        }
-        else {
+        if (member == NULL) {
             logError(
                 driver->L,
                 &entity->loc,
                 "module {s} does not export declaration with name '{s}'",
                 (FormatArg[]){{.s = path}, {.s = entity->importEntity.name}});
+            continue;
         }
+
+        if (!hasFlag(member->decl, Public)) {
+            logError(
+                driver->L,
+                &entity->loc,
+                "module {s} member'{s}' cannot be imported, it is not public",
+                (FormatArg[]){{.s = path}, {.s = entity->importEntity.name}});
+            logNote(driver->L,
+                    &member->decl->loc,
+                    "`{s}` declared here",
+                    (FormatArg[]){{.s = entity->importEntity.name}});
+            continue;
+        }
+
+        entity->importEntity.target = (AstNode *)member->decl;
     }
 
     if (hasErrors(driver->L))

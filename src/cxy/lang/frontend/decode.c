@@ -80,7 +80,7 @@ static void unpackNodeBody(AstNodeUnpackContext *ctx, AstNode *node)
 
     u64 len = 0;
     switch (node->tag) {
-    case astNop:
+    case astNoop:
     case astStringType:
     case astAutoType:
     case astContinueStmt:
@@ -213,7 +213,7 @@ static void unpackNodeBody(AstNodeUnpackContext *ctx, AstNode *node)
         node->macroDecl.ret = unpackNode(ctx);
         node->macroDecl.body = unpackNode(ctx);
         break;
-    case astFuncParam:
+    case astFuncParamDecl:
         node->funcParam.name = unpackString(ctx);
         node->funcParam.type = unpackNode(ctx);
         node->funcParam.def = unpackNode(ctx);
@@ -230,7 +230,7 @@ static void unpackNodeBody(AstNodeUnpackContext *ctx, AstNode *node)
     case astUnionDecl:
         node->unionDecl.members = unpackManyNodes(ctx, NULL);
         break;
-    case astEnumOption:
+    case astEnumOptionDecl:
         node->enumOption.name = unpackString(ctx);
         node->enumOption.value = unpackNode(ctx);
         break;
@@ -240,7 +240,7 @@ static void unpackNodeBody(AstNodeUnpackContext *ctx, AstNode *node)
         node->enumDecl.options = unpackManyNodes(ctx, &len);
         node->enumDecl.len = len;
         break;
-    case astField:
+    case astFieldDecl:
         node->structField.name = unpackString(ctx);
         node->structField.type = unpackNode(ctx);
         node->structField.value = unpackNode(ctx);

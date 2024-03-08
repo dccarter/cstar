@@ -40,6 +40,8 @@ HashTable newHashTableWithCapacity(size_t elemSize, size_t capacity)
 
 void freeHashTable(HashTable *hashTable)
 {
+    if (hashTable == NULL)
+        return;
     free(hashTable->elems);
     free(hashTable->hashes);
     hashTable->capacity = hashTable->size = 0;

@@ -24,26 +24,31 @@ static inline bool isCallableDecl(AstNode *node)
 static inline bool shouldCaptureSymbol(const AstNode *closure,
                                        const AstNode *symbol)
 {
-    return closure && (nodeIs(symbol, VarDecl) || nodeIs(symbol, FuncParam) ||
-                       nodeIs(symbol, Field));
+    return closure &&
+           (nodeIs(symbol, VarDecl) || nodeIs(symbol, FuncParamDecl) ||
+            nodeIs(symbol, FieldDecl));
 }
 
-static bool captureSymbol(AstNode *closure, AstNode *node, AstNode *symbol)
+static AstNode *captureSymbol(BindContext *ctx,
+                              AstNode *closure,
+                              AstNode *node,
+                              AstNode *symbol)
 {
     if (!shouldCaptureSymbol(closure, symbol))
-        return false;
+        return NULL;
 
     AstNode *root = node->path.elements;
     AstNode *parent = symbol->parentScope;
 
-    if (nodeIs(symbol, FuncParam) && parent == closure)
-        return false;
+    if (nodeIs(symbol, FuncParamDecl) && parent == closure)
+        return NULL;
 
     parent = node->parentScope;
     Capture *prev = NULL;
+    AstNode *captured = NULL;
     while (parent && parent != symbol->parentScope) {
         if (nodeIs(parent, ClosureExpr)) {
-            if (nodeIs(symbol, FuncParam) && symbol->parentScope == parent)
+            if (nodeIs(symbol, FuncParamDecl) && symbol->parentScope == parent)
                 break;
 
             // capture in current set
@@ -52,13 +57,24 @@ static bool captureSymbol(AstNode *closure, AstNode *node, AstNode *symbol)
 
             prev = addClosureCapture(&parent->closureExpr.captureSet, symbol);
             root->flags |= flgMember;
-            if (nodeIs(symbol, Field))
+            if (nodeIs(symbol, FieldDecl))
                 prev->flags |= flgMember;
+            if (prev->field == NULL) {
+                prev->field = makeStructField(ctx->pool,
+                                              &symbol->loc,
+                                              getCapturedNodeName(symbol),
+                                              (symbol->flags & flgConst) |
+                                                  flgPrivate | flgMember,
+                                              NULL,
+                                              NULL,
+                                              NULL);
+            }
+            captured = prev->field;
         }
         parent = parent->parentScope;
     }
 
-    return true;
+    return captured;
 }
 
 static AstNode *resolvePathBaseUpChain(BindContext *ctx, AstNode *path)
@@ -140,9 +156,12 @@ void bindPath(AstVisitor *visitor, AstNode *node)
 
         // capture symbol if in closure
         base->pathElement.resolvesTo = resolved;
-        if (captureSymbol(
-                ctx->currentClosure, node, base->pathElement.resolvesTo))
+        resolved = captureSymbol(
+            ctx, ctx->currentClosure, node, base->pathElement.resolvesTo);
+        if (resolved) {
+            base->pathElement.resolvesTo = resolved;
             node->flags |= flgAddThis;
+        }
     }
     else {
         cstring keyword = base->pathElement.name;
@@ -595,13 +614,13 @@ void bindAstPhase2(CompilerDriver *driver, Env *env, AstNode *node)
         [astFuncType] = bindFuncType,
         [astFuncDecl] = bindFunctionDecl,
         [astMacroDecl] = bindMacroDecl,
-        [astFuncParam] = bindFuncParam,
+        [astFuncParamDecl] = bindFuncParam,
         [astVarDecl] = bindVarDecl,
         [astTypeDecl] = bindTypeDecl,
         [astUnionDecl] = bindUnionDecl,
-        [astEnumOption] = bindEnumOption,
+        [astEnumOptionDecl] = bindEnumOption,
         [astEnumDecl] = bindEnumDecl,
-        [astField] = bindStructField,
+        [astFieldDecl] = bindStructField,
         [astStructDecl] = bindStructOrClassDecl,
         [astClassDecl] = bindStructOrClassDecl,
         [astInterfaceDecl] = bindInterfaceDecl,

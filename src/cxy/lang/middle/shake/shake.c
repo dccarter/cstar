@@ -32,10 +32,9 @@ static AstNode *makeTupleMemberExpr(ShakeAstContext *ctx, AstNode *tuple, u64 i)
         return NULL;
 
     if (nodeIs(tuple, TupleExpr)) {
-        AstNode *arg = tuple->tupleExpr.elements;
-        tuple->tupleExpr.elements = arg->next;
-        arg->next = NULL;
-        return arg;
+        // TODO collect
+        AstNode *arg = getNodeAtIndex(tuple->tupleExpr.elements, i);
+        return duplicateAstNode(ctx->pool, arg);
     }
 
     AstNode *target = NULL;
@@ -147,11 +146,20 @@ static bool validateOperatorOverloadArguments(ShakeAstContext *ctx,
         return reportIfUnexpectedNumberOfParameters(
             ctx, &node->loc, "str", count, 1);
 
+    case opHashOverload:
+        return reportIfUnexpectedNumberOfParameters(
+            ctx, &node->loc, "hash", count, 0);
+
     case opTruthy:
         return reportIfUnexpectedNumberOfParameters(
             ctx, &node->loc, "!!", count, 0);
 
+    case opDeinitOverload:
+        return reportIfUnexpectedNumberOfParameters(
+            ctx, &node->loc, "deinit", count, 0);
+
     case opCallOverload:
+    case opInitOverload:
         return true;
 
     default:
@@ -180,40 +188,38 @@ static AstNode *shakeVariableInitializer(ShakeAstContext *ctx, AstNode *init)
         return init;
 
     // Create variable for this
-    return makeAstNode(
-        ctx->pool,
-        &init->loc,
-        &(AstNode){.tag = astVarDecl,
-                   .varDecl = {.names = makeGenIdent(
-                                   ctx->pool, ctx->strPool, &init->loc, NULL),
-                               .init = init}});
+    return makeVarDecl(ctx->pool,
+                       &init->loc,
+                       init->flags,
+                       makeAnonymousVariable(ctx->strPool, "_gi"),
+                       NULL,
+                       init,
+                       NULL,
+                       NULL);
 }
 
 static AstNode *makeStrExprBuilder(ShakeAstContext *ctx, AstNode *node)
 {
-    AstNode *sb = findBuiltinDecl(S_StringBuilder);
+    AstNode *sb = findBuiltinDecl(S_String);
     csAssert0(sb);
 
-    return makeVarDecl(ctx->pool,
-                       &node->loc,
-                       flgNone,
-                       S_sb,
-                       NULL,
-                       makeCallExpr(ctx->pool,
-                                    &node->loc,
-                                    makeResolvedPath(ctx->pool,
-                                                     &node->loc,
-                                                     S_StringBuilder,
-                                                     flgNone,
-                                                     sb,
-                                                     NULL,
-                                                     sb->type),
-                                    NULL,
-                                    flgNone,
-                                    NULL,
-                                    NULL),
-                       NULL,
-                       NULL);
+    return makeVarDecl(
+        ctx->pool,
+        &node->loc,
+        flgNone,
+        S_sb,
+        NULL,
+        makeCallExpr(
+            ctx->pool,
+            &node->loc,
+            makeResolvedPath(
+                ctx->pool, &node->loc, S_String, flgNone, sb, NULL, sb->type),
+            NULL,
+            flgNone,
+            NULL,
+            NULL),
+        NULL,
+        NULL);
 }
 
 void shakeVariableDecl(AstVisitor *visitor, AstNode *node)
@@ -469,17 +475,20 @@ void shakeMatchStmt(AstVisitor *visitor, AstNode *node)
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
     AstNode *expr = node->matchStmt.expr;
     astVisit(visitor, expr);
-    AstNode *var = makeVarDecl(ctx->pool,
-                               &expr->loc,
-                               flgNone,
-                               makeAnonymousVariable(ctx->strPool, "_match"),
-                               NULL,
-                               expr,
-                               NULL,
-                               NULL);
-    node->matchStmt.expr =
-        makePath(ctx->pool, &expr->loc, var->varDecl.name, flgNone, NULL);
-    addNodeInBlock(ctx, var);
+    if (!nodeIsLeftValue(expr)) {
+        AstNode *var =
+            makeVarDecl(ctx->pool,
+                        &expr->loc,
+                        flgNone,
+                        makeAnonymousVariable(ctx->strPool, "_match"),
+                        NULL,
+                        expr,
+                        NULL,
+                        NULL);
+        node->matchStmt.expr =
+            makePath(ctx->pool, &expr->loc, var->varDecl.name, flgNone, NULL);
+        addNodeInBlock(ctx, var);
+    }
     astVisitManyNodes(visitor, node->matchStmt.cases);
 }
 
@@ -564,7 +573,9 @@ static void shakeForStmt(AstVisitor *visitor, AstNode *node)
             variable = variable->next;
         }
     }
-    variable->varDecl.name = name->ident.value;
+    else {
+        variable->varDecl.name = name->ident.value;
+    }
     astVisit(visitor, node->forStmt.range);
     astVisit(visitor, node->forStmt.body);
 }
@@ -584,6 +595,26 @@ static void shakeBlockStmt(AstVisitor *visitor, AstNode *node)
     }
 
     ctx->block = block;
+}
+
+static void shakeArrayType(AstVisitor *visitor, AstNode *node)
+{
+    ShakeAstContext *ctx = getAstVisitorContext(visitor);
+    if (node->arrayType.dim == NULL) {
+        AstNode *slice = findBuiltinDecl(S_Slice);
+        csAssert0(slice);
+        node->tag = astPath;
+        node->type = NULL;
+        node->path.elements =
+            makeResolvedPathElementWithArgs(ctx->pool,
+                                            &node->loc,
+                                            S_Slice,
+                                            flgNone,
+                                            slice,
+                                            NULL,
+                                            node->arrayType.elementType,
+                                            NULL);
+    }
 }
 
 static void shakeStringExpr(AstVisitor *visitor, AstNode *node)
@@ -613,26 +644,6 @@ static void shakeStringExpr(AstVisitor *visitor, AstNode *node)
     }
 
     var->next = sb;
-    sb->next = makeCallExpr(
-        ctx->pool,
-        &node->loc,
-        makePathWithElements(
-            ctx->pool,
-            &node->loc,
-            flgNone,
-            makePathElement(
-                ctx->pool,
-                &node->loc,
-                S_sb,
-                flgNone,
-                makePathElement(
-                    ctx->pool, &node->loc, S_release, flgNone, NULL, NULL),
-                NULL),
-            NULL),
-        NULL,
-        flgNone,
-        NULL,
-        NULL);
 
     node->tag = astStmtExpr;
     node->stmtExpr.stmt = makeBlockStmt(ctx->pool, &node->loc, var, NULL, NULL);
@@ -657,7 +668,8 @@ AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
         [astClosureExpr] = shakeClosureExpr,
         [astCallExpr] = shakeCallExpr,
         [astExprStmt] = shakeExprStmt,
-        [astMatchStmt] = shakeMatchStmt
+        [astMatchStmt] = shakeMatchStmt,
+        [astArrayType] = shakeArrayType
     }, .fallback = astVisitFallbackVisitAll);
     // clang-format on
 

@@ -3,20 +3,26 @@
 //
 
 #include "context.h"
+#include "llvm.h"
 
 extern "C" {
+#include "lang/frontend/flag.h"
 #include "lang/frontend/ttable.h"
 #include "lang/frontend/visitor.h"
 }
 
-LLVMContext::LLVMContext(std::shared_ptr<llvm::LLVMContext> context,
+namespace cxy {
+LLVMContext::LLVMContext(llvm::LLVMContext &context,
                          CompilerDriver *driver,
-                         const char *fname)
-    : _context{std::move(context)}, L{driver->L}, types{driver->types},
-      strings{driver->strings}, pool{driver->pool}, _sourceFilename{fname}
+                         const char *fileName,
+                         llvm::TargetMachine *TM)
+    : context{context}, L{driver->L}, types{driver->types},
+      strings{driver->strings}, pool{driver->pool}, _sourceFilename{fileName},
+      builder{context}
 {
-    _module = std::make_unique<llvm::Module>(fname, *_context);
-    _builder = std::make_unique<llvm::IRBuilder<>>(*_context);
+    _module = std::make_unique<llvm::Module>(fileName, context);
+    _module->setTargetTriple(TM->getTargetTriple().getTriple());
+    _module->setDataLayout(TM->createDataLayout());
 }
 
 LLVMContext &LLVMContext::from(AstVisitor *visitor)
@@ -35,8 +41,10 @@ llvm::Type *LLVMContext::convertToLLVMType(const Type *type)
         break;
     case typEnum:
         return getLLVMType(type->tEnum.base);
-    case typPointer:
-        return getLLVMType(type->pointer.pointed)->getPointerTo();
+    case typPointer: {
+        auto typ = getLLVMType(type->pointer.pointed);
+        return typ->getPointerTo();
+    }
     case typArray:
         return llvm::ArrayType::get(getLLVMType(type->array.elementType),
                                     type->array.len);
@@ -50,6 +58,8 @@ llvm::Type *LLVMContext::convertToLLVMType(const Type *type)
         return createUnionType(type);
     case typClass:
         return createClassType(type);
+    case typStruct:
+        return createStructType(type);
     default:
         return nullptr;
     }
@@ -64,10 +74,18 @@ llvm::Type *LLVMContext::getLLVMType(const Type *type)
         type->codegen ?: updateType(type, convertToLLVMType(type)));
 }
 
+llvm::Type *LLVMContext::classType(const Type *type)
+{
+    auto llvmType = getLLVMType(type);
+    if (isClassType(type))
+        llvmType = static_cast<llvm::Type *>(getTypeDecl(type)->codegen);
+    return llvmType;
+}
+
 llvm::AllocaInst *LLVMContext::createStackVariable(llvm::Type *type,
                                                    const char *name)
 {
-    auto func = builder().GetInsertBlock()->getParent();
+    auto func = builder.GetInsertBlock()->getParent();
     llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(),
                                  func->getEntryBlock().begin());
     return tmpBuilder.CreateAlloca(type, nullptr, name);
@@ -78,9 +96,16 @@ llvm::Value *LLVMContext::createLoad(const Type *type, llvm::Value *value)
     if (!_stack.loadVariable())
         return value;
     else if (typeIs(type, Func))
-        return builder().CreateLoad(getLLVMType(type)->getPointerTo(), value);
+        return builder.CreateLoad(getLLVMType(type)->getPointerTo(), value);
     else
-        return builder().CreateLoad(getLLVMType(type), value);
+        return builder.CreateLoad(getLLVMType(type), value);
+}
+
+llvm::Value *LLVMContext::getUnionTag(u32 tag, const llvm::Type *type)
+{
+    csAssert0(type->isStructTy() && type->getNumContainedTypes() > 0);
+    auto tagType = type->getContainedType(0);
+    return llvm::ConstantInt::get(tagType, tag);
 }
 
 std::string LLVMContext::makeTypeName(const AstNode *node)
@@ -96,13 +121,19 @@ void LLVMContext::makeTypeName(llvm::raw_string_ostream &ss,
 {
     if (node == nullptr)
         return;
-    makeTypeName(ss, node->parentScope);
+    if (!hasFlag(node, Extern)) {
+        makeTypeName(ss, node->parentScope);
 
-    if (node->parentScope && node->parentScope->type) {
-        ss << "_";
+        if (node->parentScope && node->parentScope->type) {
+            ss << "_";
+        }
+        if (node->type) {
+            ss << node->type->name;
+        }
+        if (isMemberFunction(node) && node->funcDecl.index)
+            ss << node->funcDecl.index;
     }
-
-    if (node->type) {
+    else {
         ss << node->type->name;
     }
 }
@@ -133,7 +164,7 @@ llvm::Type *LLVMContext::createTupleType(const Type *type)
     }
 
     auto structType = llvm::StructType::create(
-        context(), members, makeTypeName(type, "tuple."));
+        context, members, makeTypeName(type, "tuple."));
 
     return structType;
 }
@@ -143,7 +174,7 @@ llvm::Type *LLVMContext::createClassType(const Type *type)
     std::vector<llvm::Type *> members{};
     for (u64 i = 0; i < type->tClass.members->count; i++) {
         NamedTypeMember *member = &type->tClass.members->members[i];
-        if (!nodeIs(member->decl, Field))
+        if (!nodeIs(member->decl, FieldDecl))
             continue;
 
         if (typeIs(member->type, Func))
@@ -152,16 +183,42 @@ llvm::Type *LLVMContext::createClassType(const Type *type)
             members.push_back(getLLVMType(member->type));
     }
 
-    auto classType = llvm::StructType::create(
-        context(), members, makeTypeName(type, "Class."));
+    csAssert0(type->tClass.decl);
+    AstNode *node = type->tClass.decl;
+    auto classType =
+        llvm::StructType::create(context, members, makeTypeName(node));
+    node->codegen = classType;
+    return classType->getPointerTo();
+}
 
-    return classType;
+llvm::Type *LLVMContext::createStructType(const Type *type)
+{
+    std::vector<llvm::Type *> members{};
+    for (u64 i = 0; i < type->tStruct.members->count; i++) {
+        NamedTypeMember *member = &type->tStruct.members->members[i];
+        if (!nodeIs(member->decl, FieldDecl))
+            continue;
+
+        if (typeIs(member->type, Func))
+            members.push_back(getLLVMType(member->type)->getPointerTo());
+        else
+            members.push_back(getLLVMType(member->type));
+    }
+
+    if (type->tStruct.decl == nullptr) {
+        return llvm::StructType::create(
+            context, members, makeTypeName(type, "Struct."));
+    }
+    else {
+        return llvm::StructType::create(
+            context, members, makeTypeName(type->tStruct.decl));
+    }
 }
 
 llvm::Type *LLVMContext::createFunctionType(const Type *type)
 {
     std::vector<llvm::Type *> params;
-    if (type->func.decl && type->func.decl->funcDecl.this_)
+    if (nodeIs(type->func.decl, FuncDecl) && type->func.decl->funcDecl.this_)
         params.push_back(getLLVMType(type->func.decl->funcDecl.this_->type));
 
     for (u64 i = 0; i < type->func.paramsCount; i++) {
@@ -174,31 +231,145 @@ llvm::Type *LLVMContext::createFunctionType(const Type *type)
 
 llvm::Type *LLVMContext::createUnionType(const Type *type)
 {
-    llvm::Type *bigger = nullptr;
-    u64 maxSize = 0;
+    u64 maxSize = 0, alignment = 1;
     auto str = makeTypeName(type, "Union.");
     for (u64 i = 0; i < type->tUnion.count; i++) {
         auto member = getLLVMType(type->tUnion.members[i].type);
         auto size = module().getDataLayout().getTypeAllocSize(member);
         if (size >= maxSize) {
-            bigger = member;
             maxSize = size;
+            alignment =
+                module().getDataLayout().getABITypeAlign(member).value();
         }
-
-        type->tUnion.members[i].codegen =
-            llvm::StructType::create(context(),
-                                     {llvm::Type::getInt8Ty(context()), member},
-                                     str + "." + std::to_string(i));
     }
 
-    return llvm::StructType::create(
-        context(), {llvm::Type::getInt8Ty(context()), bigger}, str);
+    llvm::Type *tag = nullptr;
+    if (alignment == 1)
+        tag = llvm::Type::getInt8Ty(context);
+    else if (alignment == 2)
+        tag = llvm::Type::getInt16Ty(context);
+    else if (alignment == 4)
+        tag = llvm::Type::getInt32Ty(context);
+    else
+        tag = llvm::Type::getInt64Ty(context);
+
+    ((Type *)type)->tUnion.codegenTag = tag;
+    auto unionType = llvm::StructType::create(
+        context,
+        {tag, llvm::ArrayType::get(llvm::Type::getInt8Ty(context), maxSize)},
+        str);
+
+    for (u64 i = 0; i < type->tUnion.count; i++) {
+        auto member = getLLVMType(type->tUnion.members[i].type);
+        type->tUnion.members[i].codegen = llvm::StructType::create(
+            context, {tag, member}, str + "." + std::to_string(i));
+    }
+
+    return unionType;
 }
 
-void LLVMContext::addFunctionDecl(AstNode *decl, llvm::Function *func)
+llvm::Value *LLVMContext::castFromUnion(AstVisitor *visitor,
+                                        const Type *to,
+                                        AstNode *node,
+                                        u64 idx)
 {
-    if (decl == nullptr || _functions.contains(decl))
-        return;
-
-    _functions.try_emplace(decl, func);
+    auto &ctx = cxy::LLVMContext::from(visitor);
+    auto load = ctx.stack().loadVariable(false);
+    auto value = cxy::codegen(visitor, node);
+    ctx.stack().loadVariable(load);
+    auto type = static_cast<llvm::Type *>(
+        unwrapType(node->type, nullptr)->tUnion.members[idx].codegen);
+    // TODO assert/throw if type mis-match
+    value = ctx.builder.CreateBitCast(value, type->getPointerTo());
+    value = ctx.builder.CreateStructGEP(type, value, 1);
+    if (load)
+        value = ctx.builder.CreateLoad(ctx.getLLVMType(to), value);
+    return value;
 }
+
+llvm::Value *LLVMContext::generateCastExpr(AstVisitor *visitor,
+                                           const Type *to,
+                                           AstNode *expr,
+                                           u64 idx)
+{
+    auto &ctx = cxy::LLVMContext::from(visitor);
+    auto from = unwrapType(expr->type, nullptr);
+
+    to = unThisType(resolveType(to));
+    if (to == from)
+        return cxy::codegen(visitor, expr);
+
+    if (typeIs(from, Union))
+        return castFromUnion(visitor, to, expr, idx);
+
+    if (isFloatType(to)) {
+        auto value = cxy::codegen(visitor, expr);
+        auto s1 = getPrimitiveTypeSize(to), s2 = getPrimitiveTypeSize(from);
+        if (isFloatType(from)) {
+            if (s1 < s2)
+                return ctx.builder.CreateFPTrunc(value, ctx.getLLVMType(to));
+            else
+                return ctx.builder.CreateFPExt(value, ctx.getLLVMType(to));
+        }
+        else if (isUnsignedType(from) || isCharacterType(from)) {
+            return ctx.builder.CreateSIToFP(value, ctx.getLLVMType(to));
+        }
+        else {
+            return ctx.builder.CreateUIToFP(value, ctx.getLLVMType(to));
+        }
+    }
+    else if (isIntegerType(to) || isCharacterType(to)) {
+        auto value = cxy::codegen(visitor, expr);
+        if (isUnsignedType(from) || isCharacterType(from)) {
+            return ctx.builder.CreateZExtOrTrunc(value, ctx.getLLVMType(to));
+        }
+        else if (isSignedIntegerType(from)) {
+            return ctx.builder.CreateSExtOrTrunc(value, ctx.getLLVMType(to));
+        }
+        else if (isFloatType(from)) {
+            return isUnsignedType(to)
+                       ? ctx.builder.CreateFPToUI(value, ctx.getLLVMType(to))
+                       : ctx.builder.CreateFPToSI(value, ctx.getLLVMType(to));
+        }
+        else if (isPointerType(from)) {
+            csAssert0(to->primitive.id == prtU64);
+            return ctx.builder.CreatePtrToInt(value, ctx.getLLVMType(to));
+        }
+        else {
+            unreachable("Unsupported cast")
+        }
+    }
+    else if (isPointerType(to)) {
+        if (isIntegralType(from)) {
+            auto value = cxy::codegen(visitor, expr);
+            csAssert0(from->primitive.id == prtU64);
+            return ctx.builder.CreateIntToPtr(value, ctx.getLLVMType(to));
+        }
+        else if (isArrayType(from)) {
+            auto load = ctx.stack().loadVariable(false);
+            auto value = cxy::codegen(visitor, expr);
+            ctx.stack().loadVariable(load);
+
+            return ctx.builder.CreateInBoundsGEP(
+                ctx.getLLVMType(from), value, {ctx.builder.getInt64(0)});
+        }
+        else {
+            csAssert0(isPointerType(from));
+            auto value = cxy::codegen(visitor, expr);
+            auto fromPointed = from->pointer.pointed,
+                 toPointed = to->pointer.pointed;
+            if (isUnionType(fromPointed) &&
+                findUnionTypeIndex(fromPointed, toPointed) != UINT32_MAX) {
+                // Union pointer cast weird!
+                value = ctx.builder.CreateStructGEP(
+                    ctx.getLLVMType(fromPointed), value, 1);
+            }
+            return ctx.builder.CreatePointerCast(value, ctx.getLLVMType(to));
+        }
+    }
+    else {
+        unreachable("Unsupported cast");
+    }
+}
+
+} // namespace cxy

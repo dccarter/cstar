@@ -1,10 +1,5 @@
-// import { add } from "./add.cxy"
-
-pub extern func printf(fmt: string, ...args: auto) : i32;
-
-pub func main(): i32 {
-    return 0
+struct User {}
+pub func main(argc: i32, argv: &string) {
+    var f, g = (() => (20, 20))();
+    println(f, g)
 }
-
-func min[T](a: T, b: T)  => a < b? a : b
-func max[T](a: T, b: T)  => a > b? a : b

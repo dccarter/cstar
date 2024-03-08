@@ -12,9 +12,11 @@ extern "C" {
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
+#include <llvm/Target/TargetMachine.h>
 
 #include <set>
 
+namespace cxy {
 struct Stack {
 private:
 #define DEFINE_STACK_VAR(TYPE, NAME, ...)                                      \
@@ -40,14 +42,15 @@ struct LLVMContext {
     MemPool *pool{nullptr};
     TypeTable *types{nullptr};
     StrPool *strings{nullptr};
+    llvm::IRBuilder<> builder;
+    llvm::LLVMContext &context;
 
-    explicit LLVMContext(std::shared_ptr<llvm::LLVMContext> context,
+    explicit LLVMContext(llvm::LLVMContext &context,
                          CompilerDriver *driver,
-                         const char *fname);
+                         const char *fileName,
+                         llvm::TargetMachine *TM);
 
-    inline llvm::LLVMContext &context() { return *_context; }
     inline llvm::Module &module() { return *_module; }
-    inline llvm::IRBuilder<> &builder() { return *_builder; }
 
     inline void returnValue(llvm::Value *value) { _value = value; }
     inline llvm::Value *value() { return _value; }
@@ -55,6 +58,7 @@ struct LLVMContext {
     inline void setStack(Stack stack) { _stack = stack; }
 
     llvm::Type *getLLVMType(const Type *type);
+    llvm::Type *classType(const Type *type);
     inline llvm::Value *createUndefined(const Type *type)
     {
         return llvm::UndefValue::get(getLLVMType(type));
@@ -76,6 +80,13 @@ struct LLVMContext {
 
     llvm::Value *createLoad(const Type *type, llvm::Value *value);
 
+    llvm::Value *generateCastExpr(AstVisitor *visitor,
+                                  const Type *to,
+                                  AstNode *expr,
+                                  u64 idx = 0);
+
+    static llvm::Value *getUnionTag(u32 tag, const llvm::Type *type);
+
     std::string makeTypeName(const AstNode *node);
 
     std::unique_ptr<llvm::Module> moveModule()
@@ -83,25 +94,25 @@ struct LLVMContext {
         return std::exchange(_module, nullptr);
     }
 
-    llvm::Function *findOrCreateFunctionDecl(const Type *type);
-
-    void addFunctionDecl(AstNode *decl, llvm::Function *func);
-
     static LLVMContext &from(AstVisitor *visitor);
+
+    llvm::Type *createClassType(const Type *type);
+    llvm::Type *createStructType(const Type *type);
 
 private:
     llvm::Type *createTupleType(const Type *type);
     llvm::Type *createFunctionType(const Type *type);
     llvm::Type *createUnionType(const Type *type);
-    llvm::Type *createClassType(const Type *type);
-
+    llvm::Value *castFromUnion(AstVisitor *visitor,
+                               const Type *to,
+                               AstNode *node,
+                               u64 idx);
     void makeTypeName(llvm::raw_string_ostream &ss, const AstNode *node);
     static std::string makeTypeName(const Type *type, const char *alt = "");
     llvm::Type *convertToLLVMType(const Type *type);
 
-    std::shared_ptr<llvm::LLVMContext> _context{nullptr};
+private:
     std::unique_ptr<llvm::Module> _module{nullptr};
-    std::unique_ptr<llvm::IRBuilder<>> _builder{nullptr};
     llvm::DenseMap<AstNode *, llvm::Function *> _functions{};
     llvm::Value *_value = {nullptr};
     Stack _stack{};
@@ -109,11 +120,7 @@ private:
 };
 
 llvm::Value *codegen(AstVisitor *visitor, AstNode *node);
-void visitBinaryExpr(AstVisitor *visitor, AstNode *node);
-void visitArrayExpr(AstVisitor *visitor, AstNode *node);
-void visitForStmt(AstVisitor *visitor, AstNode *node);
+} // namespace cxy
 
-static inline void *updateType(const Type *type, void *codegen)
-{
-    return const_cast<Type *>(type)->codegen = codegen;
-}
+void generateArrayExpr(AstVisitor *visitor, AstNode *node);
+void generateBinaryExpr(AstVisitor *visitor, AstNode *node);

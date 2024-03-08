@@ -302,8 +302,8 @@ static int sortCompareStructMember(const void *lhs, const void *rhs)
 
 static int sortCompareEnumOption(const void *lhs, const void *rhs)
 {
-    const EnumOption *left = *((const EnumOption **)lhs),
-                     *right = *((const EnumOption **)rhs);
+    const EnumOptionDecl *left = *((const EnumOptionDecl **)lhs),
+                         *right = *((const EnumOptionDecl **)rhs);
     return left->name == right->name ? 0 : strcmp(left->name, right->name);
 }
 
@@ -392,6 +392,31 @@ const Type *resolveType(const Type *type)
                 return resolveType(type->opaque.decl->type) ?: type;
             }
             return type;
+        default:
+            return type;
+        }
+    }
+    return NULL;
+}
+
+const Type *resolveAndUnThisType(const Type *type)
+{
+    while (type) {
+        switch (type->tag) {
+        case typAlias:
+            type = resolveAndUnThisType(type->alias.aliased);
+            break;
+        case typInfo:
+            type = resolveAndUnThisType(type->info.target);
+            break;
+        case typOpaque:
+            if (hasFlag(type, ForwardDecl)) {
+                return resolveAndUnThisType(type->opaque.decl->type) ?: type;
+            }
+            return type;
+        case typThis:
+            type = resolveAndUnThisType(type->_this.that);
+            break;
         default:
             return type;
         }
@@ -656,19 +681,20 @@ const Type *makeEnum(TypeTable *table, const Type *init)
     if (!ret.f) {
         Type *tEnum = (Type *)ret.s;
         tEnum->tEnum.options = allocFromMemPool(
-            table->memPool, sizeof(EnumOption) * init->tEnum.optionsCount);
+            table->memPool, sizeof(EnumOptionDecl) * init->tEnum.optionsCount);
         memcpy(tEnum->tEnum.options,
                init->tEnum.options,
-               sizeof(EnumOption) * init->tEnum.optionsCount);
+               sizeof(EnumOptionDecl) * init->tEnum.optionsCount);
 
         tEnum->tEnum.sortedOptions = allocFromMemPool(
-            table->memPool, sizeof(EnumOption *) * init->tEnum.optionsCount);
+            table->memPool,
+            sizeof(EnumOptionDecl *) * init->tEnum.optionsCount);
         for (u64 i = 0; i < init->tEnum.optionsCount; i++)
             tEnum->tEnum.sortedOptions[i] = &tEnum->tEnum.options[i];
 
         qsort(tEnum->tEnum.sortedOptions,
               tEnum->tEnum.optionsCount,
-              sizeof(EnumOption *),
+              sizeof(EnumOptionDecl *),
               sortCompareEnumOption);
     }
 
@@ -717,7 +743,7 @@ const Type *unwrapType(const Type *type, u64 *flags)
 const Type *flattenWrappedType(const Type *type, u64 *flags)
 {
     u64 tmp = flgNone;
-
+    type = resolveType(type);
     while (typeIs(type, Wrapped)) {
         tmp |= type->flags;
         type = type->wrapped.target;
@@ -734,10 +760,10 @@ GetOrInset makeAppliedType(TypeTable *table, const Type *init)
     if (!ret.f) {
         Type *applied = (Type *)ret.s;
         applied->applied.args = allocFromMemPool(
-            table->memPool, sizeof(Type) * init->applied.totalArgsCount);
+            table->memPool, sizeof(Type *) * init->applied.totalArgsCount);
         memcpy(applied->applied.args,
                init->applied.args,
-               sizeof(Type) * init->applied.totalArgsCount);
+               sizeof(Type *) * init->applied.totalArgsCount);
     }
 
     return ret;
@@ -1050,7 +1076,7 @@ AstNode *getTypeDecl(const Type *type)
 {
     if (type == NULL)
         return NULL;
-
+    type = unwrapType(type, NULL);
     switch (type->tag) {
     case typStruct:
         return type->tStruct.decl;

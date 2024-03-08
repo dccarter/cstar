@@ -506,7 +506,8 @@ static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
         return newAstNode(
             P,
             &tok.fileLoc.begin,
-            &(AstNode){.tag = astAddressOf, .unaryExpr = {.operand = operand}});
+            &(AstNode){.tag = astAddressOf,
+                       .unaryExpr = {.operand = operand, .op = opAddrOf}});
     }
 }
 
@@ -631,7 +632,7 @@ static AstNode *functionParam(Parser *P)
     return newAstNode(
         P,
         &tok.fileLoc.begin,
-        &(AstNode){.tag = astFuncParam,
+        &(AstNode){.tag = astFuncParamDecl,
                    .attrs = attrs,
                    .flags = flags,
                    .funcParam = {.name = name, .type = type, .def = def}});
@@ -1632,7 +1633,7 @@ static AstNode *switchStatement(Parser *P)
 
     consume0(P, tokLBrace);
     while (!check(P, tokRBrace, tokEoF)) {
-        listAddAstNode(&cases, caseStatement(P));
+        listAddAstNode(&cases, comptime(P, caseStatement));
     }
     consume0(P, tokRBrace);
 
@@ -1673,7 +1674,9 @@ static AstNode *matchCaseStatement(Parser *P)
     }
 
     if (!match(P, tokComma)) {
-        consume0(P, tokFatArrow);
+        // either case X { or case =>
+        if (!check(P, tokLBrace))
+            consume0(P, tokFatArrow);
         if (!check(P, tokCase, tokRBrace)) {
             body = statement(P);
         }
@@ -1932,7 +1935,7 @@ static AstNode *parseStructField(Parser *P, bool isPrivate)
         P,
         &tok.fileLoc.begin,
         &(AstNode){
-            .tag = astField,
+            .tag = astFieldDecl,
             .flags = isPrivate ? flgPrivate : flgNone,
             .structField = {.name = name, .type = type, .value = value}});
 }
@@ -2223,7 +2226,7 @@ static AstNode *enumOption(Parser *P)
     }
     return newAstNode(P,
                       &tok.fileLoc.begin,
-                      &(AstNode){.tag = astEnumOption,
+                      &(AstNode){.tag = astEnumOptionDecl,
                                  .enumOption = {.name = name, .value = value}});
 }
 
