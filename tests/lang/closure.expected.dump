@@ -1,4 +1,3 @@
-// Cxy dump - source: /Users/dccarter/projects/cxy/tests/lang/closure.cxy
 
 func closureArg0(fn: (&void, func(_: &void) -> void)) {
   fn.1(fn.0)

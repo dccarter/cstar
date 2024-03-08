@@ -1,4 +1,3 @@
-// Cxy dump - source: /Users/dccarter/projects/cxy/tests/lang/literals.cxy
 
 struct __Optional7 {
   - ok: bool = false

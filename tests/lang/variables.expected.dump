@@ -1,4 +1,3 @@
-// Cxy dump - source: /Users/dccarter/projects/cxy/tests/lang/variables.cxy
 
 var X = 10
 const Y = ("Hello", "World")

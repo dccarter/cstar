@@ -1,4 +1,3 @@
-// Cxy dump - source: /Users/dccarter/projects/cxy/tests/lang/tuples.cxy
 
 Tup1 = (bool, wchar)
 
