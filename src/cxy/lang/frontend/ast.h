@@ -1030,7 +1030,7 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node);
 
 static inline AstNode *shallowCloneAstNode(MemPool *pool, const AstNode *node)
 {
-    CloneAstConfig config = {.pool = pool, .createMapping = false};
+    CloneAstConfig config = {.createMapping = false, .pool = pool};
     return cloneAstNode(&config, node);
 }
 

@@ -15,9 +15,18 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)
 endif ()
 
-set(CMAKE_C_FLAGS_DEBUG "-g")
-#add_compile_options(-fsanitize=address -fno-omit-frame-pointer -g)
-#add_link_options(-fsanitize=address)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-c99-designator -Werror")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
+
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
+
+if (CMAKE_BUILD_TYPE MATCHES "asan")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS_DEBUG} -fsanitize=address -fno-omit-frame-pointer -g")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fno-omit-frame-pointer -g")
+    set(CMAKE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -fno-omit-frame-pointer -fsanitize=address")
+endif ()
+
 
 # Configure path for loading project cmake scripts
 set(CMAKE_MODULE_PATH
@@ -231,4 +240,3 @@ add_custom_target(
 )
 
 add_dependencies(cxy cxy-stdlib)
-target_link_options(cxy PRIVATE LINKER:-no_warn_duplicate_libraries)
