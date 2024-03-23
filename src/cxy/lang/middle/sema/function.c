@@ -9,13 +9,11 @@
 
 #include "core/alloc.h"
 
-static inline bool isInlineFunction(const AstNode *node)
-{
+static inline bool isInlineFunction(const AstNode *node) {
     return findAttribute(node, S_inline) != NULL;
 }
 
-static inline bool isIteratorFunction(const Type *type)
-{
+static inline bool isIteratorFunction(const Type *type) {
     if (!typeIs(type, Struct) || !hasFlag(type, Closure))
         return false;
 
@@ -33,8 +31,7 @@ const Type *matchOverloadedFunctionPerfectMatch(TypingContext *ctx,
                                                 u64 argsCount,
                                                 const FileLoc *loc,
                                                 u64 flags,
-                                                bool perfectMatch)
-{
+                                                bool perfectMatch) {
     AstNode *decls = callee->func.decl->list.first ?: callee->func.decl,
             *decl = decls;
     const Type *found = NULL;
@@ -50,13 +47,13 @@ const Type *matchOverloadedFunctionPerfectMatch(TypingContext *ctx,
 
         bool isVariadic = hasFlag(decl, Variadic);
         u64 defaultCount = type->func.defaultValuesCount,
-            paramsCount = type->func.paramsCount,
-            requiredCount = paramsCount - defaultCount - isVariadic;
+                paramsCount = type->func.paramsCount,
+                requiredCount = paramsCount - defaultCount - isVariadic;
 
         declarations++;
 
         argsCount =
-            isVariadic ? MIN(argsCount, paramsCount - isVariadic) : argsCount;
+                isVariadic ? MIN(argsCount, paramsCount - isVariadic) : argsCount;
         if (argsCount < requiredCount || argsCount > paramsCount)
             continue;
 
@@ -74,14 +71,13 @@ const Type *matchOverloadedFunctionPerfectMatch(TypingContext *ctx,
                     continue;
                 }
                 compatible =
-                    isExplicitConstructableFrom(ctx, paramType, argTypes[i]);
+                        isExplicitConstructableFrom(ctx, paramType, argTypes[i]);
                 if (compatible) {
                     score--;
                     continue;
                 }
                 break;
-            }
-            else
+            } else
                 break;
         }
 
@@ -102,18 +98,19 @@ const Type *matchOverloadedFunctionPerfectMatch(TypingContext *ctx,
 
     if (loc) {
         Type type = {.tag = typFunc,
-                     .flags = flags,
-                     .name = callee->func.decl->funcDecl.name,
-                     .func = {.params = argTypes,
-                              .paramsCount = argsCount,
-                              .retType = makeAutoType(ctx->types)}};
+                .flags = flags,
+                .name = callee->func.decl->funcDecl.name,
+                .func = {.params = argTypes,
+                        .paramsCount = argsCount,
+                        .retType = makeAutoType(ctx->types)}};
 
         logError(
-            ctx->L,
-            loc,
-            "incompatible function reference ({u64} functions declared did "
-            "not match function with signature {t})",
-            (FormatArg[]){{.u64 = declarations}, {.t = &type}});
+                ctx->L,
+                loc,
+                "incompatible function reference ({u64} functions declared did "
+                "not match function with signature {t})",
+                (FormatArg[]) {{.u64 = declarations},
+                               {.t = &type}});
 
         decl = decls;
         while (decl) {
@@ -121,7 +118,7 @@ const Type *matchOverloadedFunctionPerfectMatch(TypingContext *ctx,
                 logError(ctx->L,
                          &decl->loc,
                          "found declaration with incompatible signature {t}",
-                         (FormatArg[]){{.t = decl->type}});
+                         (FormatArg[]) {{.t = decl->type}});
             else
                 logError(ctx->L,
                          &decl->loc,
@@ -136,8 +133,7 @@ const Type *matchOverloadedFunctionPerfectMatch(TypingContext *ctx,
 
 bool checkMemberFunctions(AstVisitor *visitor,
                           AstNode *node,
-                          NamedTypeMember *members)
-{
+                          NamedTypeMember *members) {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *member = node->structDecl.members;
 
@@ -146,15 +142,19 @@ bool checkMemberFunctions(AstVisitor *visitor,
         if (nodeIs(member, FuncDecl)) {
             if (member->funcDecl.this_) {
                 member->funcDecl.this_->type =
-                    nodeIs(node, ClassDecl)
-                        ? node->type
-                        : makePointerType(
-                              ctx->types, node->type, member->flags & flgConst);
+                                nodeIs(node, ClassDecl)
+                                ? node->type
+                                : makePointerType(
+                                ctx->types, node->type, member->flags & flgConst);
             }
-            const Type *type = checkFunctionBody(visitor, member);
-            if (typeIs(type, Error)) {
-                node->type = ERROR_TYPE(ctx);
-                return false;
+
+            const Type *type = member->type;
+            if (!hasFlag(member, Abstract)) {
+                type = checkFunctionBody(visitor, member);
+                if (typeIs(type, Error)) {
+                    node->type = ERROR_TYPE(ctx);
+                    return false;
+                }
             }
 
             if (member->funcDecl.operatorOverload == opRange &&
@@ -164,7 +164,7 @@ bool checkMemberFunctions(AstVisitor *visitor,
                          &member->loc,
                          "expecting an iterator function overload to return an "
                          "iterator, got '{t}'",
-                         (FormatArg[]){{.t = type->func.retType}});
+                         (FormatArg[]) {{.t = type->func.retType}});
                 node->type = ERROR_TYPE(ctx);
                 return false;
             }
@@ -178,8 +178,7 @@ bool checkMemberFunctions(AstVisitor *visitor,
     return retype;
 }
 
-void checkFunctionParam(AstVisitor *visitor, AstNode *node)
-{
+void checkFunctionParam(AstVisitor *visitor, AstNode *node) {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *type = node->funcParam.type, *def = node->funcParam.def;
     AstNode *parent = node->parentScope;
@@ -197,34 +196,34 @@ void checkFunctionParam(AstVisitor *visitor, AstNode *node)
         !hasFlag(parent, Extern)) //
     {
         type->funcType.params = makeFunctionParam(
-            ctx->pool,
-            &type->loc,
-            makeString(ctx->strings, "_"),
-            makeTypeReferenceNode(ctx->pool,
-                                  makeVoidPointerType(ctx->types, flgNone),
-                                  &type->loc),
-            NULL,
-            flgNone,
-            type->funcType.params);
+                ctx->pool,
+                &type->loc,
+                makeString(ctx->strings, "_"),
+                makeTypeReferenceNode(ctx->pool,
+                                      makeVoidPointerType(ctx->types, flgNone),
+                                      &type->loc),
+                NULL,
+                flgNone,
+                type->funcType.params);
         type->type = NULL;
         type_ = checkType(visitor, type);
         if (typeIs(type_, Error))
             return;
 
         type = node->funcParam.type = makeTupleTypeAst(
-            ctx->pool,
-            &type->loc,
-            flgNone,
-            makeTypeReferenceNode2(ctx->pool,
-                                   makeVoidPointerType(ctx->types, flgNone),
-                                   &type->loc,
-                                   type),
-            NULL,
-            makeTupleType(ctx->types,
-                          (const Type *[]){
-                              makeVoidPointerType(ctx->types, flgNone), type_},
-                          2,
-                          flgFuncTypeParam));
+                ctx->pool,
+                &type->loc,
+                flgNone,
+                makeTypeReferenceNode2(ctx->pool,
+                                       makeVoidPointerType(ctx->types, flgNone),
+                                       &type->loc,
+                                       type),
+                NULL,
+                makeTupleType(ctx->types,
+                              (const Type *[]) {
+                                      makeVoidPointerType(ctx->types, flgNone), type_},
+                              2,
+                              flgFuncTypeParam));
         node->type = type->type;
         node->flags |= flgFuncTypeParam;
         return;
@@ -247,15 +246,14 @@ void checkFunctionParam(AstVisitor *visitor, AstNode *node)
                  &def->loc,
                  "parameter default value type '{t}' is incompatible with "
                  "parameter '{t}'",
-                 (FormatArg[]){{.t = def_}, {.t = type_}});
+                 (FormatArg[]) {{.t = def_},
+                                {.t = type_}});
         node->type = ERROR_TYPE(ctx);
-    }
-    else
+    } else
         node->type = type_;
 }
 
-const Type *checkFunctionSignature(AstVisitor *visitor, AstNode *node)
-{
+const Type *checkFunctionSignature(AstVisitor *visitor, AstNode *node) {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *params = node->funcDecl.signature->params, *param = params,
             *ret = node->funcDecl.signature->ret, *body = node->funcDecl.body;
@@ -281,20 +279,21 @@ const Type *checkFunctionSignature(AstVisitor *visitor, AstNode *node)
 
     if (node->list.first && node->list.first != node) {
         const Type *found =
-            matchOverloadedFunctionPerfectMatch(ctx,
-                                                node->list.first->type,
-                                                params_,
-                                                paramsCount,
-                                                NULL,
-                                                node->flags & flgConst,
-                                                true);
+                matchOverloadedFunctionPerfectMatch(ctx,
+                                                    node->list.first->type,
+                                                    params_,
+                                                    paramsCount,
+                                                    NULL,
+                                                    node->flags & flgConst,
+                                                    true);
         if (found) {
             // conflict
             logError(
-                ctx->L,
-                &node->loc,
-                "function '{s}' overload with signature {t} already declared",
-                (FormatArg[]){{.s = node->funcDecl.name}, {.t = found}});
+                    ctx->L,
+                    &node->loc,
+                    "function '{s}' overload with signature {t} already declared",
+                    (FormatArg[]) {{.s = node->funcDecl.name},
+                                   {.t = found}});
             logNote(ctx->L,
                     &found->func.decl->loc,
                     "previous declaration found here",
@@ -306,21 +305,20 @@ const Type *checkFunctionSignature(AstVisitor *visitor, AstNode *node)
     }
 
     node->type =
-        makeFuncType(ctx->types,
-                     &(Type){.tag = typFunc,
-                             .flags = node->flags & (flgConst | flgVariadic),
-                             .name = getDeclarationName(node),
-                             .func = {.paramsCount = paramsCount,
-                                      .params = params_,
-                                      .retType = ret_,
-                                      .defaultValuesCount = defaultValues,
-                                      .decl = node}});
+            makeFuncType(ctx->types,
+                         &(Type) {.tag = typFunc,
+                                 .flags = node->flags & (flgConst | flgVariadic),
+                                 .name = getDeclarationName(node),
+                                 .func = {.paramsCount = paramsCount,
+                                         .params = params_,
+                                         .retType = ret_,
+                                         .defaultValuesCount = defaultValues,
+                                         .decl = node}});
     free(params_);
     return node->type;
 }
 
-const Type *checkFunctionBody(AstVisitor *visitor, AstNode *node)
-{
+const Type *checkFunctionBody(AstVisitor *visitor, AstNode *node) {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *body = node->funcDecl.body;
 
@@ -349,7 +347,8 @@ const Type *checkFunctionBody(AstVisitor *visitor, AstNode *node)
                  &node->loc,
                  "return type '{t}' of function declaration doesn't match type "
                  "'{t}' returned in body.",
-                 (FormatArg[]){{.t = ret_}, {.t = body_}});
+                 (FormatArg[]) {{.t = ret_},
+                                {.t = body_}});
         return node->type = ERROR_TYPE(ctx);
     }
 
@@ -363,8 +362,7 @@ const Type *checkFunctionBody(AstVisitor *visitor, AstNode *node)
     return node->type;
 }
 
-void checkFunctionType(AstVisitor *visitor, AstNode *node)
-{
+void checkFunctionType(AstVisitor *visitor, AstNode *node) {
     TypingContext *ctx = getAstVisitorContext(visitor);
 
     const Type *ret = checkType(visitor, node->funcType.ret);
@@ -378,33 +376,32 @@ void checkFunctionType(AstVisitor *visitor, AstNode *node)
         params[i] = checkType(visitor, param);
         if (params[i] == ERROR_TYPE(ctx)) {
             node->type = ERROR_TYPE(ctx);
-        }
-        else if (param->funcParam.def) {
+        } else if (param->funcParam.def) {
             defaultValuesCount++;
         }
     }
 
     if (node->type == NULL) {
         node->type = makeFuncType(
-            ctx->types,
-            &(Type){.tag = typFunc,
-                    .name = NULL,
-                    .flags = node->flags,
-                    .func = {.retType = ret,
-                             .params = params,
-                             .paramsCount = count,
-                             .defaultValuesCount = defaultValuesCount,
-                             .decl = node}});
+                ctx->types,
+                &(Type) {.tag = typFunc,
+                        .name = NULL,
+                        .flags = node->flags,
+                        .func = {.retType = ret,
+                                .params = params,
+                                .paramsCount = count,
+                                .defaultValuesCount = defaultValuesCount,
+                                .decl = node}});
     }
 
     free(params);
 }
 
-void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
-{
+void checkFunctionDecl(AstVisitor *visitor, AstNode *node) {
     TypingContext *ctx = getAstVisitorContext(visitor);
     if (node->funcDecl.name == S_main) {
         node->flags |= flgMain;
+        ctx->root.program->flags |= flgExecutable;
     }
 
     const Type *type = checkFunctionSignature(visitor, node);

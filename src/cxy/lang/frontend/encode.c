@@ -12,16 +12,14 @@ typedef struct {
     msgpack_packer packer;
 } AstNodeUnpackContext;
 
-attr(always_inline) static void packString(msgpack_packer *packer, cstring str)
-{
+attr(always_inline) static void packString(msgpack_packer *packer, cstring str) {
     size_t len = strlen(str);
     msgpack_pack_str(packer, len);
     msgpack_pack_str_body(packer, str, len);
 }
 
 attr(always_inline) static void nodeToBinary(ConstAstVisitor *visitor,
-                                             const AstNode *node)
-{
+                                             const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     if (node)
         astConstVisit(visitor, node);
@@ -29,8 +27,7 @@ attr(always_inline) static void nodeToBinary(ConstAstVisitor *visitor,
         msgpack_pack_nil(&ctx->packer);
 }
 
-static void manyNodesToBinary(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void manyNodesToBinary(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     u64 count = countAstNodes(node);
     msgpack_pack_array(&ctx->packer, count);
@@ -38,21 +35,18 @@ static void manyNodesToBinary(ConstAstVisitor *visitor, const AstNode *node)
         astConstVisit(visitor, it);
 }
 
-static void nodePopulateFilePos(msgpack_packer *packer, const FilePos *pos)
-{
+static void nodePopulateFilePos(msgpack_packer *packer, const FilePos *pos) {
     msgpack_pack_uint32(packer, pos->row);
     msgpack_pack_uint32(packer, pos->col);
     msgpack_pack_uint64(packer, pos->byteOffset);
 }
 
-static void nodePopulateLocation(msgpack_packer *packer, const FileLoc *loc)
-{
+static void nodePopulateLocation(msgpack_packer *packer, const FileLoc *loc) {
     nodePopulateFilePos(packer, &loc->begin);
     nodePopulateFilePos(packer, &loc->end);
 }
 
-static void nodePackHeader(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void nodePackHeader(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     msgpack_pack_uint32(&ctx->packer, node->tag);
     msgpack_pack_uint64(&ctx->packer, node->flags);
@@ -60,56 +54,51 @@ static void nodePackHeader(ConstAstVisitor *visitor, const AstNode *node)
     manyNodesToBinary(visitor, node->attrs);
 }
 
-static void visitProgram(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitProgram(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
     nodeToBinary(visitor, node->program.module);
     manyNodesToBinary(visitor, node->program.top);
     manyNodesToBinary(visitor, node->program.decls);
 }
 
-static void visitError(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitError(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
     packString(&ctx->packer, node->error.message);
 }
 
-static void visitNoop(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitNoop(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 }
 
-static void visitLiteral(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitLiteral(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
     switch (node->tag) {
-    case astNullLit:
-        break;
-    case astBoolLit:
-        msgpack_pack_uint8(&ctx->packer, node->boolLiteral.value);
-        break;
-    case astCharLit:
-        msgpack_pack_uint32(&ctx->packer, node->charLiteral.value);
-        break;
-    case astIntegerLit:
-        msgpack_pack_uint8(&ctx->packer, node->intLiteral.isNegative);
-        msgpack_pack_uint64(&ctx->packer, node->intLiteral.uValue);
-        break;
-    case astFloatLit:
-        msgpack_pack_double(&ctx->packer, node->floatLiteral.value);
-        break;
-    case astStringLit:
-        packString(&ctx->packer, node->stringLiteral.value);
-        break;
-    default:
-        csAssert0(false);
+        case astNullLit:
+            break;
+        case astBoolLit:
+            msgpack_pack_uint8(&ctx->packer, node->boolLiteral.value);
+            break;
+        case astCharLit:
+            msgpack_pack_uint32(&ctx->packer, node->charLiteral.value);
+            break;
+        case astIntegerLit:
+            msgpack_pack_uint8(&ctx->packer, node->intLiteral.isNegative);
+            msgpack_pack_uint64(&ctx->packer, node->intLiteral.uValue);
+            break;
+        case astFloatLit:
+            msgpack_pack_double(&ctx->packer, node->floatLiteral.value);
+            break;
+        case astStringLit:
+            packString(&ctx->packer, node->stringLiteral.value);
+            break;
+        default:
+            csAssert0(false);
     }
 }
 
-static void visitAttr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitAttr(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
@@ -117,14 +106,12 @@ static void visitAttr(ConstAstVisitor *visitor, const AstNode *node)
     manyNodesToBinary(visitor, node->attr.args);
 }
 
-static void visitStrExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitStrExpr(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
     manyNodesToBinary(visitor, node->stringExpr.parts);
 }
 
-static void visitDefine(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitDefine(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     manyNodesToBinary(visitor, node->define.names);
@@ -132,16 +119,14 @@ static void visitDefine(ConstAstVisitor *visitor, const AstNode *node)
     nodeToBinary(visitor, node->define.container);
 }
 
-static void visitImport(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitImport(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
     nodeToBinary(visitor, node->import.alias);
     nodeToBinary(visitor, node->import.module);
     manyNodesToBinary(visitor, node->import.entities);
 }
 
-static void visitImportEntity(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitImportEntity(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
@@ -149,16 +134,14 @@ static void visitImportEntity(ConstAstVisitor *visitor, const AstNode *node)
     packString(&ctx->packer, node->importEntity.alias);
 }
 
-static void visitModuleDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitModuleDecl(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     packString(&ctx->packer, node->moduleDecl.name);
 }
 
-static void visitIdentifier(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitIdentifier(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
@@ -166,73 +149,63 @@ static void visitIdentifier(ConstAstVisitor *visitor, const AstNode *node)
     packString(&ctx->packer, node->ident.alias);
 }
 
-static void visitTuple(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitTuple(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     manyNodesToBinary(visitor, node->tupleType.elements);
 }
 
-static void visitArrayType(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitArrayType(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->arrayType.elementType);
     nodeToBinary(visitor, node->arrayType.dim);
 }
 
-static void visitFuncType(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitFuncType(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->funcType.ret);
     manyNodesToBinary(visitor, node->funcType.params);
 }
 
-static void visitOptionalType(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitOptionalType(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->optionalType.type);
 }
 
-static void visitPrimitiveType(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitPrimitiveType(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     msgpack_pack_uint8(&ctx->packer, node->primitiveType.id);
 }
 
-static void visitHeaderOnly(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitHeaderOnly(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 }
 
-static void visitPointerType(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitPointerType(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->pointerType.pointed);
 }
 
-static void visitArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitArrayExpr(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     manyNodesToBinary(visitor, node->arrayExpr.elements);
 }
 
-static void visitMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitMemberExpr(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->memberExpr.target);
     nodeToBinary(visitor, node->memberExpr.member);
 }
 
-static void visitRangeExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitRangeExpr(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->rangeExpr.start);
@@ -240,32 +213,28 @@ static void visitRangeExpr(ConstAstVisitor *visitor, const AstNode *node)
     nodeToBinary(visitor, node->rangeExpr.step);
 }
 
-static void visitNewExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitNewExpr(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->newExpr.type);
     nodeToBinary(visitor, node->newExpr.init);
 }
 
-static void visitCastExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitCastExpr(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->castExpr.to);
     nodeToBinary(visitor, node->castExpr.expr);
 }
 
-static void visitIndexExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitIndexExpr(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->indexExpr.target);
     nodeToBinary(visitor, node->indexExpr.index);
 }
 
-static void visitGenericParam(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitGenericParam(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
@@ -273,16 +242,14 @@ static void visitGenericParam(ConstAstVisitor *visitor, const AstNode *node)
     nodeToBinary(visitor, node->genericParam.constraints);
 }
 
-static void visitGenericDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitGenericDecl(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->genericDecl.decl);
     manyNodesToBinary(visitor, node->genericDecl.params);
 }
 
-static void visitPathElement(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitPathElement(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
@@ -293,8 +260,7 @@ static void visitPathElement(ConstAstVisitor *visitor, const AstNode *node)
     msgpack_pack_uint64(&ctx->packer, node->pathElement.index);
 }
 
-static void visitPath(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitPath(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
@@ -302,8 +268,7 @@ static void visitPath(ConstAstVisitor *visitor, const AstNode *node)
     msgpack_pack_uint8(&ctx->packer, node->path.isType);
 }
 
-static void visitFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitFuncDecl(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
@@ -315,19 +280,16 @@ static void visitFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
     nodeToBinary(visitor, node->funcDecl.body);
 }
 
-static void visitMacroDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitMacroDecl(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
     packString(&ctx->packer, node->macroDecl.name);
     manyNodesToBinary(visitor, node->macroDecl.params);
-    nodeToBinary(visitor, node->macroDecl.ret);
     nodeToBinary(visitor, node->macroDecl.body);
 }
 
-static void visitFuncParamDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitFuncParamDecl(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
@@ -337,8 +299,7 @@ static void visitFuncParamDecl(ConstAstVisitor *visitor, const AstNode *node)
     nodeToBinary(visitor, node->funcParam.def);
 }
 
-static void visitVarDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitVarDecl(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     manyNodesToBinary(visitor, node->varDecl.names);
@@ -346,8 +307,7 @@ static void visitVarDecl(ConstAstVisitor *visitor, const AstNode *node)
     nodeToBinary(visitor, node->varDecl.init);
 }
 
-static void visitTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitTypeDecl(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
@@ -355,15 +315,13 @@ static void visitTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
     nodeToBinary(visitor, node->typeDecl.aliased);
 }
 
-static void visitUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitUnionDecl(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
     manyNodesToBinary(visitor, node->unionDecl.members);
 }
 
-static void visitEnumOptionDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitEnumOptionDecl(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
@@ -371,8 +329,7 @@ static void visitEnumOptionDecl(ConstAstVisitor *visitor, const AstNode *node)
     nodeToBinary(visitor, node->enumOption.value);
 }
 
-static void visitEnumDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitEnumDecl(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
@@ -381,8 +338,7 @@ static void visitEnumDecl(ConstAstVisitor *visitor, const AstNode *node)
     manyNodesToBinary(visitor, node->enumDecl.options);
 }
 
-static void visitFieldDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitFieldDecl(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
@@ -392,8 +348,7 @@ static void visitFieldDecl(ConstAstVisitor *visitor, const AstNode *node)
 }
 
 static void visitClassOrStructDecl(ConstAstVisitor *visitor,
-                                   const AstNode *node)
-{
+                                   const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
@@ -401,11 +356,11 @@ static void visitClassOrStructDecl(ConstAstVisitor *visitor,
     if (nodeIs(node, ClassDecl))
         nodeToBinary(visitor, node->classDecl.base);
     manyNodesToBinary(visitor, node->structDecl.members);
-    manyNodesToBinary(visitor, node->structDecl.implements);
+    if (nodeIs(node, ClassDecl))
+        manyNodesToBinary(visitor, node->classDecl.implements);
 }
 
-static void visitBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitBinaryExpr(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
@@ -415,8 +370,7 @@ static void visitBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
     nodeToBinary(visitor, node->binaryExpr.lhs);
 }
 
-static void visitUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitUnaryExpr(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
@@ -426,8 +380,7 @@ static void visitUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
     nodeToBinary(visitor, node->unaryExpr.operand);
 }
 
-static void visitTernaryExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitTernaryExpr(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->ternaryExpr.cond);
@@ -435,23 +388,20 @@ static void visitTernaryExpr(ConstAstVisitor *visitor, const AstNode *node)
     nodeToBinary(visitor, node->ternaryExpr.otherwise);
 }
 
-static void visitStmtExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitStmtExpr(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->stmtExpr.stmt);
 }
 
-static void visitTypedExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitTypedExpr(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->typedExpr.type);
     nodeToBinary(visitor, node->typedExpr.expr);
 }
 
-static void visitCallExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitCallExpr(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
@@ -460,8 +410,7 @@ static void visitCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     manyNodesToBinary(visitor, node->callExpr.args);
 }
 
-static void visitClosureExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitClosureExpr(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->closureExpr.ret);
@@ -469,8 +418,7 @@ static void visitClosureExpr(ConstAstVisitor *visitor, const AstNode *node)
     nodeToBinary(visitor, node->closureExpr.body);
 }
 
-static void visitFieldExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitFieldExpr(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
 
@@ -478,39 +426,33 @@ static void visitFieldExpr(ConstAstVisitor *visitor, const AstNode *node)
     nodeToBinary(visitor, node->fieldExpr.value);
 }
 
-static void visitStructExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitStructExpr(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->structExpr.left);
     manyNodesToBinary(visitor, node->structExpr.fields);
 }
 
-static void visitExpressionStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitExpressionStmt(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
     nodeToBinary(visitor, node->exprStmt.expr);
 }
 
-static void visitContinueStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitContinueStmt(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 }
 
-static void visitReturnStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitReturnStmt(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
     nodeToBinary(visitor, node->returnStmt.expr);
 }
 
-static void visitBlockStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitBlockStmt(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
     manyNodesToBinary(visitor, node->blockStmt.stmts);
 }
 
-static void visitForStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitForStmt(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->forStmt.var);
@@ -518,32 +460,28 @@ static void visitForStmt(ConstAstVisitor *visitor, const AstNode *node)
     nodeToBinary(visitor, node->forStmt.body);
 }
 
-static void visitWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitWhileStmt(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->whileStmt.cond);
     nodeToBinary(visitor, node->whileStmt.body);
 }
 
-static void visitSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitSwitchStmt(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->switchStmt.cond);
     manyNodesToBinary(visitor, node->switchStmt.cases);
 }
 
-static void visitCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitCaseStmt(ConstAstVisitor *visitor, const AstNode *node) {
     nodePackHeader(visitor, node);
 
     nodeToBinary(visitor, node->caseStmt.match);
     manyNodesToBinary(visitor, node->caseStmt.body);
 }
 
-static void visitFallback(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitFallback(ConstAstVisitor *visitor, const AstNode *node) {
     AstNodeUnpackContext *ctx = getConstAstVisitorContext(visitor);
     nodePackHeader(visitor, node);
     msgpack_pack_nil(&ctx->packer);
@@ -551,8 +489,7 @@ static void visitFallback(ConstAstVisitor *visitor, const AstNode *node)
 
 bool binaryEncodeAstNode(struct msgpack_sbuffer *sbuf,
                          MemPool *pool,
-                         const AstNode *node)
-{
+                         const AstNode *node) {
     msgpack_sbuffer_init(sbuf);
     AstNodeUnpackContext ctx = {.buffer = sbuf};
     msgpack_packer_init(&ctx.packer, sbuf, msgpack_sbuffer_write);
@@ -629,7 +566,7 @@ bool binaryEncodeAstNode(struct msgpack_sbuffer *sbuf,
         [astWhileStmt] = visitWhileStmt,
         [astSwitchStmt] = visitSwitchStmt,
         [astCaseStmt] = visitCaseStmt
-    }, .fallback = visitFallback );
+    }, .fallback = visitFallback);
 
     // clang-format on
     astConstVisit(&visitor, node);

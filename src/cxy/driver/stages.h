@@ -9,11 +9,14 @@
 struct CompilerDriver;
 
 // clang-format off
-#define CXY_COMPILER_STAGES(f)                         \
+#define CXY_PRIVATE_COMPILER_STAGES(f)                 \
     f(_Parse,           "Parse")                       \
     f(_Dump,            "Dump Ast")                    \
     f(_DumpIR,          "Dump IR")                     \
     f(_First,           "First Marker")                \
+
+#define CXY_PUBLIC_COMPILER_STAGES(f)                  \
+    f(Preprocess,       "Preprocess")                  \
     f(Shake,            "Shake")                       \
     f(Bind,             "Bind")                        \
     f(ConstCheck,       "Const Check")                 \
@@ -24,6 +27,11 @@ struct CompilerDriver;
     f(Codegen,          "Code Gen")                    \
     f(Collect,          "Collect")                     \
     f(Compile,          "Compile")                     \
+
+#define CXY_COMPILER_STAGES(f)                         \
+    CXY_PRIVATE_COMPILER_STAGES(f)                     \
+    CXY_PUBLIC_COMPILER_STAGES(f)
+
 
 typedef enum {
     ccsInvalid = 0,

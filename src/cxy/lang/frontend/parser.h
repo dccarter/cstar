@@ -34,3 +34,4 @@ typedef struct {
 
 Parser makeParser(Lexer *, CompilerDriver *);
 AstNode *parseProgram(Parser *);
+AstNode *parseExpression(Parser *P);

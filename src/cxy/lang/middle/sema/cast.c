@@ -90,7 +90,7 @@ static void castLiteral(TypingContext *ctx, AstNode *node)
         }
         else if (isCharacterType(node->type)) {
             expr->tag = astCharLit;
-            expr->charLiteral.value = (i32)getNumericLiteral(expr);
+            expr->charLiteral.value = (i32)nodeGetNumericLiteral(expr);
             if (node->primitiveType.id == prtCChar)
                 expr->charLiteral.value = (u8)expr->charLiteral.value;
             replaceAstNodeWith(node, expr);

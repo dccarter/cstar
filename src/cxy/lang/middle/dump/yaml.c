@@ -35,33 +35,32 @@ typedef struct {
 
 static int checkEmitStatus(YamlDumpContext *ctx,
                            const AstNode *node,
-                           int status)
-{
+                           int status) {
     if (status)
         return status;
 
     switch (ctx->emitter->error) {
-    case YAML_MEMORY_ERROR:
-        logError(ctx->L,
-                 node ? &node->loc : builtinLoc(),
-                 "YAML dump error: out of memory",
-                 NULL);
-        break;
+        case YAML_MEMORY_ERROR:
+            logError(ctx->L,
+                     node ? &node->loc : builtinLoc(),
+                     "YAML dump error: out of memory",
+                     NULL);
+            break;
 
-    case YAML_WRITER_ERROR:
-    case YAML_EMITTER_ERROR:
-        logError(ctx->L,
-                 node ? &node->loc : builtinLoc(),
-                 "YAML dump error: {s}",
-                 (FormatArg[]){{.s = ctx->emitter->problem}});
-        break;
+        case YAML_WRITER_ERROR:
+        case YAML_EMITTER_ERROR:
+            logError(ctx->L,
+                     node ? &node->loc : builtinLoc(),
+                     "YAML dump error: {s}",
+                     (FormatArg[]) {{.s = ctx->emitter->problem}});
+            break;
 
-    default:
-        logError(ctx->L,
-                 node ? &node->loc : builtinLoc(),
-                 "YAML dump error: unknown",
-                 NULL);
-        break;
+        default:
+            logError(ctx->L,
+                     node ? &node->loc : builtinLoc(),
+                     "YAML dump error: unknown",
+                     NULL);
+            break;
     }
     return status;
 }
@@ -69,15 +68,14 @@ static int checkEmitStatus(YamlDumpContext *ctx,
 #define EMIT_VALUE(ctx, node, event)                                           \
     checkEmitStatus((ctx), (node), (yaml_emitter_emit((ctx)->emitter, event)))
 
-static void emitMapKey(YamlDumpContext *ctx, const AstNode *value, cstring str)
-{
+static void emitMapKey(YamlDumpContext *ctx, const AstNode *value, cstring str) {
     yaml_event_t event;
 
     yaml_scalar_event_initialize(&event,
                                  NULL,
                                  NULL,
-                                 (yaml_char_t *)str,
-                                 (int)strlen(str),
+                                 (yaml_char_t *) str,
+                                 (int) strlen(str),
                                  1,
                                  1,
                                  YAML_ANY_SCALAR_STYLE);
@@ -85,24 +83,22 @@ static void emitMapKey(YamlDumpContext *ctx, const AstNode *value, cstring str)
     EMIT_VALUE(ctx, value, &event);
 }
 
-static void emitBool(YamlDumpContext *ctx, const AstNode *node, bool value)
-{
+static void emitBool(YamlDumpContext *ctx, const AstNode *node, bool value) {
     yaml_event_t event;
     if (value) {
         yaml_scalar_event_initialize(&event,
                                      NULL,
                                      NULL,
-                                     (yaml_char_t *)"true",
+                                     (yaml_char_t *) "true",
                                      4,
                                      1,
                                      1,
                                      YAML_ANY_SCALAR_STYLE);
-    }
-    else {
+    } else {
         yaml_scalar_event_initialize(&event,
                                      NULL,
                                      NULL,
-                                     (yaml_char_t *)"false",
+                                     (yaml_char_t *) "false",
                                      5,
                                      1,
                                      1,
@@ -112,13 +108,12 @@ static void emitBool(YamlDumpContext *ctx, const AstNode *node, bool value)
     EMIT_VALUE(ctx, node, &event);
 }
 
-static void emitNull(YamlDumpContext *ctx, const AstNode *node)
-{
+static void emitNull(YamlDumpContext *ctx, const AstNode *node) {
     yaml_event_t event;
     yaml_scalar_event_initialize(&event,
                                  NULL,
                                  NULL,
-                                 (yaml_char_t *)"null",
+                                 (yaml_char_t *) "null",
                                  4,
                                  1,
                                  1,
@@ -127,17 +122,15 @@ static void emitNull(YamlDumpContext *ctx, const AstNode *node)
     EMIT_VALUE(ctx, node, &event);
 }
 
-static void emitEmpty(YamlDumpContext *ctx, const AstNode *node)
-{
+static void emitEmpty(YamlDumpContext *ctx, const AstNode *node) {
     yaml_event_t event;
     yaml_scalar_event_initialize(
-        &event, NULL, NULL, (yaml_char_t *)"", 0, 1, 1, YAML_ANY_SCALAR_STYLE);
+            &event, NULL, NULL, (yaml_char_t *) "", 0, 1, 1, YAML_ANY_SCALAR_STYLE);
 
     EMIT_VALUE(ctx, node, &event);
 }
 
-static void emitInteger(YamlDumpContext *ctx, const AstNode *node, i64 value)
-{
+static void emitInteger(YamlDumpContext *ctx, const AstNode *node, i64 value) {
     char str[64];
     yaml_event_t event;
     int num = snprintf(str, sizeof(str), "%" PRId64, value);
@@ -146,7 +139,7 @@ static void emitInteger(YamlDumpContext *ctx, const AstNode *node, i64 value)
     yaml_scalar_event_initialize(&event,
                                  NULL,
                                  NULL,
-                                 (yaml_char_t *)str,
+                                 (yaml_char_t *) str,
                                  num,
                                  1,
                                  1,
@@ -155,8 +148,7 @@ static void emitInteger(YamlDumpContext *ctx, const AstNode *node, i64 value)
     EMIT_VALUE(ctx, node, &event);
 }
 
-static void emitUInteger(YamlDumpContext *ctx, const AstNode *node, u64 value)
-{
+static void emitUInteger(YamlDumpContext *ctx, const AstNode *node, u64 value) {
     char str[64];
     yaml_event_t event;
     int num = snprintf(str, sizeof(str), "%" PRIu64, value);
@@ -165,7 +157,7 @@ static void emitUInteger(YamlDumpContext *ctx, const AstNode *node, u64 value)
     yaml_scalar_event_initialize(&event,
                                  NULL,
                                  NULL,
-                                 (yaml_char_t *)str,
+                                 (yaml_char_t *) str,
                                  num,
                                  1,
                                  1,
@@ -174,20 +166,19 @@ static void emitUInteger(YamlDumpContext *ctx, const AstNode *node, u64 value)
     EMIT_VALUE(ctx, node, &event);
 }
 
-static void emitCharacter(YamlDumpContext *ctx, const AstNode *node, u32 value)
-{
+static void emitCharacter(YamlDumpContext *ctx, const AstNode *node, u32 value) {
     yaml_event_t event;
     FormatState state = newFormatState("", false);
 
-    format(&state, "{c}", (FormatArg[]){{.c = value}});
+    format(&state, "{c}", (FormatArg[]) {{.c = value}});
     char *str = formatStateToString(&state);
     freeFormatState(&state);
 
     yaml_scalar_event_initialize(&event,
                                  NULL,
                                  NULL,
-                                 (yaml_char_t *)str,
-                                 (int)strlen(str),
+                                 (yaml_char_t *) str,
+                                 (int) strlen(str),
                                  1,
                                  1,
                                  YAML_SINGLE_QUOTED_SCALAR_STYLE);
@@ -197,8 +188,7 @@ static void emitCharacter(YamlDumpContext *ctx, const AstNode *node, u32 value)
     free(str);
 }
 
-static void emitFloat(YamlDumpContext *ctx, const AstNode *node, f64 value)
-{
+static void emitFloat(YamlDumpContext *ctx, const AstNode *node, f64 value) {
     char str[64];
     yaml_event_t event;
     int num = snprintf(str, sizeof(str), "%f", value);
@@ -207,7 +197,7 @@ static void emitFloat(YamlDumpContext *ctx, const AstNode *node, f64 value)
     yaml_scalar_event_initialize(&event,
                                  NULL,
                                  NULL,
-                                 (yaml_char_t *)str,
+                                 (yaml_char_t *) str,
                                  num,
                                  1,
                                  1,
@@ -218,14 +208,13 @@ static void emitFloat(YamlDumpContext *ctx, const AstNode *node, f64 value)
 
 static void emitStringLiteral(YamlDumpContext *ctx,
                               const AstNode *value,
-                              cstring lit)
-{
+                              cstring lit) {
     yaml_event_t event;
     yaml_scalar_event_initialize(&event,
                                  NULL,
                                  NULL,
-                                 (yaml_char_t *)lit,
-                                 (int)strlen(lit),
+                                 (yaml_char_t *) lit,
+                                 (int) strlen(lit),
                                  1,
                                  1,
                                  YAML_DOUBLE_QUOTED_SCALAR_STYLE);
@@ -233,36 +222,32 @@ static void emitStringLiteral(YamlDumpContext *ctx,
     EMIT_VALUE(ctx, value, &event);
 }
 
-static void emitStartMap(YamlDumpContext *ctx, const AstNode *node)
-{
+static void emitStartMap(YamlDumpContext *ctx, const AstNode *node) {
     yaml_event_t event;
 
     yaml_mapping_start_event_initialize(
-        &event, NULL, NULL, 1, YAML_BLOCK_MAPPING_STYLE);
+            &event, NULL, NULL, 1, YAML_BLOCK_MAPPING_STYLE);
 
     EMIT_VALUE(ctx, node, &event);
 }
 
-static void emitEndMap(YamlDumpContext *ctx, const AstNode *value)
-{
+static void emitEndMap(YamlDumpContext *ctx, const AstNode *value) {
     yaml_event_t event;
 
     yaml_mapping_end_event_initialize(&event);
     EMIT_VALUE(ctx, value, &event);
 }
 
-static void emitStartArray(YamlDumpContext *ctx, const AstNode *value)
-{
+static void emitStartArray(YamlDumpContext *ctx, const AstNode *value) {
     yaml_event_t event;
 
     yaml_sequence_start_event_initialize(
-        &event, NULL, NULL, 0, YAML_ANY_SEQUENCE_STYLE);
+            &event, NULL, NULL, 0, YAML_ANY_SEQUENCE_STYLE);
 
     EMIT_VALUE(ctx, value, &event);
 }
 
-static void emitEndArray(YamlDumpContext *ctx, const AstNode *value)
-{
+static void emitEndArray(YamlDumpContext *ctx, const AstNode *value) {
     yaml_event_t event;
 
     yaml_sequence_end_event_initialize(&event);
@@ -271,8 +256,7 @@ static void emitEndArray(YamlDumpContext *ctx, const AstNode *value)
 
 static void nodeToYaml(ConstAstVisitor *visitor,
                        cstring name,
-                       const AstNode *node)
-{
+                       const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     if (node == NULL)
         return;
@@ -290,8 +274,7 @@ static void nodeToYaml(ConstAstVisitor *visitor,
 
 static void manyNodesToYaml(ConstAstVisitor *visitor,
                             cstring name,
-                            const AstNode *node)
-{
+                            const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     if (node == NULL)
         return;
@@ -305,8 +288,7 @@ static void manyNodesToYaml(ConstAstVisitor *visitor,
 
 static void emitNodeFilePosition(YamlDumpContext *ctx,
                                  const AstNode *node,
-                                 const FilePos *pos)
-{
+                                 const FilePos *pos) {
     emitStartMap(ctx, node);
     emitMapKey(ctx, node, "row");
     emitInteger(ctx, node, pos->row);
@@ -317,8 +299,7 @@ static void emitNodeFilePosition(YamlDumpContext *ctx,
     emitEndMap(ctx, node);
 }
 
-static void emitNodeFileLocation(YamlDumpContext *ctx, const AstNode *node)
-{
+static void emitNodeFileLocation(YamlDumpContext *ctx, const AstNode *node) {
     const FileLoc *loc = &node->loc;
     emitStartMap(ctx, node);
     emitMapKey(ctx, node, "fileName");
@@ -334,8 +315,7 @@ static void emitNodeFileLocation(YamlDumpContext *ctx, const AstNode *node)
     emitEndMap(ctx, node);
 }
 
-static void nodeAddHeader(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void nodeAddHeader(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     if (node->flags) {
         emitMapKey(ctx, node, "flags");
@@ -343,8 +323,7 @@ static void nodeAddHeader(ConstAstVisitor *visitor, const AstNode *node)
             char *str = flagsToString(node->flags);
             emitMapKey(ctx, node, str);
             free(str);
-        }
-        else {
+        } else {
             emitUInteger(ctx, node, node->flags);
         }
     }
@@ -359,8 +338,7 @@ static void nodeAddHeader(ConstAstVisitor *visitor, const AstNode *node)
     }
 }
 
-static void visitProgram(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitProgram(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -369,51 +347,47 @@ static void visitProgram(ConstAstVisitor *visitor, const AstNode *node)
     manyNodesToYaml(visitor, "decls", node->program.decls);
 }
 
-static void visitError(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitError(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
     emitMapKey(ctx, node, "message");
     emitStringLiteral(ctx, node, node->error.message);
 }
 
-static void visitNoop(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitNoop(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 }
 
-static void visitLiteral(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitLiteral(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
     emitMapKey(ctx, node, "value");
     switch (node->tag) {
-    case astNullLit:
-        emitNull(ctx, node);
-        break;
-    case astBoolLit:
-        emitBool(ctx, node, node->boolLiteral.value);
-        break;
-    case astCharLit:
-        emitCharacter(ctx, node, node->charLiteral.value);
-        break;
-    case astIntegerLit:
-        emitInteger(ctx, node, integerLiteralValue(node));
-        break;
-    case astFloatLit:
-        emitFloat(ctx, node, node->floatLiteral.value);
-        break;
-    case astStringLit:
-        emitStringLiteral(ctx, node, node->stringLiteral.value);
-        break;
-    default:
-        csAssert0(false);
+        case astNullLit:
+            emitNull(ctx, node);
+            break;
+        case astBoolLit:
+            emitBool(ctx, node, node->boolLiteral.value);
+            break;
+        case astCharLit:
+            emitCharacter(ctx, node, node->charLiteral.value);
+            break;
+        case astIntegerLit:
+            emitInteger(ctx, node, integerLiteralValue(node));
+            break;
+        case astFloatLit:
+            emitFloat(ctx, node, node->floatLiteral.value);
+            break;
+        case astStringLit:
+            emitStringLiteral(ctx, node, node->stringLiteral.value);
+            break;
+        default:
+            csAssert0(false);
     }
 }
 
-static void visitAttr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitAttr(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -422,16 +396,14 @@ static void visitAttr(ConstAstVisitor *visitor, const AstNode *node)
     manyNodesToYaml(visitor, "args", node->attr.args);
 }
 
-static void visitStrExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitStrExpr(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
     manyNodesToYaml(visitor, "parts", node->stringExpr.parts);
 }
 
-static void visitDefine(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitDefine(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -442,8 +414,7 @@ static void visitDefine(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "args", node->define.container);
 }
 
-static void visitImport(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitImport(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -453,8 +424,7 @@ static void visitImport(ConstAstVisitor *visitor, const AstNode *node)
     manyNodesToYaml(visitor, "entities", node->import.entities);
 }
 
-static void visitImportEntity(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitImportEntity(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -464,8 +434,7 @@ static void visitImportEntity(ConstAstVisitor *visitor, const AstNode *node)
     emitMapKey(ctx, node, node->importEntity.alias);
 }
 
-static void visitModuleDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitModuleDecl(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -475,8 +444,7 @@ static void visitModuleDecl(ConstAstVisitor *visitor, const AstNode *node)
     }
 }
 
-static void visitIdentifier(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitIdentifier(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
     if (node->ident.alias) {
@@ -488,16 +456,14 @@ static void visitIdentifier(ConstAstVisitor *visitor, const AstNode *node)
     emitMapKey(ctx, node, node->ident.value);
 }
 
-static void visitTuple(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitTuple(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
     manyNodesToYaml(visitor, "members", node->tupleType.elements);
 }
 
-static void visitArrayType(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitArrayType(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -506,8 +472,7 @@ static void visitArrayType(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "dim", node->arrayType.dim);
 }
 
-static void visitFuncType(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitFuncType(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -515,16 +480,14 @@ static void visitFuncType(ConstAstVisitor *visitor, const AstNode *node)
     manyNodesToYaml(visitor, "params", node->funcType.params);
 }
 
-static void visitOptionalType(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitOptionalType(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
     nodeToYaml(visitor, "optType", node->optionalType.type);
 }
 
-static void visitPrimitiveType(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitPrimitiveType(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -532,30 +495,26 @@ static void visitPrimitiveType(ConstAstVisitor *visitor, const AstNode *node)
     emitMapKey(ctx, node, getPrimitiveTypeName(node->primitiveType.id));
 }
 
-static void visitHeaderOnly(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitHeaderOnly(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 }
 
-static void visitPointerType(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitPointerType(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
     nodeToYaml(visitor, "pointed", node->pointerType.pointed);
 }
 
-static void visitArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitArrayExpr(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
     manyNodesToYaml(visitor, "elements", node->arrayExpr.elements);
 }
 
-static void visitMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitMemberExpr(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -564,8 +523,7 @@ static void visitMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "member", node->memberExpr.member);
 }
 
-static void visitRangeExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitRangeExpr(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -576,8 +534,7 @@ static void visitRangeExpr(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "step", node->rangeExpr.step);
 }
 
-static void visitNewExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitNewExpr(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -586,8 +543,7 @@ static void visitNewExpr(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "init", node->newExpr.init);
 }
 
-static void visitCastExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitCastExpr(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -595,8 +551,7 @@ static void visitCastExpr(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "exp", node->castExpr.expr);
 }
 
-static void visitIndexExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitIndexExpr(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -605,8 +560,7 @@ static void visitIndexExpr(ConstAstVisitor *visitor, const AstNode *node)
         nodeToYaml(visitor, "index", node->indexExpr.index);
 }
 
-static void visitGenericParam(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitGenericParam(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -615,8 +569,7 @@ static void visitGenericParam(ConstAstVisitor *visitor, const AstNode *node)
     manyNodesToYaml(visitor, "constraints", node->genericParam.constraints);
 }
 
-static void visitGenericDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitGenericDecl(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -624,8 +577,7 @@ static void visitGenericDecl(ConstAstVisitor *visitor, const AstNode *node)
     manyNodesToYaml(visitor, "params", node->genericDecl.params);
 }
 
-static void visitPathElement(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitPathElement(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -640,8 +592,7 @@ static void visitPathElement(ConstAstVisitor *visitor, const AstNode *node)
     }
 }
 
-static void visitPath(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitPath(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -650,15 +601,14 @@ static void visitPath(ConstAstVisitor *visitor, const AstNode *node)
     emitBool(ctx, node, node->path.isType);
 }
 
-static void visitFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitFuncDecl(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
     if (node->funcDecl.operatorOverload != opInvalid) {
         emitMapKey(ctx, node, "overload");
         emitMapKey(
-            ctx, node, getOpOverloadName(node->funcDecl.operatorOverload));
+                ctx, node, getOpOverloadName(node->funcDecl.operatorOverload));
     }
 
     if (node->funcDecl.index != 0) {
@@ -674,8 +624,7 @@ static void visitFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "body", node->funcDecl.body);
 }
 
-static void visitMacroDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitMacroDecl(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -683,13 +632,10 @@ static void visitMacroDecl(ConstAstVisitor *visitor, const AstNode *node)
     emitMapKey(ctx, node, node->macroDecl.name);
     manyNodesToYaml(visitor, "params", node->macroDecl.params);
 
-    nodeToYaml(visitor, "ret", node->macroDecl.ret);
-
     nodeToYaml(visitor, "body", node->macroDecl.body);
 }
 
-static void visitFuncParamDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitFuncParamDecl(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -703,8 +649,7 @@ static void visitFuncParamDecl(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "default", node->funcParam.def);
 }
 
-static void visitVarDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitVarDecl(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -715,8 +660,7 @@ static void visitVarDecl(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "init", node->varDecl.init);
 }
 
-static void visitTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitTypeDecl(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -726,8 +670,7 @@ static void visitTypeDecl(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "aliased", node->typeDecl.aliased);
 }
 
-static void visitUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitUnionDecl(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -735,8 +678,7 @@ static void visitUnionDecl(ConstAstVisitor *visitor, const AstNode *node)
     manyNodesToYaml(visitor, "members", node->unionDecl.members);
 }
 
-static void visitEnumOptionDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitEnumOptionDecl(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -748,8 +690,7 @@ static void visitEnumOptionDecl(ConstAstVisitor *visitor, const AstNode *node)
     emitUInteger(ctx, node, node->enumOption.index);
 }
 
-static void visitEnumDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitEnumDecl(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -760,8 +701,7 @@ static void visitEnumDecl(ConstAstVisitor *visitor, const AstNode *node)
     manyNodesToYaml(visitor, "options", node->enumDecl.options);
 }
 
-static void visitFieldDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitFieldDecl(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -776,21 +716,21 @@ static void visitFieldDecl(ConstAstVisitor *visitor, const AstNode *node)
 }
 
 static void visitClassOrStructDecl(ConstAstVisitor *visitor,
-                                   const AstNode *node)
-{
+                                   const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
     emitMapKey(ctx, node, "name");
     emitMapKey(ctx, node, node->structDecl.name);
-    if (nodeIs(node, ClassDecl))
+    if (nodeIs(node, ClassDecl)) {
         nodeToYaml(visitor, "base", node->classDecl.base);
-    manyNodesToYaml(visitor, "implements", node->structDecl.implements);
+        manyNodesToYaml(visitor, "implements", node->classDecl.implements);
+    }
+
     manyNodesToYaml(visitor, "members", node->structDecl.members);
 }
 
-static void visitInterfaceDecl(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitInterfaceDecl(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -799,22 +739,20 @@ static void visitInterfaceDecl(ConstAstVisitor *visitor, const AstNode *node)
     manyNodesToYaml(visitor, "members", node->interfaceDecl.members);
 }
 
-static void visitBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitBinaryExpr(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
     if (!ctx->config.withNamedEnums) {
         emitMapKey(ctx, node, "op");
         emitUInteger(ctx, node, node->binaryExpr.op);
-    }
-    else {
+    } else {
         emitMapKey(ctx, node, "op");
         emitMapKey(ctx,
                    node,
                    (nodeIs(node, BinaryExpr)
-                        ? getBinaryOpString(node->binaryExpr.op)
-                        : getAssignOpString(node->assignExpr.op)));
+                    ? getBinaryOpString(node->binaryExpr.op)
+                    : getAssignOpString(node->assignExpr.op)));
     }
 
     nodeToYaml(visitor, "lhs", node->binaryExpr.lhs);
@@ -822,16 +760,14 @@ static void visitBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "rhs", node->binaryExpr.rhs);
 }
 
-static void visitUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitUnaryExpr(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
     if (ctx->config.withNamedEnums) {
         emitMapKey(ctx, node, "op");
         emitUInteger(ctx, node, node->unaryExpr.op);
-    }
-    else {
+    } else {
         emitMapKey(ctx, node, "op");
         emitMapKey(ctx, node, getUnaryOpString(node->unaryExpr.op));
     }
@@ -841,8 +777,7 @@ static void visitUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "lhs", node->unaryExpr.operand);
 }
 
-static void visitTernaryExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitTernaryExpr(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -853,16 +788,14 @@ static void visitTernaryExpr(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "otherwise", node->ternaryExpr.otherwise);
 }
 
-static void visitStmtExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitStmtExpr(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
     nodeToYaml(visitor, "stmt", node->stmtExpr.stmt);
 }
 
-static void visitTypedExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitTypedExpr(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -871,8 +804,7 @@ static void visitTypedExpr(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "expr", node->typedExpr.expr);
 }
 
-static void visitCallExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitCallExpr(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -884,8 +816,7 @@ static void visitCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     }
 }
 
-static void visitClosureExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitClosureExpr(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -894,8 +825,7 @@ static void visitClosureExpr(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "body", node->closureExpr.body);
 }
 
-static void visitFieldExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitFieldExpr(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -905,8 +835,7 @@ static void visitFieldExpr(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "value", node->fieldExpr.value);
 }
 
-static void visitStructExpr(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitStructExpr(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -914,37 +843,32 @@ static void visitStructExpr(ConstAstVisitor *visitor, const AstNode *node)
     manyNodesToYaml(visitor, "members", node->structExpr.fields);
 }
 
-static void visitExpressionStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitExpressionStmt(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
     nodeToYaml(visitor, "expr", node->exprStmt.expr);
 }
 
-static void visitContinueStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitContinueStmt(ConstAstVisitor *visitor, const AstNode *node) {
     nodeAddHeader(visitor, node);
 }
 
-static void visitReturnStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitReturnStmt(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
     nodeToYaml(visitor, "expr", node->returnStmt.expr);
 }
 
-static void visitBlockStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitBlockStmt(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
     manyNodesToYaml(visitor, "stmts", node->blockStmt.stmts);
 }
 
-static void visitForStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitForStmt(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -955,8 +879,7 @@ static void visitForStmt(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "body", node->forStmt.body);
 }
 
-static void visitWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitWhileStmt(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -965,8 +888,7 @@ static void visitWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "body", node->whileStmt.body);
 }
 
-static void visitSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitSwitchStmt(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -974,8 +896,7 @@ static void visitSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
     manyNodesToYaml(visitor, "cases", node->switchStmt.cases);
 }
 
-static void visitCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitCaseStmt(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 
@@ -983,22 +904,20 @@ static void visitCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
     manyNodesToYaml(visitor, "body", node->caseStmt.body);
 }
 
-static void visitFallback(ConstAstVisitor *visitor, const AstNode *node)
-{
+static void visitFallback(ConstAstVisitor *visitor, const AstNode *node) {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
     nodeAddHeader(visitor, node);
 }
 
-AstNode *dumpAstToYaml(CompilerDriver *driver, AstNode *node, FILE *file)
-{
+AstNode *dumpAstToYaml(CompilerDriver *driver, AstNode *node, FILE *file) {
     yaml_event_t event;
     yaml_emitter_t emitter;
     YamlDumpContext ctx = {
-        .L = driver->L,
-        .emitter = &emitter,
-        .config = {.withNamedEnums = driver->options.dev.withNamedEnums,
-                   .withoutAttrs = driver->options.dev.withoutAttrs,
-                   .withLocation = driver->options.dev.withLocation}};
+            .L = driver->L,
+            .emitter = &emitter,
+            .config = {.withNamedEnums = driver->options.dev.withNamedEnums,
+                    .withoutAttrs = driver->options.dev.withoutAttrs,
+                    .withLocation = driver->options.dev.withLocation}};
 
     yaml_emitter_initialize(&emitter);
     yaml_emitter_set_output_file(&emitter, stdout);
@@ -1018,80 +937,80 @@ AstNode *dumpAstToYaml(CompilerDriver *driver, AstNode *node, FILE *file)
     csAssert0(nodeIs(node, Metadata));
 
     // clang-format off
-   ConstAstVisitor visitor = makeConstAstVisitor(&ctx, {
-       [astProgram] = visitProgram,
-       [astError] = visitError,
-       [astNoop] = visitNoop,
-       [astAttr] = visitAttr,
-       [astNullLit] = visitLiteral,
-       [astBoolLit] = visitLiteral,
-       [astCharLit] = visitLiteral,
-       [astIntegerLit] = visitLiteral,
-       [astFloatLit] = visitLiteral,
-       [astStringLit] = visitLiteral,
-       [astStringExpr] = visitStrExpr,
-       [astDefine] = visitDefine,
-       [astImportDecl] = visitImport,
-       [astImportEntity] = visitImportEntity,
-       [astModuleDecl] = visitModuleDecl,
-       [astIdentifier] = visitIdentifier,
-       [astTupleType] = visitTuple,
-       [astTupleExpr] = visitTuple,
-       [astArrayType] = visitArrayType,
-       [astFuncType] = visitFuncType,
-       [astOptionalType] = visitOptionalType,
-       [astStringType] = visitHeaderOnly,
-       [astAutoType] = visitHeaderOnly,
-       [astPrimitiveType] = visitPrimitiveType,
-       [astPointerType] = visitPointerType,
-       [astArrayExpr] = visitArrayExpr,
-       [astMemberExpr] = visitMemberExpr,
-       [astRangeExpr] = visitRangeExpr,
-       [astNewExpr] = visitNewExpr,
-       [astCastExpr] = visitCastExpr,
-       [astIndexExpr] = visitIndexExpr,
-       [astGenericParam] = visitGenericParam,
-       [astGenericDecl] = visitGenericDecl,
-       [astPathElem] = visitPathElement,
-       [astPath] = visitPath,
-       [astFuncDecl] = visitFuncDecl,
-       [astMacroDecl] = visitMacroDecl,
-       [astFuncParamDecl] = visitFuncParamDecl,
-       [astVarDecl] = visitVarDecl,
-       [astTypeDecl] = visitTypeDecl,
-       [astUnionDecl] = visitUnionDecl,
-       [astEnumOptionDecl] = visitEnumOptionDecl,
-       [astEnumDecl] = visitEnumDecl,
-       [astFieldDecl] = visitFieldDecl,
-       [astStructDecl] = visitClassOrStructDecl,
-       [astClassDecl] = visitClassOrStructDecl,
-       [astInterfaceDecl] = visitInterfaceDecl,
-       [astAssignExpr] = visitBinaryExpr,
-       [astBinaryExpr] = visitBinaryExpr,
-       [astUnaryExpr] = visitUnaryExpr,
-       [astAddressOf] = visitUnaryExpr,
-       [astTernaryExpr] = visitTernaryExpr,
-       [astIfStmt] = visitTernaryExpr,
-       [astStmtExpr] = visitStmtExpr,
-       [astTypedExpr] = visitTypedExpr,
-       [astCallExpr] = visitCallExpr,
-       [astMacroCallExpr] = visitCallExpr,
-       [astClosureExpr] = visitClosureExpr,
-       [astFieldExpr] = visitFieldExpr,
-       [astStructExpr] = visitStructExpr,
-       [astExprStmt] = visitExpressionStmt,
-       [astDeferStmt] = visitExpressionStmt,
-       [astGroupExpr] = visitExpressionStmt,
-       [astSpreadExpr] = visitExpressionStmt,
-       [astBreakStmt] = visitContinueStmt,
-       [astContinueStmt] = visitContinueStmt,
-       [astReturnStmt] = visitReturnStmt,
-       [astBlockStmt] = visitBlockStmt,
-       [astForStmt] = visitForStmt,
-       [astWhileStmt] = visitWhileStmt,
-       [astSwitchStmt] = visitSwitchStmt,
-       [astCaseStmt] = visitCaseStmt
-   }, .fallback = visitFallback );
+    ConstAstVisitor visitor = makeConstAstVisitor(&ctx, {
+        [astProgram] = visitProgram,
+        [astError] = visitError,
+        [astNoop] = visitNoop,
+        [astAttr] = visitAttr,
+        [astNullLit] = visitLiteral,
+        [astBoolLit] = visitLiteral,
+        [astCharLit] = visitLiteral,
+        [astIntegerLit] = visitLiteral,
+        [astFloatLit] = visitLiteral,
+        [astStringLit] = visitLiteral,
+        [astStringExpr] = visitStrExpr,
+        [astDefine] = visitDefine,
+        [astImportDecl] = visitImport,
+        [astImportEntity] = visitImportEntity,
+        [astModuleDecl] = visitModuleDecl,
+        [astIdentifier] = visitIdentifier,
+        [astTupleType] = visitTuple,
+        [astTupleExpr] = visitTuple,
+        [astArrayType] = visitArrayType,
+        [astFuncType] = visitFuncType,
+        [astOptionalType] = visitOptionalType,
+        [astStringType] = visitHeaderOnly,
+        [astAutoType] = visitHeaderOnly,
+        [astPrimitiveType] = visitPrimitiveType,
+        [astPointerType] = visitPointerType,
+        [astArrayExpr] = visitArrayExpr,
+        [astMemberExpr] = visitMemberExpr,
+        [astRangeExpr] = visitRangeExpr,
+        [astNewExpr] = visitNewExpr,
+        [astCastExpr] = visitCastExpr,
+        [astIndexExpr] = visitIndexExpr,
+        [astGenericParam] = visitGenericParam,
+        [astGenericDecl] = visitGenericDecl,
+        [astPathElem] = visitPathElement,
+        [astPath] = visitPath,
+        [astFuncDecl] = visitFuncDecl,
+        [astMacroDecl] = visitMacroDecl,
+        [astFuncParamDecl] = visitFuncParamDecl,
+        [astVarDecl] = visitVarDecl,
+        [astTypeDecl] = visitTypeDecl,
+        [astUnionDecl] = visitUnionDecl,
+        [astEnumOptionDecl] = visitEnumOptionDecl,
+        [astEnumDecl] = visitEnumDecl,
+        [astFieldDecl] = visitFieldDecl,
+        [astStructDecl] = visitClassOrStructDecl,
+        [astClassDecl] = visitClassOrStructDecl,
+        [astInterfaceDecl] = visitInterfaceDecl,
+        [astAssignExpr] = visitBinaryExpr,
+        [astBinaryExpr] = visitBinaryExpr,
+        [astUnaryExpr] = visitUnaryExpr,
+        [astAddressOf] = visitUnaryExpr,
+        [astTernaryExpr] = visitTernaryExpr,
+        [astIfStmt] = visitTernaryExpr,
+        [astStmtExpr] = visitStmtExpr,
+        [astTypedExpr] = visitTypedExpr,
+        [astCallExpr] = visitCallExpr,
+        [astMacroCallExpr] = visitCallExpr,
+        [astClosureExpr] = visitClosureExpr,
+        [astFieldExpr] = visitFieldExpr,
+        [astStructExpr] = visitStructExpr,
+        [astExprStmt] = visitExpressionStmt,
+        [astDeferStmt] = visitExpressionStmt,
+        [astGroupExpr] = visitExpressionStmt,
+        [astSpreadExpr] = visitExpressionStmt,
+        [astBreakStmt] = visitContinueStmt,
+        [astContinueStmt] = visitContinueStmt,
+        [astReturnStmt] = visitReturnStmt,
+        [astBlockStmt] = visitBlockStmt,
+        [astForStmt] = visitForStmt,
+        [astWhileStmt] = visitWhileStmt,
+        [astSwitchStmt] = visitSwitchStmt,
+        [astCaseStmt] = visitCaseStmt
+    }, .fallback = visitFallback);
 
     // clang-format on
     nodeToYaml(&visitor, NULL, node->metadata.node);
@@ -1108,7 +1027,7 @@ AstNode *dumpAstToYaml(CompilerDriver *driver, AstNode *node, FILE *file)
         goto dumpAstToYamlError;
     }
 
-dumpAstToYamlError:
+    dumpAstToYamlError:
     yaml_emitter_delete(&emitter);
     return node;
 }

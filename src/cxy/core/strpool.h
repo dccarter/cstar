@@ -21,13 +21,18 @@ typedef struct StrPool {
 } StrPool;
 
 StrPool newStrPool(MemPool *);
+
 void freeStrPool(StrPool *);
 
 const char *makeString(StrPool *, const char *);
+
 const char *makeTrimmedString(StrPool *, const char *);
+
 const char *makeStringSized(StrPool *, const char *, u64);
+
 const char *makeAnonymousVariable(StrPool *pool, const char *prefix);
+
 const char *makeStringConcat_(StrPool *, const char *, ...);
 
 #define makeStringConcat(P, S1, ...)                                           \
-    makeStringConcat_((P), (S1), #__VA_ARGS__, NULL)
+    makeStringConcat_((P), (S1), ##__VA_ARGS__, NULL)

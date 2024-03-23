@@ -23,7 +23,7 @@
     f(Deferred,             10)                 \
     f(Capture,              11)                 \
     f(Closure,              12)                 \
-    f(CapturePointer,       13)                 \
+    f(MacroArgument,        13)                 \
     f(ClosureStyle,         14)                 \
     f(FuncTypeParam,        15)                 \
     f(Member,               16)                 \
@@ -34,7 +34,7 @@
     f(Reference,            21)                 \
     f(TopLevelDecl,         22)                 \
     f(Generated,            23)                 \
-    f(CodeGenerated,        24)                 \
+    f(Executable,           24)                 \
     f(ImportAlias,          25)                 \
     f(EnumLiteral,          26)                 \
     f(Comptime,             27)                 \
@@ -59,7 +59,10 @@
     f(Transient,            46)                 \
     f(Static,               47)                 \
     f(SyncCall,             48)                 \
-    f(Bound,                49)
+    f(Bound,                49)                 \
+    f(Substituted,          50)                 \
+    f(Virtual,              51)                 \
+    f(Abstract,             52)
 
 // clang-format on
 static const u64 flgNone = 0;

@@ -17,22 +17,125 @@ typedef struct {
     u64 value;
 } EnumOptionMap;
 
-static EnumOptionMap dumpModes[] = {
-#define ff(NN) {#NN, dmp##NN},
-    DUMP_OPTIONS(ff)
-#undef ff
-};
 #define DUMP_OPTIONS_COUNT (sizeof(dumpModes) / sizeof(EnumOptionMap))
+
+static bool cmdParseDumpAstModes(CmdParser *P,
+                                 CmdFlagValue *dst,
+                                 const char *str,
+                                 const char *name)
+{
+    static CmdEnumValueDesc dumpModes[] = {
+#define ff(NN) {#NN, dmp##NN},
+        DUMP_OPTIONS(ff)
+#undef ff
+    };
+    return cmdParseEnumValue(P, dst, str, name, dumpModes, DUMP_OPTIONS_COUNT);
+}
+
+static bool cmdParseLastStage(CmdParser *P,
+                              CmdFlagValue *dst,
+                              const char *str,
+                              const char *name)
+{
+    static CmdEnumValueDesc stagesDesc[] = {
+#define ff(NN, _) {#NN, ccs##NN},
+        CXY_PUBLIC_COMPILER_STAGES(ff)
+#undef ff
+    };
+    return cmdParseEnumValue(
+        P, dst, str, name, stagesDesc, sizeof__(stagesDesc));
+}
+
+static bool cmdOptimizationLevel(CmdParser *P,
+                                 CmdFlagValue *dst,
+                                 const char *str,
+                                 const char *name)
+{
+    if (str && str[0] != '\0' && str[1] == '\0') {
+        dst->state = cmdNumber;
+        switch (str[0]) {
+        case '0':
+        case 'd':
+            dst->num = O0;
+            return true;
+        case '1':
+            dst->num = O1;
+            return true;
+        case '2':
+            dst->num = O2;
+            return true;
+        case '3':
+            dst->num = O3;
+            return true;
+        default:
+            dst->state = cmdNoValue;
+            break;
+        }
+    }
+    sprintf(P->error,
+            "error: value '%s' passed to flag '%s' cannot be parsed as an "
+            "optimization flag, supported values -O1, -O2, -O3 -Os -Od\n",
+            str ?: "null",
+            name);
+    return false;
+}
+
+static bool cmdCompilerDefine(CmdParser *P,
+                              CmdFlagValue *dst,
+                              const char *str,
+                              const char *name)
+{
+    if (str == NULL || str[0] == '\0') {
+        sprintf(P->error,
+                "error: command line argument '%s' is missing a value",
+                name);
+        return false;
+    }
+    if (dst->array.elemSize == 0)
+        dst->array = newDynArray(sizeof(CompilerDefine));
+
+    const char *it = str;
+    while (isspace(it[0]))
+        it++;
+    cstring variable = it, value = NULL;
+    if (!isalpha(it[0]) && it[0] != '_') {
+        sprintf(P->error,
+                "error: define variable '%s' does not conform to cxy variable "
+                "specification",
+                name);
+        return false;
+    }
+
+    while (isalnum(it[0]) || it[0] == '_')
+        it++;
+    if (it[0] == '=') {
+        value = it + 1;
+        ((char *)it)[0] = '\0';
+    }
+    else if (it[0] != '\0') {
+        sprintf(P->error,
+                "error: define variable '%s' does not conform to cxy variable "
+                "specification",
+                name);
+        return false;
+    }
+
+    pushOnDynArray(&dst->array,
+                   &(CompilerDefine){.name = variable, .value = value});
+    return true;
+}
 
 Command(
     dev,
     "development mode build, useful when debugging issues",
     Positionals(),
-    Str(Name("last-stage"),
+    Use(cmdParseLastStage,
+        Name("last-stage"),
         Help("the last compiler stage to execute, e.g "
              "'Codegen'"),
-        Def("Codegen")),
-    Str(Name("dump-ast"),
+        Def("Compile")),
+    Use(cmdParseDumpAstModes,
+        Name("dump-ast"),
         Help("Dumps the the AST as either JSON, YAML or CXY. Supported values: "
              "JSON|YAML|CXY"),
         Def("NONE")),
@@ -55,6 +158,14 @@ Command(
         Def("")),
     Opt(Name("print-ir"),
         Help("prints the generate IR (on supported backends, e.g LLVM)"),
+        Def("false")),
+    Opt(Name("emit-assembly"),
+        Help("emits the generated assembly code to given filename on supported "
+             "backends (e.g LLVM)"),
+        Def("false")),
+    Opt(Name("emit-bitcode"),
+        Help("emits the generated bitcode to given filename on supported "
+             "platforms (e.g LLVM)"),
         Def("false")));
 
 Command(build,
@@ -64,14 +175,13 @@ Command(build,
             Sf('o'),
             Help("output file for the compiled binary (default: app)"),
             Def("app")),
-        Str(Name("lib"),
-            Sf('L'),
+        Str(Name("stdlib"),
             Help("root directory where cxy standard library is installed"),
             Def("")),
         Str(Name("build-dir"),
             Help("the build directory, used as the working directory for the "
                  "compiler"),
-            Def(".build")));
+            Def("")));
 
 // clang-format off
 #define BUILD_COMMANDS(f)                                                      \
@@ -80,14 +190,16 @@ Command(build,
     f(build)
 
 #define DEV_CMD_LAYOUT(f, ...)                                                 \
-    f(dev.lastStage.str, Local, String, 0, ##__VA_ARGS__)                      \
-    f(dev.dump, Local, String, 1, ##__VA_ARGS__)                                \
+    f(dev.lastStage, Local, Int, 0, ##__VA_ARGS__)                             \
+    f(dev.dumpMode, Local, Int, 1, ##__VA_ARGS__)                              \
     f(dev.cleanAst, Local, Option, 2, ##__VA_ARGS__)                           \
     f(dev.withLocation, Local, Option, 3, ##__VA_ARGS__)                       \
     f(dev.withoutAttrs, Local, Option, 4, ##__VA_ARGS__)                       \
     f(dev.withNamedEnums, Local, Option, 5, ##__VA_ARGS__)                     \
     f(output, Local, String, 6, ##__VA_ARGS__)                                 \
-    f(dev.printIR, Local, Option, 7, ##__VA_ARGS__)
+    f(dev.printIR, Local, Option, 7, ##__VA_ARGS__)                            \
+    f(dev.emitAssembly, Local, Option, 8, ##__VA_ARGS__)                       \
+    f(dev.emitBitCode, Local, Option, 9, ##__VA_ARGS__)                        \
 
 #define BUILD_CMD_LAYOUT(f, ...)                                               \
     f(output, Local, String, 0, ##__VA_ARGS__)                                 \
@@ -122,7 +234,7 @@ static void parseSpaceSeperatedList(DynArray *into,
 static void initializeOptions(StrPool *strings, Options *options)
 {
     options->cflags = newDynArray(sizeof(char *));
-    options->ldflags = newDynArray(sizeof(char *));
+    options->libraries = newDynArray(sizeof(char *));
     options->defines = newDynArray(sizeof(char *));
 #ifdef __APPLE__
     pushStringOnDynArray(&options->defines, "MACOS");
@@ -139,21 +251,26 @@ static void initializeOptions(StrPool *strings, Options *options)
 #endif
 }
 
-static u64 parseEnumOption(
-    Log *L, cstring str, EnumOptionMap *values, u64 len, u64 def)
+static void fixCmdDevOptions(Options *options)
 {
-    while (*str == '\0')
-        str++;
-    u64 size = 0;
-    while (str[size])
-        size++;
-
-    for (u64 i = 0; i < len; i++) {
-        if (strncmp(str, values[i].name, size) == 0)
-            return values[i].value;
+    if (options->dev.emitBitCode) {
+        options->dev.emitAssembly = false;
+        options->dev.printIR = false;
+        options->dev.dumpMode = dmpNONE;
+        options->dev.lastStage = ccsCompile;
     }
-
-    return def;
+    else if (options->dev.emitAssembly) {
+        options->dev.printIR = false;
+        options->dev.dumpMode = dmpNONE;
+        options->dev.lastStage = ccsCompile;
+    }
+    else if (options->dev.printIR) {
+        options->dev.dumpMode = dmpNONE;
+        options->dev.lastStage = ccsCodegen;
+    }
+    else if (options->dev.dumpMode != dmpNONE) {
+        options->dev.lastStage = MIN(options->dev.lastStage, ccsSimplify);
+    }
 }
 
 bool parseCommandLineOptions(
@@ -186,7 +303,20 @@ bool parseCommandLineOptions(
         Str(Name("cflags"),
             Help("C compiler flags to add to the c compiler when importing C "
                  "files"),
-            Def("")));
+            Def("")),
+        Opt(Name("no-pie"), Help("disable position independent code")),
+        Use(cmdOptimizationLevel,
+            Name("optimization"),
+            Sf('O'),
+            Help("Code optimization level, valid values '0', 'd', '1', '2', "
+                 "'3', 's'"),
+            Def("d")),
+        Use(cmdCompilerDefine,
+            Name("define"),
+            Sf('D'),
+            Help("Adds a compiler definition, e.g -DDISABLE_ASSERT, "
+                 "-DAPP_VERSION=\\\"0.0.1\\\""),
+            Def("[]")));
 
     int selected = argparse(argc, &argv, parser);
 
@@ -215,17 +345,9 @@ bool parseCommandLineOptions(
 
     options->withoutBuiltins = getGlobalOption(cmd, 4);
     if (cmd->id == CMD_dev) {
+        options->cmd = cmdDev;
         UnloadCmd(cmd, options, DEV_CMD_LAYOUT);
-        options->dev.lastStage.num =
-            parseCompilerStages(log, options->dev.lastStage.str);
-        if (options->dev.lastStage.num == ccsInvalid) {
-            return false;
-        }
-        options->dev.lastStage.num = (u64)log2((f64)options->dev.lastStage.num);
-
-        // parse dump mode
-        options->dev.dumpMode = parseEnumOption(
-            log, options->dev.dump, dumpModes, DUMP_OPTIONS_COUNT, dmpNONE);
+        fixCmdDevOptions(options);
     }
     else if (cmd->id == CMD_build) {
         options->cmd = cmdBuild;
@@ -234,6 +356,9 @@ bool parseCommandLineOptions(
 
     cstring str = getGlobalString(cmd, 5);
     parseSpaceSeperatedList(&options->cflags, strings, str);
+    options->noPIE = getGlobalOption(cmd, 6);
+    options->optimizationLevel = getGlobalInt(cmd, 7);
+    options->defines = getGlobalArray(cmd, 8);
 
     file_count = *argc - 1;
 
@@ -256,6 +381,6 @@ exit:
 void deinitCommandLineOptions(Options *options)
 {
     freeDynArray(&options->cflags);
-    freeDynArray(&options->ldflags);
+    freeDynArray(&options->libraries);
     freeDynArray(&options->defines);
 }

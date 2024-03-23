@@ -11,17 +11,16 @@ static AstNode *resolveMember(TypingContext *ctx,
                               const Type *parent,
                               AstNode *node,
                               u64 *flags,
-                              cstring name)
-{
+                              cstring name) {
     AstNode *decl = findMemberDeclInType(parent, name);
     if (decl != NULL && decl->type != NULL) {
         *flags = decl->type->flags | decl->flags;
-    }
-    else {
+    } else {
         logError(ctx->L,
                  &node->loc,
                  "type '{t}' does not have a member named '{s}'",
-                 (FormatArg[]){{.t = parent}, {.s = name}});
+                 (FormatArg[]) {{.t = parent},
+                                {.s = name}});
     }
     return decl;
 }
@@ -31,23 +30,20 @@ static AstNode *resolveMemberUpInheritance(TypingContext *ctx,
                                            AstNode *node,
                                            u64 *flags,
                                            cstring name,
-                                           int depth)
-{
+                                           int depth) {
     AstNode *decl = findMemberDeclInType(parent, name);
     if (decl == NULL) {
-        TypeInheritance *inheritance = typeIs(parent, Struct)
-                                           ? parent->tStruct.inheritance
-                                           : parent->tClass.inheritance;
+        const TypeInheritance *inheritance = getTypeInheritance(parent);
         const Type *base = inheritance ? inheritance->base : NULL;
         if (base) {
             return resolveMemberUpInheritance(
-                ctx, base, node, flags, name, depth + 1);
-        }
-        else if (depth == 0) {
+                    ctx, base, node, flags, name, depth + 1);
+        } else if (depth == 0) {
             logError(ctx->L,
                      &node->loc,
                      "type '{t}' does not have a member named '{s}'",
-                     (FormatArg[]){{.t = parent}, {.s = name}});
+                     (FormatArg[]) {{.t = parent},
+                                    {.s = name}});
         }
         return NULL;
     }
@@ -60,44 +56,42 @@ static AstNode *resolveMemberUpInheritance(TypingContext *ctx,
     return decl;
 }
 
-const Type *checkMember(AstVisitor *visitor, const Type *parent, AstNode *node)
-{
+const Type *checkMember(AstVisitor *visitor, const Type *parent, AstNode *node) {
     TypingContext *ctx = getAstVisitorContext(visitor);
     cstring name =
-        nodeIs(node, PathElem) ? node->pathElement.name : node->ident.value;
+            nodeIs(node, PathElem) ? node->pathElement.name : node->ident.value;
     u64 flags = flgNone;
     const Type *resolved = NULL;
     AstNode *decl = NULL;
     switch (parent->tag) {
-    case typEnum:
-        if (name == S___name) {
-            resolved = makeStringType(ctx->types);
-            flags |= flgEnumLiteral;
-        }
-        else {
+        case typEnum:
+            if (name == S___name) {
+                resolved = makeStringType(ctx->types);
+                flags |= flgEnumLiteral;
+            } else {
+                decl = resolveMember(ctx, parent, node, &flags, name);
+                resolved = decl ? decl->type : NULL;
+                flags = flgEnumLiteral;
+            }
+            break;
+        case typThis:
+            return checkMember(visitor, parent->_this.that, node);
+        case typStruct:
+        case typClass:
+            decl = resolveMemberUpInheritance(ctx, parent, node, &flags, name, 0);
+            resolved = decl ? decl->type : NULL;
+            break;
+        case typInterface:
+        case typModule:
             decl = resolveMember(ctx, parent, node, &flags, name);
             resolved = decl ? decl->type : NULL;
-            flags = flgEnumLiteral;
-        }
-        break;
-    case typThis:
-        return checkMember(visitor, parent->_this.that, node);
-    case typStruct:
-    case typClass:
-        decl = resolveMemberUpInheritance(ctx, parent, node, &flags, name, 0);
-        resolved = decl ? decl->type : NULL;
-        break;
-    case typInterface:
-    case typModule:
-        decl = resolveMember(ctx, parent, node, &flags, name);
-        resolved = decl ? decl->type : NULL;
-        break;
-    default:
-        logError(ctx->L,
-                 &node->loc,
-                 "expression of type '{t}' does not support member expressions",
-                 (FormatArg[]){{.t = parent}});
-        break;
+            break;
+        default:
+            logError(ctx->L,
+                     &node->loc,
+                     "expression of type '{t}' does not support member expressions",
+                     (FormatArg[]) {{.t = parent}});
+            break;
     }
 
     if (resolved == NULL || typeIs(resolved, Error))
@@ -123,8 +117,7 @@ const Type *checkMember(AstVisitor *visitor, const Type *parent, AstNode *node)
 
 static const Type *checkBasePathElement(AstVisitor *visitor,
                                         AstNode *node,
-                                        u64 flags)
-{
+                                        u64 flags) {
     TypingContext *ctx = getAstVisitorContext(visitor);
     if (node->pathElement.isKeyword) {
         cstring keyword = node->pathElement.name;
@@ -133,16 +126,14 @@ static const Type *checkBasePathElement(AstVisitor *visitor,
         AstNode *enclosure = node->pathElement.enclosure;
         if (keyword == S_super) {
             return node->type = getTypeBase(enclosure->type);
-        }
-        else if (keyword == S_this) {
+        } else if (keyword == S_this) {
             return node->type =
-                       nodeIs(enclosure, StructDecl)
-                           ? makePointerType(ctx->types,
-                                             enclosure->type,
-                                             enclosure->flags & flgConst)
-                           : enclosure->type;
-        }
-        else if (keyword == S_This) {
+                                   nodeIs(enclosure, StructDecl)
+                                   ? makePointerType(ctx->types,
+                                                     enclosure->type,
+                                                     enclosure->flags & flgConst)
+                                   : enclosure->type;
+        } else if (keyword == S_This) {
             if (nodeIs(enclosure, StructDecl))
                 return enclosure->structDecl.thisType;
             else
@@ -151,24 +142,22 @@ static const Type *checkBasePathElement(AstVisitor *visitor,
                                        flags & flgConst);
         }
         unreachable("unsupported keyword");
-    }
-    else {
+    } else {
         csAssert0(node->pathElement.resolvesTo);
         AstNode *target = node->pathElement.resolvesTo;
         if (nodeIs(target, FieldDecl) || isMemberFunction(target))
             node->flags |= (flgMember | flgAddThis);
         return node->type =
-                   target->type ?: checkTypeShallow(visitor, target, true);
+                       target->type ?: checkTypeShallow(visitor, target, true);
     }
 }
 
-void checkPath(AstVisitor *visitor, AstNode *node)
-{
+void checkPath(AstVisitor *visitor, AstNode *node) {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *base = node->path.elements, *elem = base->next;
     if (hasFlag(node, Inherited)) {
         base->pathElement.resolvesTo =
-            getBaseClassByName(ctx->currentStruct, base->pathElement.name);
+                getBaseClassByName(ctx->currentStruct, base->pathElement.name);
     }
     const Type *type = checkBasePathElement(visitor, base, node->flags);
 

@@ -8,7 +8,7 @@
 #include "lang/frontend/strings.h"
 #include "lang/frontend/ttable.h"
 
-f64 getNumericLiteral(const AstNode *node)
+f64 nodeGetNumericLiteral(const AstNode *node)
 {
     switch (node->tag) {
     case astNullLit:
@@ -26,10 +26,7 @@ f64 getNumericLiteral(const AstNode *node)
     }
 }
 
-void setNumericLiteralValue(AstNode *node,
-                            AstNode *lhs,
-                            AstNode *rhs,
-                            f64 value)
+void nodeSetNumericLiteral(AstNode *node, AstNode *lhs, AstNode *rhs, f64 value)
 {
     switch (lhs->tag) {
     case astBoolLit:

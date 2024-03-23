@@ -7,7 +7,7 @@ import { Vector } from "stdlib/vector.cxy"
 #const MAX_LOAD_FACTOR = 70 // %
 #const MIN_PRIME = <u64> 7
 #const MAX_PRIME = <u64> 1048583
-#const NUM_PRIMES = 15
+macro NUM_PRIMES 15
 
 const HASH_PRIMES = [
     #{MIN_PRIME},
@@ -17,7 +17,7 @@ const HASH_PRIMES = [
 ];
 
 pub func hashNextPrime(i: u64) {
-    var j, k = (0, #{NUM_PRIMES});
+    var j, k = (0, NUM_PRIMES!);
     while (j < k) {
         var m = (j + k) / 2;
         var p = HASH_PRIMES.[m];
@@ -26,7 +26,7 @@ pub func hashNextPrime(i: u64) {
         else
             k = m
     }
-    return HASH_PRIMES.[k >= #{NUM_PRIMES} ? #{NUM_PRIMES - 1} : k];
+    return HASH_PRIMES.[k >= NUM_PRIMES! ? (NUM_PRIMES! - 1) : k];
 }
 
 @inline

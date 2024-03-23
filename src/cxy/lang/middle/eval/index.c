@@ -47,7 +47,7 @@ static bool evalIntegerIndexExpr(EvalContext *ctx, AstNode *node)
         return false;
     }
 
-    i64 i = (i64)getNumericLiteral(index);
+    i64 i = (i64)nodeGetNumericLiteral(index);
     u64 len = nodeIs(target, StringLit) ? strlen(target->stringLiteral.value)
                                         : target->arrayExpr.len;
     if (i < 0 || i >= len) {

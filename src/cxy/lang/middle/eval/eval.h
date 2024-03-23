@@ -22,11 +22,6 @@ const Type *evalType(EvalContext *ctx, AstNode *node);
 bool evaluate(AstVisitor *visitor, AstNode *node);
 void initComptime(EvalContext *ctx);
 
-f64 getNumericLiteral(const AstNode *node);
-void setNumericLiteralValue(AstNode *node,
-                            AstNode *lhs,
-                            AstNode *rhs,
-                            f64 value);
 void evalStringConcatenation(EvalContext *ctx,
                              AstNode *node,
                              AstNode *lhs,

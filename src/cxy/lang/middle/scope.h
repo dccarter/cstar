@@ -4,6 +4,7 @@
 #pragma once
 
 #include "core/htable.h"
+#include "driver/driver.h"
 #include "lang/frontend/ast.h"
 
 typedef struct Symbol {
@@ -74,10 +75,20 @@ AstNode *findEnclosingClass(Env *env,
                             cstring keyword,
                             const FileLoc *loc);
 
+AstNode *findEnclosingInterface(Env *env,
+                                Log *L,
+                                cstring keyword,
+                                const FileLoc *loc);
+
 AstNode *findEnclosingClassOrStruct(Env *env,
                                     Log *L,
                                     cstring keyword,
                                     const FileLoc *loc);
+
+AstNode *findEnclosingClassOrStructOrInterface(Env *env,
+                                               Log *L,
+                                               cstring keyword,
+                                               const FileLoc *loc);
 
 AstNode *findEnclosingBlock(Env *env,
                             cstring keyword,

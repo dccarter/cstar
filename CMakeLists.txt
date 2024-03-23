@@ -66,8 +66,8 @@ FetchContent_MakeAvailable(msgpack-c)
 set(BUILD_TESTING OFF)
 FetchContent_Declare(
         libyaml
-        GIT_REPOSITORY https://github.com/yaml/libyaml.git
-        GIT_TAG master
+        GIT_REPOSITORY https://github.com/dccarter/libyaml.git
+        GIT_TAG main
 )
 FetchContent_MakeAvailable(libyaml)
 
@@ -114,6 +114,7 @@ set(CXY_FRONTEND_SOURCES
         src/cxy/lang/frontend/ast.c
         src/cxy/lang/frontend/capture.c
         src/cxy/lang/frontend/encode.c
+        src/cxy/lang/frontend/defines.c
         src/cxy/lang/frontend/decode.c
         src/cxy/lang/frontend/lexer.c
         src/cxy/lang/frontend/operator.c
@@ -170,6 +171,7 @@ set(CXY_MIDDLE_SOURCES
         src/cxy/lang/middle/eval/unary.c
 
         src/cxy/lang/middle/bind/bind.c
+        src/cxy/lang/middle/bind/bind.c
         src/cxy/lang/middle/bind/discover.c
         src/cxy/lang/middle/bind/resolve.c
 
@@ -179,6 +181,9 @@ set(CXY_MIDDLE_SOURCES
 
         src/cxy/lang/middle/shake/closure.c
         src/cxy/lang/middle/shake/shake.c
+
+        src/cxy/lang/middle/preprocess/preprocessor.c
+        src/cxy/lang/middle/preprocess/evaluate.c
 
         src/cxy/lang/middle/simplify/simplify.c)
 

@@ -164,6 +164,15 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
                               ? callee->path.elements->pathElement.resolvesTo
                               : NULL;
         if (isClassOrStructAstNode(symbol)) {
+            if (hasFlag(symbol, Abstract)) {
+                logError(ctx->L,
+                         &callee->loc,
+                         "cannot create an instance of '{t}' because it is an "
+                         "abstract type",
+                         (FormatArg[]){{.t = callee_}});
+                node->type = ERROR_TYPE(ctx);
+                return;
+            }
             node->type = transformToConstructCallExpr(visitor, node);
             return;
         }

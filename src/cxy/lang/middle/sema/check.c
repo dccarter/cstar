@@ -592,6 +592,7 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astIdentifier] = checkIdentifier,
         [astPath] = checkPath,
         [astFuncDecl] = checkFunctionDecl,
+        [astMacroDecl] = astVisitSkip,
         [astFuncParamDecl] = checkFunctionParam,
         [astVarDecl] = checkVarDecl,
         [astTypeDecl] = checkTypeDecl,

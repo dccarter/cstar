@@ -406,6 +406,7 @@ void printDiagnosticToConsole(const Diagnostic *diag, void *ctx)
     else
         fputs(msg, stdout);
     freeFormatState(&state);
+    free(msg);
 }
 
 void printDiagnosticToMemory(const Diagnostic *diag, void *ctx)

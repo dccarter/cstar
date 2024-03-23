@@ -98,6 +98,7 @@ struct LLVMContext {
 
     llvm::Type *createClassType(const Type *type);
     llvm::Type *createStructType(const Type *type);
+    llvm::Type *createInterfaceType(const Type *type);
 
 private:
     llvm::Type *createTupleType(const Type *type);

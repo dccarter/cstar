@@ -233,15 +233,14 @@ typedef struct Type {
         } tEnum;
 
         struct {
-            TypeInheritance *inheritance;
             TypeMembersContainer *members;
             AstNode *decl;
         } tStruct;
 
         struct {
-            TypeInheritance *inheritance;
             TypeMembersContainer *members;
             AstNode *decl;
+            TypeInheritance *inheritance;
         } tClass;
 
         struct {
@@ -269,67 +268,85 @@ typedef struct Type {
 typedef Pair(i64, u64) IntMinMax;
 
 #define CYX_TYPE_BODY_SIZE (sizeof(Type) - sizeof(((Type *)0)->_head))
-static inline bool typeIs_(const Type *type, TTag tag)
-{
+
+static inline bool typeIs_(const Type *type, TTag tag) {
     return type && type->tag == tag;
 }
 
 #define typeIs(T, TAG) typeIs_((T), typ##TAG)
 
 bool isTypeAssignableFrom(const Type *to, const Type *from);
+
 bool isTypeCastAssignable(const Type *to, const Type *from);
+
 bool isPrimitiveTypeBigger(const Type *to, const Type *from);
+
 bool isIntegerType(const Type *type);
+
 bool isIntegralType(const Type *type);
+
 bool isSignedType(const Type *type);
+
 bool isSignedIntegerType(const Type *type);
+
 bool isUnsignedType(const Type *type);
+
 bool isFloatType(const Type *type);
+
 bool isNumericType(const Type *type);
+
 bool isBuiltinType(const Type *type);
+
 bool isBooleanType(const Type *type);
+
 bool isCharacterType(const Type *type);
+
 bool isArrayType(const Type *type);
+
 bool isPointerType(const Type *type);
+
 bool isVoidPointer(const Type *type);
+
 bool isClassType(const Type *type);
+
 bool isStructType(const Type *type);
+
 bool isTupleType(const Type *type);
+
 bool isUnionType(const Type *type);
+
 bool isConstType(const Type *type);
 
 bool hasReferenceMembers(const Type *type);
 
-static inline bool isClassOrStructType(const Type *type)
-{
+static inline bool isClassOrStructType(const Type *type) {
     return isClassType(type) || isStructType(type);
 }
 
-static inline bool isStructPointer(const Type *type)
-{
+static inline bool isStructPointer(const Type *type) {
     switch (type->tag) {
-    case typPointer:
-        return typeIs(type->pointer.pointed, Struct) ||
-               isStructPointer(type->pointer.pointed);
-    case typThis:
-        return typeIs(type->_this.that, Struct);
-    default:
-        return false;
+        case typPointer:
+            return typeIs(type->pointer.pointed, Struct) ||
+                   isStructPointer(type->pointer.pointed);
+        case typThis:
+            return typeIs(type->_this.that, Struct);
+        default:
+            return false;
     }
 }
 
 const char *getPrimitiveTypeName(PrtId tag);
+
 u64 getPrimitiveTypeSizeFromTag(PrtId tag);
-static inline u64 getPrimitiveTypeSize(const Type *type)
-{
+
+static inline u64 getPrimitiveTypeSize(const Type *type) {
     csAssert0(typeIs_(type, typPrimitive));
     return getPrimitiveTypeSizeFromTag(type->primitive.id);
 }
 
 void printType_(FormatState *state, const Type *type, bool keyword);
 
-static inline void printType(FormatState *state, const Type *type)
-{
+static inline void printType(FormatState *state, const Type *type) {
     printType_(state, type, true);
 }
 
@@ -337,74 +354,65 @@ bool isSliceType(const Type *type);
 
 IntMinMax getIntegerTypeMinMax(const Type *id);
 
-static inline const Type *unThisType(const Type *_this)
-{
+static inline const Type *unThisType(const Type *_this) {
     return typeIs(_this, This) ? _this->_this.that : _this;
 }
 
 const NamedTypeMember *findNamedTypeMemberInContainer(
-    const TypeMembersContainer *container, cstring member);
+        const TypeMembersContainer *container, cstring member);
 
 static inline const NamedTypeMember *findStructMember(const Type *type,
-                                                      cstring member)
-{
+                                                      cstring member) {
     return findNamedTypeMemberInContainer(unThisType(type)->tStruct.members,
                                           member);
 }
 
-static inline const Type *findStructMemberType(const Type *type, cstring member)
-{
+static inline const Type *findStructMemberType(const Type *type, cstring member) {
     const NamedTypeMember *found = findStructMember(type, member);
     return found ? found->type : NULL;
 }
 
 static inline const NamedTypeMember *findClassMember(const Type *type,
-                                                     cstring member)
-{
+                                                     cstring member) {
     return findNamedTypeMemberInContainer(unThisType(type)->tClass.members,
                                           member);
 }
 
-static inline const Type *findClassMemberType(const Type *type, cstring member)
-{
+static inline const Type *findClassMemberType(const Type *type, cstring member) {
     const NamedTypeMember *found = findClassMember(type, member);
     return found ? found->type : NULL;
 }
 
 const TypeInheritance *getTypeInheritance(const Type *type);
+
 const Type *getTypeBase(const Type *type);
 
 bool implementsInterface(const Type *type, const Type *inf);
 
 static inline const NamedTypeMember *findInterfaceMember(const Type *type,
-                                                         cstring member)
-{
+                                                         cstring member) {
     return findNamedTypeMemberInContainer(type->tInterface.members, member);
 }
 
 static inline const Type *findInterfaceMemberType(const Type *type,
-                                                  cstring member)
-{
+                                                  cstring member) {
     const NamedTypeMember *found = findInterfaceMember(type, member);
     return found ? found->type : NULL;
 }
 
 const EnumOptionDecl *findEnumOption(const Type *type, cstring member);
 
-static inline const Type *findEnumOptionType(const Type *type, cstring member)
-{
+static inline const Type *findEnumOptionType(const Type *type, cstring member) {
     const EnumOptionDecl *found = findEnumOption(type, member);
     return found ? type : NULL;
 }
 
 static inline const NamedTypeMember *findModuleMember(const Type *type,
-                                                      cstring member)
-{
+                                                      cstring member) {
     return findNamedTypeMemberInContainer(type->module.members, member);
 }
 
-static inline const Type *findModuleMemberType(const Type *type, cstring member)
-{
+static inline const Type *findModuleMemberType(const Type *type, cstring member) {
     const NamedTypeMember *found = findModuleMember(type, member);
     return found ? found->type : NULL;
 }
@@ -421,12 +429,19 @@ TypeInheritance *makeTypeInheritance(TypeTable *types,
 AstNode *findMemberDeclInType(const Type *type, cstring name);
 
 const Type *getPointedType(const Type *type);
+
 bool isTruthyType(const Type *type);
+
 const Type *getOptionalType();
+
 const Type *getOptionalTargetType(const Type *type);
+
 const Type *getSliceTargetType(const Type *type);
+
 u32 findUnionTypeIndex(const Type *tagged, const Type *type);
+
 void pushThisReference(const Type *_this, AstNode *node);
+
 void resolveThisReferences(TypeTable *table,
                            const Type *_this,
                            const Type *type);
