@@ -17,6 +17,7 @@ typedef struct {
 } AstNodeUnpackContext;
 
 static AstNode *unpackManyNodes(AstNodeUnpackContext *ctx, u64 *len);
+
 static AstNode *unpackNode(AstNodeUnpackContext *ctx);
 
 #define unpackPositiveInteger(msg, NAME)                                       \
@@ -210,7 +211,6 @@ static void unpackNodeBody(AstNodeUnpackContext *ctx, AstNode *node)
     case astMacroDecl:
         node->macroDecl.name = unpackString(ctx);
         node->macroDecl.params = unpackManyNodes(ctx, NULL);
-        node->macroDecl.ret = unpackNode(ctx);
         node->macroDecl.body = unpackNode(ctx);
         break;
     case astFuncParamDecl:
@@ -248,7 +248,6 @@ static void unpackNodeBody(AstNodeUnpackContext *ctx, AstNode *node)
     case astStructDecl:
         node->structDecl.name = unpackString(ctx);
         node->structDecl.members = unpackManyNodes(ctx, NULL);
-        node->structDecl.implements = unpackManyNodes(ctx, NULL);
         break;
     case astClassDecl:
         node->classDecl.name = unpackString(ctx);

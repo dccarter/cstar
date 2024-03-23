@@ -79,6 +79,7 @@ static void evalClassMembers(AstVisitor *visitor, AstNode *node)
 
         if (nodeIs(member, FuncDecl)) {
             type = checkFunctionSignature(visitor, member);
+            node->flags |= member->flags & (flgAbstract | flgVirtual);
         }
         else {
             type = checkType(visitor, member);
@@ -203,13 +204,13 @@ AstNode *makeGetReferenceCall(TypingContext *ctx,
 void checkClassDecl(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    const Type **implements = NULL, *base = NULL;
+    const Type **implements = NULL, *baseType = NULL;
 
     if (node->classDecl.base) {
         checkBaseDecl(visitor, node);
         if (typeIs(node->type, Error))
             return;
-        base = node->classDecl.base->type;
+        baseType = node->classDecl.base->type;
     }
 
     u64 implementsCount = countAstNodes(node->classDecl.implements);
@@ -250,7 +251,7 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
                                                members,
                                                membersCount,
                                                node,
-                                               base,
+                                               baseType,
                                                implements,
                                                implementsCount,
                                                node->flags & flgTypeApplicable);
@@ -261,26 +262,25 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
         goto checkClassMembersError;
 
     ctx->currentClass = node;
-    if (checkMemberFunctions(visitor, node, members)) {
+    bool retype = checkMemberFunctions(visitor, node, members);
+    if (!retype && typeIs(node->type, Error))
+        goto checkClassMembersError;
+
+    if (retype) {
         node->type = replaceClassType(ctx->types,
                                       this->_this.that,
                                       members,
                                       membersCount,
                                       node,
-                                      base,
+                                      baseType,
                                       implements,
                                       implementsCount,
                                       node->flags & flgTypeApplicable);
         ((Type *)this)->_this.that = node->type;
     }
-    else if (typeIs(node->type, Error)) {
-        node->type = ERROR_TYPE(ctx);
-        return;
-    }
     else {
         node->type = this->_this.that;
     }
-
     ctx->currentClass = NULL;
 
     if (!checkTypeImplementsAllMembers(ctx, node))

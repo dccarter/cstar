@@ -683,8 +683,6 @@ static void visitMacroDecl(ConstAstVisitor *visitor, const AstNode *node)
     emitMapKey(ctx, node, node->macroDecl.name);
     manyNodesToYaml(visitor, "params", node->macroDecl.params);
 
-    nodeToYaml(visitor, "ret", node->macroDecl.ret);
-
     nodeToYaml(visitor, "body", node->macroDecl.body);
 }
 
@@ -783,9 +781,11 @@ static void visitClassOrStructDecl(ConstAstVisitor *visitor,
 
     emitMapKey(ctx, node, "name");
     emitMapKey(ctx, node, node->structDecl.name);
-    if (nodeIs(node, ClassDecl))
+    if (nodeIs(node, ClassDecl)) {
         nodeToYaml(visitor, "base", node->classDecl.base);
-    manyNodesToYaml(visitor, "implements", node->structDecl.implements);
+        manyNodesToYaml(visitor, "implements", node->classDecl.implements);
+    }
+
     manyNodesToYaml(visitor, "members", node->structDecl.members);
 }
 
@@ -1018,80 +1018,80 @@ AstNode *dumpAstToYaml(CompilerDriver *driver, AstNode *node, FILE *file)
     csAssert0(nodeIs(node, Metadata));
 
     // clang-format off
-   ConstAstVisitor visitor = makeConstAstVisitor(&ctx, {
-       [astProgram] = visitProgram,
-       [astError] = visitError,
-       [astNoop] = visitNoop,
-       [astAttr] = visitAttr,
-       [astNullLit] = visitLiteral,
-       [astBoolLit] = visitLiteral,
-       [astCharLit] = visitLiteral,
-       [astIntegerLit] = visitLiteral,
-       [astFloatLit] = visitLiteral,
-       [astStringLit] = visitLiteral,
-       [astStringExpr] = visitStrExpr,
-       [astDefine] = visitDefine,
-       [astImportDecl] = visitImport,
-       [astImportEntity] = visitImportEntity,
-       [astModuleDecl] = visitModuleDecl,
-       [astIdentifier] = visitIdentifier,
-       [astTupleType] = visitTuple,
-       [astTupleExpr] = visitTuple,
-       [astArrayType] = visitArrayType,
-       [astFuncType] = visitFuncType,
-       [astOptionalType] = visitOptionalType,
-       [astStringType] = visitHeaderOnly,
-       [astAutoType] = visitHeaderOnly,
-       [astPrimitiveType] = visitPrimitiveType,
-       [astPointerType] = visitPointerType,
-       [astArrayExpr] = visitArrayExpr,
-       [astMemberExpr] = visitMemberExpr,
-       [astRangeExpr] = visitRangeExpr,
-       [astNewExpr] = visitNewExpr,
-       [astCastExpr] = visitCastExpr,
-       [astIndexExpr] = visitIndexExpr,
-       [astGenericParam] = visitGenericParam,
-       [astGenericDecl] = visitGenericDecl,
-       [astPathElem] = visitPathElement,
-       [astPath] = visitPath,
-       [astFuncDecl] = visitFuncDecl,
-       [astMacroDecl] = visitMacroDecl,
-       [astFuncParamDecl] = visitFuncParamDecl,
-       [astVarDecl] = visitVarDecl,
-       [astTypeDecl] = visitTypeDecl,
-       [astUnionDecl] = visitUnionDecl,
-       [astEnumOptionDecl] = visitEnumOptionDecl,
-       [astEnumDecl] = visitEnumDecl,
-       [astFieldDecl] = visitFieldDecl,
-       [astStructDecl] = visitClassOrStructDecl,
-       [astClassDecl] = visitClassOrStructDecl,
-       [astInterfaceDecl] = visitInterfaceDecl,
-       [astAssignExpr] = visitBinaryExpr,
-       [astBinaryExpr] = visitBinaryExpr,
-       [astUnaryExpr] = visitUnaryExpr,
-       [astAddressOf] = visitUnaryExpr,
-       [astTernaryExpr] = visitTernaryExpr,
-       [astIfStmt] = visitTernaryExpr,
-       [astStmtExpr] = visitStmtExpr,
-       [astTypedExpr] = visitTypedExpr,
-       [astCallExpr] = visitCallExpr,
-       [astMacroCallExpr] = visitCallExpr,
-       [astClosureExpr] = visitClosureExpr,
-       [astFieldExpr] = visitFieldExpr,
-       [astStructExpr] = visitStructExpr,
-       [astExprStmt] = visitExpressionStmt,
-       [astDeferStmt] = visitExpressionStmt,
-       [astGroupExpr] = visitExpressionStmt,
-       [astSpreadExpr] = visitExpressionStmt,
-       [astBreakStmt] = visitContinueStmt,
-       [astContinueStmt] = visitContinueStmt,
-       [astReturnStmt] = visitReturnStmt,
-       [astBlockStmt] = visitBlockStmt,
-       [astForStmt] = visitForStmt,
-       [astWhileStmt] = visitWhileStmt,
-       [astSwitchStmt] = visitSwitchStmt,
-       [astCaseStmt] = visitCaseStmt
-   }, .fallback = visitFallback );
+    ConstAstVisitor visitor = makeConstAstVisitor(&ctx, {
+        [astProgram] = visitProgram,
+        [astError] = visitError,
+        [astNoop] = visitNoop,
+        [astAttr] = visitAttr,
+        [astNullLit] = visitLiteral,
+        [astBoolLit] = visitLiteral,
+        [astCharLit] = visitLiteral,
+        [astIntegerLit] = visitLiteral,
+        [astFloatLit] = visitLiteral,
+        [astStringLit] = visitLiteral,
+        [astStringExpr] = visitStrExpr,
+        [astDefine] = visitDefine,
+        [astImportDecl] = visitImport,
+        [astImportEntity] = visitImportEntity,
+        [astModuleDecl] = visitModuleDecl,
+        [astIdentifier] = visitIdentifier,
+        [astTupleType] = visitTuple,
+        [astTupleExpr] = visitTuple,
+        [astArrayType] = visitArrayType,
+        [astFuncType] = visitFuncType,
+        [astOptionalType] = visitOptionalType,
+        [astStringType] = visitHeaderOnly,
+        [astAutoType] = visitHeaderOnly,
+        [astPrimitiveType] = visitPrimitiveType,
+        [astPointerType] = visitPointerType,
+        [astArrayExpr] = visitArrayExpr,
+        [astMemberExpr] = visitMemberExpr,
+        [astRangeExpr] = visitRangeExpr,
+        [astNewExpr] = visitNewExpr,
+        [astCastExpr] = visitCastExpr,
+        [astIndexExpr] = visitIndexExpr,
+        [astGenericParam] = visitGenericParam,
+        [astGenericDecl] = visitGenericDecl,
+        [astPathElem] = visitPathElement,
+        [astPath] = visitPath,
+        [astFuncDecl] = visitFuncDecl,
+        [astMacroDecl] = visitMacroDecl,
+        [astFuncParamDecl] = visitFuncParamDecl,
+        [astVarDecl] = visitVarDecl,
+        [astTypeDecl] = visitTypeDecl,
+        [astUnionDecl] = visitUnionDecl,
+        [astEnumOptionDecl] = visitEnumOptionDecl,
+        [astEnumDecl] = visitEnumDecl,
+        [astFieldDecl] = visitFieldDecl,
+        [astStructDecl] = visitClassOrStructDecl,
+        [astClassDecl] = visitClassOrStructDecl,
+        [astInterfaceDecl] = visitInterfaceDecl,
+        [astAssignExpr] = visitBinaryExpr,
+        [astBinaryExpr] = visitBinaryExpr,
+        [astUnaryExpr] = visitUnaryExpr,
+        [astAddressOf] = visitUnaryExpr,
+        [astTernaryExpr] = visitTernaryExpr,
+        [astIfStmt] = visitTernaryExpr,
+        [astStmtExpr] = visitStmtExpr,
+        [astTypedExpr] = visitTypedExpr,
+        [astCallExpr] = visitCallExpr,
+        [astMacroCallExpr] = visitCallExpr,
+        [astClosureExpr] = visitClosureExpr,
+        [astFieldExpr] = visitFieldExpr,
+        [astStructExpr] = visitStructExpr,
+        [astExprStmt] = visitExpressionStmt,
+        [astDeferStmt] = visitExpressionStmt,
+        [astGroupExpr] = visitExpressionStmt,
+        [astSpreadExpr] = visitExpressionStmt,
+        [astBreakStmt] = visitContinueStmt,
+        [astContinueStmt] = visitContinueStmt,
+        [astReturnStmt] = visitReturnStmt,
+        [astBlockStmt] = visitBlockStmt,
+        [astForStmt] = visitForStmt,
+        [astWhileStmt] = visitWhileStmt,
+        [astSwitchStmt] = visitSwitchStmt,
+        [astCaseStmt] = visitCaseStmt
+    }, .fallback = visitFallback);
 
     // clang-format on
     nodeToYaml(&visitor, NULL, node->metadata.node);

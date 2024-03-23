@@ -4,7 +4,7 @@
 
 #include "parser.h"
 #include "ast.h"
-#include "builtins.h"
+#include "defines.h"
 #include "flag.h"
 #include "lexer.h"
 #include "strings.h"
@@ -29,7 +29,14 @@ static void synchronizeUntil(Parser *P, TokenTag tag);
 
 static AstNode *expression(Parser *P, bool allowStructs);
 
-static AstNode *statement(Parser *P);
+static AstNode *statement(Parser *P, bool exprOnly);
+
+static inline AstNode *statementOrExpression(Parser *P)
+{
+    return statement(P, true);
+}
+
+static inline AstNode *statementOnly(Parser *P) { return statement(P, false); }
 
 static AstNode *parseType(Parser *P);
 
@@ -333,11 +340,15 @@ static inline AstNode *parseString(Parser *P)
 static inline AstNode *parseIdentifier(Parser *P)
 {
     const Token tok = *consume0(P, tokIdent);
-    return newAstNode(
-        P,
-        &tok.fileLoc.begin,
-        &(AstNode){.tag = astIdentifier,
-                   .ident.value = getTokenString(P, &tok, false)});
+    AstNode *ident =
+        newAstNode(P,
+                   &tok.fileLoc.begin,
+                   &(AstNode){.tag = astIdentifier,
+                              .ident.value = getTokenString(P, &tok, false)});
+    if (check(P, tokLNot))
+        return macroExpression(P, ident);
+
+    return ident;
 }
 
 static inline AstNode *parseIdentifierWithAlias(Parser *P)
@@ -481,6 +492,23 @@ static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
             &(AstNode){.tag = astMemberExpr, .memberExpr = {.member = member}});
     }
 
+    if (match(P, tokDefined)) {
+        const Token tok = *previous(P);
+        cstring name = NULL;
+        if (match(P, tokLParen)) {
+            name = getTokenString(P, consume0(P, tokIdent), false);
+            consume0(P, tokRParen);
+        }
+        else
+            name = getTokenString(P, consume0(P, tokIdent), false);
+
+        return newAstNode(P,
+                          &tok.fileLoc.begin,
+                          &(AstNode){.tag = astBoolLit,
+                                     .boolLiteral.value = preprocessorHasMacro(
+                                         &P->cc->preprocessor, name, NULL)});
+    }
+
     switch (current(P)->tag) {
 #define f(O, T, ...) case tok##T:
         AST_PREFIX_EXPR_LIST(f)
@@ -570,8 +598,12 @@ static AstNode *ternary(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 {
     AstNode *cond = assign(P, parsePrimary);
     if (match(P, tokQuestion)) {
-        AstNode *lhs = ternary(P, parsePrimary);
-        consume0(P, tokColon);
+        AstNode *lhs = NULL;
+        // allow ?: operator
+        if (!match(P, tokColon)) {
+            lhs = ternary(P, parsePrimary);
+            consume0(P, tokColon);
+        }
         AstNode *rhs = ternary(P, parsePrimary);
 
         return newAstNode(
@@ -891,7 +923,7 @@ static AstNode *block(Parser *P)
     while (!check(P, tokRBrace, tokEoF)) {
         E4C_TRY_BLOCK(
             {
-                listAddAstNode(&stmts, statement(P));
+                listAddAstNode(&stmts, statement(P, false));
                 match(P, tokSemicolon);
             } E4C_CATCH(ParserException) {
                 synchronizeUntil(P, tokRBrace);
@@ -972,6 +1004,9 @@ static AstNode *parsePath(Parser *P)
 {
     AstNodeList parts = {NULL};
     Token tok = *current(P);
+    if (check(P, tokIdent) && checkPeek(P, 1, tokLNot)) {
+        return parseIdentifier(P);
+    }
 
     do {
         listAddAstNode(&parts, pathElement(P));
@@ -1243,6 +1278,7 @@ static AstNode *parseVarDeclName(Parser *P)
     if (check(P, tokSubstitutue)) {
         return substitute(P, false);
     }
+
     return parseIdentifier(P);
 }
 
@@ -1336,23 +1372,26 @@ static AstNode *macroDecl(Parser *P, bool isPublic)
     consume0(P, tokMacro);
     cstring name = getTokenString(P, consume0(P, tokIdent), false);
 
-    consume0(P, tokLParen);
-    params = parseMany(P, tokRParen, tokComma, functionParam);
-    consume0(P, tokRParen);
+    if (match(P, tokLParen)) {
+        params = parseMany(P, tokRParen, tokComma, parseIdentifier);
+        consume0(P, tokRParen);
+    }
 
-    if (match(P, tokColon))
-        ret = parseType(P);
+    if (match(P, tokLParen)) {
+        body = parseManyNoSeparator(P, tokRParen, statementOnly);
+        consume0(P, tokRParen);
+    }
+    else {
+        body = statementOrExpression(P);
+    }
 
-    body = block(P);
-
-    return newAstNode(P,
-                      &tok.fileLoc.begin,
-                      &(AstNode){.tag = astMacroDecl,
-                                 .flags = isPublic ? flgPublic : flgNone,
-                                 .macroDecl = {.name = name,
-                                               .params = params,
-                                               .ret = ret,
-                                               .body = body}});
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){
+            .tag = astMacroDecl,
+            .flags = isPublic ? flgPublic : flgNone,
+            .macroDecl = {.name = name, .params = params, .body = body}});
 }
 
 typedef Pair(Operator, cstring) OperatorOverload;
@@ -1442,7 +1481,7 @@ static AstNode *funcDecl(Parser *P, u64 flags)
     AstNode *gParams = NULL, *params = NULL, *ret = NULL, *body = NULL;
     Token tok = *current(P);
     bool Extern = (flags & flgExtern) == flgExtern;
-
+    bool Virtual = (flags & flgVirtual) == flgVirtual;
     flags |= match(P, tokAsync) ? flgAsync : flgNone;
 
     consume0(P, tokFunc);
@@ -1458,9 +1497,12 @@ static AstNode *funcDecl(Parser *P, u64 flags)
     }
 
     if (match(P, tokLBracket)) {
-        if (flags & flgExtern)
+        if (Extern)
             reportUnexpectedToken(
                 P, "a '(', extern functions cannot have generic parameters");
+        if (Virtual)
+            reportUnexpectedToken(
+                P, "a '(', virtual functions cannot have generic parameters");
 
         gParams = parseAtLeastOne(
             P, "generic params", tokRBracket, tokComma, parseGenericParam);
@@ -1482,8 +1524,18 @@ static AstNode *funcDecl(Parser *P, u64 flags)
             body = expression(P, true);
             match(P, tokSemicolon);
         }
-        else {
+        else if (check(P, tokLBrace)) {
             body = block(P);
+        }
+        else if (Virtual) {
+            if (ret == NULL)
+                reportUnexpectedToken(
+                    P, "':' before virtual function declaration return type");
+            else
+                flags |= flgAbstract;
+        }
+        else {
+            reportUnexpectedToken(P, "a function body");
         }
     }
     else {
@@ -1534,9 +1586,9 @@ static AstNode *ifStatement(Parser *P)
     }
     consume0(P, tokRParen);
 
-    body = statement(P);
+    body = statement(P, false);
     if (match(P, tokElse)) {
-        ifElse = statement(P);
+        ifElse = statement(P, false);
     }
 
     return newAstNode(
@@ -1559,7 +1611,7 @@ static AstNode *forStatement(Parser *P, bool isComptime)
     AstNode *range = expression(P, true);
     consume0(P, tokRParen);
     if (!match(P, tokSemicolon))
-        body = statement(P);
+        body = statement(P, false);
 
     return newAstNode(
         P,
@@ -1584,7 +1636,7 @@ static AstNode *whileStatement(Parser *P)
     }
     consume0(P, tokRParen);
     if (!match(P, tokSemicolon))
-        body = statement(P);
+        body = statement(P, false);
 
     return newAstNode(P,
                       &tok.fileLoc.begin,
@@ -1611,7 +1663,7 @@ static AstNode *caseStatement(Parser *P)
     if (!match(P, tokComma)) {
         consume0(P, tokFatArrow);
         if (!check(P, tokCase, tokRBrace)) {
-            body = statement(P);
+            body = statement(P, false);
         }
     }
 
@@ -1678,7 +1730,7 @@ static AstNode *matchCaseStatement(Parser *P)
         if (!check(P, tokLBrace))
             consume0(P, tokFatArrow);
         if (!check(P, tokCase, tokRBrace)) {
-            body = statement(P);
+            body = statement(P, false);
         }
     }
 
@@ -1757,7 +1809,7 @@ static AstNode *continueStatement(Parser *P)
                                                                : astBreakStmt});
 }
 
-static AstNode *statement(Parser *P)
+static AstNode *statement(Parser *P, bool exprOnly)
 {
     AstNode *attrs = NULL;
     u64 flags = flgNone;
@@ -1812,10 +1864,11 @@ static AstNode *statement(Parser *P)
         break;
     default: {
         AstNode *expr = expression(P, false);
-        stmt = newAstNode(
-            P,
-            &expr->loc.begin,
-            &(AstNode){.tag = astExprStmt, .exprStmt = {.expr = expr}});
+        stmt = exprOnly ? expr
+                        : newAstNode(P,
+                                     &expr->loc.begin,
+                                     &(AstNode){.tag = astExprStmt,
+                                                .exprStmt = {.expr = expr}});
         match(P, tokSemicolon);
         break;
     }
@@ -1949,6 +2002,7 @@ static AstNode *parseClassOrStructMember(Parser *P)
         attrs = attributes(P);
 
     bool isPrivate = match(P, tokMinus);
+    bool isVirtual = match(P, tokVirtual);
     bool isConst = match(P, tokConst);
 
     switch (current(P)->tag) {
@@ -1956,9 +2010,12 @@ static AstNode *parseClassOrStructMember(Parser *P)
         member = parseStructField(P, isPrivate);
         break;
     case tokFunc:
-    case tokAsync:
-        member = funcDecl(P, isPrivate ? flgNone : flgPublic);
+    case tokAsync: {
+        u64 flags = isVirtual ? flgVirtual : flgNone;
+        flags |= isPrivate ? flgNone : flgPublic;
+        member = funcDecl(P, flags);
         break;
+    }
     case tokMacro:
         if (attrs)
             parserError(P,
@@ -2134,7 +2191,8 @@ static AstNode *classOrStructDecl(Parser *P, bool isPublic, bool isExtern)
             consume0(P, tokRBracket);
         }
 
-        if (match(P, tokColon)) {
+        if (tok.tag == tokClass && match(P, tokColon)) {
+            // Only classes support inheritance
             if (!check(P, tokColon))
                 base = parseType(P);
             if (match(P, tokColon))
@@ -2562,3 +2620,5 @@ AstNode *parseProgram(Parser *P)
                                              .top = topLevel.first,
                                              .decls = decls.first}});
 }
+
+AstNode *parseExpression(Parser *P) { return expression(P, false); }

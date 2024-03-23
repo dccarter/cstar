@@ -19,7 +19,7 @@ static bool evalIntegerMemberExpr(EvalContext *ctx, AstNode *node)
         return false;
     }
 
-    i64 i = (i64)getNumericLiteral(member);
+    i64 i = (i64)nodeGetNumericLiteral(member);
     u64 len = target->tupleExpr.len;
     if (i < 0 || i >= len) {
         logError(ctx->L,

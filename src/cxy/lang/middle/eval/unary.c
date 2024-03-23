@@ -43,7 +43,7 @@ static void evalPrefixMinusOperation(EvalContext *ctx, AstNode *node)
     if (!evalVerifyIntegerOrFloatOperand(ctx, rhs, node->unaryExpr.op))
         return;
 
-    f64 value = -getNumericLiteral(rhs);
+    f64 value = -nodeGetNumericLiteral(rhs);
     if (nodeIs(node, FloatLit)) {
         node->tag = astFloatLit;
         node->floatLiteral.value = value;
@@ -64,7 +64,7 @@ static void evalPrefixPlusOperation(EvalContext *ctx, AstNode *node)
     if (!evalVerifyIntegerOrFloatOperand(ctx, rhs, node->unaryExpr.op))
         return;
 
-    f64 value = +getNumericLiteral(rhs);
+    f64 value = +nodeGetNumericLiteral(rhs);
     if (nodeIs(node, FloatLit)) {
         node->tag = astFloatLit;
         node->floatLiteral.value = value;
@@ -93,7 +93,7 @@ static void evalLogicNotOperation(EvalContext *ctx, AstNode *node)
     }
 
     node->tag = astBoolLit;
-    node->boolLiteral.value = !getNumericLiteral(rhs);
+    node->boolLiteral.value = !nodeGetNumericLiteral(rhs);
 }
 
 static void evalBitNotOperation(EvalContext *ctx, AstNode *node)
@@ -110,7 +110,7 @@ static void evalBitNotOperation(EvalContext *ctx, AstNode *node)
     }
 
     node->tag = astIntegerLit;
-    node->intLiteral.uValue = ~((u64)getNumericLiteral(rhs));
+    node->intLiteral.uValue = ~((u64)nodeGetNumericLiteral(rhs));
 }
 
 void evalUnaryExpr(AstVisitor *visitor, AstNode *node)

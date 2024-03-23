@@ -119,7 +119,6 @@
         break;                                                                 \
     case astMacroDecl:                                                         \
         MODE##VisitManyNodes(visitor, node->macroDecl.params);                 \
-        MODE##Visit(visitor, node->macroDecl.ret);                             \
         MODE##Visit(visitor, node->macroDecl.body);                            \
         break;                                                                 \
     case astFuncParamDecl:                                                     \
@@ -153,7 +152,6 @@
         MODE##Visit(visitor, node->structField.value);                         \
         break;                                                                 \
     case astStructDecl:                                                        \
-        MODE##VisitManyNodes(visitor, node->structDecl.implements);            \
         MODE##VisitManyNodes(visitor, node->structDecl.members);               \
         break;                                                                 \
     case astClassDecl:                                                         \
@@ -326,6 +324,7 @@ void astConstVisitFallbackVisitAll(ConstAstVisitor *visitor,
 }
 
 void astVisitSkip(AstVisitor *visitor, AstNode *node) {}
+
 void astConstVisitSkip(ConstAstVisitor *visitor, const AstNode *node) {}
 
 void astModifierInit(AstModifier *ctx, AstNode *node)

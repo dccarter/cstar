@@ -18,6 +18,7 @@
     f(super)                    \
     f(static)                   \
     f(transient)                \
+    f(abstract)                 \
     f(inline)                   \
     f(explicit)                 \
     f(pure)                     \
@@ -66,6 +67,7 @@
     f(destructorForward)        \
     f(newClass)                 \
     f(release)                  \
+    f(vtable)                   \
     f(poco)                     \
     f(Promise)                  \
     f(Coroutine)                \

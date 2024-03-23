@@ -113,9 +113,26 @@ static AstNode *executeDumpIR(CompilerDriver *driver, AstNode *node)
     return backendDumpIR(driver, node);
 }
 
+static AstNode *executePreprocessAst(CompilerDriver *driver, AstNode *node)
+{
+    csAssert0(nodeIs(node, Metadata));
+    node->metadata.node = preprocessAst(driver, node->metadata.node);
+
+    if (hasErrors(driver->L))
+        return NULL;
+    node->metadata.stages |= BIT(ccsPreprocess);
+    return node;
+}
+
 static AstNode *executeShakeAst(CompilerDriver *driver, AstNode *node)
 {
     csAssert0(nodeIs(node, Metadata));
+    if (!(node->metadata.stages & BIT(ccsPreprocess))) {
+        logError(
+            driver->L, builtinLoc(), "cannot shake an unprocessed ast", NULL);
+        return NULL;
+    }
+
     node->metadata.node = shakeAstNode(driver, node->metadata.node);
 
     if (hasErrors(driver->L))
@@ -127,6 +144,11 @@ static AstNode *executeShakeAst(CompilerDriver *driver, AstNode *node)
 static AstNode *executeBindAst(CompilerDriver *driver, AstNode *node)
 {
     csAssert0(nodeIs(node, Metadata));
+    if (!(node->metadata.stages & BIT(ccsShake))) {
+        logError(driver->L, builtinLoc(), "cannot bind an unshaken ast", NULL);
+        return NULL;
+    }
+
     node->metadata.node = bindAst(driver, node->metadata.node);
 
     if (hasErrors(driver->L))
@@ -175,7 +197,7 @@ static AstNode *executeSimplify(CompilerDriver *driver, AstNode *node)
 static AstNode *executeGenerateCode(CompilerDriver *driver, AstNode *node)
 {
     csAssert0(nodeIs(node, Metadata));
-    if (!(node->metadata.stages & BIT(ccsTypeCheck))) {
+    if (!(node->metadata.stages & BIT(ccsSimplify))) {
         logError(driver->L,
                  builtinLoc(),
                  "cannot generate code for an unbound ast",
@@ -186,11 +208,11 @@ static AstNode *executeGenerateCode(CompilerDriver *driver, AstNode *node)
     FormatState state = newFormatState("  ", true);
     node->metadata.state = &state;
     generateCode(driver, node);
+    freeFormatState(&state);
+    node->metadata.state = NULL;
 
     if (hasErrors(driver->L))
         return NULL;
-
-    freeFormatState(&state);
 
     node->metadata.stages |= BIT(ccsCodegen);
     node->metadata.state = NULL;
@@ -212,7 +234,12 @@ static AstNode *executeTargetCompile(CompilerDriver *driver, AstNode *node)
     if (!hasFlag(node->metadata.node, Main))
         return node;
 
-    free((void *)node->metadata.filePath);
+    if (!compilerBackendMakeExecutable(driver))
+        return NULL;
+
+    if (hasErrors(driver->L))
+        return NULL;
+
     node->metadata.stages |= BIT(ccsCompile);
     return node;
 }
@@ -305,6 +332,7 @@ static CompilerStageExecutor compilerStageExecutors[ccsCOUNT] = {
     [ccsInvalid] = NULL,
     [ccs_Dump] = executeDumpAst,
     [ccs_DumpIR] = executeDumpIR,
+    [ccsPreprocess] = executePreprocessAst,
     [ccsShake] = executeShakeAst,
     [ccsBind] = executeBindAst,
     [ccsTypeCheck] = executeTypeCheckAst,
@@ -312,8 +340,7 @@ static CompilerStageExecutor compilerStageExecutors[ccsCOUNT] = {
     [ccsCodegen] = executeGenerateCode,
     // TODO causing issues
     // [ccsCollect] = executeCollect,
-    // [ccsCompile] = executeTargetCompile
-};
+    [ccsCompile] = executeTargetCompile};
 
 AstNode *executeCompilerStage(CompilerDriver *driver,
                               CompilerStage stage,

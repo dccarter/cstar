@@ -233,15 +233,14 @@ typedef struct Type {
         } tEnum;
 
         struct {
-            TypeInheritance *inheritance;
             TypeMembersContainer *members;
             AstNode *decl;
         } tStruct;
 
         struct {
-            TypeInheritance *inheritance;
             TypeMembersContainer *members;
             AstNode *decl;
+            TypeInheritance *inheritance;
         } tClass;
 
         struct {
@@ -269,6 +268,7 @@ typedef struct Type {
 typedef Pair(i64, u64) IntMinMax;
 
 #define CYX_TYPE_BODY_SIZE (sizeof(Type) - sizeof(((Type *)0)->_head))
+
 static inline bool typeIs_(const Type *type, TTag tag)
 {
     return type && type->tag == tag;
@@ -277,25 +277,45 @@ static inline bool typeIs_(const Type *type, TTag tag)
 #define typeIs(T, TAG) typeIs_((T), typ##TAG)
 
 bool isTypeAssignableFrom(const Type *to, const Type *from);
+
 bool isTypeCastAssignable(const Type *to, const Type *from);
+
 bool isPrimitiveTypeBigger(const Type *to, const Type *from);
+
 bool isIntegerType(const Type *type);
+
 bool isIntegralType(const Type *type);
+
 bool isSignedType(const Type *type);
+
 bool isSignedIntegerType(const Type *type);
+
 bool isUnsignedType(const Type *type);
+
 bool isFloatType(const Type *type);
+
 bool isNumericType(const Type *type);
+
 bool isBuiltinType(const Type *type);
+
 bool isBooleanType(const Type *type);
+
 bool isCharacterType(const Type *type);
+
 bool isArrayType(const Type *type);
+
 bool isPointerType(const Type *type);
+
 bool isVoidPointer(const Type *type);
+
 bool isClassType(const Type *type);
+
 bool isStructType(const Type *type);
+
 bool isTupleType(const Type *type);
+
 bool isUnionType(const Type *type);
+
 bool isConstType(const Type *type);
 
 bool hasReferenceMembers(const Type *type);
@@ -319,7 +339,9 @@ static inline bool isStructPointer(const Type *type)
 }
 
 const char *getPrimitiveTypeName(PrtId tag);
+
 u64 getPrimitiveTypeSizeFromTag(PrtId tag);
+
 static inline u64 getPrimitiveTypeSize(const Type *type)
 {
     csAssert0(typeIs_(type, typPrimitive));
@@ -372,6 +394,7 @@ static inline const Type *findClassMemberType(const Type *type, cstring member)
 }
 
 const TypeInheritance *getTypeInheritance(const Type *type);
+
 const Type *getTypeBase(const Type *type);
 
 bool implementsInterface(const Type *type, const Type *inf);
@@ -421,12 +444,19 @@ TypeInheritance *makeTypeInheritance(TypeTable *types,
 AstNode *findMemberDeclInType(const Type *type, cstring name);
 
 const Type *getPointedType(const Type *type);
+
 bool isTruthyType(const Type *type);
+
 const Type *getOptionalType();
+
 const Type *getOptionalTargetType(const Type *type);
+
 const Type *getSliceTargetType(const Type *type);
+
 u32 findUnionTypeIndex(const Type *tagged, const Type *type);
+
 void pushThisReference(const Type *_this, AstNode *node);
+
 void resolveThisReferences(TypeTable *table,
                            const Type *_this,
                            const Type *type);

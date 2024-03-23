@@ -191,8 +191,10 @@ static bool compileProgram(CompilerDriver *driver,
 
     CompilerStage stage = ccs_First + 1,
                   maxStage =
-                      (options->cmd == cmdDev ? options->dev.lastStage.num + 1
+                      (options->cmd == cmdDev ? options->dev.lastStage + 1
                                               : ccsCOUNT);
+    if (hasFlag(program, BuiltinsModule))
+        maxStage = MAX(ccsTypeCheck + 1, maxStage);
 
     for (; stage < maxStage; stage++) {
         metadata = executeCompilerStage(driver, stage, metadata);
@@ -261,6 +263,7 @@ bool initCompilerDriver(CompilerDriver *compiler,
     const Options *options = &compiler->options;
     compiler->backend = initCompilerBackend(compiler, argc, argv);
     csAssert0(compiler->backend);
+    initCompilerPreprocessor(compiler);
 
     if (options->cmd == cmdBuild || !options->withoutBuiltins) {
         return compileBuiltin(compiler,
@@ -431,6 +434,7 @@ bool compileFile(const char *fileName, CompilerDriver *driver)
     startCompilerStats(driver);
     AstNode *program = parseFile(driver, fileName);
     program->flags |= flgMain;
+
     return compileProgram(driver, program, fileName);
 }
 

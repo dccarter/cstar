@@ -805,6 +805,11 @@ static void dumpFuncDeclWithParams(ConstAstVisitor *visitor,
         printKeyword(ctx->state, "extern");
         AddSpace();
     }
+    if (hasFlag(node, Virtual)) {
+        printKeyword(ctx->state, "virtual");
+        AddSpace();
+    }
+
     printKeyword(ctx->state, "func");
     AddSpace();
     dumpFunctionName(ctx, node);
@@ -892,19 +897,6 @@ static void dumpStructDeclWithParams(ConstAstVisitor *visitor,
     if (params)
         dumpManyAstNodesEnclosed(visitor, params, "[", ", ", "]");
 
-    if (node->structDecl.base || node->structDecl.implements)
-        format(ctx->state, ":", NULL);
-
-    if (node->structDecl.base) {
-        AddSpace();
-        astConstVisit(visitor, node->structDecl.base);
-    }
-
-    if (node->structDecl.implements) {
-        format(ctx->state, ": ", NULL);
-        dumpManyAstNodes(visitor, node->structDecl.implements, ", ");
-    }
-
     if (node->structDecl.members == NULL) {
         if (!hasFlag(node, Extern))
             format(ctx->state, "{{ }", NULL);
@@ -990,74 +982,122 @@ AstNode *dumpCxySource(CompilerDriver *driver, AstNode *node, FILE *file)
 
     // clang-format off
     // sb.op__lshift7(this.b).op__lshift7(" -> ").op__lshift10(this.x)
-    ConstAstVisitor visitor = makeConstAstVisitor(&context, {
-        [astProgram] = dumpProgram,
-        [astPath] = dumpPath,
-        [astPathElem] = dumpPathElement,
-        [astIdentifier] = dumpIdentifier,
-        [astAttr] = dumpAttribute,
-        [astFuncParamDecl] = dumpFuncParam,
-        [astGenericParam] = dumpGenericParam,
-        [astImportEntity] = dumpImportEntity,
-        [astBackendCall] = dumpBackendCall,
-        [astTypeRef] = dumpTypeRef,
-        [astNullLit] = dumpNullLit,
-        [astBoolLit] = dumpBoolLit,
-        [astCharLit] = dumpCharLit,
-        [astIntegerLit] = dumpIntegerLit,
-        [astFloatLit] = dumpFloatLit,
-        [astStringLit] = dumpStringLit,
-        [astStringExpr] = dumpStringExpr,
-        [astUnaryExpr] = dumpUnaryExpr,
-        [astBinaryExpr] = dumpBinaryExpr,
-        [astAssignExpr] = dumpAssignExpr,
-        [astTernaryExpr] = dumpTernaryExpr,
-        [astGroupExpr] = dumpGroupExpr,
-        [astStmtExpr] = dumpStmtExpr,
-        [astCastExpr] = dumpCastExpr,
-        [astTypedExpr] = dumpTypedExpr,
-        [astRangeExpr] = dumpRangeExpr,
-        [astMemberExpr] = dumpMemberExpr,
-        [astIndexExpr] = dumpIndexExpr,
-        [astCallExpr] = dumpCallExpr,
-        [astTupleExpr] = dumpTupleExpr,
-        [astArrayExpr] = dumpArrayExpr,
-        [astFieldExpr] = dumpFieldExpr,
-        [astStructExpr] = dumpStructExpr,
-        [astMacroCallExpr] = dumpMacroCallExpr,
-        [astUnionValueExpr] = dumpUnionValueExpr,
-        [astAddressOf] = dumpUnaryExpr,
-        [astPrimitiveType] = dumpPrimitiveType,
-        [astStringType] = dumpBuiltinType,
-        [astVoidType] = dumpBuiltinType,
-        [astAutoType] = dumpBuiltinType,
-        [astFuncType] = dumpFuncType,
-        [astOptionalType] = dumpOptionalType,
-        [astArrayType] = dumpArrayType,
-        [astTupleType] = dumpTupleType,
-        [astPointerType] = dumpPointerType,
-        [astUnionDecl] = dumpUnionType,
-        [astBlockStmt] = dumpBlockStmt,
-        [astIfStmt] = dumpIfStmt,
-        [astForStmt] = dumpForStmt,
-        [astWhileStmt] = dumpWhileStmt,
-        [astExprStmt] = dumpExprStmt,
-        [astDeferStmt] = dumpDeferStmt,
-        [astBreakStmt] = dumpBreakStmt,
-        [astContinueStmt] = dumpContinueStmt,
-        [astReturnStmt] = dumpReturnStmt,
-        [astCaseStmt] = dumpCaseStmt,
-        [astSwitchStmt] = dumpSwitchStmt,
-        [astMatchStmt] = dumpMatchStmt,
-        [astVarDecl] = dumpVarDecl,
-        [astTypeDecl] = dumpTypeDecl,
-        [astFieldDecl] = dumpStructField,
-        [astStructDecl] = dumpStructDecl,
-        [astModuleDecl] = dumpModuleDecl,
-        [astImportDecl] = dumpImportDecl,
-        [astFuncDecl] = dumpFuncDecl,
-        [astGenericDecl] = dumpGenericDecl,
-    });
+    ConstAstVisitor visitor = makeConstAstVisitor(&context,
+                                                  {
+                                                      [astProgram] = dumpProgram,
+                                                      [astPath] = dumpPath,
+                                                      [astPathElem] =
+                                                      dumpPathElement,
+                                                      [astIdentifier] =
+                                                      dumpIdentifier,
+                                                      [astAttr] = dumpAttribute,
+                                                      [astFuncParamDecl] =
+                                                      dumpFuncParam,
+                                                      [astGenericParam] =
+                                                      dumpGenericParam,
+                                                      [astImportEntity] =
+                                                      dumpImportEntity,
+                                                      [astBackendCall] =
+                                                      dumpBackendCall,
+                                                      [astTypeRef] = dumpTypeRef,
+                                                      [astNullLit] = dumpNullLit,
+                                                      [astBoolLit] = dumpBoolLit,
+                                                      [astCharLit] = dumpCharLit,
+                                                      [astIntegerLit] =
+                                                      dumpIntegerLit,
+                                                      [astFloatLit] = dumpFloatLit,
+                                                      [astStringLit] =
+                                                      dumpStringLit,
+                                                      [astStringExpr] =
+                                                      dumpStringExpr,
+                                                      [astUnaryExpr] =
+                                                      dumpUnaryExpr,
+                                                      [astBinaryExpr] =
+                                                      dumpBinaryExpr,
+                                                      [astAssignExpr] =
+                                                      dumpAssignExpr,
+                                                      [astTernaryExpr] =
+                                                      dumpTernaryExpr,
+                                                      [astGroupExpr] =
+                                                      dumpGroupExpr,
+                                                      [astStmtExpr] = dumpStmtExpr,
+                                                      [astCastExpr] = dumpCastExpr,
+                                                      [astTypedExpr] =
+                                                      dumpTypedExpr,
+                                                      [astRangeExpr] =
+                                                      dumpRangeExpr,
+                                                      [astMemberExpr] =
+                                                      dumpMemberExpr,
+                                                      [astIndexExpr] =
+                                                      dumpIndexExpr,
+                                                      [astCallExpr] = dumpCallExpr,
+                                                      [astTupleExpr] =
+                                                      dumpTupleExpr,
+                                                      [astArrayExpr] =
+                                                      dumpArrayExpr,
+                                                      [astFieldExpr] =
+                                                      dumpFieldExpr,
+                                                      [astStructExpr] =
+                                                      dumpStructExpr,
+                                                      [astMacroCallExpr] =
+                                                      dumpMacroCallExpr,
+                                                      [astUnionValueExpr] =
+                                                      dumpUnionValueExpr,
+                                                      [astAddressOf] =
+                                                      dumpUnaryExpr,
+                                                      [astPrimitiveType] =
+                                                      dumpPrimitiveType,
+                                                      [astStringType] =
+                                                      dumpBuiltinType,
+                                                      [astVoidType] =
+                                                      dumpBuiltinType,
+                                                      [astAutoType] =
+                                                      dumpBuiltinType,
+                                                      [astFuncType] = dumpFuncType,
+                                                      [astOptionalType] =
+                                                      dumpOptionalType,
+                                                      [astArrayType] =
+                                                      dumpArrayType,
+                                                      [astTupleType] =
+                                                      dumpTupleType,
+                                                      [astPointerType] =
+                                                      dumpPointerType,
+                                                      [astUnionDecl] =
+                                                      dumpUnionType,
+                                                      [astBlockStmt] =
+                                                      dumpBlockStmt,
+                                                      [astIfStmt] = dumpIfStmt,
+                                                      [astForStmt] = dumpForStmt,
+                                                      [astWhileStmt] =
+                                                      dumpWhileStmt,
+                                                      [astExprStmt] = dumpExprStmt,
+                                                      [astDeferStmt] =
+                                                      dumpDeferStmt,
+                                                      [astBreakStmt] =
+                                                      dumpBreakStmt,
+                                                      [astContinueStmt] =
+                                                      dumpContinueStmt,
+                                                      [astReturnStmt] =
+                                                      dumpReturnStmt,
+                                                      [astCaseStmt] = dumpCaseStmt,
+                                                      [astSwitchStmt] =
+                                                      dumpSwitchStmt,
+                                                      [astMatchStmt] =
+                                                      dumpMatchStmt,
+                                                      [astVarDecl] = dumpVarDecl,
+                                                      [astTypeDecl] = dumpTypeDecl,
+                                                      [astFieldDecl] =
+                                                      dumpStructField,
+                                                      [astStructDecl] =
+                                                      dumpStructDecl,
+                                                      [astModuleDecl] =
+                                                      dumpModuleDecl,
+                                                      [astImportDecl] =
+                                                      dumpImportDecl,
+                                                      [astFuncDecl] = dumpFuncDecl,
+                                                      [astGenericDecl] =
+                                                      dumpGenericDecl,
+                                                  });
 
     // clang-format on
     astConstVisit(&visitor,

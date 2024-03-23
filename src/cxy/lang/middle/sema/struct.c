@@ -74,6 +74,8 @@ static void preCheckStructMembers(AstNode *node, NamedTypeMember *members)
             members[i] = (NamedTypeMember){.name = getDeclarationName(member),
                                            .type = member->type,
                                            .decl = member};
+
+            node->flags |= member->flags & (flgAbstract | flgVirtual);
         }
     }
 }
@@ -265,24 +267,6 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
 void checkStructDecl(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    const Type *base = NULL;
-    if (node->structDecl.base) {
-        checkBaseDecl(visitor, node);
-        if (typeIs(node->type, Error))
-            return;
-        base = node->structDecl.base->type;
-    }
-
-    const Type **implements = NULL;
-    u64 implementsCount = countAstNodes(node->structDecl.implements);
-    if (implementsCount) {
-        u64 count = countAstNodes(node->structDecl.implements);
-        implements = mallocOrDie(sizeof(Type *) * count);
-        checkImplements(visitor, node, implements, count);
-    }
-
-    if (typeIs(node->type, Error))
-        goto checkStructInterfacesError;
 
     node->structDecl.thisType =
         node->structDecl.thisType
@@ -293,7 +277,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
     evaluateStructMembers(visitor, node);
     ctx->currentStruct = NULL;
     if (typeIs(node->type, Error))
-        goto checkStructInterfacesError;
+        return;
 
     u64 membersCount = countAstNodes(node->structDecl.members);
     NamedTypeMember *members =
@@ -312,9 +296,6 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
                        members,
                        membersCount,
                        node,
-                       base,
-                       implements,
-                       implementsCount,
                        node->flags & flgTypeApplicable);
     node->type = this;
 
@@ -330,9 +311,6 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
             members,
             membersCount,
             node,
-            base,
-            implements,
-            implementsCount,
             node->flags & (flgReferenceMembers | flgTypeApplicable));
         ((Type *)this)->_this.that = node->type;
     }
@@ -341,14 +319,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
 
     ctx->currentStruct = NULL;
 
-    if (!checkTypeImplementsAllMembers(ctx, node))
-        node->type = ERROR_TYPE(ctx);
-
 checkStructMembersError:
     if (members)
         free(members);
-
-checkStructInterfacesError:
-    if (implements)
-        free(implements);
 }

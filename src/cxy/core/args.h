@@ -14,10 +14,11 @@
 extern "C" {
 #endif
 
+#include <core/array.h>
 #include <core/utils.h>
 #include <stdio.h>
 
-enum { cmdNoValue, cmdNumber, cmdString };
+enum { cmdNoValue, cmdNumber, cmdString, cmdArray };
 
 struct CommandLineParser;
 
@@ -26,8 +27,14 @@ typedef struct CommandLineArgumentValue {
     union {
         f64 num;
         const char *str;
+        DynArray array;
     };
 } CmdFlagValue;
+
+typedef struct CommandLineEnumValueDesc {
+    const char *str;
+    f64 value;
+} CmdEnumValueDesc;
 
 typedef struct CommandLineArgument {
     const char *name;
@@ -105,6 +112,14 @@ bool cmdParseByteSize(CmdParser *P,
                       CmdFlagValue *dst,
                       const char *str,
                       const char *name);
+
+bool cmdParseEnumValue(CmdParser *P,
+                       CmdFlagValue *dst,
+                       const char *str,
+                       const char *name,
+                       const CmdEnumValueDesc *enums,
+                       u32 len);
+
 bool cmdParseBitFlags(CmdParser *P,
                       CmdFlagValue *dst,
                       const char *str,
@@ -117,6 +132,7 @@ bool cmdParseBitFlags(CmdParser *P,
 #define Help(H) .help = H
 #define Type(V) .validator = V
 #define Def(D) .def = D
+#define BindArray(Arr) .val.array = Arr
 #define Positionals(...)                                                       \
     {                                                                          \
         __VA_ARGS__                                                            \
@@ -145,6 +161,7 @@ bool cmdParseBitFlags(CmdParser *P,
     {                                                                          \
         __VA_ARGS__, .validator = cmdParseByteSize                             \
     }
+
 #define Use(V, ...)                                                            \
     {                                                                          \
         __VA_ARGS__, .validator = V                                            \
@@ -244,17 +261,20 @@ i32 parseCommandLineArguments_(int *pargc, char ***pargv, CmdParser *P);
 #define getGlobalOption(cmd, I) (cmdGetGlobalFlag(cmd, (I) + 2)->num != 0)
 #define getGlobalBool(cmd, I) (cmdGetGlobalFlag(cmd, (I) + 2)->num != 0)
 #define getGlobalString(cmd, I) cmdGetGlobalFlag(cmd, (I) + 2)->str
+#define getGlobalArray(cmd, I) cmdGetGlobalFlag(cmd, (I) + 2)->array
 #define getLocalInt(cmd, I) (int)cmdGetFlag(cmd, (I))->num
 #define getLocalFloat(cmd, I) cmdGetFlag(cmd, (I))->num
 #define getLocalBytes(cmd, I) (int)cmdGetFlag(cmd, (I))->num
 #define getLocalOption(cmd, I) (cmdGetFlag(cmd, (I))->num != 0)
 #define getLocalBool(cmd, I) (cmdGetFlag(cmd, (I))->num != 0)
 #define getLocalString(cmd, I) cmdGetFlag(cmd, (I))->str
+#define getLocalArray(cmd, I) cmdGetFlag(cmd, (I))->array
 #define getPositionalInt(cmd, I) (int)cmdGetPositional(cmd, (I))->num
 #define getPositionalFloat(cmd, I) cmdGetPositional(cmd, (I))->num
 #define getPositionalBytes(cmd, I) (int)cmdGetPositional(cmd, (I))->num
 #define getPositionalBool(cmd, I) (cmdGetPositional(cmd, (I))->num != 0)
 #define getPositionalString(cmd, I) cmdGetPositional(cmd, (I))->str
+#define getPositionalArray(cmd, I) cmdGetPositional(cmd, (I))->array
 
 #define __UNLOAD_TO_TARGET_WITH(cmd, target, name, G, I)                       \
     (target)->name = G(cmd, I);

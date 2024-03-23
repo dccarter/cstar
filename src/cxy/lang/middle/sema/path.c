@@ -35,9 +35,7 @@ static AstNode *resolveMemberUpInheritance(TypingContext *ctx,
 {
     AstNode *decl = findMemberDeclInType(parent, name);
     if (decl == NULL) {
-        TypeInheritance *inheritance = typeIs(parent, Struct)
-                                           ? parent->tStruct.inheritance
-                                           : parent->tClass.inheritance;
+        const TypeInheritance *inheritance = getTypeInheritance(parent);
         const Type *base = inheritance ? inheritance->base : NULL;
         if (base) {
             return resolveMemberUpInheritance(

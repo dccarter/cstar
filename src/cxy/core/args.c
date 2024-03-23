@@ -598,6 +598,30 @@ bool cmdParseBitFlags(CmdParser *P,
     return true;
 }
 
+bool cmdParseEnumValue(CmdParser *P,
+                       CmdFlagValue *dst,
+                       const char *str,
+                       const char *name,
+                       const CmdEnumValueDesc *enums,
+                       u32 len)
+{
+    while (*str == '\0')
+        str++;
+    u64 size = 0;
+    while (str[size])
+        size++;
+
+    for (u64 i = 0; i < len; i++) {
+        if (strncmp(str, enums[i].str, size) == 0) {
+            dst->state = cmdNumber;
+            dst->num = enums[i].value;
+            return true;
+        }
+    }
+
+    return false;
+}
+
 CmdFlagValue *cmdGetFlag(CmdCommand *cmd, u32 i)
 {
     if (i >= cmd->nargs || cmd->args[i].val.state == cmdNoValue)
@@ -736,7 +760,7 @@ i32 parseCommandLineArguments_(int *pargc, char ***pargv, CmdParser *P)
 
     cmdHandleBuiltins(cmd, choseDef);
 
-    // Validate that all require flags and positional arguments have been set
+    // Validate that all required flags and positional arguments have been set
     for (int i = 0; i < cmd->nargs; i++) {
         CmdFlag *flag = &cmd->args[i];
         if (flag->val.state != cmdNoValue)
@@ -751,6 +775,9 @@ i32 parseCommandLineArguments_(int *pargc, char ***pargv, CmdParser *P)
             if (flag->def[0] == '\0') {
                 flag->val.state = cmdString;
                 flag->val.str = NULL;
+            }
+            else if (flag->def[0] == '[' && flag->def[1] == ']') {
+                flag->val.state = cmdArray;
             }
             else if (!flag->validator(P, &flag->val, flag->def, flag->name))
                 return -1;
@@ -778,6 +805,9 @@ i32 parseCommandLineArguments_(int *pargc, char ***pargv, CmdParser *P)
             if (flag->def[0] == '\0') {
                 flag->val.state = cmdString;
                 flag->val.str = NULL;
+            }
+            else if (flag->def[0] == '[' && flag->def[1] == ']') {
+                flag->val.state = cmdArray;
             }
             else if (!flag->validator(P, &flag->val, flag->def, flag->name))
                 return -1;

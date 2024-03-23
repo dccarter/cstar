@@ -2,7 +2,6 @@
 // Created by Carter Mbotho on 2024-01-09.
 //
 
-
 #include "check.h"
 
 void checkIfStmt(AstVisitor *visitor, AstNode *node)

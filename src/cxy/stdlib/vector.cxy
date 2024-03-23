@@ -121,7 +121,7 @@ pub class Vector[T] {
 
     const func indexOf(elem: T) : u64? {
         for (var i: 0.._size) {
-            if (elem == _data.[i]))
+            if (elem == _data.[i])
                 return (<u64> i)
         }
         return null

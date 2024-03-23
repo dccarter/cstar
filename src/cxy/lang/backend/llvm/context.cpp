@@ -60,6 +60,8 @@ llvm::Type *LLVMContext::convertToLLVMType(const Type *type)
         return createClassType(type);
     case typStruct:
         return createStructType(type);
+    case typInterface:
+        return createInterfaceType(type);
     default:
         return nullptr;
     }
@@ -172,6 +174,13 @@ llvm::Type *LLVMContext::createTupleType(const Type *type)
 llvm::Type *LLVMContext::createClassType(const Type *type)
 {
     std::vector<llvm::Type *> members{};
+    const Type *base = type->tClass.inheritance->base;
+    if (base)
+        members.push_back(getLLVMType(base));
+
+    for (u64 i = 0; i < type->tClass.inheritance->interfacesCount; i++)
+        members.push_back(getLLVMType(type->tClass.inheritance->interfaces[i]));
+
     for (u64 i = 0; i < type->tClass.members->count; i++) {
         NamedTypeMember *member = &type->tClass.members->members[i];
         if (!nodeIs(member->decl, FieldDecl))
@@ -194,6 +203,17 @@ llvm::Type *LLVMContext::createClassType(const Type *type)
 llvm::Type *LLVMContext::createStructType(const Type *type)
 {
     std::vector<llvm::Type *> members{};
+    llvm::StructType *structType = nullptr;
+    if (type->tStruct.decl == nullptr) {
+        structType =
+            llvm::StructType::create(context, makeTypeName(type, "Struct."));
+    }
+    else {
+        structType =
+            llvm::StructType::create(context, makeTypeName(type->tStruct.decl));
+    }
+    updateType(type, structType);
+
     for (u64 i = 0; i < type->tStruct.members->count; i++) {
         NamedTypeMember *member = &type->tStruct.members->members[i];
         if (!nodeIs(member->decl, FieldDecl))
@@ -205,14 +225,29 @@ llvm::Type *LLVMContext::createStructType(const Type *type)
             members.push_back(getLLVMType(member->type));
     }
 
-    if (type->tStruct.decl == nullptr) {
-        return llvm::StructType::create(
-            context, members, makeTypeName(type, "Struct."));
+    structType->setBody(members);
+    return structType;
+}
+
+llvm::Type *LLVMContext::createInterfaceType(const Type *type)
+{
+    csAssert0(type->tInterface.decl);
+    AstNode *node = type->tInterface.decl;
+    auto interfaceType = llvm::StructType::create(context, makeTypeName(node));
+    node->codegen = interfaceType;
+    updateType(type, interfaceType->getPointerTo());
+
+    std::vector<llvm::Type *> members{};
+    for (u64 i = 0; i < type->tInterface.members->count; i++) {
+        NamedTypeMember *member = &type->tInterface.members->members[i];
+        if (!nodeIs(member->decl, FuncDecl))
+            continue;
+
+        members.push_back(getLLVMType(member->type)->getPointerTo());
     }
-    else {
-        return llvm::StructType::create(
-            context, members, makeTypeName(type->tStruct.decl));
-    }
+
+    interfaceType->setBody(members);
+    return interfaceType->getPointerTo();
 }
 
 llvm::Type *LLVMContext::createFunctionType(const Type *type)

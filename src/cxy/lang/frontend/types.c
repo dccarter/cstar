@@ -939,8 +939,6 @@ const NamedTypeMember *findNamedTypeMemberInContainer(
 const TypeInheritance *getTypeInheritance(const Type *type)
 {
     switch (type->tag) {
-    case typStruct:
-        return type->tStruct.inheritance;
     case typClass:
         return type->tClass.inheritance;
     default:
@@ -980,9 +978,6 @@ const Type *getTypeBase(const Type *type)
     switch (type->tag) {
     case typClass:
         return type->tClass.inheritance ? type->tClass.inheritance->base : NULL;
-    case typStruct:
-        return type->tStruct.inheritance ? type->tStruct.inheritance->base
-                                         : NULL;
     case typThis:
         return getTypeBase(type->_this.that);
     case typEnum:

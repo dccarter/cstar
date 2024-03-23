@@ -85,6 +85,7 @@ struct StrPool;
     f(Attr)                 \
     f(Path)                 \
     f(PathElem)             \
+    f(Substitution)         \
     f(GenericParam)         \
     f(Identifier)           \
     f(ImportEntity)         \
@@ -125,6 +126,7 @@ struct Scope;
 struct AstVisitor;
 
 typedef struct AstNode AstNode;
+
 typedef AstNode *(*EvaluateMacro)(struct AstVisitor *,
                                   const AstNode *,
                                   AstNode *);
@@ -185,7 +187,9 @@ typedef struct FunctionSignature {
 
 typedef struct SortedNodes {
     u64 count;
+
     int (*compare)(const void *lhs, const void *rhs);
+
     struct AstNode *nodes[0];
 } SortedNodes;
 
@@ -229,6 +233,11 @@ struct AstNode {
             AstNode *container;
             Env *env;
         } define;
+
+        struct {
+            AstNode *variables;
+            AstNode *body;
+        } substitution;
 
         struct {
             ImportKind kind;
@@ -399,7 +408,6 @@ struct AstNode {
         struct {
             const char *name;
             struct AstNode *params;
-            struct AstNode *ret;
             union {
                 struct AstNode *body;
                 struct AstNode *definition;
@@ -460,21 +468,19 @@ struct AstNode {
 
         struct {
             cstring name;
-            struct AstNode *implements;
-            struct AstNode *base;
             struct AstNode *members;
             struct AstNode *typeParams;
-            const struct Type *thisType;
+            const Type *thisType;
             struct AstNode *closureForward;
         } structDecl;
 
         struct {
             cstring name;
-            struct AstNode *implements;
-            struct AstNode *base;
             struct AstNode *members;
             struct AstNode *typeParams;
-            const struct Type *thisType;
+            const Type *thisType;
+            struct AstNode *implements;
+            struct AstNode *base;
         } classDecl;
 
         struct {
@@ -644,6 +650,7 @@ struct AstNode {
 #define CXY_AST_NODE_BODY_SIZE (sizeof(AstNode) - sizeof(((AstNode *)0)->_head))
 
 void clearAstBody(AstNode *node);
+
 AstNode *makeAstNode(MemPool *pool, const FileLoc *loc, const AstNode *node);
 
 AstNode *makeVoidAstNode(MemPool *pool,
@@ -657,11 +664,13 @@ AstNode *makeIntegerLiteral(MemPool *pool,
                             i64 value,
                             AstNode *next,
                             const Type *type);
+
 AstNode *makeUnsignedIntegerLiteral(MemPool *pool,
                                     const FileLoc *loc,
                                     u64 value,
                                     AstNode *next,
                                     const Type *type);
+
 AstNode *makeCharLiteral(MemPool *pool,
                          const FileLoc *loc,
                          i32 value,
@@ -777,6 +786,24 @@ AstNode *makeStructField(MemPool *pool,
                          AstNode *type,
                          AstNode *def,
                          AstNode *next);
+
+AstNode *makeStructDecl(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        cstring name,
+                        AstNode *members,
+                        AstNode *next,
+                        const Type *type);
+
+AstNode *makeClassDecl(MemPool *pool,
+                       const FileLoc *loc,
+                       u64 flags,
+                       cstring name,
+                       AstNode *members,
+                       AstNode *base,
+                       AstNode *interfaces,
+                       AstNode *next,
+                       const Type *type);
 
 AstNode *makeGroupExpr(MemPool *pool,
                        const FileLoc *loc,
@@ -1024,6 +1051,7 @@ AstNode *copyAstNode(MemPool *pool, const AstNode *node);
 AstNode *duplicateAstNode(MemPool *pool, const AstNode *node);
 
 void initCloneAstNodeMapping(CloneAstConfig *config);
+
 void deinitCloneAstNodeConfig(CloneAstConfig *config);
 
 AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node);
@@ -1039,6 +1067,7 @@ AstNode *deepCloneAstNode(MemPool *pool, const AstNode *node);
 AstNode *cloneGenericDeclaration(MemPool *pool, const AstNode *node);
 
 AstNode *replaceAstNode(AstNode *node, const AstNode *with);
+
 void replaceAstNodeInList(AstNode **list, const AstNode *node, AstNode *with);
 
 AstNode *replaceAstNodeWith(AstNode *node, const AstNode *with);
@@ -1047,19 +1076,36 @@ static inline bool nodeIs_(const AstNode *node, AstTag tag)
 {
     return node && node->tag == tag;
 }
+
 #define nodeIs(NODE, TAG) nodeIs_((NODE), ast##TAG)
 
 #define hasFlag(ITEM, FLG) ((ITEM) && ((ITEM)->flags & (flg##FLG)))
 #define hasFlags(ITEM, FLGS) ((ITEM) && ((ITEM)->flags & (FLGS)))
 
 bool isTuple(const AstNode *node);
+
 bool isAssignableExpr(const AstNode *node);
+
 bool isLiteralExpr(const AstNode *node);
+
 bool isEnumLiteral(const AstNode *node);
+
 bool isIntegralLiteral(const AstNode *node);
+
+bool isNumericLiteral(const AstNode *node);
+
 bool isTypeExpr(const AstNode *node);
+
 bool isBuiltinTypeExpr(const AstNode *node);
+
 bool isMemberFunction(const AstNode *node);
+
+f64 nodeGetNumericLiteral(const AstNode *node);
+
+void nodeSetNumericLiteral(AstNode *node,
+                           AstNode *lhs,
+                           AstNode *rhs,
+                           f64 value);
 
 bool comptimeCompareTypes(const AstNode *lhs, const AstNode *rhs);
 
@@ -1069,6 +1115,7 @@ static inline bool isClassOrStructAstNode(const AstNode *node)
 }
 
 u64 countAstNodes(const AstNode *node);
+
 u64 countProgramDecls(const AstNode *program);
 
 AstNode *getLastAstNode(AstNode *node);
@@ -1096,10 +1143,15 @@ void unlinkAstNode(AstNode **head, AstNode *prev, AstNode *node);
 const char *getDeclKeyword(AstTag tag);
 
 const char *getDeclarationName(const AstNode *node);
+
 void setDeclarationName(AstNode *node, cstring name);
+
 void setForwardDeclDefinition(AstNode *node, AstNode *definition);
+
 AstNode *getForwardDeclDefinition(AstNode *node);
+
 AstNode *getGenericDeclarationParams(AstNode *node);
+
 void setGenericDeclarationParams(AstNode *node, AstNode *params);
 
 const AstNode *findAttribute(const AstNode *node, cstring name);
@@ -1116,6 +1168,7 @@ FunctionSignature *makeFunctionSignature(MemPool *pool,
                                          const FunctionSignature *from);
 
 AstNode *getParentScope(AstNode *node);
+
 AstNode *getMemberParentScope(AstNode *node);
 
 AstNode *makeTypeReferenceNode(MemPool *pool,
@@ -1128,12 +1181,17 @@ AstNode *makeTypeReferenceNode2(MemPool *pool,
                                 AstNode *next);
 
 AstNode *findInAstNode(AstNode *node, cstring name);
+
 AstNode *resolvePath(const AstNode *path);
+
 AstNode *getResolvedPath(const AstNode *path);
+
 AstNode *getMemberFunctionThis(AstNode *node);
 
 int isInInheritanceChain(const AstNode *node, const AstNode *parent);
+
 AstNode *getBaseClassAtLevel(AstNode *node, u64 level);
+
 AstNode *getBaseClassByName(AstNode *node, cstring name);
 
 attr(always_inline) static i64 integerLiteralValue(const AstNode *node)
@@ -1151,6 +1209,7 @@ attr(always_inline) static u64 unsignedIntegerLiteralValue(const AstNode *node)
 }
 
 int compareNamedAstNodes(const void *lhs, const void *rhs);
+
 SortedNodes *makeSortedNodes(MemPool *pool,
                              AstNode *nodes,
                              int (*compare)(const void *, const void *));
@@ -1172,5 +1231,7 @@ static bool isStructDeclaration(AstNode *node)
 }
 
 bool nodeIsLeftValue(const AstNode *node);
+
 bool nodeIsNoop(const AstNode *node);
+
 CCodeKind getCCodeKind(TokenTag tag);

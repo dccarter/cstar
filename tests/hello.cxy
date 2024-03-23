@@ -1,5 +1,19 @@
-struct User {}
+
+class OutputStream {
+    virtual func hello() { }
+    virtual func write(data: &const void, len: u64) : i64
+    // the rest goes here
+}
+
+class StringStream : OutputStream {
+    func `init`(){ }
+
+    @override
+    const func write(data: &const void, len: u64) {
+        println("Hello World")
+    }
+}
+
 pub func main(argc: i32, argv: &string) {
-    var f, g = (() => (20, 20))();
-    println(f, g)
+    var os = StringStream();
 }

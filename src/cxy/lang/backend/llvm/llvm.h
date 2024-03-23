@@ -4,9 +4,13 @@
 
 #pragma once
 
+#include <llvm/Analysis/CGSCCPassManager.h>
+#include <llvm/Analysis/LoopAnalysisManager.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/MC/TargetRegistry.h>
+#include <llvm/Passes/StandardInstrumentations.h>
+#include <llvm/Transforms/IPO.h>
 
 extern "C" {
 #include "driver/driver.h"
@@ -22,9 +26,9 @@ public:
     llvm::LLVMContext &context() { return *_context; }
     void dumpMainModuleIR(cstring output_path);
     bool linkModules();
-
+    bool makeExecutable();
     llvm::TargetMachine *getTargetMachine() { return TM; }
-    
+
     ~LLVMBackend()
     {
         _linkedModule = nullptr;
@@ -32,6 +36,14 @@ public:
     }
 
 private:
+    std::string getCCompiler();
+    bool emitMachineCode(llvm::SmallString<128> outputPath,
+                         llvm::CodeGenFileType fileType,
+                         llvm::Reloc::Model model);
+    bool moveFile(llvm::Twine src, llvm::Twine dst);
+    bool linkGeneratedOutput(llvm::SmallString<128> generatedOutputPath);
+    void optimizeModule(llvm::Module &module);
+
     std::unique_ptr<llvm::Module> _linkedModule{nullptr};
     std::vector<std::unique_ptr<llvm::Module>> modules{};
     std::shared_ptr<llvm::LLVMContext> _context{nullptr};

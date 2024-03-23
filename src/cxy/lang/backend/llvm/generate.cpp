@@ -5,7 +5,8 @@
 #include "context.h"
 #include "llvm.h"
 
-#include "llvm/IR/Verifier.h"
+#include <llvm/IR/Attributes.h>
+#include <llvm/IR/Verifier.h>
 
 #include <vector>
 
@@ -180,7 +181,8 @@ static void visitIdentifierExpr(AstVisitor *visitor, AstNode *node)
         !nodeIs(target, ExternDecl)) {
         value = ctx.createLoad(node->type, value);
     }
-
+    if (value == nullptr && hasFlag(target, Abstract))
+        value = ctx.createUndefined(target->type);
     ctx.returnValue(value);
 }
 
@@ -776,6 +778,9 @@ void visitVariableDecl(AstVisitor *visitor, AstNode *node)
 
 void visitFuncDecl(AstVisitor *visitor, AstNode *node)
 {
+    if (hasFlag(node, Abstract))
+        return;
+
     auto &ctx = cxy::LLVMContext::from(visitor);
     auto type = node->type;
     llvm::Function *func = ctx.module().getFunction(ctx.makeTypeName(node))
@@ -788,6 +793,9 @@ void visitFuncDecl(AstVisitor *visitor, AstNode *node)
         ctx.returnValue(func);
         return;
     }
+
+    if (findAttribute(node, S_inline) != nullptr)
+        func->addFnAttr(llvm::Attribute::AlwaysInline);
 
     auto bb = llvm::BasicBlock::Create(ctx.context, "entry", func);
     auto end = llvm::BasicBlock::Create(ctx.context, "end");
@@ -838,9 +846,13 @@ void visitFuncDecl(AstVisitor *visitor, AstNode *node)
 
 void visitExternDecl(AstVisitor *visitor, AstNode *node)
 {
+    if (hasFlag(node, Abstract)) {
+        return;
+    }
+
     auto &ctx = cxy::LLVMContext::from(visitor);
     auto type = static_cast<llvm::FunctionType *>(node->type->codegen);
-    if (type == nullptr) {
+    if (type == nullptr || node->externDecl.func->codegen == nullptr) {
         node->codegen = generateFunctionProto(visitor, node->externDecl.func);
     }
     else {
@@ -863,6 +875,12 @@ void visitStructDecl(AstVisitor *visitor, AstNode *node)
 }
 
 void visitClassDecl(AstVisitor *visitor, AstNode *node)
+{
+    auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.getLLVMType(node->type);
+}
+
+void visitInterfaceDecl(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     ctx.getLLVMType(node->type);
@@ -968,9 +986,11 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
         [astExternDecl] = visitExternDecl,
         [astStructDecl] = visitStructDecl,
         [astClassDecl] = visitClassDecl,
+        [astInterfaceDecl] = visitInterfaceDecl,
         [astEnumDecl] = visitEnumDecl,
         [astGenericDecl] = astVisitSkip,
         [astImportDecl] = astVisitSkip,
+        [astMacroDecl] = astVisitSkip
     }, .fallback = astVisitFallbackVisitAll, .dispatch = dispatch);
     // clang-format on
 

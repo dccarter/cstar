@@ -151,10 +151,14 @@ bool checkMemberFunctions(AstVisitor *visitor,
                         : makePointerType(
                               ctx->types, node->type, member->flags & flgConst);
             }
-            const Type *type = checkFunctionBody(visitor, member);
-            if (typeIs(type, Error)) {
-                node->type = ERROR_TYPE(ctx);
-                return false;
+
+            const Type *type = member->type;
+            if (!hasFlag(member, Abstract)) {
+                type = checkFunctionBody(visitor, member);
+                if (typeIs(type, Error)) {
+                    node->type = ERROR_TYPE(ctx);
+                    return false;
+                }
             }
 
             if (member->funcDecl.operatorOverload == opRange &&
@@ -405,6 +409,7 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     if (node->funcDecl.name == S_main) {
         node->flags |= flgMain;
+        ctx->root.program->flags |= flgExecutable;
     }
 
     const Type *type = checkFunctionSignature(visitor, node);

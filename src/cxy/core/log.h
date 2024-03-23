@@ -101,11 +101,15 @@ static inline FileLoc *locExtend_(FileLoc *dst,
                                   const FileLoc *start,
                                   const FileLoc *end)
 {
-    csAssert0(start->fileName == end->fileName);
-    csAssert0(start->begin.byteOffset <= end->end.byteOffset);
-
-    *dst = (FileLoc){
-        .fileName = start->fileName, .begin = start->begin, .end = end->end};
+    if (start->fileName == end->fileName) {
+        csAssert0(start->begin.byteOffset <= end->end.byteOffset);
+        *dst = (FileLoc){.fileName = start->fileName,
+                         .begin = start->begin,
+                         .end = end->end};
+    }
+    else {
+        *dst = *start;
+    }
     return dst;
 }
 

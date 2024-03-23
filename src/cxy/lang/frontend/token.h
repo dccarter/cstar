@@ -69,6 +69,7 @@
     f(BangColon,       "!:")        \
 
 #define KEYWORD_LIST(f)             \
+    f(Virtual, "virtual")           \
     f(Auto, "auto")                 \
     f(True, "true")                 \
     f(False, "false")               \
@@ -115,6 +116,7 @@
     f(ThisClass,  "This")           \
     f(Super,     "super")           \
     f(Class,     "class")           \
+    f(Defined,   "defined")         \
     PRIM_TYPE_LIST(f)
 
 #define SPECIAL_TOKEN_LIST(f)                   \

@@ -7,7 +7,7 @@
 typedef struct Log Log;
 struct StrPool;
 
-typedef enum { cmdDev, cmdBuild } Command;
+typedef enum { cmdDev, cmdBuild, cmdRun } Command;
 // clang-format off
 #define DUMP_OPTIONS(ff)    \
     ff(NONE)                \
@@ -22,6 +22,20 @@ typedef enum {
 #undef ff
 } DumpModes;
 
+typedef enum OptimizationLevel {
+    O0,
+    Od = O0,
+    O1,
+    O2,
+    O3,
+    Os
+} OptimizationLevel;
+
+typedef struct CompilerDefine {
+    cstring name;
+    cstring value;
+} CompilerDefine;
+
 // clang-format on
 
 typedef struct Options {
@@ -31,23 +45,22 @@ typedef struct Options {
     const char *buildDir;
     const char *rest;
     DynArray cflags;
-    DynArray ldflags;
+    DynArray libraries;
+    DynArray librarySearchPaths;
     DynArray defines;
     bool withoutBuiltins;
+    bool noPIE;
+    OptimizationLevel optimizationLevel;
     struct {
         bool printIR;
+        bool emitBitCode;
+        bool emitAssembly;
         bool cleanAst;
         bool withLocation;
         bool withoutAttrs;
         bool withNamedEnums;
-        union {
-            cstring dump;
-            DumpModes dumpMode;
-        };
-        struct {
-            cstring str;
-            u64 num;
-        } lastStage;
+        DumpModes dumpMode;
+        u64 lastStage;
     } dev;
     bool progress;
 } Options;

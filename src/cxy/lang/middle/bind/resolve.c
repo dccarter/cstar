@@ -251,7 +251,7 @@ void bindFunctionDecl(AstVisitor *visitor, AstNode *node)
     BindContext *ctx = getAstVisitorContext(visitor);
     pushScope(ctx->env, node);
 
-    if (findEnclosingClassOrStruct(ctx->env, NULL, S_this, NULL) &&
+    if (findEnclosingClassOrStructOrInterface(ctx->env, NULL, S_this, NULL) &&
         findAttribute(node, S_static) == NULL) {
         node->funcDecl.this_ =
             makeFunctionParam(ctx->pool,
@@ -277,19 +277,6 @@ void bindFuncType(AstVisitor *visitor, AstNode *node)
     pushScope(ctx->env, node);
     astVisit(visitor, node->funcType.ret);
     astVisitManyNodes(visitor, node->funcType.params);
-    popScope(ctx->env);
-}
-
-void bindMacroDecl(AstVisitor *visitor, AstNode *node)
-{
-    BindContext *ctx = getAstVisitorContext(visitor);
-
-    pushScope(ctx->env, node);
-
-    astVisit(visitor, node->macroDecl.ret);
-    astVisitManyNodes(visitor, node->macroDecl.params);
-    astVisit(visitor, node->macroDecl.body);
-
     popScope(ctx->env);
 }
 
@@ -369,8 +356,10 @@ void bindStructOrClassDecl(AstVisitor *visitor, AstNode *node)
     BindContext *ctx = getAstVisitorContext(visitor);
     AstNode *member = node->structDecl.members;
 
-    astVisit(visitor, node->structDecl.base);
-    astVisitManyNodes(visitor, node->structDecl.implements);
+    if (nodeIs(node, ClassDecl)) {
+        astVisit(visitor, node->classDecl.base);
+        astVisitManyNodes(visitor, node->classDecl.implements);
+    }
 
     pushScope(ctx->env, node);
     defineSymbol(ctx->env, ctx->L, S_This, node);
@@ -613,7 +602,7 @@ void bindAstPhase2(CompilerDriver *driver, Env *env, AstNode *node)
         [astPath] = bindPath,
         [astFuncType] = bindFuncType,
         [astFuncDecl] = bindFunctionDecl,
-        [astMacroDecl] = bindMacroDecl,
+        [astMacroDecl] = astVisitSkip,
         [astFuncParamDecl] = bindFuncParam,
         [astVarDecl] = bindVarDecl,
         [astTypeDecl] = bindTypeDecl,

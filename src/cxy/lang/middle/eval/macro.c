@@ -280,52 +280,57 @@ static AstNode *makeAstIntegerNode(AstVisitor *visitor,
     return args;
 }
 
-static AstNode *makeIsTypeNode(AstVisitor *visitor,
-                               attr(unused) const AstNode *node,
-                               attr(unused) AstNode *args,
-                               cstring name,
-                               TTag tag)
+static AstNode *makeInitializeDefaults(AstVisitor *visitor,
+                                       attr(unused) const AstNode *node,
+                                       attr(unused) AstNode *args)
 {
     EvalContext *ctx = getAstVisitorContext(visitor);
     if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
         return NULL;
 
-    if (!typeIs(args->type, Info)) {
-        logError(ctx->L,
-                 &args->loc,
-                 "macro native '{s}!' expecting a typeinfo object",
-                 (FormatArg[]){{.s = name}});
-        return NULL;
+    const Type *type = args->type ?: evalType(ctx, args);
+    csAssert0(type);
+    const Type *raw = stripAll(type);
+    AstNode *decl = getTypeDecl(raw);
+    AstNodeList init = {NULL};
+    for (AstNode *member = decl->structDecl.members; member;
+         member = member->next) {
+        if (nodeIs(member, FieldDecl) && member->structField.value)
+            insertAstNode(
+                &init,
+                makeAssignExpr(
+                    ctx->pool,
+                    &member->loc,
+                    member->flags,
+                    makeMemberExpr(
+                        ctx->pool,
+                        &member->loc,
+                        type->flags,
+                        deepCloneAstNode(ctx->pool, args),
+                        makeResolvedIdentifier(ctx->pool,
+                                               &member->loc,
+                                               member->structField.name,
+                                               0,
+                                               member,
+                                               NULL,
+                                               member->type),
+                        NULL,
+                        member->type),
+                    opAssign,
+                    deepCloneAstNode(ctx->pool, member->structField.value),
+                    NULL,
+                    member->type));
     }
 
     clearAstBody(args);
-    args->flags = flgNone;
-    args->tag = astBoolLit;
-    args->boolLiteral.value = args->type->info.target->tag == tag;
-    args->type = getPrimitiveType(ctx->types, prtBool);
-
+    if (init.first) {
+        args->tag = astBlockStmt;
+        args->blockStmt.stmts = init.first;
+    }
+    else {
+        args->tag = astNoop;
+    }
     return args;
-}
-
-static AstNode *makeIsPointerNode(AstVisitor *visitor,
-                                  attr(unused) const AstNode *node,
-                                  attr(unused) AstNode *args)
-{
-    return makeIsTypeNode(visitor, node, args, "is_pointer", typPointer);
-}
-
-static AstNode *makeIsEnumNode(AstVisitor *visitor,
-                               attr(unused) const AstNode *node,
-                               attr(unused) AstNode *args)
-{
-    return makeIsTypeNode(visitor, node, args, "is_enum", typEnum);
-}
-
-static AstNode *makeIsStructNode(AstVisitor *visitor,
-                                 attr(unused) const AstNode *node,
-                                 attr(unused) AstNode *args)
-{
-    return makeIsTypeNode(visitor, node, args, "is_struct", typStruct);
 }
 
 static AstNode *makeTypeinfoNode(AstVisitor *visitor,
@@ -789,9 +794,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "error", makeAstLogErrorNode},
     {.name = "file", makeFilenameNode},
     {.name = "info", makeAstLogNoteNode},
-    {.name = "is_enum", makeIsEnumNode},
-    {.name = "is_pointer", makeIsPointerNode},
-    {.name = "is_struct", makeIsStructNode},
+    {.name = "init_defaults", makeInitializeDefaults},
     {.name = "len", makeLenNode},
     {.name = "line", makeLineNumberNode},
     {.name = "mk_ident", makeAstIdentifierNode},

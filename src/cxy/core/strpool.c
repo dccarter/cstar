@@ -51,7 +51,7 @@ const char *makeTrimmedString(StrPool *pool, const char *str)
     while (*s && !isspace(*s))
         s++;
 
-    return makeStringSized(pool, str, s - str - 1);
+    return makeStringSized(pool, str, s - str);
 }
 
 const char *makeStringSized(StrPool *pool, const char *str, u64 len)
@@ -104,9 +104,9 @@ const char *makeStringConcat_(StrPool *pool, const char *s1, ...)
     va_start(ap, s1);
     const char *s = va_arg(ap, const char *);
     while (s) {
-        size_t sz = strlen(s) - 2;
+        size_t sz = strlen(s);
         csAssert0(len < MAX_ANONYMOUS_PREFIX_SIZE);
-        memcpy(&variable[len], s + 1, sz);
+        memcpy(&variable[len], s, sz);
         s = va_arg(ap, const char *);
         len += sz;
     }

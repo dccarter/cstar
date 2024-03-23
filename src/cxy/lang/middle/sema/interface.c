@@ -127,6 +127,14 @@ void checkInterfaceDecl(AstVisitor *visitor, AstNode *node)
                                    node,
                                    node->flags & flgTypeApplicable);
 
+    member = node->interfaceDecl.members;
+    for (u64 i = 0; member; member = member->next, i++) {
+        if (member->funcDecl.this_) {
+            member->funcDecl.this_->type = makePointerType(
+                ctx->types, node->type, member->flags & flgConst);
+        }
+    }
+
 checkInterfaceMembersError:
     if (members)
         free(members);

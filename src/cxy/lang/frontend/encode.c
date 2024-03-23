@@ -322,7 +322,6 @@ static void visitMacroDecl(ConstAstVisitor *visitor, const AstNode *node)
 
     packString(&ctx->packer, node->macroDecl.name);
     manyNodesToBinary(visitor, node->macroDecl.params);
-    nodeToBinary(visitor, node->macroDecl.ret);
     nodeToBinary(visitor, node->macroDecl.body);
 }
 
@@ -401,7 +400,8 @@ static void visitClassOrStructDecl(ConstAstVisitor *visitor,
     if (nodeIs(node, ClassDecl))
         nodeToBinary(visitor, node->classDecl.base);
     manyNodesToBinary(visitor, node->structDecl.members);
-    manyNodesToBinary(visitor, node->structDecl.implements);
+    if (nodeIs(node, ClassDecl))
+        manyNodesToBinary(visitor, node->classDecl.implements);
 }
 
 static void visitBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -629,7 +629,7 @@ bool binaryEncodeAstNode(struct msgpack_sbuffer *sbuf,
         [astWhileStmt] = visitWhileStmt,
         [astSwitchStmt] = visitSwitchStmt,
         [astCaseStmt] = visitCaseStmt
-    }, .fallback = visitFallback );
+    }, .fallback = visitFallback);
 
     // clang-format on
     astConstVisit(&visitor, node);

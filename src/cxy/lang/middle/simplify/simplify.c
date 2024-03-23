@@ -389,6 +389,7 @@ static void visitIdentifier(AstVisitor *visitor, AstNode *node)
                                         &target->loc,
                                         &(AstNode){.tag = astExternDecl,
                                                    .type = target->type,
+                                                   .flags = target->flags,
                                                    .externDecl.func = target});
 
             addFunctionToExternDecl(ctx, target, decl);
@@ -583,6 +584,7 @@ AstNode *simplifyAst(CompilerDriver *driver, AstNode *node)
         [astClassDecl] = visitStructDecl,
         [astFuncDecl] = visitFuncDecl,
         [astGenericDecl] = astVisitSkip,
+        [astMacroDecl] = astVisitSkip
     }, .fallback = astVisitFallbackVisitAll);
     // clang-format on
 

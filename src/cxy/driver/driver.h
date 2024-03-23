@@ -6,6 +6,11 @@
 
 #include <core/strpool.h>
 
+typedef struct CompilerPreprocessor {
+    MemPool *pool;
+    HashTable symbols;
+} CompilerPreprocessor;
+
 typedef struct CompilerDriver {
     Options options;
     MemPool *pool;
@@ -21,6 +26,8 @@ typedef struct CompilerDriver {
     CompilerStats stats;
     Log *L;
     TypeTable *types;
+    AstNode *mainModule;
+    CompilerPreprocessor preprocessor;
     void *backend;
 } CompilerDriver;
 
@@ -62,3 +69,6 @@ const Type *compileModule(CompilerDriver *driver,
 
 void *initCompilerBackend(CompilerDriver *driver, int argc, char **argv);
 void deinitCompilerBackend(CompilerDriver *driver);
+bool compilerBackendMakeExecutable(CompilerDriver *driver);
+void initCompilerPreprocessor(struct CompilerDriver *driver);
+void deinitCompilerPreprocessor(struct CompilerDriver *driver);

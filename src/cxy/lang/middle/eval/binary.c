@@ -115,8 +115,8 @@ static void evalAddOperation(EvalContext *ctx, AstNode *node)
         return;
     }
 
-    f64 value = getNumericLiteral(lhs) + getNumericLiteral(rhs);
-    setNumericLiteralValue(node, lhs, rhs, value);
+    f64 value = nodeGetNumericLiteral(lhs) + nodeGetNumericLiteral(rhs);
+    nodeSetNumericLiteral(node, lhs, rhs, value);
 }
 
 static void evalSubOperation(EvalContext *ctx, AstNode *node)
@@ -140,8 +140,8 @@ static void evalSubOperation(EvalContext *ctx, AstNode *node)
             NULL);
     }
 
-    f64 value = getNumericLiteral(lhs) - getNumericLiteral(rhs);
-    setNumericLiteralValue(node, lhs, rhs, value);
+    f64 value = nodeGetNumericLiteral(lhs) - nodeGetNumericLiteral(rhs);
+    nodeSetNumericLiteral(node, lhs, rhs, value);
 }
 
 static void evalMulOperation(EvalContext *ctx, AstNode *node)
@@ -172,8 +172,8 @@ static void evalMulOperation(EvalContext *ctx, AstNode *node)
                    NULL);
     }
 
-    f64 value = getNumericLiteral(lhs) * getNumericLiteral(rhs);
-    setNumericLiteralValue(node, lhs, rhs, value);
+    f64 value = nodeGetNumericLiteral(lhs) * nodeGetNumericLiteral(rhs);
+    nodeSetNumericLiteral(node, lhs, rhs, value);
 }
 
 static void evalDivOperation(EvalContext *ctx, AstNode *node)
@@ -207,11 +207,12 @@ static void evalDivOperation(EvalContext *ctx, AstNode *node)
     if (nodeIs(lhs, FloatLit) || nodeIs(rhs, FloatLit)) {
         node->tag = astFloatLit;
         node->floatLiteral.value =
-            getNumericLiteral(lhs) / getNumericLiteral(rhs);
+            nodeGetNumericLiteral(lhs) / nodeGetNumericLiteral(rhs);
     }
     else {
-        i64 value = (i64)getNumericLiteral(lhs) / (i64)getNumericLiteral(rhs);
-        setNumericLiteralValue(node, lhs, rhs, (f64)value);
+        i64 value =
+            (i64)nodeGetNumericLiteral(lhs) / (i64)nodeGetNumericLiteral(rhs);
+        nodeSetNumericLiteral(node, lhs, rhs, (f64)value);
     }
 }
 
@@ -238,11 +239,11 @@ static void evalModOperation(EvalContext *ctx, AstNode *node)
         return;
     }
 
-    setNumericLiteralValue(
-        node,
-        lhs,
-        rhs,
-        (f64)((i64)getNumericLiteral(lhs) % (i64)getNumericLiteral(rhs)));
+    nodeSetNumericLiteral(node,
+                          lhs,
+                          rhs,
+                          (f64)((i64)nodeGetNumericLiteral(lhs) %
+                                (i64)nodeGetNumericLiteral(rhs)));
 }
 
 static bool checkBinaryBitOperation(EvalContext *ctx, AstNode *node)
@@ -296,11 +297,11 @@ static bool checkBinaryBitOperation(EvalContext *ctx, AstNode *node)
         if (!checkBinaryBitOperation(ctx, node))                               \
             return;                                                            \
                                                                                \
-        setNumericLiteralValue(node,                                           \
-                               lhs,                                            \
-                               rhs,                                            \
-                               (f64)((i64)getNumericLiteral(lhs) OP(i64)       \
-                                         getNumericLiteral(rhs)));             \
+        nodeSetNumericLiteral(node,                                            \
+                              lhs,                                             \
+                              rhs,                                             \
+                              (f64)((i64)nodeGetNumericLiteral(lhs) OP(i64)    \
+                                        nodeGetNumericLiteral(rhs)));          \
     }
 
 CXY_DEFINE_BINARY_BIT_OPERATOR(Shl, <<)
@@ -327,7 +328,8 @@ static void evalLAndOperation(EvalContext *ctx, AstNode *node)
     }
 
     node->tag = astBoolLit;
-    node->boolLiteral.value = getNumericLiteral(lhs) && getNumericLiteral(rhs);
+    node->boolLiteral.value =
+        nodeGetNumericLiteral(lhs) && nodeGetNumericLiteral(rhs);
 }
 
 static void evalLOrOperation(EvalContext *ctx, AstNode *node)
@@ -344,7 +346,8 @@ static void evalLOrOperation(EvalContext *ctx, AstNode *node)
     }
 
     node->tag = astBoolLit;
-    node->boolLiteral.value = getNumericLiteral(lhs) || getNumericLiteral(rhs);
+    node->boolLiteral.value =
+        nodeGetNumericLiteral(lhs) || nodeGetNumericLiteral(rhs);
 }
 
 static bool checkComparisonOperation(EvalContext *ctx, AstNode *node)
@@ -399,7 +402,7 @@ static bool checkComparisonOperation(EvalContext *ctx, AstNode *node)
         memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);                       \
         node->tag = astBoolLit;                                                \
         node->boolLiteral.value =                                              \
-            getNumericLiteral(lhs) OP getNumericLiteral(rhs);                  \
+            nodeGetNumericLiteral(lhs) OP nodeGetNumericLiteral(rhs);          \
     }
 
 CXY_DEFINE_BINARY_EQ_COMP_OPERATOR(Eq, ==)
@@ -435,7 +438,7 @@ CXY_DEFINE_BINARY_EQ_COMP_OPERATOR(Ne, !=)
         memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);                       \
         node->tag = astBoolLit;                                                \
         node->boolLiteral.value =                                              \
-            getNumericLiteral(lhs) OP getNumericLiteral(rhs);                  \
+            nodeGetNumericLiteral(lhs) OP nodeGetNumericLiteral(rhs);          \
     }
 
 CXY_DEFINE_BINARY_COMP_OPERATOR(Lt, <)

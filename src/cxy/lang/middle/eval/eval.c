@@ -88,7 +88,8 @@ bool comptimeCompareTypes(const AstNode *lhs, const AstNode *rhs)
 
 bool evaluate(AstVisitor *visitor, AstNode *node)
 {
-    if (isLiteralExpr(node) || isBuiltinTypeExpr(node))
+    if (node->tag != astUnaryExpr &&
+        (isLiteralExpr(node) || isBuiltinTypeExpr(node)))
         return true;
 
     astVisit(visitor, node);

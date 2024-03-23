@@ -544,6 +544,46 @@ AstNode *makeStructField(MemPool *pool,
                    .structField = {.name = name, .type = type, .value = def}});
 }
 
+AstNode *makeStructDecl(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        cstring name,
+                        AstNode *members,
+                        AstNode *next,
+                        const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astStructDecl,
+                   .flags = flags,
+                   .type = type,
+                   .next = next,
+                   .structDecl = {.name = name, .members = members}});
+}
+
+AstNode *makeClassDecl(MemPool *pool,
+                       const FileLoc *loc,
+                       u64 flags,
+                       cstring name,
+                       AstNode *members,
+                       AstNode *base,
+                       AstNode *interfaces,
+                       AstNode *next,
+                       const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astClassDecl,
+                                  .flags = flags,
+                                  .type = type,
+                                  .next = next,
+                                  .classDecl = {.name = name,
+                                                .base = base,
+                                                .implements = interfaces,
+                                                .members = members}});
+}
+
 AstNode *makeGroupExpr(
     MemPool *pool, const FileLoc *loc, u64 flags, AstNode *exprs, AstNode *next)
 {
@@ -1185,6 +1225,19 @@ bool isIntegralLiteral(const AstNode *node)
     }
 }
 
+bool isNumericLiteral(const AstNode *node)
+{
+    switch (node->tag) {
+    case astIntegerLit:
+    case astFloatLit:
+    case astCharLit:
+    case astBoolLit:
+        return true;
+    default:
+        return false;
+    }
+}
+
 bool isTypeExpr(const AstNode *node)
 {
     switch (node->tag) {
@@ -1457,6 +1510,10 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
     case astPathElem:
         CLONE_MANY(pathElement, args);
         break;
+    case astSubstitution:
+        CLONE_MANY(substitution, variables);
+        CLONE_ONE(substitution, body);
+        break;
     case astPath:
         CLONE_MANY(path, elements);
         break;
@@ -1505,7 +1562,6 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
         break;
     case astMacroDecl:
         CLONE_MANY(macroDecl, params);
-        CLONE_ONE(macroDecl, ret);
         CLONE_ONE(macroDecl, body);
         break;
     case astVarDecl:
@@ -1523,7 +1579,6 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
 
     case astStructDecl:
         CLONE_MANY(structDecl, members);
-        CLONE_MANY(structDecl, implements);
         break;
 
     case astClassDecl:

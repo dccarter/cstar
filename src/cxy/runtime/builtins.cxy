@@ -32,6 +32,13 @@ pub func __cxy_assert(cond: bool, file: string, line: u64, column: u64) {
     }
 }
 
+#if (!defined DISABLE_ASSERT) {
+    macro assert(cond) __cxy_assert(cond!, file!, line!, column!)
+}
+else {
+    macro assert(cond) ()
+}
+
 /* Builtin Optional Type */
 struct __Optional[T] {
     /* @note: Do not change the order of these members */
@@ -426,7 +433,7 @@ class String {
 
     @inline
     const func `[]`(idx: u32) {
-        __cxy_assert(idx < _size, file!, line!, column!)
+        assert!(idx < _size)
         return this._data.[idx]
     }
 
@@ -456,19 +463,19 @@ pub struct Slice[T] {
 
     @inline
     func `[]=`(index:  i64, data: T) {
-        __cxy_assert(index < len, file!, line!, column!)
+        assert!(index < len)
         this.data.[index] = data
     }
 
     @inline
     func `[]`(index:  i64) {
-        __cxy_assert(index < len, file!, line!, column!)
+        assert!(index < len)
         return this.data.[index]
     }
 
     @inline
     const func `[]`(index:  i64) {
-        __cxy_assert(index < len, file!, line!, column!)
+        assert!(index < len)
         return this.data.[index]
     }
 
@@ -500,8 +507,14 @@ pub struct Slice[T] {
     }
 }
 
-@inline
-pub func allocate[T](len: u32 = 0) => __cxy_alloc(sizeof!(#T)) : T
+pub func allocate[T](len: u32 = 0) => {
+    var obj = __cxy_alloc(sizeof!(#T)) : T;
+    #if (T.isClass || T.isStruct) {
+        // this will ensure that default values are assigned
+        init_defaults!(obj)
+    }
+    return obj
+}
 
 @inline
 pub func deallocate[T](ptr: T) {
@@ -511,6 +524,7 @@ pub func deallocate[T](ptr: T) {
     __cxy_free(ptr: &void)
 }
 
+@inline
 pub func print[T](data: const T) {
     #if (T.isString) {
         #if (T.isClass) {

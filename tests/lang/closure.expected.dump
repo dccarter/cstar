@@ -99,17 +99,17 @@ pub func Slice6_op__init(this: &Slice[string], data: &string, len: u64) {
 
 
 pub func Slice6_op__idx_assign(this: &Slice[string], index: i64, data: string) {
-  __cxy_assert(index < this.len, "__builtins.cxy", 461, 49)
+  __cxy_assert(index < this.len, "__builtins.cxy", 468, 9)
   this.data.[index] = data
 }
 
 pub func Slice6_op__idx(this: &Slice[string], index: i64): string {
-  __cxy_assert(index < this.len, "__builtins.cxy", 467, 49)
+  __cxy_assert(index < this.len, "__builtins.cxy", 474, 9)
   return this.data.[index]
 }
 
 pub func Slice6_op__idx(this: const &Slice[string], index: i64): string {
-  __cxy_assert(index < this.len, "__builtins.cxy", 473, 49)
+  __cxy_assert(index < this.len, "__builtins.cxy", 480, 9)
   return this.data.[index]
 }
 
@@ -155,7 +155,13 @@ pub func __Closure16_op__call(this: &__Closure16): i8 {
 
 
 pub func allocate18(len: u32 = 0): String {
-  return (__cxy_alloc(__bc(0, #String)) : class String)
+  var obj = (__cxy_alloc(__bc(0, #String)) : class String)
+  {
+    obj._capacity = 0
+    obj._size = 0
+    obj._data = null
+  }
+  return obj
 }
 
 struct __Closure19{ }

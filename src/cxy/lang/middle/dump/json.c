@@ -501,8 +501,6 @@ static void visitMacroDecl(ConstAstVisitor *visitor, const AstNode *node)
     cJSON_AddItemToObject(
         jsonNode, "params", manyNodesToJson(visitor, node->macroDecl.params));
     cJSON_AddItemToObject(
-        jsonNode, "ret", nodeToJson(visitor, node->macroDecl.ret));
-    cJSON_AddItemToObject(
         jsonNode, "body", nodeToJson(visitor, node->macroDecl.body));
 
     Return(ctx, jsonNode);
@@ -613,12 +611,11 @@ static void visitClassOrStructDecl(ConstAstVisitor *visitor,
     if (nodeIs(node, ClassDecl)) {
         cJSON_AddItemToObject(
             jsonNode, "base", nodeToJson(visitor, node->classDecl.base));
+        cJSON_AddItemToObject(
+            jsonNode,
+            "implements",
+            manyNodesToJson(visitor, node->classDecl.implements));
     }
-
-    cJSON_AddItemToObject(
-        jsonNode,
-        "implements",
-        manyNodesToJson(visitor, node->structDecl.implements));
     cJSON_AddItemToObject(jsonNode,
                           "members",
                           manyNodesToJson(visitor, node->structDecl.members));
@@ -963,7 +960,7 @@ AstNode *dumpAstJson(CompilerDriver *driver, AstNode *node, FILE *file)
         [astWhileStmt] = visitWhileStmt,
         [astSwitchStmt] = visitSwitchStmt,
         [astCaseStmt] = visitCaseStmt
-    }, .fallback = visitFallback );
+    }, .fallback = visitFallback);
 
     // clang-format on
     astConstVisit(&visitor, node);

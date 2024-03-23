@@ -4,6 +4,7 @@
 
 #include "lang/middle/scope.h"
 
+#include "lang/frontend/defines.h"
 #include "lang/frontend/flag.h"
 
 #include "core/alloc.h"
@@ -345,6 +346,15 @@ AstNode *findEnclosingClass(Env *env,
         env, L, keyword, "class", astClassDecl, astClassDecl, astError, loc);
 }
 
+AstNode *findEnclosingInterface(Env *env,
+                                Log *L,
+                                cstring keyword,
+                                const FileLoc *loc)
+{
+    return findEnclosingScope(
+        env, L, keyword, "class", astClassDecl, astClassDecl, astError, loc);
+}
+
 AstNode *findEnclosingClassOrStruct(Env *env,
                                     Log *L,
                                     cstring keyword,
@@ -357,6 +367,21 @@ AstNode *findEnclosingClassOrStruct(Env *env,
                               astStructDecl,
                               astClassDecl,
                               astError,
+                              loc);
+}
+
+AstNode *findEnclosingClassOrStructOrInterface(Env *env,
+                                               Log *L,
+                                               cstring keyword,
+                                               const FileLoc *loc)
+{
+    return findEnclosingScope(env,
+                              L,
+                              keyword,
+                              "class or struct",
+                              astStructDecl,
+                              astClassDecl,
+                              astInterfaceDecl,
                               loc);
 }
 

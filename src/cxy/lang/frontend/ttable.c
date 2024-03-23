@@ -789,9 +789,6 @@ const Type *makeStructType(TypeTable *table,
                            NamedTypeMember *members,
                            u64 membersCount,
                            AstNode *decl,
-                           const Type *base,
-                           const Type **interfaces,
-                           u64 interfacesCount,
                            u64 flags)
 {
     GetOrInset ret = getOrInsertType(
@@ -801,8 +798,6 @@ const Type *makeStructType(TypeTable *table,
         Type *type = (Type *)ret.s;
         type->tStruct.members =
             makeTypeMembersContainer(table, members, membersCount);
-        type->tStruct.inheritance =
-            makeTypeInheritance(table, base, interfaces, interfacesCount);
         type->tStruct.decl = decl;
     }
 
@@ -839,21 +834,10 @@ const Type *replaceStructType(TypeTable *table,
                               NamedTypeMember *members,
                               u64 membersCount,
                               AstNode *decl,
-                              const Type *base,
-                              const Type **interfaces,
-                              u64 interfacesCount,
                               u64 flags)
 {
     removeFromTypeTable(table, og);
-    return makeStructType(table,
-                          og->name,
-                          members,
-                          membersCount,
-                          decl,
-                          base,
-                          interfaces,
-                          interfacesCount,
-                          flags);
+    return makeStructType(table, og->name, members, membersCount, decl, flags);
 }
 
 const Type *replaceClassType(TypeTable *table,

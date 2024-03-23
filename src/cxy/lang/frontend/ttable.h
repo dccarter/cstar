@@ -32,25 +32,43 @@ typedef struct TypeTable {
 typedef Pair(bool, const Type *) GetOrInset;
 
 TypeTable *newTypeTable(MemPool *pool, StrPool *strPool);
+
 void freeTypeTable(TypeTable *table);
 
 const Type *resolveType(const Type *type);
+
 const Type *resolveAndUnThisType(const Type *type);
+
 const Type *stripPointer(const Type *type);
+
 const Type *stripAll(const Type *type);
+
 const Type *stripOnce(const Type *type, u64 *flags);
+
 const Type *arrayToPointer(TypeTable *table, const Type *type);
+
 const Type *getPrimitiveType(TypeTable *table, PrtId id);
+
 const Type *getAnySliceType(TypeTable *table);
+
 const Type *makeErrorType(TypeTable *table);
+
 const Type *makeAutoType(TypeTable *table);
+
 const Type *makeVoidType(TypeTable *table);
+
 const Type *makeNullType(TypeTable *table);
+
 const Type *makeStringType(TypeTable *table);
+
 const Type *makePointerType(TypeTable *table, const Type *pointed, u64 flags);
+
 const Type *makeOptionalType(TypeTable *table, const Type *target, u64 flags);
+
 const Type *makeTypeInfo(TypeTable *table, const Type *target);
+
 const Type *makeArrayType(TypeTable *table, const Type *elementType, u64 size);
+
 const Type *makeContainerType(TypeTable *table,
                               cstring name,
                               const Type *base,
@@ -101,9 +119,6 @@ const Type *makeStructType(TypeTable *table,
                            NamedTypeMember *members,
                            u64 memberCount,
                            AstNode *decl,
-                           const Type *base,
-                           const Type **interfaces,
-                           u64 interfacesCount,
                            u64 flags);
 
 const Type *makeClassType(TypeTable *table,
@@ -121,9 +136,6 @@ const Type *replaceStructType(TypeTable *table,
                               NamedTypeMember *members,
                               u64 membersCount,
                               AstNode *decl,
-                              const Type *base,
-                              const Type **interfaces,
-                              u64 interfacesCount,
                               u64 flags);
 
 const Type *replaceClassType(TypeTable *table,
@@ -154,7 +166,9 @@ const Type *makeEnum(TypeTable *table, const Type *init);
 const Type *makeGenericType(TypeTable *table, AstNode *decl);
 
 const Type *makeWrappedType(TypeTable *table, const Type *target, u64 flags);
+
 const Type *unwrapType(const Type *type, u64 *flags);
+
 const Type *flattenWrappedType(const Type *type, u64 *flags);
 
 GetOrInset makeAppliedType(TypeTable *table, const Type *init);
@@ -182,9 +196,13 @@ const Type *expectInType(TypeTable *table,
                          const FileLoc *loc);
 
 const Type *getIntegerTypeForLiteral(TypeTable *table, i64 literal);
+
 bool isIntegerTypeInRange(const Type *type, i64 min, i64 max);
+
 int findTypeInArray(const Type **types, u64 count, const Type *type);
+
 u64 pointerLevels(const Type *type);
+
 const Type *removeFromTypeTable(TypeTable *table, const Type *type);
 
 AstNode *getTypeDecl(const Type *type);
