@@ -75,7 +75,8 @@ const Type *makeContainerType(TypeTable *table,
                               cstring *names,
                               u64 count);
 
-static inline const Type *makeVoidPointerType(TypeTable *table, u64 flags) {
+static inline const Type *makeVoidPointerType(TypeTable *table, u64 flags)
+{
     return makePointerType(table, makeVoidType(table), flags);
 }
 
@@ -93,7 +94,8 @@ const Type *makeOpaqueTypeWithFlags(TypeTable *table,
 
 static inline const Type *makeOpaqueType(TypeTable *table,
                                          cstring name,
-                                         AstNode *decl) {
+                                         AstNode *decl)
+{
     return makeOpaqueTypeWithFlags(table, name, decl, 0);
 }
 

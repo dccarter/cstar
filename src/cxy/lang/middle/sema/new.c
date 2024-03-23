@@ -97,7 +97,6 @@ static const Type *checkNewInitializerOverload(AstVisitor *visitor,
     return checkType(visitor, node);
 }
 
-
 static const Type *checkNewInitializerExpr(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);

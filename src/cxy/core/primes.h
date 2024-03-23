@@ -47,5 +47,3 @@ static inline size_t modPrime(size_t i, size_t p)
         return i % p;
     }
 }
-
-

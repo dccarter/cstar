@@ -12,7 +12,8 @@
 
 #include "core/alloc.h"
 
-static void evaluateStructMembers(AstVisitor *visitor, AstNode *node) {
+static void evaluateStructMembers(AstVisitor *visitor, AstNode *node)
+{
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *member = node->structDecl.members;
     AstNode *prev = NULL;
@@ -25,7 +26,8 @@ static void evaluateStructMembers(AstVisitor *visitor, AstNode *node) {
             if (nodeIs(member, Noop)) {
                 if (prev == NULL) {
                     node->structDecl.members = member->next;
-                } else {
+                }
+                else {
                     prev->next = member->next;
                 }
                 member = member->next;
@@ -48,7 +50,8 @@ static void evaluateStructMembers(AstVisitor *visitor, AstNode *node) {
                 node->type = ERROR_TYPE(ctx);
                 continue;
             }
-        } else {
+        }
+        else {
             type = checkType(visitor, member);
         }
 
@@ -57,18 +60,20 @@ static void evaluateStructMembers(AstVisitor *visitor, AstNode *node) {
     }
 }
 
-static void preCheckStructMembers(AstNode *node, NamedTypeMember *members) {
+static void preCheckStructMembers(AstNode *node, NamedTypeMember *members)
+{
     AstNode *member = node->structDecl.members;
     for (u64 i = 0; member; member = member->next, i++) {
         if (nodeIs(member, FieldDecl)) {
-            members[i] = (NamedTypeMember) {.name = member->structField.name,
-                    .type = member->type,
-                    .decl = member};
+            members[i] = (NamedTypeMember){.name = member->structField.name,
+                                           .type = member->type,
+                                           .decl = member};
             member->structField.index = i;
-        } else {
-            members[i] = (NamedTypeMember) {.name = getDeclarationName(member),
-                    .type = member->type,
-                    .decl = member};
+        }
+        else {
+            members[i] = (NamedTypeMember){.name = getDeclarationName(member),
+                                           .type = member->type,
+                                           .decl = member};
 
             node->flags |= member->flags & (flgAbstract | flgVirtual);
         }
@@ -77,7 +82,8 @@ static void preCheckStructMembers(AstNode *node, NamedTypeMember *members) {
 
 bool isExplicitConstructableFrom(TypingContext *ctx,
                                  const Type *type,
-                                 const Type *from) {
+                                 const Type *from)
+{
     type = unwrapType(resolveAndUnThisType(type), NULL);
     if (!isClassOrStructType(type))
         return isTypeAssignableFrom(type, from);
@@ -87,7 +93,7 @@ bool isExplicitConstructableFrom(TypingContext *ctx,
         return false;
 
     constructor = matchOverloadedFunction(
-            ctx, constructor, (const Type *[]) {from}, 1, NULL, flgNone);
+        ctx, constructor, (const Type *[]){from}, 1, NULL, flgNone);
 
     if (constructor == NULL ||
         findAttribute(constructor->func.decl, S_explicit))
@@ -108,9 +114,10 @@ bool isExplicitConstructableFrom(TypingContext *ctx,
 
 bool evalExplicitConstruction(AstVisitor *visitor,
                               const Type *type,
-                              AstNode *node) {
+                              AstNode *node)
+{
     const Type *source = unwrapType(
-            resolveAndUnThisType(node->type ?: checkType(visitor, node)), NULL);
+        resolveAndUnThisType(node->type ?: checkType(visitor, node)), NULL);
     type = resolveAndUnThisType(unwrapType(type, NULL));
     TypingContext *ctx = getAstVisitorContext(visitor);
 
@@ -125,12 +132,12 @@ bool evalExplicitConstruction(AstVisitor *visitor,
         return false;
 
     const Type *constructor =
-            matchOverloadedFunction(ctx,
-                                    member->type,
-                                    (const Type *[]) {node->type},
-                                    1,
-                                    &node->loc,
-                                    flgNone);
+        matchOverloadedFunction(ctx,
+                                member->type,
+                                (const Type *[]){node->type},
+                                1,
+                                &node->loc,
+                                flgNone);
     if (constructor == NULL ||
         findAttribute(constructor->func.decl, "explicit"))
         return false;
@@ -148,14 +155,15 @@ bool evalExplicitConstruction(AstVisitor *visitor,
     node->type = NULL;
     node->flags = flgNone;
     node->callExpr.callee =
-            makePath(ctx->pool, &node->loc, type->name, flgNone, type);
+        makePath(ctx->pool, &node->loc, type->name, flgNone, type);
     node->callExpr.args = args;
 
     type = transformToConstructCallExpr(visitor, node);
     return !typeIs(type, Error);
 }
 
-void checkStructExpr(AstVisitor *visitor, AstNode *node) {
+void checkStructExpr(AstVisitor *visitor, AstNode *node)
+{
     TypingContext *ctx = getAstVisitorContext(visitor);
     const Type *target = checkType(visitor, node->structExpr.left);
     if (typeIs(target, Error)) {
@@ -168,7 +176,7 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node) {
                  &node->structExpr.left->loc,
                  "unsupported type used with struct initializer, '{t}' is not "
                  "a struct",
-                 (FormatArg[]) {{.t = target}});
+                 (FormatArg[]){{.t = target}});
         node->type = ERROR_TYPE(ctx);
         return;
     }
@@ -176,29 +184,28 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node) {
     AstNode *field = node->structExpr.fields, *prev = node->structExpr.fields;
     const Type *striped = stripAll(target);
     bool *initialized =
-            callocOrDie(1, sizeof(bool) * striped->tStruct.members->count);
+        callocOrDie(1, sizeof(bool) * striped->tStruct.members->count);
 
     for (; field; field = field->next) {
         prev = field;
         const NamedTypeMember *member =
-                findStructMember(target, field->fieldExpr.name);
+            findStructMember(target, field->fieldExpr.name);
         if (member == NULL) {
             logError(
-                    ctx->L,
-                    &field->loc,
-                    "field '{s}' does not exist in target struct type '{t}'",
-                    ((FormatArg[]) {{.s = field->fieldExpr.name},
-                                    {.t = target}}));
+                ctx->L,
+                &field->loc,
+                "field '{s}' does not exist in target struct type '{t}'",
+                ((FormatArg[]){{.s = field->fieldExpr.name}, {.t = target}}));
             node->type = ERROR_TYPE(ctx);
             continue;
         }
 
         if (!nodeIs(member->decl, FieldDecl)) {
             logError(
-                    ctx->L,
-                    &field->loc,
-                    "member '{s}' is not a field, only struct can be initialized",
-                    (FormatArg[]) {{.s = field->fieldExpr.name}});
+                ctx->L,
+                &field->loc,
+                "member '{s}' is not a field, only struct can be initialized",
+                (FormatArg[]){{.s = field->fieldExpr.name}});
             node->type = ERROR_TYPE(ctx);
             continue;
         }
@@ -210,8 +217,7 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node) {
             logError(ctx->L,
                      &field->fieldExpr.value->loc,
                      "value type '{t}' is not assignable to field type '{t}'",
-                     (FormatArg[]) {{.t = type},
-                                    {.t = member->type}});
+                     (FormatArg[]){{.t = type}, {.t = member->type}});
             node->type = ERROR_TYPE(ctx);
             continue;
         }
@@ -231,23 +237,23 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node) {
 
         if (targetField->structField.value == NULL) {
             logError(
-                    ctx->L,
-                    &node->loc,
-                    "initializer expression missing struct required member '{s}'",
-                    (FormatArg[]) {{.s = targetField->structField.name}});
+                ctx->L,
+                &node->loc,
+                "initializer expression missing struct required member '{s}'",
+                (FormatArg[]){{.s = targetField->structField.name}});
             logNote(
-                    ctx->L, &targetField->loc, "struct field declared here", NULL);
+                ctx->L, &targetField->loc, "struct field declared here", NULL);
             node->type = ERROR_TYPE(ctx);
             continue;
         }
         AstNode *temp = makeAstNode(
-                ctx->pool,
-                &(prev ?: node)->loc,
-                &(AstNode) {.tag = astFieldExpr,
-                        .type = targetField->type,
-                        .flags = targetField->flags,
-                        .fieldExpr = {.name = targetField->structField.name,
-                                .value = targetField->structField.value}});
+            ctx->pool,
+            &(prev ?: node)->loc,
+            &(AstNode){.tag = astFieldExpr,
+                       .type = targetField->type,
+                       .flags = targetField->flags,
+                       .fieldExpr = {.name = targetField->structField.name,
+                                     .value = targetField->structField.value}});
         if (prev)
             prev = prev->next = temp;
         else
@@ -258,11 +264,12 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node) {
         node->type = target;
 }
 
-void checkStructDecl(AstVisitor *visitor, AstNode *node) {
+void checkStructDecl(AstVisitor *visitor, AstNode *node)
+{
     TypingContext *ctx = getAstVisitorContext(visitor);
 
     node->structDecl.thisType =
-            node->structDecl.thisType
+        node->structDecl.thisType
             ?: makeThisType(ctx->types, node->structDecl.name, flgNone);
     const Type *this = node->structDecl.thisType;
 
@@ -274,7 +281,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node) {
 
     u64 membersCount = countAstNodes(node->structDecl.members);
     NamedTypeMember *members =
-            mallocOrDie(sizeof(NamedTypeMember) * membersCount);
+        mallocOrDie(sizeof(NamedTypeMember) * membersCount);
 
     ctx->currentStruct = node;
     preCheckStructMembers(node, members);
@@ -283,13 +290,13 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node) {
     if (typeIs(node->type, Error))
         goto checkStructMembersError;
 
-    ((Type *) this)->_this.that =
-            makeStructType(ctx->types,
-                           getDeclarationName(node),
-                           members,
-                           membersCount,
-                           node,
-                           node->flags & flgTypeApplicable);
+    ((Type *)this)->_this.that =
+        makeStructType(ctx->types,
+                       getDeclarationName(node),
+                       members,
+                       membersCount,
+                       node,
+                       node->flags & flgTypeApplicable);
     node->type = this;
 
     implementClassOrStructBuiltins(visitor, node);
@@ -299,19 +306,20 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node) {
     ctx->currentStruct = node;
     if (checkMemberFunctions(visitor, node, members)) {
         node->type = replaceStructType(
-                ctx->types,
-                this->_this.that,
-                members,
-                membersCount,
-                node,
-                node->flags & (flgReferenceMembers | flgTypeApplicable));
-        ((Type *) this)->_this.that = node->type;
-    } else
+            ctx->types,
+            this->_this.that,
+            members,
+            membersCount,
+            node,
+            node->flags & (flgReferenceMembers | flgTypeApplicable));
+        ((Type *)this)->_this.that = node->type;
+    }
+    else
         node->type = this->_this.that;
 
     ctx->currentStruct = NULL;
 
-    checkStructMembersError:
+checkStructMembersError:
     if (members)
         free(members);
 }

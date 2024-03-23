@@ -119,7 +119,7 @@ typedef enum {
     CXY_LANG_AST_TAGS(f)
 #undef f
 
-    astCOUNT
+        astCOUNT
 } AstTag;
 
 struct Scope;
@@ -176,12 +176,8 @@ typedef enum {
     struct AstNode *attrs;                                                     \
     void *codegen;
 
-typedef enum {
-    iptModule, iptPath
-} ImportKind;
-typedef enum {
-    cInclude, cDefine, cSources
-} CCodeKind;
+typedef enum { iptModule, iptPath } ImportKind;
+typedef enum { cInclude, cDefine, cSources } CCodeKind;
 
 typedef struct FunctionSignature {
     struct AstNode *params;
@@ -865,7 +861,8 @@ attr(always_inline) static AstNode *makePathElement(MemPool *pool,
                                                     cstring name,
                                                     u64 flags,
                                                     AstNode *next,
-                                                    const Type *type) {
+                                                    const Type *type)
+{
     return makeResolvedPathElement(pool, loc, name, flags, NULL, next, type);
 }
 
@@ -1059,7 +1056,8 @@ void deinitCloneAstNodeConfig(CloneAstConfig *config);
 
 AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node);
 
-static inline AstNode *shallowCloneAstNode(MemPool *pool, const AstNode *node) {
+static inline AstNode *shallowCloneAstNode(MemPool *pool, const AstNode *node)
+{
     CloneAstConfig config = {.createMapping = false, .pool = pool};
     return cloneAstNode(&config, node);
 }
@@ -1074,7 +1072,8 @@ void replaceAstNodeInList(AstNode **list, const AstNode *node, AstNode *with);
 
 AstNode *replaceAstNodeWith(AstNode *node, const AstNode *with);
 
-static inline bool nodeIs_(const AstNode *node, AstTag tag) {
+static inline bool nodeIs_(const AstNode *node, AstTag tag)
+{
     return node && node->tag == tag;
 }
 
@@ -1110,7 +1109,8 @@ void nodeSetNumericLiteral(AstNode *node,
 
 bool comptimeCompareTypes(const AstNode *lhs, const AstNode *rhs);
 
-static inline bool isClassOrStructAstNode(const AstNode *node) {
+static inline bool isClassOrStructAstNode(const AstNode *node)
+{
     return nodeIs(node, StructDecl) || nodeIs(node, ClassDecl);
 }
 
@@ -1194,15 +1194,17 @@ AstNode *getBaseClassAtLevel(AstNode *node, u64 level);
 
 AstNode *getBaseClassByName(AstNode *node, cstring name);
 
-attr(always_inline) static i64 integerLiteralValue(const AstNode *node) {
+attr(always_inline) static i64 integerLiteralValue(const AstNode *node)
+{
     csAssert0(nodeIs(node, IntegerLit));
     return node->intLiteral.isNegative ? node->intLiteral.value
-                                       : (i64) node->intLiteral.uValue;
+                                       : (i64)node->intLiteral.uValue;
 }
 
-attr(always_inline) static u64 unsignedIntegerLiteralValue(const AstNode *node) {
+attr(always_inline) static u64 unsignedIntegerLiteralValue(const AstNode *node)
+{
     csAssert0(nodeIs(node, IntegerLit));
-    return node->intLiteral.isNegative ? (u64) node->intLiteral.value
+    return node->intLiteral.isNegative ? (u64)node->intLiteral.value
                                        : node->intLiteral.uValue;
 }
 
@@ -1216,14 +1218,16 @@ const AstNode *getOptionalDecl();
 
 AstNode *findInSortedNodes(SortedNodes *sorted, cstring name);
 
-static inline AstNode *underlyingDeclaration(AstNode *decl) {
+static inline AstNode *underlyingDeclaration(AstNode *decl)
+{
     return nodeIs(decl, GenericDecl) ? decl->genericDecl.decl : decl;
 }
 
-static bool isStructDeclaration(AstNode *node) {
+static bool isStructDeclaration(AstNode *node)
+{
     return nodeIs(node, StructDecl) ||
            nodeIs(node, GenericDecl) &&
-           isStructDeclaration(node->genericDecl.decl);
+               isStructDeclaration(node->genericDecl.decl);
 }
 
 bool nodeIsLeftValue(const AstNode *node);

@@ -246,7 +246,8 @@
         unreachable("UNKNOWN NODE ast%s", getAstNodeName(node));               \
     }
 
-void astVisitManyNodes(AstVisitor *visitor, AstNode *node) {
+void astVisitManyNodes(AstVisitor *visitor, AstNode *node)
+{
     AstNode *curr = NULL, *next = node;
     for (; next;) {
         curr = next;
@@ -255,13 +256,15 @@ void astVisitManyNodes(AstVisitor *visitor, AstNode *node) {
     }
 }
 
-void astConstVisitManyNodes(ConstAstVisitor *visitor, const AstNode *node) {
+void astConstVisitManyNodes(ConstAstVisitor *visitor, const AstNode *node)
+{
     for (const AstNode *it = node; it; it = it->next) {
         astConstVisit(visitor, it);
     }
 }
 
-void astVisit(AstVisitor *visitor, AstNode *node) {
+void astVisit(AstVisitor *visitor, AstNode *node)
+{
     if (node == NULL)
         return;
 
@@ -280,14 +283,16 @@ void astVisit(AstVisitor *visitor, AstNode *node) {
 
     if (visitor->dispatch) {
         visitor->dispatch(func, visitor, node);
-    } else {
+    }
+    else {
         func(visitor, node);
     }
 
     visitor->current = stack;
 }
 
-void astConstVisit(ConstAstVisitor *visitor, const AstNode *node) {
+void astConstVisit(ConstAstVisitor *visitor, const AstNode *node)
+{
     if (node == NULL)
         return;
 
@@ -307,12 +312,14 @@ void astConstVisit(ConstAstVisitor *visitor, const AstNode *node) {
     visitor->current = stack;
 }
 
-void astVisitFallbackVisitAll(AstVisitor *visitor, AstNode *node) {
+void astVisitFallbackVisitAll(AstVisitor *visitor, AstNode *node)
+{
     AST_VISIT_ALL_NODES(ast)
 }
 
 void astConstVisitFallbackVisitAll(ConstAstVisitor *visitor,
-                                   const AstNode *node) {
+                                   const AstNode *node)
+{
     AST_VISIT_ALL_NODES(astConst)
 }
 
@@ -320,40 +327,47 @@ void astVisitSkip(AstVisitor *visitor, AstNode *node) {}
 
 void astConstVisitSkip(ConstAstVisitor *visitor, const AstNode *node) {}
 
-void astModifierInit(AstModifier *ctx, AstNode *node) {
+void astModifierInit(AstModifier *ctx, AstNode *node)
+{
     ctx->parent = node;
     ctx->previous = NULL;
     ctx->current = NULL;
 }
 
-void astModifierNext(AstModifier *ctx, AstNode *node) {
+void astModifierNext(AstModifier *ctx, AstNode *node)
+{
     ctx->previous = ctx->current;
     ctx->current = node;
 }
 
-void astModifierRemoveCurrent(AstModifier *ctx) {
+void astModifierRemoveCurrent(AstModifier *ctx)
+{
     csAssert0(ctx->current);
     if (ctx->previous)
         ctx->previous->next = ctx->current->next;
     else {
         if (nodeIs(ctx->parent, Program)) {
             ctx->parent->program.decls = ctx->current->next;
-        } else {
+        }
+        else {
             csAssert0(nodeIs(ctx->parent, BlockStmt));
             ctx->parent->blockStmt.stmts = ctx->current->next;
         }
     }
 }
 
-void astModifierAdd(AstModifier *ctx, AstNode *node) {
+void astModifierAdd(AstModifier *ctx, AstNode *node)
+{
     csAssert0(ctx->current);
 
     node->next = ctx->current;
     if (ctx->previous) {
         ctx->previous->next = node;
-    } else if (nodeIs(ctx->parent, Program)) {
+    }
+    else if (nodeIs(ctx->parent, Program)) {
         ctx->parent->program.decls = node;
-    } else {
+    }
+    else {
         csAssert0(nodeIs(ctx->parent, BlockStmt));
         ctx->parent->blockStmt.stmts = node;
     }
@@ -361,7 +375,8 @@ void astModifierAdd(AstModifier *ctx, AstNode *node) {
     ctx->previous = node;
 }
 
-void astModifierAddAsNext(AstModifier *ctx, AstNode *node) {
+void astModifierAddAsNext(AstModifier *ctx, AstNode *node)
+{
     csAssert0(ctx->current);
     getLastAstNode(node)->next = ctx->current->next;
     ctx->current->next = node;

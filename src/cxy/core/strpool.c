@@ -9,9 +9,10 @@
 #include <stdarg.h>
 #include <string.h>
 
-StrPool newStrPool(MemPool *mem_pool) {
-    return (StrPool) {.mem_pool = mem_pool,
-            .hash_table = newHashTable(sizeof(char *))};
+StrPool newStrPool(MemPool *mem_pool)
+{
+    return (StrPool){.mem_pool = mem_pool,
+                     .hash_table = newHashTable(sizeof(char *))};
 }
 
 void freeStrPool(StrPool *str_pool) { freeHashTable(&str_pool->hash_table); }
@@ -21,21 +22,25 @@ typedef struct {
     u64 len;
 } SizedString;
 
-static bool compareStrFind(const void *left, const void *right) {
-    SizedString *str = (SizedString *) right;
-    return !strncmp(*(char **) left, str->s, str->len);
+static bool compareStrFind(const void *left, const void *right)
+{
+    SizedString *str = (SizedString *)right;
+    return !strncmp(*(char **)left, str->s, str->len);
 }
 
-static bool compareStrInsert(const void *left, const void *right) {
-    SizedString *str = (SizedString *) right;
-    return !strncmp(*(char **) left, str->s, str->len);
+static bool compareStrInsert(const void *left, const void *right)
+{
+    SizedString *str = (SizedString *)right;
+    return !strncmp(*(char **)left, str->s, str->len);
 }
 
-const char *makeString(StrPool *str_pool, const char *str) {
+const char *makeString(StrPool *str_pool, const char *str)
+{
     return makeStringSized(str_pool, str, strlen(str));
 }
 
-const char *makeTrimmedString(StrPool *pool, const char *str) {
+const char *makeTrimmedString(StrPool *pool, const char *str)
+{
     if (str == NULL)
         return NULL;
 
@@ -49,13 +54,14 @@ const char *makeTrimmedString(StrPool *pool, const char *str) {
     return makeStringSized(pool, str, s - str);
 }
 
-const char *makeStringSized(StrPool *pool, const char *str, u64 len) {
+const char *makeStringSized(StrPool *pool, const char *str, u64 len)
+{
     if (str == NULL)
         return NULL;
     uint32_t hash = hashRawBytes(hashInit(), str, len);
     SizedString s = {.s = str, .len = len};
     char **strPtr = findInHashTable(
-            &pool->hash_table, &s, hash, sizeof(char *), compareStrFind);
+        &pool->hash_table, &s, hash, sizeof(char *), compareStrFind);
     if (strPtr)
         return *strPtr;
 
@@ -68,14 +74,16 @@ const char *makeStringSized(StrPool *pool, const char *str, u64 len) {
     return newStr;
 }
 
-const char *makeAnonymousVariable(StrPool *pool, const char *prefix) {
+const char *makeAnonymousVariable(StrPool *pool, const char *prefix)
+{
     char variable[MAX_ANONYMOUS_PREFIX_SIZE + 32];
     static u64 postfix = 0;
     u64 len;
     if (prefix == NULL) {
         prefix = "cxy_anonymous_var";
         len = 19;
-    } else
+    }
+    else
         len = strlen(prefix);
 
     csAssert0(len < +MAX_ANONYMOUS_PREFIX_SIZE);
@@ -85,7 +93,8 @@ const char *makeAnonymousVariable(StrPool *pool, const char *prefix) {
     return makeString(pool, variable);
 }
 
-const char *makeStringConcat_(StrPool *pool, const char *s1, ...) {
+const char *makeStringConcat_(StrPool *pool, const char *s1, ...)
+{
     char variable[MAX_ANONYMOUS_PREFIX_SIZE + 32];
     size_t len = strlen(s1);
     csAssert0(len < MAX_ANONYMOUS_PREFIX_SIZE);

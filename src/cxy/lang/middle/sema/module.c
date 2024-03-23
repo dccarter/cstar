@@ -80,4 +80,7 @@ void buildModuleType(TypingContext *ctx, AstNode *node, bool isBuiltinModule)
     free(members);
 }
 
-void checkImportDecl(attr(unused) AstVisitor *visitor, attr(unused) AstNode *node) {}
+void checkImportDecl(attr(unused) AstVisitor *visitor,
+                     attr(unused) AstNode *node)
+{
+}
