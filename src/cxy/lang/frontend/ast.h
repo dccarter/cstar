@@ -235,11 +235,6 @@ struct AstNode {
         } define;
 
         struct {
-            AstNode *variables;
-            AstNode *body;
-        } substitution;
-
-        struct {
             ImportKind kind;
             struct AstNode *module;
             struct AstNode *exports;

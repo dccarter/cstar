@@ -177,8 +177,8 @@ static void visitIdentifierExpr(AstVisitor *visitor, AstNode *node)
     auto target = node->ident.resolvesTo;
     auto value = static_cast<llvm::Value *>(target->codegen);
 
-    if (ctx.stack().loadVariable() && !nodeIs(target, FuncDecl) &&
-        !nodeIs(target, ExternDecl)) {
+    target = nodeIs(target, ExternDecl) ? target->externDecl.func : target;
+    if (ctx.stack().loadVariable() && !nodeIs(target, FuncDecl)) {
         value = ctx.createLoad(node->type, value);
     }
     if (value == nullptr && hasFlag(target, Abstract))
@@ -202,15 +202,37 @@ static void visitMemberExpr(AstVisitor *visitor, AstNode *node)
         auto resolvesTo = member->ident.resolvesTo;
 
         if (nodeIs(resolvesTo, FieldDecl)) {
-            value = ctx.builder.CreateStructGEP(
-                isClassType(type) ? ctx.classType(type)
-                                  : ctx.getLLVMType(stripPointer(type)),
-                value,
-                resolvesTo->fieldExpr.index,
-                resolvesTo->fieldExpr.name);
+            llvm::Type *llvmType = isClassType(type)
+                                       ? ctx.classType(type)
+                                       : ctx.getLLVMType(stripPointer(type));
+
+            value = ctx.builder.CreateStructGEP(llvmType,
+                                                value,
+                                                resolvesTo->fieldExpr.index,
+                                                resolvesTo->fieldExpr.name);
         }
         else if (nodeIs(resolvesTo, EnumOptionDecl)) {
             value = static_cast<llvm::ConstantInt *>(resolvesTo->codegen);
+            ctx.returnValue(value);
+            return;
+        }
+        else if (nodeIs(resolvesTo, FuncDecl)) {
+            value = static_cast<llvm::Function *>(resolvesTo->codegen);
+            csAssert0(value != NULL);
+            ctx.returnValue(value);
+            return;
+        }
+        else if (nodeIs(resolvesTo, ExternDecl)) {
+            AstNode *func = resolvesTo->externDecl.func;
+            if (hasFlag(func, Abstract)) {
+                value = ctx.createUndefined(
+                    ctx.getLLVMType(resolvesTo->type)->getPointerTo());
+            }
+            else {
+                value = llvm::cast<llvm::Function>(
+                            static_cast<llvm::Value *>(resolvesTo->codegen))
+                            ?: generateFunctionProto(visitor, func);
+            }
             ctx.returnValue(value);
             return;
         }
@@ -734,11 +756,24 @@ void visitVariableDecl(AstVisitor *visitor, AstNode *node)
         ctx.module().getOrInsertGlobal(node->varDecl.name,
                                        ctx.getLLVMType(node->type));
         auto var = ctx.module().getGlobalVariable(node->varDecl.name);
-        var->setAlignment(llvm::Align(4));
         var->setConstant(hasFlag(node, Const));
         if (node->varDecl.init) {
+            var->setExternallyInitialized(false);
             auto value = cxy::codegen(visitor, node->varDecl.init);
             var->setInitializer(llvm::dyn_cast<llvm::Constant>(value));
+        }
+        else if (!hasFlag(node, Extern)) {
+            var->setExternallyInitialized(false);
+            if (isPointerType(node->type) || isClassType(node->type))
+                var->setInitializer(llvm::ConstantPointerNull::get(
+                    llvm::dyn_cast<llvm::PointerType>(
+                        ctx.getLLVMType(node->type))));
+            else
+                var->setInitializer(llvm::dyn_cast<llvm::Constant>(
+                    ctx.createUndefined(node->type)));
+        }
+        else {
+            var->setExternallyInitialized(true);
         }
         node->codegen = var;
         ctx.returnValue(var);
@@ -850,21 +885,17 @@ void visitExternDecl(AstVisitor *visitor, AstNode *node)
         return;
     }
 
+    auto target = node->externDecl.func;
     auto &ctx = cxy::LLVMContext::from(visitor);
-    auto type = static_cast<llvm::FunctionType *>(node->type->codegen);
-    if (type == nullptr || node->externDecl.func->codegen == nullptr) {
-        node->codegen = generateFunctionProto(visitor, node->externDecl.func);
-    }
+    if (nodeIs(target, FuncDecl))
+        node->codegen = generateFunctionProto(visitor, target);
     else {
-        auto func =
-            static_cast<llvm::Function *>(node->externDecl.func->codegen);
-        csAssert0(func);
-
-        node->codegen =
-            llvm::Function::Create(type,
-                                   llvm::GlobalValue::ExternalLinkage,
-                                   func->getName(),
-                                   &ctx.module());
+        // global variable
+        ctx.module().getOrInsertGlobal(target->varDecl.name,
+                                       ctx.getLLVMType(target->type));
+        auto var = ctx.module().getGlobalVariable(target->varDecl.name);
+        var->setConstant(hasFlag(target, Const));
+        node->codegen = var;
     }
 }
 

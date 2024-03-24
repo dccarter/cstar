@@ -129,6 +129,12 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
                                const AstNode *generic,
                                AstNode *node);
 
+AstNode *inheritanceMakeVTableMember(TypingContext *ctx,
+                                     AstNode *node,
+                                     AstNode *init);
+AstNode *inheritanceBuildVTableType(AstVisitor *visitor, AstNode *node);
+AstNode *inheritanceBuildVTable(TypingContext *ctx, AstNode *node);
+
 const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node);
 AstNode *transformClosureArgument(AstVisitor *visitor, AstNode *node);
 

@@ -173,13 +173,14 @@ llvm::Type *LLVMContext::createTupleType(const Type *type)
 
 llvm::Type *LLVMContext::createClassType(const Type *type)
 {
+    csAssert0(type->tClass.decl);
+    AstNode *node = type->tClass.decl;
+    auto classType = llvm::StructType::create(context, makeTypeName(node));
+    node->codegen = classType;
+    updateType(type, classType->getPointerTo());
+
     std::vector<llvm::Type *> members{};
     const Type *base = type->tClass.inheritance->base;
-    if (base)
-        members.push_back(getLLVMType(base));
-
-    for (u64 i = 0; i < type->tClass.inheritance->interfacesCount; i++)
-        members.push_back(getLLVMType(type->tClass.inheritance->interfaces[i]));
 
     for (u64 i = 0; i < type->tClass.members->count; i++) {
         NamedTypeMember *member = &type->tClass.members->members[i];
@@ -191,12 +192,8 @@ llvm::Type *LLVMContext::createClassType(const Type *type)
         else
             members.push_back(getLLVMType(member->type));
     }
+    classType->setBody(members);
 
-    csAssert0(type->tClass.decl);
-    AstNode *node = type->tClass.decl;
-    auto classType =
-        llvm::StructType::create(context, members, makeTypeName(node));
-    node->codegen = classType;
     return classType->getPointerTo();
 }
 
@@ -331,7 +328,7 @@ llvm::Value *LLVMContext::generateCastExpr(AstVisitor *visitor,
     auto from = unwrapType(expr->type, nullptr);
 
     to = unThisType(resolveType(to));
-    if (to == from)
+    if (to == unThisType(from))
         return cxy::codegen(visitor, expr);
 
     if (typeIs(from, Union))
@@ -401,6 +398,10 @@ llvm::Value *LLVMContext::generateCastExpr(AstVisitor *visitor,
             }
             return ctx.builder.CreatePointerCast(value, ctx.getLLVMType(to));
         }
+    }
+    else if (typeIsBaseOf(to, from)) {
+        auto value = cxy::codegen(visitor, expr);
+        return ctx.builder.CreatePointerCast(value, ctx.getLLVMType(to));
     }
     else {
         unreachable("Unsupported cast");

@@ -11,9 +11,9 @@
 #include "lang/frontend/visitor.h"
 
 typedef struct {
-    AstNode *func;
+    AstNode *node;
     AstNode *target;
-} FuncToExternDecl;
+} NodeToExternDecl;
 
 typedef struct SimplifyContext {
     Log *L;
@@ -21,7 +21,7 @@ typedef struct SimplifyContext {
     StrPool *strings;
     MemPool *pool;
     AstModifier root;
-    HashTable functions;
+    HashTable n2e;
     struct {
         struct {
             AstNode *currentFunction;
@@ -34,33 +34,81 @@ typedef struct SimplifyContext {
     };
 } SimplifyContext;
 
-bool compareFuncToExternDecl(const void *lhs, const void *rhs)
+bool compareNodeToExternDecl(const void *lhs, const void *rhs)
 {
-    return ((FuncToExternDecl *)lhs)->func == ((FuncToExternDecl *)rhs)->func;
+    return ((NodeToExternDecl *)lhs)->node == ((NodeToExternDecl *)rhs)->node;
 }
 
-static void addFunctionToExternDecl(SimplifyContext *ctx,
-                                    AstNode *node,
-                                    AstNode *target)
+static bool isVirtualDispatch(const AstNode *target, const AstNode *member)
 {
-    if (nodeIs(node, FuncDecl)) {
+    if (!isClassOrStructType(target->type))
+        return false;
+    AstNode *decl = getTypeDecl(target->type),
+            *func = getTypeDecl(member->type);
+
+    return hasFlag(decl, Virtual) && hasFlag(func, Virtual);
+}
+
+static AstNode *virtualDispatch(SimplifyContext *ctx,
+                                AstNode *target,
+                                AstNode *member)
+{
+    // [target].vtable.[member](target, [args])
+    AstNode *decl = getTypeDecl(target->type),
+            *vTable = decl->classDecl.members,
+            *vTableFunc = findMemberDeclInType(vTable->type->pointer.pointed,
+                                               member->ident.value);
+    return makeMemberExpr(ctx->pool,
+                          &target->loc,
+                          flgConst,
+                          makeMemberExpr(ctx->pool,
+                                         &target->loc,
+                                         flgConst,
+                                         deepCloneAstNode(ctx->pool, target),
+                                         makeResolvedIdentifier(ctx->pool,
+                                                                &target->loc,
+                                                                S_vtable,
+                                                                0,
+                                                                vTable,
+                                                                NULL,
+                                                                vTable->type),
+                                         NULL,
+                                         vTable->type),
+                          makeResolvedIdentifier(ctx->pool,
+                                                 &target->loc,
+                                                 vTableFunc->_namedNode.name,
+                                                 0,
+                                                 vTableFunc,
+                                                 NULL,
+                                                 vTableFunc->type),
+                          NULL,
+                          vTableFunc->type);
+}
+
+static void addNodeToExternDecl(SimplifyContext *ctx,
+                                AstNode *node,
+                                AstNode *target)
+{
+    if (nodeIs(node, FuncDecl) ||
+        (hasFlag(node, TopLevelDecl) && nodeIs(node, VarDecl))) //
+    {
         insertInHashTable(
-            &ctx->functions,
-            &(FuncToExternDecl){.func = node, .target = target ?: node},
+            &ctx->n2e,
+            &(NodeToExternDecl){.node = node, .target = target ?: node},
             hashPtr(hashInit(), node),
-            sizeof(FuncToExternDecl),
-            compareFuncToExternDecl);
+            sizeof(NodeToExternDecl),
+            compareNodeToExternDecl);
     }
 }
 
-static FuncToExternDecl *getFunctionToExternDecl(SimplifyContext *ctx,
-                                                 AstNode *decl)
+static NodeToExternDecl *getNodeToExternDecl(SimplifyContext *ctx,
+                                             AstNode *decl)
 {
-    return findInHashTable(&ctx->functions,
-                           &(FuncToExternDecl){.func = decl, .target = decl},
+    return findInHashTable(&ctx->n2e,
+                           &(NodeToExternDecl){.node = decl, .target = decl},
                            hashPtr(hashInit(), decl),
-                           sizeof(FuncToExternDecl),
-                           compareFuncToExternDecl);
+                           sizeof(NodeToExternDecl),
+                           compareNodeToExternDecl);
 }
 
 static void simplifyForRangeStmt(AstVisitor *visitor, AstNode *node)
@@ -371,18 +419,26 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
         target = makeAddrOffExpr(
             ctx->pool, &target->loc, this->flags, target, NULL, this->type);
     }
-
-    target->next = args;
-    node->callExpr.args = target;
-    node->callExpr.callee = call;
+    if (isVirtualDispatch(target, call)) {
+        node->callExpr.callee = virtualDispatch(ctx, target, call);
+        target->next = args;
+        node->callExpr.args = target;
+    }
+    else {
+        target->next = args;
+        node->callExpr.args = target;
+        node->callExpr.callee = call;
+    }
 }
 
 static void visitIdentifier(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
     AstNode *target = node->ident.resolvesTo;
-    if (nodeIs(target, FuncDecl)) {
-        FuncToExternDecl *f2e = getFunctionToExternDecl(ctx, target);
+    if (nodeIs(target, FuncDecl) ||
+        (nodeIs(target, VarDecl) && hasFlag(target, TopLevelDecl))) //
+    {
+        NodeToExternDecl *f2e = getNodeToExternDecl(ctx, target);
         if (f2e == NULL) {
             // new function declaration added, add extern
             AstNode *decl = makeAstNode(ctx->pool,
@@ -392,7 +448,7 @@ static void visitIdentifier(AstVisitor *visitor, AstNode *node)
                                                    .flags = target->flags,
                                                    .externDecl.func = target});
 
-            addFunctionToExternDecl(ctx, target, decl);
+            addNodeToExternDecl(ctx, target, decl);
             astModifierAdd(&ctx->root, decl);
             node->ident.resolvesTo = decl;
         }
@@ -553,12 +609,19 @@ static void visitFuncDecl(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
     ctx->currentFunction = node;
-    addFunctionToExternDecl(ctx, node, node);
+    addNodeToExternDecl(ctx, node, node);
     if (node->funcDecl.this_) {
         node->funcDecl.signature->params = node->funcDecl.this_;
     }
     astVisitFallbackVisitAll(visitor, node);
     ctx->currentFunction = NULL;
+}
+
+static void visitVarDecl(AstVisitor *visitor, AstNode *node)
+{
+    SimplifyContext *ctx = getAstVisitorContext(visitor);
+    addNodeToExternDecl(ctx, node, node);
+    astVisitFallbackVisitAll(visitor, node);
 }
 
 AstNode *simplifyAst(CompilerDriver *driver, AstNode *node)
@@ -567,8 +630,7 @@ AstNode *simplifyAst(CompilerDriver *driver, AstNode *node)
                                .types = driver->types,
                                .strings = driver->strings,
                                .pool = driver->pool,
-                               .functions =
-                                   newHashTable(sizeof(FuncToExternDecl))};
+                               .n2e = newHashTable(sizeof(NodeToExternDecl))};
 
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context, {
@@ -583,13 +645,14 @@ AstNode *simplifyAst(CompilerDriver *driver, AstNode *node)
         [astStructDecl] = visitStructDecl,
         [astClassDecl] = visitStructDecl,
         [astFuncDecl] = visitFuncDecl,
+        [astVarDecl] = visitVarDecl,
         [astGenericDecl] = astVisitSkip,
         [astMacroDecl] = astVisitSkip
     }, .fallback = astVisitFallbackVisitAll);
     // clang-format on
 
     astVisit(&visitor, node);
-    freeHashTable(&context.functions);
+    freeHashTable(&context.n2e);
 
     return node;
 }

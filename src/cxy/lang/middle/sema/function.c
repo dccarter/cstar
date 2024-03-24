@@ -142,7 +142,7 @@ bool checkMemberFunctions(AstVisitor *visitor,
     AstNode *member = node->structDecl.members;
 
     bool retype = false;
-    for (u64 i = 0; member; member = member->next, i++) {
+    for (u64 i = hasFlag(node, Virtual); member; member = member->next, i++) {
         if (nodeIs(member, FuncDecl)) {
             if (member->funcDecl.this_) {
                 member->funcDecl.this_->type =

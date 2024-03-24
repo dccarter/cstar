@@ -318,6 +318,8 @@ bool isUnionType(const Type *type);
 
 bool isConstType(const Type *type);
 
+bool typeIsBaseOf(const Type *base, const Type *type);
+
 bool hasReferenceMembers(const Type *type);
 
 static inline bool isClassOrStructType(const Type *type)
@@ -363,6 +365,9 @@ static inline const Type *unThisType(const Type *_this)
 {
     return typeIs(_this, This) ? _this->_this.that : _this;
 }
+
+const NamedTypeMember *findOverloadMemberUpInheritanceChain(const Type *type,
+                                                            cstring member);
 
 const NamedTypeMember *findNamedTypeMemberInContainer(
     const TypeMembersContainer *container, cstring member);
