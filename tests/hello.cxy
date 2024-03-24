@@ -1,19 +1,9 @@
+var ofs: OutputFileStream;
 
-class OutputStream {
-    virtual func hello() { }
-    virtual func write(data: &const void, len: u64) : i64
-    // the rest goes here
-}
-
-class StringStream : OutputStream {
-    func `init`(){ }
-
-    @override
-    const func write(data: &const void, len: u64) {
-        println("Hello World")
-    }
-}
-
-pub func main(argc: i32, argv: &string) {
-    var os = StringStream();
+pub func main() {
+    stdout = OutputFileStream(1)
+    stdout << "Hello "
+           << "World "
+           << true
+   println("We used println to print this")
 }

@@ -67,9 +67,9 @@ pub func hash14(val: string, init: Hash = 16777619): Hash {
 
 
 
-pub func String_op__lshift15(this: String, val: string): String {
+pub func OutputStream_op__lshift15(this: OutputStream, val: string): OutputStream {
   
-  String_appendString(this, ({
+  OutputStream_appendString(this, ({
     var s16 = CString{s = null}
     CString_op__init(&s16, val)
     s16
@@ -89,17 +89,17 @@ pub func Slice7_op__init(this: &Slice[string], data: &string, len: u64) {
 
 
 pub func Slice7_op__idx_assign(this: &Slice[string], index: i64, data: string) {
-  __cxy_assert(index < this.len, "__builtins.cxy", 468, 9)
+  __cxy_assert(index < this.len, "__builtins.cxy", 488, 9)
   this.data.[index] = data
 }
 
 pub func Slice7_op__idx(this: &Slice[string], index: i64): string {
-  __cxy_assert(index < this.len, "__builtins.cxy", 474, 9)
+  __cxy_assert(index < this.len, "__builtins.cxy", 494, 9)
   return this.data.[index]
 }
 
 pub func Slice7_op__idx(this: const &Slice[string], index: i64): string {
-  __cxy_assert(index < this.len, "__builtins.cxy", 480, 9)
+  __cxy_assert(index < this.len, "__builtins.cxy", 500, 9)
   return this.data.[index]
 }
 
@@ -122,19 +122,19 @@ pub func Slice7_op__hash(this: const &Slice[string]): u32 {
 
 
 
-pub func Slice7_op__str(this: const &Slice[string], sb: String) {
-  String_appendChar(sb, '[')
+pub func Slice7_op__str(this: const &Slice[string], sb: OutputStream) {
+  OutputStream_appendChar(sb, '[')
   {
     const i = 0
     while (i != this.len)
     {
       if (i != 0) {
-        String_appendString(sb, ", ")
+        OutputStream_appendString(sb, ", ")
       }
-      String_op__lshift15(sb, this.data.[i])
+      OutputStream_op__lshift15(sb, this.data.[i])
     }
   }
-  String_appendChar(sb, ']')
+  OutputStream_appendChar(sb, ']')
 }
 
 struct __Closure17{ }

@@ -94,7 +94,7 @@ static void preCheckClassMembers(AstNode *node, NamedTypeMember *members)
 {
     AstNode *member = node->classDecl.members;
 
-    for (u64 i = 0; member; member = member->next, i++) {
+    for (u64 i = hasFlag(node, Virtual); member; member = member->next, i++) {
         if (nodeIs(member, FieldDecl)) {
             members[i] = (NamedTypeMember){.name = member->structField.name,
                                            .type = member->type,
@@ -205,6 +205,7 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     const Type **implements = NULL, *baseType = NULL;
+    AstNode *base = node->classDecl.base, *vTableMember = NULL;
 
     if (node->classDecl.base) {
         checkBaseDecl(visitor, node);
@@ -235,7 +236,13 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
     if (typeIs(node->type, Error))
         goto checkClassInterfacesError;
 
-    u64 membersCount = countAstNodes(node->classDecl.members);
+    u8 isVirtual = hasFlag(node, Virtual);
+    if (hasFlag(base, Virtual) && !isVirtual) {
+        // Add - vtable: &Base_VTable member
+        vTableMember = inheritanceMakeVTableMember(ctx, node, NULL);
+    }
+
+    u64 membersCount = countAstNodes(node->classDecl.members) + isVirtual;
     NamedTypeMember *members =
         mallocOrDie(sizeof(NamedTypeMember) * membersCount);
 
@@ -248,8 +255,8 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
 
     ((Type *)this)->_this.that = makeClassType(ctx->types,
                                                getDeclarationName(node),
-                                               members,
-                                               membersCount,
+                                               &members[isVirtual],
+                                               membersCount - isVirtual,
                                                node,
                                                baseType,
                                                implements,
@@ -265,6 +272,18 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
     bool retype = checkMemberFunctions(visitor, node, members);
     if (!retype && typeIs(node->type, Error))
         goto checkClassMembersError;
+
+    if (isVirtual) {
+        members[0].name = S_vtable;
+        members[0].decl = inheritanceBuildVTableType(visitor, node);
+        if (members[0].decl == NULL)
+            goto checkClassMembersError;
+        members[0].type = members[0].decl->type;
+        retype = true;
+    }
+    else if (vTableMember != NULL) {
+        vTableMember->structField.value = inheritanceBuildVTable(ctx, node);
+    }
 
     if (retype) {
         node->type = replaceClassType(ctx->types,

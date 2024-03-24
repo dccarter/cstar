@@ -100,19 +100,17 @@ void checkMemberExpr(AstVisitor *visitor, AstNode *node)
             node->type = ERROR_TYPE(ctx);
         }
         if (member->ident.super) {
-            node->memberExpr.target = makeMemberExpr(
-                ctx->pool,
-                &target->loc,
-                target->flags,
-                target,
-                makeIdentifier(ctx->pool,
-                               &target->loc,
-                               S_super,
-                               member->ident.super - 1,
-                               NULL,
-                               member->ident.resolvesTo->parentScope->type),
-                NULL,
-                member->ident.resolvesTo->parentScope->type);
+            node->memberExpr.target =
+                makeCastExpr(ctx->pool,
+                             &target->loc,
+                             target->flags,
+                             target,
+                             makeTypeReferenceNode(
+                                 ctx->pool,
+                                 member->ident.resolvesTo->parentScope->type,
+                                 &target->loc),
+                             NULL,
+                             member->ident.resolvesTo->parentScope->type);
             member->ident.super--;
         }
     }

@@ -1510,10 +1510,6 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
     case astPathElem:
         CLONE_MANY(pathElement, args);
         break;
-    case astSubstitution:
-        CLONE_MANY(substitution, variables);
-        CLONE_ONE(substitution, body);
-        break;
     case astPath:
         CLONE_MANY(path, elements);
         break;

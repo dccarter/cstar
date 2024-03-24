@@ -145,6 +145,7 @@ set(CXY_MIDDLE_SOURCES
         src/cxy/lang/middle/sema/generics.c
         src/cxy/lang/middle/sema/if.c
         src/cxy/lang/middle/sema/index.c
+        src/cxy/lang/middle/sema/inheritance.c
         src/cxy/lang/middle/sema/interface.c
         src/cxy/lang/middle/sema/match.c
         src/cxy/lang/middle/sema/member.c

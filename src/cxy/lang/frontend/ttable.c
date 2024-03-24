@@ -207,11 +207,11 @@ static bool compareTypes(const Type *lhs, const Type *rhs)
     case typEnum:
     case typStruct:
     case typGeneric:
-    case typInfo:
     case typInterface:
     case typClass:
         return (left->name == right->name) && (left->ns == right->ns);
-
+    case typInfo:
+        return compareTypes(left->info.target, right->info.target);
     default:
         unreachable("invalid type");
     }

@@ -270,9 +270,15 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
         return typeIs(from, Enum) &&
                isTypeAssignableFrom(to->tEnum.base, from->tEnum.base);
     case typStruct:
+        if (typeIs(from, This))
+            return to == from->_this.that;
+        return typeIs(from, Pointer) && typeIs(from->pointer.pointed, Null);
     case typClass:
         if (typeIs(from, This))
             return to == from->_this.that;
+        if (typeIs(from, Class) && from->tClass.inheritance->base)
+            return to == from->tClass.inheritance->base;
+
         return typeIs(from, Pointer) && typeIs(from->pointer.pointed, Null);
     case typInfo:
         return typeIs(from, Info) &&
@@ -639,6 +645,17 @@ bool isConstType(const Type *type)
     return flags & flgConst;
 }
 
+bool typeIsBaseOf(const Type *base, const Type *type)
+{
+    const Type *it = resolveAndUnThisType(type);
+    while (typeIs(it, Class) && it->tClass.inheritance->base) {
+        if (it->tClass.inheritance->base == base)
+            return true;
+        it = resolveAndUnThisType(it->tClass.inheritance->base);
+    }
+    return false;
+}
+
 bool isBuiltinType(const Type *type)
 {
     if (type == NULL)
@@ -934,6 +951,18 @@ const NamedTypeMember *findNamedTypeMemberInContainer(
                              searchCompareStructMember);
 
     return index == -1 ? NULL : container->sortedMembers[index];
+}
+
+const NamedTypeMember *findOverloadMemberUpInheritanceChain(const Type *type,
+                                                            cstring member)
+{
+    while (type != NULL && isClassOrStructType(type)) {
+        const NamedTypeMember *named = findStructMember(type, member);
+        if (named)
+            return named;
+        type = getTypeBase(type);
+    }
+    return NULL;
 }
 
 const TypeInheritance *getTypeInheritance(const Type *type)
