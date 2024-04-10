@@ -684,6 +684,24 @@ AstNode *makeTupleExpr(MemPool *pool,
             .tupleExpr = {.elements = members, .len = countAstNodes(members)}});
 }
 
+AstNode *makeArrayExpr(MemPool *pool,
+                       const FileLoc *loc,
+                       u64 flags,
+                       AstNode *members,
+                       AstNode *next,
+                       const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){
+            .tag = astArrayExpr,
+            .flags = flags,
+            .type = type,
+            .next = next,
+            .arrayExpr = {.elements = members, .len = countAstNodes(members)}});
+}
+
 AstNode *makeTupleTypeAst(MemPool *pool,
                           const FileLoc *loc,
                           u64 flags,
@@ -1375,7 +1393,7 @@ cstring getMemberName(const AstNode *member)
 
 AstNode *findMemberByName(AstNode *node, cstring name)
 {
-    AstNode *member = node->structDecl.members;
+    AstNode *member = node;
     while (member) {
         if (getMemberName(member) == name)
             return member;
@@ -2050,6 +2068,8 @@ AstNode *findInAstNode(AstNode *node, cstring name)
     switch (node->tag) {
     case astStructDecl:
         return findMemberByName(node->structDecl.members, name);
+    case astClassDecl:
+        return findMemberByName(node->classDecl.members, name);
     case astInterfaceDecl:
         return findMemberByName(node->interfaceDecl.members, name);
     case astUnionDecl:

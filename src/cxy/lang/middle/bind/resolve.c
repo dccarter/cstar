@@ -77,8 +77,9 @@ static AstNode *captureSymbol(BindContext *ctx,
     return captured;
 }
 
-static AstNode *resolvePathBaseUpChain(BindContext *ctx, AstNode *path)
+static AstNode *resolvePathBaseUpChain(AstVisitor *visitor, AstNode *path)
 {
+    BindContext *ctx = getAstVisitorContext(visitor);
     AstNode *root = path->path.elements;
     AstNode *parent = findEnclosingClassOrStruct(ctx->env, NULL, NULL, NULL);
     if (!nodeIs(parent, ClassDecl) || parent->classDecl.base == NULL ||
@@ -99,7 +100,7 @@ static AstNode *resolvePathBaseUpChain(BindContext *ctx, AstNode *path)
     AstNode *base = resolvePath(parent->classDecl.base);
 
     // lookup symbol upstream
-    for (u64 i = 1; isStructDeclaration(base);
+    for (u64 i = 1; isClassDeclaration(base);
          base = resolvePath(underlyingDeclaration(base)->classDecl.base), i++) {
         resolved = findInAstNode(
             base, root->pathElement.alt ?: root->pathElement.name);
@@ -111,15 +112,14 @@ static AstNode *resolvePathBaseUpChain(BindContext *ctx, AstNode *path)
                 &root->loc,
                 &(AstNode){.tag = astPathElem,
                            .next = root,
-                           .pathElement = {.name = base->structDecl.name,
+                           .pathElement = {.isKeyword = true,
+                                           .name = S_super,
                                            .resolvesTo =
-                                               nodeIs(base, GenericDecl)
-                                                   ? underlyingDeclaration(base)
-                                                   : NULL}});
+                                               underlyingDeclaration(base)}});
             if (nodeIs(base, GenericDecl))
                 path->flags |= flgInherited;
-
-            return resolved;
+            astVisit(visitor, path);
+            return NULL;
         }
     }
 
@@ -138,9 +138,10 @@ void bindPath(AstVisitor *visitor, AstNode *node)
     BindContext *ctx = getAstVisitorContext(visitor);
     AstNode *base = node->path.elements;
     if (!base->pathElement.isKeyword) {
-        AstNode *resolved = resolvePathBaseUpChain(ctx, node);
+        AstNode *resolved = resolvePathBaseUpChain(visitor, node);
         if (resolved == NULL)
             return;
+
         if (hasFlag(resolved, Comptime) && !ctx->isComptimeContext) {
             logError(ctx->L,
                      &base->loc,
@@ -351,10 +352,46 @@ void bindStructField(AstVisitor *visitor, AstNode *node)
     defineSymbol(ctx->env, ctx->L, node->structField.name, node);
 }
 
-void bindStructOrClassDecl(AstVisitor *visitor, AstNode *node)
+void bindStructDecl(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
     AstNode *member = node->structDecl.members;
+
+    pushScope(ctx->env, node);
+    defineSymbol(ctx->env, ctx->L, S_This, node);
+
+    for (; member; member = member->next) {
+        if (isCallableDecl(member)) {
+            if (nodeIs(member, FuncDecl)) {
+                defineFunctionDecl(
+                    ctx->env, ctx->L, getDeclarationName(member), member);
+            }
+            else {
+                defineSymbol(
+                    ctx->env, ctx->L, getDeclarationName(member), member);
+            }
+        }
+        else {
+            astVisit(visitor, member);
+        }
+    }
+
+    if (!isBuiltinsInitialized())
+        defineDeclaration(ctx, node->structDecl.name, node);
+    member = node->structDecl.members;
+    for (; member; member = member->next) {
+        // visit unvisited functions or macros
+        if (isCallableDecl(member))
+            astVisit(visitor, member);
+    }
+
+    popScope(ctx->env);
+}
+
+void bindClassDecl(AstVisitor *visitor, AstNode *node)
+{
+    BindContext *ctx = getAstVisitorContext(visitor);
+    AstNode *member = node->classDecl.members;
 
     if (nodeIs(node, ClassDecl)) {
         astVisit(visitor, node->classDecl.base);
@@ -380,8 +417,7 @@ void bindStructOrClassDecl(AstVisitor *visitor, AstNode *node)
         }
     }
 
-    if (nodeIs(node, ClassDecl) || (!isBuiltinsInitialized()))
-        defineDeclaration(ctx, node->structDecl.name, node);
+    defineDeclaration(ctx, node->structDecl.name, node);
     member = node->structDecl.members;
     for (; member; member = member->next) {
         // visit unvisited functions or macros
@@ -610,8 +646,8 @@ void bindAstPhase2(CompilerDriver *driver, Env *env, AstNode *node)
         [astEnumOptionDecl] = bindEnumOption,
         [astEnumDecl] = bindEnumDecl,
         [astFieldDecl] = bindStructField,
-        [astStructDecl] = bindStructOrClassDecl,
-        [astClassDecl] = bindStructOrClassDecl,
+        [astStructDecl] = bindStructDecl,
+        [astClassDecl] = bindClassDecl,
         [astInterfaceDecl] = bindInterfaceDecl,
         [astIfStmt] = bindIfStmt,
         [astClosureExpr] = bindClosureExpr,

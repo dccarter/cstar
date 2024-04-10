@@ -236,6 +236,8 @@ static bool compileBuiltin(CompilerDriver *driver,
 
     program->flags |= flgBuiltinsModule;
     if (compileProgram(driver, program, fileName)) {
+        insertAstNode(&driver->startup,
+                      copyAstNode(driver->pool, program->program.decls));
         initializeBuiltins(driver->L, &program->loc, program->type);
         return true;
     }
@@ -385,6 +387,11 @@ const Type *compileModule(CompilerDriver *driver,
         program->flags |= flgImportedModule;
         if (!compileProgram(driver, program, path))
             return NULL;
+        AstNode *decls = program->program.decls;
+        if (nodeIs(decls, ExternDecl)) {
+            // copy this declaration
+            insertAstNode(&driver->startup, copyAstNode(driver->pool, decls));
+        }
     }
 
     AstNode *entity = entities;

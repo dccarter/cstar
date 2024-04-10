@@ -1028,6 +1028,12 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
     astVisit(&visitor, node->metadata.node);
 
     if (!hasErrors(driver->L)) {
+        if (auto gv =
+                context.module().getGlobalVariable(S___LLVM_global_ctors)) {
+            gv->setSection(S_ctor_section);
+            gv->setLinkage(llvm::GlobalValue::AppendingLinkage);
+        }
+
         if (!backend->addModule(context.moveModule()))
             logError(
                 driver->L, &node->loc, "module verification failed\n", nullptr);

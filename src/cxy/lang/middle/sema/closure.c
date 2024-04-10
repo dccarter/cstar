@@ -115,7 +115,7 @@ static void transformClosureToStructExpr(AstVisitor *visitor,
 static AstNode *makeClosureForwardFunction(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    AstNode *call = findMemberByName(node, S_CallOverload);
+    AstNode *call = findInAstNode(node, S_CallOverload);
     csAssert0(call);
 
     AstNodeList params = {};

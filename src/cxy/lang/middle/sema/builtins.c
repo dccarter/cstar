@@ -11,7 +11,7 @@
 
 static inline bool hasMember(AstNode *node, cstring name)
 {
-    return findMemberByName(node, name) != NULL;
+    return findInAstNode(node, name) != NULL;
 }
 
 static AstNode *implementCallStructCopyMember(TypingContext *ctx,

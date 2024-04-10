@@ -22,6 +22,8 @@ typedef struct SimplifyContext {
     MemPool *pool;
     AstModifier root;
     HashTable n2e;
+    AstNodeList init;
+    AstNodeList *startup;
     struct {
         struct {
             AstNode *currentFunction;
@@ -543,6 +545,7 @@ static void visitStructDecl(AstVisitor *visitor, AstNode *node)
     node->structDecl.members = fields.first;
     if (others.first)
         astModifierAddAsNext(&ctx->root, others.first);
+    // node->tag = astStructDecl;
 }
 
 void visitForStmt(AstVisitor *visitor, AstNode *node)
@@ -622,6 +625,131 @@ static void visitVarDecl(AstVisitor *visitor, AstNode *node)
     SimplifyContext *ctx = getAstVisitorContext(visitor);
     addNodeToExternDecl(ctx, node, node);
     astVisitFallbackVisitAll(visitor, node);
+    AstNode *init = node->varDecl.init;
+    if (!hasFlag(node, TopLevelDecl) || init == NULL) {
+        return;
+    }
+    else if (nodeIs(init, CallExpr)) {
+        if (typeIs(init->type, Class)) {
+            node->varDecl.init =
+                makeNullLiteral(ctx->pool, &init->loc, NULL, init->type);
+        }
+        else {
+            node->varDecl.init = NULL;
+        }
+        // just a list of assignment expressions
+        insertAstNode(&ctx->init,
+                      makeAssignExpr(ctx->pool,
+                                     &node->loc,
+                                     node->flags,
+                                     makeResolvedIdentifier(ctx->pool,
+                                                            &node->loc,
+                                                            node->varDecl.name,
+                                                            0,
+                                                            node,
+                                                            NULL,
+                                                            node->type),
+                                     opAssign,
+                                     init,
+                                     NULL,
+                                     init->type));
+    }
+}
+
+static void createModuleInit(SimplifyContext *ctx, AstNode *program)
+{
+    cstring name = makeString(ctx->strings, S___init);
+    AstNode *func = makeFunctionDecl(
+        ctx->pool,
+        builtinLoc(),
+        name,
+        NULL,
+        makeVoidAstNode(
+            ctx->pool, builtinLoc(), flgNone, NULL, makeVoidType(ctx->types)),
+        makeBlockStmt(ctx->pool, builtinLoc(), ctx->init.first, NULL, NULL),
+        flgTopLevelDecl | flgPublic,
+        NULL,
+        NULL);
+
+    func->type = makeFuncType(
+        ctx->types,
+        &(Type){.tag = typFunc,
+                .name = name,
+                .func = {.retType = makeVoidType(ctx->types), .decl = func}});
+    func->parentScope = program;
+
+    AstNode *ext = makeAstNode(ctx->pool,
+                               &func->loc,
+                               &(AstNode){.tag = astExternDecl,
+                                          .type = func->type,
+                                          .flags = func->flags | flgPublic,
+                                          .next = program->program.decls,
+                                          .externDecl.func = func});
+    program->program.decls = ext;
+    getLastAstNode(ext)->next = func;
+}
+
+static void simplifyMainModule(SimplifyContext *ctx, AstNode *program)
+{
+    const Type *moduleCtorType = makeTupleType(
+        ctx->types,
+        (const Type *[]){
+            getPrimitiveType(ctx->types, prtI32),
+            makeFuncType(ctx->types,
+                         &(Type){.tag = typFunc,
+                                 .name = S___init,
+                                 .func = {.retType = makeVoidType(ctx->types),
+                                          .decl = NULL}}),
+            makeVoidPointerType(ctx->types, flgNone)},
+        3,
+        flgNone);
+
+    AstNodeList elems = {};
+    AstNode *init = ctx->startup->first;
+    i32 i = 0;
+    for (; init; init = init->next, i++) {
+        // we want to add that function here
+        AstNode *members = makeIntegerLiteral(
+            ctx->pool,
+            &init->loc,
+            i,
+            makeResolvedIdentifier(
+                ctx->pool,
+                &init->loc,
+                init->type->name,
+                0,
+                init,
+                makeNullLiteral(ctx->pool,
+                                &init->loc,
+                                NULL,
+                                moduleCtorType->tuple.members[2]),
+                init->type),
+            moduleCtorType->tuple.members[0]);
+        insertAstNode(&elems,
+                      makeTupleExpr(ctx->pool,
+                                    &members->loc,
+                                    flgNone,
+                                    members,
+                                    NULL,
+                                    moduleCtorType));
+    }
+
+    getLastAstNode(ctx->startup->first)->next = program->program.decls;
+    program->program.decls = ctx->startup->first;
+    const Type *type = makeArrayType(ctx->types, moduleCtorType, i);
+    ctx->startup->first = NULL;
+
+    AstNode *ctors = makeVarDecl(
+        ctx->pool,
+        builtinLoc(),
+        flgTopLevelDecl | flgConst | flgPublic,
+        makeString(ctx->strings, S___LLVM_global_ctors),
+        NULL,
+        makeArrayExpr(
+            ctx->pool, builtinLoc(), flgConst, elems.first, NULL, type),
+        NULL,
+        type);
+    getLastAstNode(program->program.decls)->next = ctors;
 }
 
 AstNode *simplifyAst(CompilerDriver *driver, AstNode *node)
@@ -630,6 +758,7 @@ AstNode *simplifyAst(CompilerDriver *driver, AstNode *node)
                                .types = driver->types,
                                .strings = driver->strings,
                                .pool = driver->pool,
+                               .startup = &driver->startup,
                                .n2e = newHashTable(sizeof(NodeToExternDecl))};
 
     // clang-format off
@@ -653,6 +782,13 @@ AstNode *simplifyAst(CompilerDriver *driver, AstNode *node)
 
     astVisit(&visitor, node);
     freeHashTable(&context.n2e);
+    if (context.init.first != NULL) {
+        // only create initializer when there is data to initialize
+        createModuleInit(&context, node);
+    }
 
+    if (hasFlag(node, Main) && driver->startup.first) {
+        simplifyMainModule(&context, node);
+    }
     return node;
 }

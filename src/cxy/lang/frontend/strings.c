@@ -26,8 +26,9 @@ AST_ASSIGN_EXPR_LIST(f)
 void internCommonStrings(StrPool *pool)
 {
 #define f(name) S_##name = makeString(pool, #name);
-#define ff(name, str) S_##name = makeString(pool, "op__" str);
+#define ff(name, str) S_##name = makeString(pool, str);
     CXY_BUILTIN_NAMES(f, ff);
+#undef ff
 #undef f
 
 #define f(name, _0, _1, str) S_##name = makeString(pool, "op__" str);
