@@ -130,7 +130,8 @@ static const Type *checkBasePathElement(AstVisitor *visitor,
 
         AstNode *enclosure = node->pathElement.enclosure;
         if (keyword == S_super) {
-            return node->type = getTypeBase(enclosure->type);
+            node->type = enclosure->type;
+            return getTypeBase(enclosure->type);
         }
         else if (keyword == S_this) {
             return node->type =

@@ -64,8 +64,10 @@ static void transformVariadicFunction(ShakeAstContext *ctx,
                                       AstNode *node,
                                       AstNode *param)
 {
-    node->flags |= flgVariadic;
+
+    AstNode *parent = node->parentScope;
     bool isTransient = findAttribute(param, S_transient);
+    node->flags |= flgVariadic;
     AstNode *genericParam = makeAstNode(
         ctx->pool,
         &param->funcParam.type->loc,
@@ -74,22 +76,35 @@ static void transformVariadicFunction(ShakeAstContext *ctx,
                    .genericParam = {.name = S__Variadic,
                                     .constraints = param->funcParam.type,
                                     .inferIndex = node->funcDecl.paramsCount}});
-
     param->funcParam.type = makePath(ctx->pool,
                                      &param->funcParam.type->loc,
                                      S__Variadic,
                                      param->funcParam.type->flags,
                                      NULL);
 
-    *node = (AstNode){.tag = astGenericDecl,
-                      .loc = node->loc,
-                      .flags = node->flags | flgVariadic |
-                               (isTransient ? flgTransient : flgNone),
-                      .next = node->next,
-                      .genericDecl = {.decl = copyAstNode(ctx->pool, node),
-                                      .params = genericParam,
-                                      .paramsCount = 1,
-                                      .inferrable = 0}};
+    if (nodeIs(parent, GenericDecl)) {
+        AstNode *params = getLastAstNode(parent->genericDecl.params);
+        if (params)
+            params->next = genericParam;
+        else
+            parent->genericDecl.params = genericParam;
+        parent->flags |= flgVariadic | (isTransient ? flgTransient : flgNone);
+        if (parent->genericDecl.inferrable == -1)
+            parent->genericDecl.inferrable = 0;
+        else
+            parent->genericDecl.inferrable++;
+    }
+    else {
+        *node = (AstNode){.tag = astGenericDecl,
+                          .loc = node->loc,
+                          .flags = node->flags | flgVariadic |
+                                   (isTransient ? flgTransient : flgNone),
+                          .next = node->next,
+                          .genericDecl = {.decl = copyAstNode(ctx->pool, node),
+                                          .params = genericParam,
+                                          .paramsCount = 1,
+                                          .inferrable = 0}};
+    }
 }
 
 attr(always_inline) static bool reportIfUnexpectedNumberOfParameters(
@@ -544,6 +559,7 @@ static void shakeGenericDecl(AstVisitor *visitor, AstNode *node)
 
     free(inferrable);
     node->genericDecl.inferrable = (i16)index;
+    decl->parentScope = node;
     astVisit(visitor, decl);
 }
 
@@ -644,6 +660,13 @@ static void shakeStringExpr(AstVisitor *visitor, AstNode *node)
     }
 
     var->next = sb;
+    sb->next = makeResolvedPath(ctx->pool,
+                                &node->loc,
+                                var->varDecl.name,
+                                flgNone,
+                                var,
+                                NULL,
+                                var->type);
 
     node->tag = astStmtExpr;
     node->stmtExpr.stmt = makeBlockStmt(ctx->pool, &node->loc, var, NULL, NULL);

@@ -8,7 +8,6 @@ pub extern func realloc(ptr: &void, s: u64): &void
 pub extern func free(ptr: &void): void
 pub extern func abort(): void;
 pub extern func printf(s: string, ...args: auto): i32
-
 pub extern func write(fd: i32, buf: &const void, len: u64) : i64
 
 @[pure, inline]
@@ -369,6 +368,7 @@ class String : OutputStream {
 
     @inline
     func `str`(sb: OutputStream) {
+        printf("This is another thing\n");
         sb.append(_data, _size)
     }
 
@@ -459,7 +459,7 @@ class String : OutputStream {
     @inline const func data() => _data
 }
 
-class OutputFileStream : OutputStream {
+class FileOutputStream : OutputStream {
     - fd: i32
     func `init`(fd: i32 = 0) {
         this.fd = fd
@@ -536,6 +536,16 @@ pub func allocate[T](len: u32 = 0) => {
     return obj
 }
 
+pub func make[T](...args: auto) => {
+    var obj = __cxy_alloc(sizeof!(#T)) : T;
+    #if (T.isClass || T.isStruct) {
+        // this will ensure that default values are assigned
+        init_defaults!(obj)
+        obj.op__init(...args)
+    }
+    return obj
+}
+
 @inline
 pub func deallocate[T](ptr: T) {
     #if (T.has_deinit) {
@@ -544,8 +554,8 @@ pub func deallocate[T](ptr: T) {
     __cxy_free(ptr: &void)
 }
 
-pub var stdout: OutputStream = null;
-pub var stderr: OutputStream = null;
+pub var stdout: OutputStream = make[FileOutputStream](1);
+pub var stderr: OutputStream = make[FileOutputStream](2);
 
 @inline
 pub func print[T](data: const T) {
@@ -566,4 +576,5 @@ pub func println(...args: auto) {
     #for (const x: args) {
         stdout << #{x}
     }
+    stdout << '\n'
 }

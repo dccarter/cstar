@@ -27,6 +27,7 @@ typedef struct CompilerDriver {
     Log *L;
     TypeTable *types;
     AstNode *mainModule;
+    AstNodeList startup;
     CompilerPreprocessor preprocessor;
     void *backend;
 } CompilerDriver;

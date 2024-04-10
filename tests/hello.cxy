@@ -1,9 +1,30 @@
-var ofs: OutputFileStream;
+
+class Base {
+    x: i32 = 20;
+    func hello() {
+        println("We are ", x)
+    }
+
+    virtual func say() {
+        hello()
+    }
+}
+
+//var x: i32 = 10;
+class Child : Base {
+    y: i32 = 0;
+    func `init`() {
+        y = super.x - 10
+        println("X = ", x, "Y = ", y)
+        say()
+    }
+
+    const func `str`(os: OutputStream) {
+        os << "(x, y) = " << (x, y) << '\n'
+    }
+}
 
 pub func main() {
-    stdout = OutputFileStream(1)
-    stdout << "Hello "
-           << "World "
-           << true
-   println("We used println to print this")
+    var x = f"hello ${10}";
+    stdout << x
 }

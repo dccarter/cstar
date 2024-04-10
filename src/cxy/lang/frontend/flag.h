@@ -59,7 +59,7 @@
     f(Transient,            46)                 \
     f(Static,               47)                 \
     f(SyncCall,             48)                 \
-    f(Bound,                49)                 \
+    f(VTable,               49)                 \
     f(Substituted,          50)                 \
     f(Virtual,              51)                 \
     f(Abstract,             52)

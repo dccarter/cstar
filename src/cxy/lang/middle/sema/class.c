@@ -12,6 +12,28 @@
 
 #include "core/alloc.h"
 
+static inline bool isInheritable(AstNode *member)
+{
+    return nodeIs(member, FieldDecl) &&
+           !(hasFlag(member, Static) || hasFlag(member, VTable));
+}
+
+static void inheritClassMembers(TypingContext *ctx,
+                                AstNodeList *into,
+                                AstNode *base)
+{
+    if (base->classDecl.base) {
+        inheritClassMembers(ctx, into, resolvePath(base->classDecl.base));
+    }
+
+    AstNode *member = base->classDecl.members;
+    for (; member; member = member->next) {
+        if (isInheritable(member)) {
+            insertAstNode(into, deepCloneAstNode(ctx->pool, member));
+        }
+    }
+}
+
 void checkBaseDecl(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
@@ -30,15 +52,6 @@ void checkBaseDecl(AstVisitor *visitor, AstNode *node)
         node->type = ERROR_TYPE(ctx);
         return;
     }
-    else if (nodeIs(node, StructDecl) && !typeIs(base, Struct)) {
-        logError(
-            ctx->L,
-            &node->classDecl.base->loc,
-            "base of type of '{t}' is not supported, base must be a struct",
-            (FormatArg[]){{.t = base}});
-        node->type = ERROR_TYPE(ctx);
-        return;
-    }
 
     const AstNode *finalized = findAttribute(base->tClass.decl, S_final);
     if (finalized != NULL) {
@@ -48,6 +61,14 @@ void checkBaseDecl(AstVisitor *visitor, AstNode *node)
                  (FormatArg[]){{.t = base}});
         node->type = ERROR_TYPE(ctx);
         return;
+    }
+
+    AstNodeList inheritedMembers = {NULL};
+    inheritClassMembers(
+        ctx, &inheritedMembers, resolvePath(node->classDecl.base));
+    if (inheritedMembers.first != NULL) {
+        inheritedMembers.last->next = node->classDecl.members;
+        node->classDecl.members = inheritedMembers.first;
     }
 }
 

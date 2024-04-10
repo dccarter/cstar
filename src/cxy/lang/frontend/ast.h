@@ -844,6 +844,13 @@ AstNode *makeTupleExpr(MemPool *pool,
                        AstNode *next,
                        const Type *type);
 
+AstNode *makeArrayExpr(MemPool *pool,
+                       const FileLoc *loc,
+                       u64 flags,
+                       AstNode *members,
+                       AstNode *next,
+                       const Type *type);
+
 AstNode *makeTupleTypeAst(MemPool *pool,
                           const FileLoc *loc,
                           u64 flags,
@@ -1223,6 +1230,13 @@ static bool isStructDeclaration(AstNode *node)
     return nodeIs(node, StructDecl) ||
            nodeIs(node, GenericDecl) &&
                isStructDeclaration(node->genericDecl.decl);
+}
+
+static bool isClassDeclaration(AstNode *node)
+{
+    return nodeIs(node, ClassDecl) ||
+           nodeIs(node, GenericDecl) &&
+               isClassDeclaration(node->genericDecl.decl);
 }
 
 bool nodeIsLeftValue(const AstNode *node);

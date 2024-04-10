@@ -75,9 +75,13 @@
     f(asyncLaunchMember)        \
     f(sync)                     \
     f(self)                     \
+    f(__init)                   \
+    f(__startup)                \
     f(__name)                   \
     f(__fwd)                    \
-    f(CXY__main)
+    f(CXY__main)                \
+    ff(__LLVM_global_ctors, "llvm.global_ctors") \
+    ff(ctor_section,        ".ctor")
 
 // clang-format on
 
