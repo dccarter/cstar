@@ -127,7 +127,7 @@ pub class Vector[T] {
         return null
     }
 
-    const func `str`(sb: String) {
+    const func `str`(sb: OutputStream) {
         sb << '['
         for (var i: 0.._size) {
             if (i != 0)

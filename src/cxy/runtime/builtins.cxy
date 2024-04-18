@@ -537,13 +537,16 @@ pub func allocate[T](len: u32 = 0) => {
 }
 
 pub func make[T](...args: auto) => {
-    var obj = __cxy_alloc(sizeof!(#T)) : T;
-    #if (T.isClass || T.isStruct) {
+    #if (T.isClass) {
+        var obj = __cxy_alloc(sizeof!(#T)) : T;
         // this will ensure that default values are assigned
         init_defaults!(obj)
         obj.op__init(...args)
+        return obj
     }
-    return obj
+    else {
+        error!("type '{t}' unsupported by `make`", #T)
+    }
 }
 
 @inline

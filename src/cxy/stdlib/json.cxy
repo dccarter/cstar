@@ -1,58 +1,58 @@
 module json
 
-pub func toJson[T](@transient sb: StringBuilder, it: const T) : void {
+pub func toJson[T](@transient os: OutputStream, it: const T) : void {
     #if (T.isNumber || T.isBoolean || T.isChar) {
-        sb << it
+        os << it
     }
     else #if (T.isString) {
-        sb << '"' << it << '"'
+        os << '"' << it << '"'
     }
     else #if (T.isOptional) {
         if (it) {
             const value = *it;
-            toJson[#{typeof!(value)}](sb, value)
+            toJson[#{typeof!(value)}](os, value)
         }
     }
     else #if (T.isStruct) {
-        sb << "{";
+        os << "{";
         #const first = true;
         #for (const member: T.members) {
             #if (member.isField) {
                 #if (first == false) {
-                    sb << ", "
+                    os << ", "
                 }
 
-                sb << '"' << #{member.name} << "\": ";
-                toJson[#{member.Tinfo}](sb, it.#{mkIdent!(member.name)})
+                os << '"' << #{member.name} << "\": ";
+                toJson[#{member.Tinfo}](os, it.#{mk_ident!(member.name)})
                 #{first = false}
             }
         }
-        sb << "}"
+        os << "}"
     }
     else #if (T.isTuple) {
-        sb << "["
+        os << "["
         @consistent
         #for (const i: 0..T.membersCount) {
             #if (i != 0) {
-                sb << ", ";
+                os << ", ";
             }
 
             var member = it.#{i};
-            toJson(sb, member)
+            toJson(os, member)
         }
-        sb << "]"
+        os << "]"
     }
     else #if (T.isSlice) {
-        sb << '[';
+        os << '[';
         var first = true;
         for (const member, _: it) {
-            if (!first) sb << ", "
+            if (!first) os << ", "
 
-            toJson[#{T.elementType}](sb, member)
+            toJson[#{T.elementType}](os, member)
 
             first = false
         }
-        sb << ']'
+        os << ']'
     }
     else {
         // give up here

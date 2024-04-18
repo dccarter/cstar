@@ -200,6 +200,7 @@ llvm::Type *LLVMContext::createClassType(const Type *type)
 llvm::Type *LLVMContext::createStructType(const Type *type)
 {
     std::vector<llvm::Type *> members{};
+    AstNode *node = type->tStruct.decl;
     llvm::StructType *structType = nullptr;
     if (type->tStruct.decl == nullptr) {
         structType =
@@ -209,6 +210,7 @@ llvm::Type *LLVMContext::createStructType(const Type *type)
         structType =
             llvm::StructType::create(context, makeTypeName(type->tStruct.decl));
     }
+    node->codegen = structType;
     updateType(type, structType);
 
     for (u64 i = 0; i < type->tStruct.members->count; i++) {

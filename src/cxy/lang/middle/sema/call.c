@@ -160,9 +160,8 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
 
     callee_ = flattenWrappedType(callee_, &flags);
     if (isClassOrStructType(callee_)) {
-        AstNode *symbol = nodeIs(callee, Path)
-                              ? callee->path.elements->pathElement.resolvesTo
-                              : NULL;
+        AstNode *symbol = nodeIs(callee, Path) ? resolveAstNode(callee) : NULL;
+
         if (isClassOrStructAstNode(symbol)) {
             if (hasFlag(symbol, Abstract)) {
                 logError(ctx->L,

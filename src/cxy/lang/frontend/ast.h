@@ -1186,6 +1186,8 @@ AstNode *findInAstNode(AstNode *node, cstring name);
 
 AstNode *resolvePath(const AstNode *path);
 
+AstNode *resolveAstNode(AstNode *node);
+
 AstNode *getResolvedPath(const AstNode *path);
 
 AstNode *getMemberFunctionThis(AstNode *node);

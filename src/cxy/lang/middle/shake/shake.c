@@ -15,15 +15,16 @@
 
 static void addNodeInBlock(ShakeAstContext *ctx, AstNode *node)
 {
+    AstNode *last = getLastAstNode(node);
     if (ctx->block.previous == NULL) {
-        node->next = ctx->block.self->blockStmt.stmts;
+        last->next = ctx->block.self->blockStmt.stmts;
         ctx->block.self->blockStmt.stmts = node;
     }
     else {
-        node->next = ctx->block.current;
+        last->next = ctx->block.current;
         ctx->block.previous->next = node;
     }
-    ctx->block.previous = node;
+    ctx->block.previous = last;
 }
 
 static AstNode *makeTupleMemberExpr(ShakeAstContext *ctx, AstNode *tuple, u64 i)
@@ -222,7 +223,7 @@ static AstNode *makeStrExprBuilder(ShakeAstContext *ctx, AstNode *node)
         ctx->pool,
         &node->loc,
         flgNone,
-        S_sb,
+        makeAnonymousVariable(ctx->strPool, S_sb),
         NULL,
         makeCallExpr(
             ctx->pool,
@@ -644,8 +645,13 @@ static void shakeStringExpr(AstVisitor *visitor, AstNode *node)
     }
 
     AstNode *var = makeStrExprBuilder(ctx, node),
-            *sb = makeResolvedPath(
-                ctx->pool, &node->loc, S_sb, flgNone, var, NULL, var->type);
+            *sb = makeResolvedPath(ctx->pool,
+                                   &node->loc,
+                                   var->varDecl.name,
+                                   flgNone,
+                                   var,
+                                   NULL,
+                                   var->type);
 
     for (; part;) {
         if (nodeIs(part, StringLit) && part->stringLiteral.value[0] == '\0') {
@@ -660,17 +666,10 @@ static void shakeStringExpr(AstVisitor *visitor, AstNode *node)
     }
 
     var->next = sb;
-    sb->next = makeResolvedPath(ctx->pool,
-                                &node->loc,
-                                var->varDecl.name,
-                                flgNone,
-                                var,
-                                NULL,
-                                var->type);
-
-    node->tag = astStmtExpr;
-    node->stmtExpr.stmt = makeBlockStmt(ctx->pool, &node->loc, var, NULL, NULL);
-    node->stmtExpr.stmt->flags |= flgBlockReturns;
+    addNodeInBlock(ctx, var);
+    node->tag = astPath;
+    node->path.elements = makePathElement(
+        ctx->pool, &node->loc, var->varDecl.name, var->flags, NULL, NULL);
 }
 
 AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)

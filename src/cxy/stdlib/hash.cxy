@@ -49,7 +49,7 @@ struct HashMapNode[K, V] {
 
     @inline
     func `==`(key: K) {
-        #if (K.isStruct || K.isClass) {
+        #if (K.isStruct) {
             return this.key == &key
         }
         else {
@@ -236,7 +236,7 @@ pub class HashMap[K, V] {
         return output
     }
 
-    const func `str`(sb: String) {
+    const func `str`(sb: OutputStream) {
         sb << "{"
         var i = 0;
         var first = true;
@@ -426,7 +426,7 @@ pub class HashSet[K] {
         }
     }
 
-    const func `str`(sb: String) {
+    const func `str`(sb: OutputStream) {
         sb << "{"
         var i = 0;
         var first = true;
