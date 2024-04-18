@@ -168,6 +168,10 @@ size_t escapeString(const char *str, size_t n, char *dst, size_t size)
             dst[j++] = '$';
             i++;
             break;
+        case '"':
+            dst[j++] = '"';
+            i++;
+            break;
         default:
             dst[j++] = '\\';
             break;

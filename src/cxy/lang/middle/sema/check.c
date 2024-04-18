@@ -544,7 +544,7 @@ void addBlockLevelDeclaration(TypingContext *ctx, AstNode *node)
 {
     csAssert0(ctx->block.current);
 
-    node->next = ctx->block.current;
+    getLastAstNode(node)->next = ctx->block.current;
     if (ctx->block.previous)
         ctx->block.previous->next = node;
     else

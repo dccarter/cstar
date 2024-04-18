@@ -31,19 +31,15 @@ pub func __Optional8_op__deref(this: const &__Optional[(string, i32)]): (string,
 }
 
 pub func Some9(value: (string, i32)): __Optional[(string, i32)] {
-  return ({
-    var s10 = __Optional8{ok = false, val = (null, 0)}
-    __Optional8_op__init(&s10, value)
-    s10
-  })
+  var s10 = __Optional8{ok = false, val = (null, 0)}
+  __Optional8_op__init(&s10, value)
+  return s10
 }
 
 pub func None11(): __Optional[(string, i32)] {
-  return ({
-    var s12 = __Optional8{ok = false, val = (null, 0)}
-    __Optional8_op__init(&s12)
-    s12
-  })
+  var s12 = __Optional8{ok = false, val = (null, 0)}
+  __Optional8_op__init(&s12)
+  return s12
 }
 
 struct __Closure13 {
@@ -68,11 +64,9 @@ pub func hash14(val: string, init: Hash = 16777619): Hash {
 
 pub func OutputStream_op__lshift15(this: OutputStream, val: string): OutputStream {
   
-  OutputStream_appendString(this, ({
-    var s16 = CString{s = null}
-    CString_op__init(&s16, val)
-    s16
-  }))
+  var s16 = CString{s = null}
+  CString_op__init(&s16, val)
+  OutputStream_appendString(this, s16)
   return this
 }
 

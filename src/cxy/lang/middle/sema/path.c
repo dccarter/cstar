@@ -166,8 +166,8 @@ void checkPath(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *base = node->path.elements, *elem = base->next;
     if (hasFlag(node, Inherited)) {
-        base->pathElement.resolvesTo =
-            getBaseClassByName(ctx->currentStruct, base->pathElement.name);
+        base->pathElement.resolvesTo = getBaseClassByName(
+            ctx->currentStruct ?: ctx->currentClass, base->pathElement.name);
     }
     const Type *type = checkBasePathElement(visitor, base, node->flags);
 

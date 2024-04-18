@@ -917,6 +917,24 @@ void visitInterfaceDecl(AstVisitor *visitor, AstNode *node)
     ctx.getLLVMType(node->type);
 }
 
+void visitUnionDecl(AstVisitor *visitor, AstNode *node)
+{
+    auto &ctx = cxy::LLVMContext::from(visitor);
+    auto load = ctx.stack().loadVariable(false);
+    astVisitManyNodes(visitor, node->unionDecl.members);
+    ctx.stack().loadVariable(load);
+    node->codegen = ctx.getLLVMType(node->type);
+}
+
+void visitTypeDecl(AstVisitor *visitor, AstNode *node)
+{
+    auto &ctx = cxy::LLVMContext::from(visitor);
+    auto load = ctx.stack().loadVariable(false);
+    astVisitManyNodes(visitor, node->typeDecl.aliased);
+    ctx.stack().loadVariable(load);
+    node->codegen = ctx.getLLVMType(node->type);
+}
+
 static void visitEnumDecl(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
@@ -1018,6 +1036,8 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
         [astStructDecl] = visitStructDecl,
         [astClassDecl] = visitClassDecl,
         [astInterfaceDecl] = visitInterfaceDecl,
+        [astUnionDecl] = visitUnionDecl,
+        [astTypeDecl] = visitTypeDecl,
         [astEnumDecl] = visitEnumDecl,
         [astGenericDecl] = astVisitSkip,
         [astImportDecl] = astVisitSkip,

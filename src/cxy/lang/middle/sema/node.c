@@ -92,20 +92,20 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *callee = node->callExpr.callee;
     u64 flags = (callee->flags & ~flgTopLevelDecl);
-
-    // turn S(...) => ({ var tmp = S{}; tmp.init(...); tmp; })
+    const Type *target = unThisType(callee->type);
+    // turn S(...) => var tmp = S{}; tmp.init(...); tmp;
 
     cstring name = makeAnonymousVariable(ctx->strings, "s");
     // S{}
     AstNode *structExpr =
-        typeIs(callee->type, Struct)
+        typeIs(unwrapType(target, NULL), Struct)
             ? makeStructExpr(ctx->pool,
                              &callee->loc,
                              flags,
                              callee,
                              makeStructInitializerForDefaults(ctx, callee),
                              NULL,
-                             callee->type)
+                             target)
             : makeAllocateCall(ctx, callee);
     // var name = S{}
     AstNode *varDecl = makeVarDecl(ctx->pool,
@@ -116,6 +116,12 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
                                    structExpr,
                                    NULL,
                                    NULL);
+    const Type *type = checkType(visitor, varDecl);
+    if (typeIs(type, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return type;
+    }
+
     // tmp.init
     AstNode *newCallee = makePathWithElements(
         ctx->pool,
@@ -132,33 +138,31 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
             NULL),
         NULL);
 
-    // tmp;
-    AstNode *ret = makeExprStmt(
-        ctx->pool,
-        &node->loc,
-        node->flags,
-        makeResolvedPath(
-            ctx->pool, &node->loc, name, flgNone, varDecl, NULL, NULL),
-        NULL,
-        NULL);
-
     //     name.init(...); tmp
-    varDecl->next = makeCallExpr(ctx->pool,
-                                 &node->loc,
-                                 newCallee,
-                                 node->callExpr.args,
-                                 node->flags,
-                                 ret,
-                                 NULL);
+    AstNode *callExpr = makeCallExpr(ctx->pool,
+                                     &node->loc,
+                                     newCallee,
+                                     node->callExpr.args,
+                                     node->flags,
+                                     NULL,
+                                     NULL);
+    type = checkType(visitor, callExpr);
+    if (typeIs(type, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return type;
+    }
+    varDecl->next = callExpr;
+    
+    addBlockLevelDeclaration(ctx, varDecl);
 
     memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);
     clearAstBody(node);
-    node->tag = astStmtExpr;
-    node->stmtExpr.stmt =
-        makeBlockStmt(ctx->pool, &node->loc, varDecl, NULL, NULL);
-    node->stmtExpr.stmt->flags = flgBlockReturns;
+    node->tag = astIdentifier;
+    node->ident.value = name;
+    node->ident.resolvesTo = varDecl;
+    node->type = varDecl->type;
 
-    return checkType(visitor, node);
+    return node->type;
 }
 
 bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node)

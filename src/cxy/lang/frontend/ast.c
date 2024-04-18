@@ -2103,6 +2103,25 @@ AstNode *resolvePath(const AstNode *path)
     return resolved;
 }
 
+AstNode *resolveAstNode(AstNode *node)
+{
+    if (node == NULL)
+        return node;
+
+    switch (node->tag) {
+    case astTypeDecl:
+        return resolveAstNode(node->typeDecl.aliased);
+    case astPath:
+        return resolveAstNode(node->path.elements);
+    case astPathElem:
+        return resolveAstNode(node->pathElement.resolvesTo);
+    case astIdentifier:
+        return resolveAstNode(node->ident.resolvesTo);
+    default:
+        return node;
+    }
+}
+
 AstNode *getResolvedPath(const AstNode *path)
 {
     if (!nodeIs(path, Path))
