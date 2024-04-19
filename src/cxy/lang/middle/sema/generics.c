@@ -35,8 +35,14 @@ static bool inferGenericFunctionTypes(AstVisitor *visitor,
 
     u64 argsCount = countAstNodes(arg);
 
-    if (argsCount == 0)
-        return false;
+    if (argsCount == 0) {
+        if (!hasFlag(param, Variadic))
+            return false;
+        call->callExpr.args =
+            makeTupleExpr(ctx->pool, &call->loc, flgNone, NULL, NULL, NULL);
+        argsCount = 1;
+        arg = call->callExpr.args;
+    }
 
     const Type **argTypes = mallocOrDie(sizeof(Type *) * argsCount);
     bool status = true;

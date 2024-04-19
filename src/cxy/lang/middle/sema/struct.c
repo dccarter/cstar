@@ -139,7 +139,7 @@ bool evalExplicitConstruction(AstVisitor *visitor,
                                 &node->loc,
                                 flgNone);
     if (constructor == NULL ||
-        findAttribute(constructor->func.decl, "explicit"))
+        findAttribute(constructor->func.decl, S_explicit))
         return false;
 
     if (constructor->func.paramsCount != 1)

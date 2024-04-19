@@ -10,13 +10,13 @@ pub class Vector[T] {
     - func grow() {
         if (_size >= _capacity) {
             _capacity += (_capacity / 2)
-            _data = <&T> __cxy_realloc(_data: &void, sizeof!(#T) * _capacity)
+            _data = <&T> realloc(_data: &void, sizeof!(#T) * _capacity)
         }
     }
 
     func `init`(initialSize: u64 = #{DEFAULT_VECTOR_CAPACITY}) {
         _capacity = initialSize
-        _data = <&T> __cxy_alloc(sizeof!(#T) * _capacity)
+        _data = <&T> malloc(sizeof!(#T) * _capacity)
     }
 
     @inline
@@ -26,7 +26,7 @@ pub class Vector[T] {
                 _data.[i] = null
             }
         }
-        __cxy_free(_data: &void)
+        free(_data: &void)
     }
 
     func push(item: T) {
@@ -50,7 +50,7 @@ pub class Vector[T] {
     }
 
     func resize(newSize: u64) {
-        _data = <&T> __cxy_realloc(_data: &void, sizeof!(#T) * newSize)
+        _data = <&T> realloc(_data: &void, sizeof!(#T) * newSize)
         if (newSize < _size)
             _size = newSize
        _capacity = newSize;

@@ -84,7 +84,8 @@ void generateBinaryExpr(AstVisitor *visitor, AstNode *node)
 
     llvm::Value *lhs = NULL, *rhs = NULL;
 
-    if (left->type != right->type && !typeIs(left->type, Pointer)) {
+    if (left->type != right->type &&
+        !(typeIs(left->type, Pointer) || typeIs(left->type, Func))) {
         // implicitly cast to the bigger type
         if (isPrimitiveTypeBigger(left->type, right->type)) {
             rhs = ctx.generateCastExpr(visitor, left->type, right);

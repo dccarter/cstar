@@ -291,6 +291,8 @@ struct AstNode {
         struct {
             cstring name;
             struct AstNode *args;
+            u32 count;
+            bool kvpArgs;
         } attr;
 
         struct {
@@ -1037,6 +1039,12 @@ AstNode *makeIndexExpr(MemPool *pool,
                        AstNode *next,
                        const Type *type);
 
+AstNode *makeAttribute(MemPool *pool,
+                       const FileLoc *loc,
+                       cstring name,
+                       AstNode *args,
+                       AstNode *next);
+
 AstNode *makeBackendCallExpr(MemPool *pool,
                              const FileLoc *loc,
                              u64 flags,
@@ -1158,9 +1166,14 @@ void setGenericDeclarationParams(AstNode *node, AstNode *params);
 
 const AstNode *findAttribute(const AstNode *node, cstring name);
 
-FileLoc *getDeclarationLoc(FileLoc *dst, const AstNode *node);
-
 const AstNode *findAttributeArgument(const AstNode *attr, cstring name);
+
+const AstNode *getAttributeArgument(Log *L,
+                                    const FileLoc *loc,
+                                    const AstNode *attr,
+                                    u32 index);
+
+FileLoc *getDeclarationLoc(FileLoc *dst, const AstNode *node);
 
 bool mapAstNode(HashTable *mapping, const AstNode *from, AstNode *to);
 

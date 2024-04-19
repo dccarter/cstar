@@ -224,7 +224,7 @@ AstNode *findSymbol(const Env *env,
 
     if (isBuiltinsInitialized()) {
         AstNode *node = findBuiltinDecl(name);
-        if (node)
+        if (hasFlag(node, Public))
             return node;
     }
 

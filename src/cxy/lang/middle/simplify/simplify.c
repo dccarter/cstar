@@ -340,7 +340,7 @@ static void simplifyCastExpression(SimplifyContext *ctx,
                                    const Type *type)
 {
     const Type *from = unwrapType(node->type, NULL);
-    if (type == from)
+    if (type == from || typeIs(type, Func))
         return;
 
     if (!typeIs(from, Union)) {
@@ -742,13 +742,31 @@ static void simplifyMainModule(SimplifyContext *ctx, AstNode *program)
     AstNode *ctors = makeVarDecl(
         ctx->pool,
         builtinLoc(),
-        flgTopLevelDecl | flgConst | flgPublic,
+        flgTopLevelDecl | flgConst,
         makeString(ctx->strings, S___LLVM_global_ctors),
         NULL,
         makeArrayExpr(
             ctx->pool, builtinLoc(), flgConst, elems.first, NULL, type),
         NULL,
         type);
+    ctors->attrs = makeAttribute(
+        ctx->pool,
+        builtinLoc(),
+        S_linkage,
+        makeStringLiteral(ctx->pool,
+                          builtinLoc(),
+                          S_Appending,
+                          NULL,
+                          makeStringType(ctx->types)),
+        makeAttribute(ctx->pool,
+                      builtinLoc(),
+                      S_section,
+                      makeStringLiteral(ctx->pool,
+                                        builtinLoc(),
+                                        S_ctor_section,
+                                        NULL,
+                                        makeStringType(ctx->types)),
+                      NULL));
     getLastAstNode(program->program.decls)->next = ctors;
 }
 
