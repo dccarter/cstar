@@ -1,7 +1,17 @@
-import { Vector } from "stdlib/vector.cxy"
+//import { Vector } from "stdlib/vector.cxy"
 
-type Users = Vector[i32]
+class Demo {
+    func `init`() {
+        stdout << "Initializing....\n"
+    }
+
+    func `deinit`() {
+        stdout << "De-initializing....\n"
+    }
+}
 
 pub func main() {
-    var x = Users();
+    var x = make[Demo]();
+    ref(x)
+    deallocate(x)
 }

@@ -186,7 +186,7 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
     case optEquality:
         if (!typeIs(type, Primitive) && !typeIs(type, Pointer) &&
             !typeIs(type, String) && !typeIs(type, Enum) &&
-            !typeIs(type, Opaque)) {
+            !typeIs(type, Opaque) && !typeIs(type, Func)) {
             logError(ctx->L,
                      &node->loc,
                      "cannot perform equality binary operation '{s}' on "

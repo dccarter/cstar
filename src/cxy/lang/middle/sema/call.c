@@ -24,17 +24,26 @@ static void reAssignCalleeType(AstNode *node, const Type *type)
 {
     if (nodeIs(node, Path)) {
         AstNode *elem = getLastAstNode(node->path.elements);
+        AstNode *resolved = elem->pathElement.resolvesTo;
         elem->type = type;
-        elem->pathElement.resolvesTo = type->func.decl;
+        if (!nodeIs(resolved, FuncParamDecl) && !nodeIs(resolved, FieldDecl))
+            elem->pathElement.resolvesTo = type->func.decl;
     }
     else if (nodeIs(node, MemberExpr)) {
         AstNode *member = node->memberExpr.member;
         member->type = type;
-        if (nodeIs(member, Identifier))
-            member->ident.resolvesTo = type->func.decl;
+        if (nodeIs(member, Identifier)) {
+            AstNode *resolved = member->ident.resolvesTo;
+            if (!nodeIs(resolved, FuncParamDecl) &&
+                !nodeIs(resolved, FieldDecl))
+                member->ident.resolvesTo = type->func.decl;
+        }
     }
-    else if (nodeIs(node, Identifier))
-        node->ident.resolvesTo = type->func.decl;
+    else if (nodeIs(node, Identifier)) {
+        AstNode *resolved = node->ident.resolvesTo;
+        if (!nodeIs(resolved, FuncParamDecl) && !nodeIs(resolved, FieldDecl))
+            node->ident.resolvesTo = type->func.decl;
+    }
     node->type = type;
 }
 

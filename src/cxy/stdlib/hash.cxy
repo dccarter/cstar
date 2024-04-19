@@ -74,8 +74,8 @@ pub class HashMap[K, V] {
         var newCapacity = hashNextPrime(_capacity);
         if (newCapacity <= _capacity)
             newCapacity = _capacity * 2 + 1;
-        var newData = <&HashMapNode[K,V]> __cxy_calloc(sizeof!(#HashMapNode[K,V]) * newCapacity);
-        var newHashes = <&u32> __cxy_calloc(sizeof!(#u32) * newCapacity);
+        var newData = <&HashMapNode[K,V]> __calloc(sizeof!(#HashMapNode[K,V]) * newCapacity);
+        var newHashes = <&u32> __calloc(sizeof!(#u32) * newCapacity);
 
         var n = _capacity;
         for (const i: 0..n) {
@@ -91,8 +91,8 @@ pub class HashMap[K, V] {
             newHashes.[index] = hashCode;
         }
 
-        __cxy_free(_hashes: &void)
-        __cxy_free(_data: &void)
+        free(_hashes: &void)
+        free(_data: &void)
         _hashes = newHashes;
         _data = newData
         _capacity = newCapacity
@@ -121,8 +121,8 @@ pub class HashMap[K, V] {
 
     func `init`(_capacity: u64 = #{DEFAULT_HASH_TABLE_CAPACITY}) {
         _capacity = hashNextPrime(_capacity)
-        _data = <&HashMapNode[K,V]> __cxy_calloc(sizeof!(#HashMapNode[K,V]) * _capacity)
-        _hashes = <&u32> __cxy_calloc(sizeof!(#u32) * _capacity)
+        _data = <&HashMapNode[K,V]> __calloc(sizeof!(#HashMapNode[K,V]) * _capacity)
+        _hashes = <&u32> __calloc(sizeof!(#u32) * _capacity)
         this._capacity = _capacity
     }
 
@@ -134,8 +134,8 @@ pub class HashMap[K, V] {
                 }
             }
 
-            __cxy_free(_data: &void)
-            __cxy_free(_hashes: &void)
+            free(_data: &void)
+            free(_hashes: &void)
             _size = 0
             _capacity = 0
         }
@@ -276,8 +276,8 @@ pub class HashSet[K] {
         var newCapacity = hashNextPrime(_capacity);
         if (newCapacity <= _capacity)
             newCapacity = _capacity * 2 + 1;
-        var newData = <&HashMapNode[K, void]> __cxy_calloc(sizeof!(#HashMapNode[K, void]) * newCapacity);
-        var newHashes = <&u32> __cxy_calloc(sizeof!(#u32) * newCapacity);
+        var newData = <&HashMapNode[K, void]> __calloc(sizeof!(#HashMapNode[K, void]) * newCapacity);
+        var newHashes = <&u32> __calloc(sizeof!(#u32) * newCapacity);
 
         var n = _capacity;
         for (const i: 0..n) {
@@ -292,8 +292,8 @@ pub class HashSet[K] {
             newHashes.[index] = hashCode;
         }
 
-        __cxy_free(_hashes: &void)
-        __cxy_free(_data: &void)
+        free(_hashes: &void)
+        free(_data: &void)
         _hashes = newHashes;
         _data = newData
         _capacity = newCapacity
@@ -318,8 +318,8 @@ pub class HashSet[K] {
 
     func `init`(_capacity: u64 = #{DEFAULT_HASH_TABLE_CAPACITY}) {
         _capacity = hashNextPrime(_capacity)
-        _data = <&HashMapNode[K, void]> __cxy_calloc(sizeof!(#HashMapNode[K, void]) * _capacity)
-        _hashes = <&u32> __cxy_calloc(sizeof!(#u32) * _capacity)
+        _data = <&HashMapNode[K, void]> __calloc(sizeof!(#HashMapNode[K, void]) * _capacity)
+        _hashes = <&u32> __calloc(sizeof!(#u32) * _capacity)
         this._capacity = _capacity
     }
 
@@ -331,8 +331,8 @@ pub class HashSet[K] {
                 }
             }
 
-            __cxy_free(_data: &void)
-            __cxy_free(_hashes: &void)
+            free(_data: &void)
+            free(_hashes: &void)
             _size = 0
             _capacity = 0
         }

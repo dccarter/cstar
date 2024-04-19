@@ -17,11 +17,35 @@ extern "C" {
 #include "lang/frontend/visitor.h"
 }
 
-static llvm::GlobalValue::LinkageTypes getLinkageType(const AstNode *node)
+static llvm::GlobalValue::LinkageTypes getLinkageType(cxy::LLVMContext &ctx,
+                                                      const AstNode *node)
 {
     if (hasFlag(node, Public))
         return llvm::GlobalValue::ExternalLinkage;
+
+    if (auto attr = findAttribute(node, S_linkage)) {
+        auto linkage = getAttributeArgument(ctx.L, &node->loc, attr, 0);
+        if (nodeIs(linkage, StringLit)) {
+            if (linkage->stringLiteral.value == S_External) {
+                return llvm::GlobalValue::ExternalLinkage;
+            }
+            else if (linkage->stringLiteral.value == S_Appending) {
+                return llvm::GlobalValue::AppendingLinkage;
+            }
+        }
+    }
+
     return llvm::GlobalValue::InternalLinkage;
+}
+
+static inline cstring getGlobalVariableSection(const AstNode *node)
+{
+    if (auto attr = findAttribute(node, S_section)) {
+        auto section = getAttributeArgument(NULL, NULL, attr, 0);
+        if (nodeIs(section, StringLit))
+            return section->stringLiteral.value;
+    }
+    return nullptr;
 }
 
 static void dispatch(Visitor func, AstVisitor *visitor, AstNode *node)
@@ -58,8 +82,10 @@ static llvm::Function *generateFunctionProto(AstVisitor *visitor, AstNode *node)
     auto funcType = llvm::FunctionType::get(
         ctx.getLLVMType(type->func.retType), params, hasFlag(node, Variadic));
 
-    auto func = llvm::Function::Create(
-        funcType, getLinkageType(node), ctx.makeTypeName(node), &ctx.module());
+    auto func = llvm::Function::Create(funcType,
+                                       getLinkageType(ctx, node),
+                                       ctx.makeTypeName(node),
+                                       &ctx.module());
 
     cxy::updateType(type, funcType);
     node->codegen = func;
@@ -118,18 +144,23 @@ static void visitNullLit(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     AstNode *parent = node->parentScope;
-    if (nodeIs(parent, AssignExpr))
+    if (nodeIs(parent, AssignExpr)) {
         ctx.returnValue(llvm::ConstantPointerNull::get(
             llvm::dyn_cast<llvm::PointerType>(ctx.getLLVMType(parent->type))));
+    }
     else if (nodeIs(parent, BinaryExpr)) {
-        if (parent->binaryExpr.rhs == node)
+        if (parent->binaryExpr.rhs == node) {
+            auto lhs = parent->binaryExpr.lhs->type;
+            auto type = ctx.getLLVMType(parent->binaryExpr.lhs->type);
             ctx.returnValue(llvm::ConstantPointerNull::get(
                 llvm::dyn_cast<llvm::PointerType>(
-                    ctx.getLLVMType(parent->binaryExpr.lhs->type))));
-        else
+                    typeIs(lhs, Func) ? type->getPointerTo() : type)));
+        }
+        else {
             ctx.returnValue(llvm::ConstantPointerNull::get(
                 llvm::dyn_cast<llvm::PointerType>(
                     ctx.getLLVMType(parent->binaryExpr.rhs->type))));
+        }
     }
     else {
         ctx.returnValue(llvm::ConstantPointerNull::get(
@@ -474,6 +505,9 @@ static void visitTupleExpr(AstVisitor *visitor, AstNode *node)
         }
         ctx.returnValue(obj);
     }
+    else {
+        ctx.returnValue(ctx.createUndefined(node->type));
+    }
 }
 
 static void visitUnionValue(AstVisitor *visitor, AstNode *node)
@@ -757,6 +791,11 @@ void visitVariableDecl(AstVisitor *visitor, AstNode *node)
                                        ctx.getLLVMType(node->type));
         auto var = ctx.module().getGlobalVariable(node->varDecl.name);
         var->setConstant(hasFlag(node, Const));
+        var->setLinkage(getLinkageType(ctx, node));
+        if (auto section = getGlobalVariableSection(node)) {
+            var->setSection(section);
+        }
+
         if (node->varDecl.init) {
             var->setExternallyInitialized(false);
             auto value = cxy::codegen(visitor, node->varDecl.init);
@@ -1048,12 +1087,6 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
     astVisit(&visitor, node->metadata.node);
 
     if (!hasErrors(driver->L)) {
-        if (auto gv =
-                context.module().getGlobalVariable(S___LLVM_global_ctors)) {
-            gv->setSection(S_ctor_section);
-            gv->setLinkage(llvm::GlobalValue::AppendingLinkage);
-        }
-
         if (!backend->addModule(context.moveModule()))
             logError(
                 driver->L, &node->loc, "module verification failed\n", nullptr);

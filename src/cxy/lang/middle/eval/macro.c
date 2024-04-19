@@ -146,6 +146,48 @@ static AstNode *makeAstLogNoteNode(AstVisitor *visitor,
     return args;
 }
 
+static AstNode *makeRequireNode(AstVisitor *visitor,
+                                attr(unused) const AstNode *node,
+                                attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (args == NULL) {
+        logError(ctx->L,
+                 &node->loc,
+                 "call to `require!` macro is missing condition argument",
+                 NULL);
+        return NULL;
+    }
+    AstNode *cond = args;
+    FileLoc loc = cond->loc;
+    args = args->next;
+    if (!evaluate(visitor, cond)) {
+        if (!nodeIs(cond, Error))
+            logError(ctx->L,
+                     &loc,
+                     "condition argument of `require!` macro must be comptime "
+                     "evaluable",
+                     NULL);
+        return NULL;
+    }
+
+    if (!nodeIs(cond, BoolLit)) {
+        logError(ctx->L,
+                 &loc,
+                 "condition argument of `require!` macro must evaluate to a "
+                 "boolean literal",
+                 NULL);
+        return NULL;
+    }
+
+    if (!cond->boolLiteral.value) {
+        staticLog(visitor, dkError, node, args);
+    }
+
+    args->tag = astNoop;
+    return args;
+}
+
 static AstNode *makeFilenameNode(AstVisitor *visitor,
                                  attr(unused) const AstNode *node,
                                  attr(unused) AstNode *args)
@@ -800,6 +842,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "mk_ident", makeAstIdentifierNode},
     {.name = "mk_integer", makeAstIntegerNode},
     {.name = "ptroff", makePointerOfNode},
+    {.name = "require", makeRequireNode},
     {.name = "sizeof", makeSizeofNode},
     {.name = "typeat", makeTypeAtIdxNode},
     {.name = "typeof", makeTypeofNode},

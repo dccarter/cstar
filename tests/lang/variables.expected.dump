@@ -84,17 +84,17 @@ pub func Slice8_op__init(this: &Slice[string], data: &string, len: u64) {
 
 
 pub func Slice8_op__idx_assign(this: &Slice[string], index: i64, data: string) {
-  __cxy_assert(index < this.len, "__builtins.cxy", 488, 9)
+  __cxy_assert(index < this.len, "__builtins.cxy", 552, 9)
   this.data.[index] = data
 }
 
 pub func Slice8_op__idx(this: &Slice[string], index: i64): string {
-  __cxy_assert(index < this.len, "__builtins.cxy", 494, 9)
+  __cxy_assert(index < this.len, "__builtins.cxy", 558, 9)
   return this.data.[index]
 }
 
 pub func Slice8_op__idx(this: const &Slice[string], index: i64): string {
-  __cxy_assert(index < this.len, "__builtins.cxy", 500, 9)
+  __cxy_assert(index < this.len, "__builtins.cxy", 564, 9)
   return this.data.[index]
 }
 

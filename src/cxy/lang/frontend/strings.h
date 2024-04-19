@@ -75,6 +75,10 @@
     f(asyncLaunchMember)        \
     f(sync)                     \
     f(self)                     \
+    f(External)                 \
+    f(Appending)                \
+    f(linkage)                  \
+    f(section)                  \
     f(__init)                   \
     f(__startup)                \
     f(__name)                   \

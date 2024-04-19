@@ -1176,12 +1176,18 @@ static AstNode *attribute(Parser *P)
     Token tok = *consume0(P, tokIdent);
     const char *name = getTokenString(P, &tok, false);
     AstNodeList args = {NULL};
+    bool isKvp = false;
     if (match(P, tokLParen) && !isEoF(P)) {
+        isKvp = check(P, tokIdent) && checkPeek(P, 1, tokColon);
         while (!check(P, tokRParen, tokEoF)) {
             AstNode *value = NULL;
-            Token start = *consume0(P, tokIdent);
-            const char *pname = getTokenString(P, &start, false);
-            consume0(P, tokColon);
+            const char *pname = NULL;
+            Token start = *peek(P, 0);
+            if (isKvp) {
+                consume0(P, tokIdent);
+                pname = getTokenString(P, &start, false);
+                consume0(P, tokColon);
+            }
 
             switch (current(P)->tag) {
             case tokTrue:
@@ -1204,13 +1210,18 @@ static AstNode *attribute(Parser *P)
                 reportUnexpectedToken(P, "string/float/int/char/bool literal");
             }
 
-            listAddAstNode(
-                &args,
-                newAstNode(
-                    P,
-                    &start.fileLoc.begin,
-                    &(AstNode){.tag = astFieldExpr,
-                               .fieldExpr = {.name = pname, .value = value}}));
+            if (isKvp) {
+                listAddAstNode(
+                    &args,
+                    newAstNode(P,
+                               &start.fileLoc.begin,
+                               &(AstNode){.tag = astFieldExpr,
+                                          .fieldExpr = {.name = pname,
+                                                        .value = value}}));
+            }
+            else {
+                listAddAstNode(&args, value);
+            }
 
             match(P, tokComma);
         }
@@ -1220,7 +1231,9 @@ static AstNode *attribute(Parser *P)
     return newAstNode(
         P,
         &tok.fileLoc.begin,
-        &(AstNode){.tag = astAttr, .attr = {.name = name, .args = args.first}});
+        &(AstNode){
+            .tag = astAttr,
+            .attr = {.name = name, .args = args.first, .kvpArgs = isKvp}});
 }
 
 static AstNode *attributes(Parser *P)

@@ -94,17 +94,17 @@ pub func Slice10_op__init(this: &Slice[string], data: &string, len: u64) {
 
 
 pub func Slice10_op__idx_assign(this: &Slice[string], index: i64, data: string) {
-  __cxy_assert(index < this.len, "__builtins.cxy", 488, 9)
+  __cxy_assert(index < this.len, "__builtins.cxy", 552, 9)
   this.data.[index] = data
 }
 
 pub func Slice10_op__idx(this: &Slice[string], index: i64): string {
-  __cxy_assert(index < this.len, "__builtins.cxy", 494, 9)
+  __cxy_assert(index < this.len, "__builtins.cxy", 558, 9)
   return this.data.[index]
 }
 
 pub func Slice10_op__idx(this: const &Slice[string], index: i64): string {
-  __cxy_assert(index < this.len, "__builtins.cxy", 500, 9)
+  __cxy_assert(index < this.len, "__builtins.cxy", 564, 9)
   return this.data.[index]
 }
 
@@ -149,9 +149,15 @@ pub func __Closure20_op__call(this: &__Closure20): i8 {
 }
 
 
+func __deinit_fwd23(ptr: sptr) {
+  String_op__deinit(((ptr : &class String)))
+}
+
+
 
 pub func allocate22(len: u32 = 0): String {
-  var obj = (__cxy_alloc(__bc(0, #String)) : class String)
+  var obj: class String
+  obj = ((__smart_ptr_alloc(__bc(0, #String), __deinit_fwd23) : class String))
   {
     obj.vtable = &String_vTable
     obj._capacity = 0
@@ -161,10 +167,10 @@ pub func allocate22(len: u32 = 0): String {
   return obj
 }
 
-struct __Closure23{ }
+struct __Closure24{ }
 
 
-pub func __Closure23_op__call(this: &__Closure23, name: string): String {
+pub func __Closure24_op__call(this: &__Closure24, name: string): String {
   var s21 = allocate22(<u32>0)
   String_op__init(s21)
   var sb7 = s21
@@ -173,36 +179,23 @@ pub func __Closure23_op__call(this: &__Closure23, name: string): String {
 }
 
 
-pub func OutputStream_op__lshift25(this: OutputStream, val: i8): OutputStream {
+pub func OutputStream_op__lshift26(this: OutputStream, val: i8): OutputStream {
   
   OutputStream_appendSignedInt(this, <i64>val)
   return this
 }
 
-struct __Closure26 {
+struct __Closure27 {
   - b: string
   - x: i8
 }
 
-pub func __Closure26_op__call(this: &__Closure26): String {
-  var s24 = allocate22(<u32>0)
-  String_op__init(s24)
-  var sb8 = s24
-  OutputStream_op__lshift25(OutputStream_op__lshift18(OutputStream_op__lshift18(<OutputStream>sb8, this.b), " -> "), this.x)
+pub func __Closure27_op__call(this: &__Closure27): String {
+  var s25 = allocate22(<u32>0)
+  String_op__init(s25)
+  var sb8 = s25
+  OutputStream_op__lshift26(OutputStream_op__lshift18(OutputStream_op__lshift18(<OutputStream>sb8, this.b), " -> "), this.x)
   return sb8
-}
-
-struct __Closure28 {
-  - b: string
-  - x: i8
-}
-
-pub func __Closure28_op__call(this: &__Closure28): String {
-  var s27 = allocate22(<u32>0)
-  String_op__init(s27)
-  var sb9 = s27
-  OutputStream_op__lshift25(OutputStream_op__lshift18(OutputStream_op__lshift18(<OutputStream>sb9, this.b), " -> "), this.x)
-  return sb9
 }
 
 struct __Closure29 {
@@ -210,34 +203,47 @@ struct __Closure29 {
   - x: i8
 }
 
-pub func __Closure29_op__call(this: &__Closure29) {
-  const g = __Closure28{b = b, x = x}
+pub func __Closure29_op__call(this: &__Closure29): String {
+  var s28 = allocate22(<u32>0)
+  String_op__init(s28)
+  var sb9 = s28
+  OutputStream_op__lshift26(OutputStream_op__lshift18(OutputStream_op__lshift18(<OutputStream>sb9, this.b), " -> "), this.x)
+  return sb9
 }
 
-struct __Closure30{ }
+struct __Closure30 {
+  - b: string
+  - x: i8
+}
 
-pub func __Closure30_op__call(this: &__Closure30) { }
-
-
-func __Closure30__fwd(ptr: &void): void => __Closure30_op__call(<&__Closure30>ptr)
+pub func __Closure30_op__call(this: &__Closure30) {
+  const g = __Closure29{b = b, x = x}
+}
 
 struct __Closure31{ }
 
-pub func __Closure31_op__call(this: &__Closure31, msg: string) { }
+pub func __Closure31_op__call(this: &__Closure31) { }
 
 
-func __Closure31__fwd(ptr: &void, msg: string): void => __Closure31_op__call(<&__Closure31>ptr, msg)
+func __Closure31__fwd(ptr: &void): void => __Closure31_op__call(<&__Closure31>ptr)
+
+struct __Closure32{ }
+
+pub func __Closure32_op__call(this: &__Closure32, msg: string) { }
+
+
+func __Closure32__fwd(ptr: &void, msg: string): void => __Closure32_op__call(<&__Closure32>ptr, msg)
 
 func main(args: Slice10) {
   const one = __Closure20{}
   __Closure20_op__call(&one)
-  __Closure23_op__call(&(__Closure23{}), "User")
+  __Closure24_op__call(&(__Closure24{}), "User")
   var x = 100
   var b = "Hello"
-  __Closure26_op__call(&(__Closure26{b = b, x = x}))
-  const f = __Closure29{b = b, x = x}
-  closureArg0((<&void>&__Closure30{}, __Closure30__fwd))
-  closureArg2((<&void>&__Closure31{}, __Closure31__fwd))
+  __Closure27_op__call(&(__Closure27{b = b, x = x}))
+  const f = __Closure30{b = b, x = x}
+  closureArg0((<&void>&__Closure31{}, __Closure31__fwd))
+  closureArg2((<&void>&__Closure32{}, __Closure32__fwd))
 }
 
 const llvm.global_ctors = [(0, __init, null)]

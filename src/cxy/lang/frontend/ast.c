@@ -1100,6 +1100,33 @@ AstNode *makeIndexExpr(MemPool *pool,
                    .indexExpr = {.target = target, .index = index}});
 }
 
+AstNode *makeAttribute(MemPool *pool,
+                       const FileLoc *loc,
+                       cstring name,
+                       AstNode *args,
+                       AstNode *next)
+{
+    bool isKvp = nodeIs(args, FieldExpr);
+    for (AstNode *arg = args; arg; arg = arg->next) {
+        if (isKvp) {
+            csAssert(
+                nodeIs(arg, FieldExpr),
+                "only key/value pairs can be used with this attribute express");
+        }
+        else {
+            csAssert(isLiteralExpr(arg),
+                     "only literals can be used in attribute expressions");
+        }
+    }
+
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astAttr,
+                   .next = next,
+                   .attr = {.name = name, .args = args, .kvpArgs = isKvp}});
+}
+
 AstNode *makeBackendCallExpr(MemPool *pool,
                              const FileLoc *loc,
                              u64 flags,
@@ -1840,6 +1867,33 @@ const AstNode *findAttributeArgument(const AstNode *attr, cstring name)
         arg = arg->next;
     }
     return arg ? arg->fieldExpr.value : NULL;
+}
+
+const AstNode *getAttributeArgument(Log *L,
+                                    const FileLoc *loc,
+                                    const AstNode *attr,
+                                    u32 index)
+{
+    if (attr->attr.kvpArgs) {
+        if (L) {
+            logError(L,
+                     loc,
+                     "attribute '{s}' is defined with key-value arguments",
+                     (FormatArg[]){{.s = attr->attr.name}});
+            logNote(L, &attr->loc, "attribute defined here", NULL);
+        }
+        return NULL;
+    }
+
+    AstNode *node = getNodeAtIndex(attr->attr.args, index);
+    if (L && node == NULL) {
+        logError(L,
+                 loc,
+                 "given index `{u32}` is out of range for attribute arguments",
+                 (FormatArg[]){{.u32 = index}});
+        logNote(L, &attr->loc, "attribute defined here", NULL);
+    }
+    return node;
 }
 
 const char *getDeclKeyword(AstTag tag)
