@@ -85,7 +85,10 @@
     f(__fwd)                    \
     f(CXY__main)                \
     ff(__LLVM_global_ctors, "llvm.global_ctors") \
-    ff(ctor_section,        ".ctor")
+    ff(ctor_section,        ".ctor")\
+    ff(sptr_ref,            "__smart_ptr_get")   \
+    ff(sptr_drop,           "__smart_ptr_drop")  \
+    ff(copy,                "__copy")
 
 // clang-format on
 

@@ -123,7 +123,7 @@ static void checkBlockStmt(AstVisitor *visitor, AstNode *node)
     ctx->block = block;
 
     if (node->type == NULL)
-        node->type = makeAutoType(ctx->types);
+        node->type = makeVoidType(ctx->types);
 }
 
 static void checkReturnStmt(AstVisitor *visitor, AstNode *node)
@@ -543,13 +543,14 @@ void addTopLevelDeclarationAsNext(TypingContext *ctx, AstNode *node)
 void addBlockLevelDeclaration(TypingContext *ctx, AstNode *node)
 {
     csAssert0(ctx->block.current);
-
-    getLastAstNode(node)->next = ctx->block.current;
+    AstNode *last = getLastAstNode(node);
+    last->next = ctx->block.current;
     if (ctx->block.previous)
         ctx->block.previous->next = node;
     else
         ctx->block.self->program.decls = node;
-    ctx->block.previous = node;
+
+    ctx->block.previous = last;
 }
 
 const Type *checkMaybeComptime(AstVisitor *visitor, AstNode *node)

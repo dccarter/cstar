@@ -62,7 +62,11 @@
     f(VTable,               49)                 \
     f(Substituted,          50)                 \
     f(Virtual,              51)                 \
-    f(Abstract,             52)
+    f(Abstract,             52)                 \
+    f(ModuleInit,           53)                 \
+    f(Move,                 54)                 \
+    f(Moved,                55)                 \
+    f(BlockValue,           56)
 
 // clang-format on
 static const u64 flgNone = 0;

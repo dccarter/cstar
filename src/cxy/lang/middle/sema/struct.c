@@ -53,6 +53,13 @@ static void evaluateStructMembers(AstVisitor *visitor, AstNode *node)
         }
         else {
             type = checkType(visitor, member);
+            type = unwrapType(type, NULL);
+            if (isClassType(type)) {
+                node->flags |= flgReferenceMembers;
+            }
+            else if (isStructType(type) || isStructType(type)) {
+                node->flags |= (type->flags & flgReferenceMembers);
+            }
         }
 
         if (typeIs(type, Error))
@@ -170,7 +177,7 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
         node->type = ERROR_TYPE(ctx);
         return;
     }
-
+    target = resolveType(target);
     if (!isStructType(target)) {
         logError(ctx->L,
                  &node->structExpr.left->loc,
@@ -180,7 +187,7 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
         node->type = ERROR_TYPE(ctx);
         return;
     }
-
+    node->structExpr.left->type = target;
     AstNode *field = node->structExpr.fields, *prev = node->structExpr.fields;
     const Type *striped = stripAll(target);
     bool *initialized =
@@ -330,7 +337,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
                        members,
                        membersCount,
                        node,
-                       node->flags & flgTypeApplicable);
+                       node->flags & flgTypeApplicable | flgReferenceMembers);
     node->type = this;
 
     implementClassOrStructBuiltins(visitor, node);

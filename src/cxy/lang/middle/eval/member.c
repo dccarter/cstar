@@ -4,6 +4,8 @@
 
 #include "eval.h"
 
+#include "lang/frontend/flag.h"
+
 static bool evalIntegerMemberExpr(EvalContext *ctx, AstNode *node)
 {
     AstNode *target = node->memberExpr.target;

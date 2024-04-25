@@ -79,7 +79,7 @@ void transformToMemberCallExpr(AstVisitor *visitor,
         makeIdentifier(ctx->pool, &target->loc, member, 0, NULL, NULL),
         NULL,
         NULL);
-
+    callee->parentScope = node;
     clearAstBody(node);
     node->tag = astCallExpr;
     node->type = NULL;
@@ -108,14 +108,15 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
                              target)
             : makeAllocateCall(ctx, callee);
     // var name = S{}
-    AstNode *varDecl = makeVarDecl(ctx->pool,
-                                   &callee->loc,
-                                   flags | flgImmediatelyReturned,
-                                   name,
-                                   NULL,
-                                   structExpr,
-                                   NULL,
-                                   NULL);
+    AstNode *varDecl =
+        makeVarDecl(ctx->pool,
+                    &callee->loc,
+                    flags | flgImmediatelyReturned | flgTransient,
+                    name,
+                    NULL,
+                    structExpr,
+                    NULL,
+                    NULL);
     const Type *type = checkType(visitor, varDecl);
     if (typeIs(type, Error)) {
         node->type = ERROR_TYPE(ctx);
@@ -152,7 +153,7 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
         return type;
     }
     varDecl->next = callExpr;
-    
+
     addBlockLevelDeclaration(ctx, varDecl);
 
     memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);
@@ -161,6 +162,7 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
     node->ident.value = name;
     node->ident.resolvesTo = varDecl;
     node->type = varDecl->type;
+    node->flags |= flgMove;
 
     return node->type;
 }

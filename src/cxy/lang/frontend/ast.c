@@ -2293,11 +2293,19 @@ CCodeKind getCCodeKind(TokenTag tag)
 
 bool nodeIsLeftValue(const AstNode *node)
 {
+    if (node == NULL)
+        return false;
     switch (node->tag) {
     case astPath:
     case astIdentifier:
-    case astMemberExpr:
+    case astIndexExpr:
         return true;
+    case astGroupExpr:
+        return nodeIsLeftValue(node->groupExpr.expr);
+    case astMemberExpr: {
+        AstNode *member = node->memberExpr.member;
+        return nodeIs(member, IntegerLit) || nodeIsLeftValue(member);
+    }
     default:
         return false;
     }

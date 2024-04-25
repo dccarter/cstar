@@ -336,7 +336,7 @@ void astModifierInit(AstModifier *ctx, AstNode *node)
 
 void astModifierNext(AstModifier *ctx, AstNode *node)
 {
-    ctx->previous = ctx->current;
+    ctx->previous = ctx->current ?: ctx->previous;
     ctx->current = node;
 }
 
@@ -354,12 +354,11 @@ void astModifierRemoveCurrent(AstModifier *ctx)
             ctx->parent->blockStmt.stmts = ctx->current->next;
         }
     }
+    ctx->current = NULL;
 }
 
 void astModifierAdd(AstModifier *ctx, AstNode *node)
 {
-    csAssert0(ctx->current);
-
     node->next = ctx->current;
     if (ctx->previous) {
         ctx->previous->next = node;

@@ -7,16 +7,28 @@ pub class Vector[T] {
     - _size: u64
     - _capacity: u64
 
+    @inline
+    - func elemSize() {
+        #if (T.isClass)
+            return sizeof!(#&void)
+        else
+            return sizeof!(#T)
+    }
+
     - func grow() {
         if (_size >= _capacity) {
             _capacity += (_capacity / 2)
-            _data = <&T> realloc(_data: &void, sizeof!(#T) * _capacity)
+            _data = <&T> realloc(_data: &void, elemSize() * _capacity)
+           #if (T.isDestructible) {
+               memset((_data + _size), 0, elemSize() * (_capacity - _size))
+           }
         }
     }
 
     func `init`(initialSize: u64 = #{DEFAULT_VECTOR_CAPACITY}) {
+        _size = 0
         _capacity = initialSize
-        _data = <&T> malloc(sizeof!(#T) * _capacity)
+        _data = <&T>__calloc(elemSize() * _capacity)
     }
 
     @inline
@@ -31,7 +43,7 @@ pub class Vector[T] {
 
     func push(item: T) {
         grow()
-        _data.[_size++] = item
+        _data.[_size++] = &&item
     }
 
     func pop() {
@@ -42,15 +54,15 @@ pub class Vector[T] {
 
     func shift() {
         assert!(_size > 0)
-        var item = _data.[0];
+        var item = &&_data.[0];
         var tmp = _data;
         _size--
-        memmove(tmp, ptroff!(tmp + 1), sizeof!(#T) * _size)
+        memmove(tmp, ptroff!(tmp + 1), elemSize() * _size)
         return item
     }
 
     func resize(newSize: u64) {
-        _data = <&T> realloc(_data: &void, sizeof!(#T) * newSize)
+        _data = <&T> realloc(_data: &void, elemSize() * newSize)
         if (newSize < _size)
             _size = newSize
        _capacity = newSize;
@@ -68,7 +80,7 @@ pub class Vector[T] {
 
     func `[]=`(index: i32, value: T) {
         assert!(index < _size)
-        _data.[index] = value
+        _data.[index] = &&value
     }
 
     func `..`() {

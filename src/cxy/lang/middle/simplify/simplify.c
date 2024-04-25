@@ -9,6 +9,7 @@
 #include "lang/frontend/strings.h"
 #include "lang/frontend/ttable.h"
 #include "lang/frontend/visitor.h"
+#include "lang/middle/builtins.h"
 
 typedef struct {
     AstNode *node;
@@ -24,7 +25,7 @@ typedef struct SimplifyContext {
     HashTable n2e;
     AstNodeList init;
     AstNodeList *startup;
-    struct {
+    union {
         struct {
             AstNode *currentFunction;
             AstModifier block;
@@ -35,6 +36,10 @@ typedef struct SimplifyContext {
         } stack;
     };
 } SimplifyContext;
+
+static bool isRedundantExpression(AstNode *node);
+
+static bool isRedundantStatement(AstNode *node);
 
 bool compareNodeToExternDecl(const void *lhs, const void *rhs)
 {
@@ -111,6 +116,21 @@ static NodeToExternDecl *getNodeToExternDecl(SimplifyContext *ctx,
                            hashPtr(hashInit(), decl),
                            sizeof(NodeToExternDecl),
                            compareNodeToExternDecl);
+}
+
+static AstNode *makeExternReferenceToBuiltin(SimplifyContext *ctx,
+                                             cstring builtin)
+{
+    AstNode *target = findBuiltinDecl(builtin);
+    csAssert0(target);
+    AstNode *decl = makeAstNode(ctx->pool,
+                                &target->loc,
+                                &(AstNode){.tag = astExternDecl,
+                                           .type = target->type,
+                                           .flags = target->flags,
+                                           .externDecl.func = target});
+    addNodeToExternDecl(ctx, target, decl);
+    return decl;
 }
 
 static void simplifyForRangeStmt(AstVisitor *visitor, AstNode *node)
@@ -361,13 +381,112 @@ static void simplifyCastExpression(SimplifyContext *ctx,
     }
 }
 
+static bool isRedundantExpressionMany(AstNode *node)
+{
+    AstNode *it = node;
+    for (; it; it = it->next) {
+        if (isRedundantExpression(it))
+            return true;
+    }
+
+    return false;
+}
+
+static bool isRedundantStructExpression(AstNode *node)
+{
+    AstNode *it = node->structExpr.fields;
+    for (; it; it = it->next) {
+        if (isRedundantExpression(it->fieldExpr.value))
+            return true;
+    }
+
+    return false;
+}
+
+static bool isRedundantExpression(AstNode *node)
+{
+    if (node == NULL)
+        return true;
+
+    if (hasFlag(node, BlockValue))
+        return false;
+
+    switch (node->tag) {
+    case astNullLit:
+    case astCharLit:
+    case astBoolLit:
+    case astIntegerLit:
+    case astFloatLit:
+    case astStringLit:
+    case astIdentifier:
+    case astPath:
+        return true;
+    case astMemberExpr:
+        return isRedundantExpression(node->memberExpr.target);
+    case astIndexExpr:
+        return isRedundantExpression(node->indexExpr.target);
+    case astArrayExpr:
+        return isRedundantExpressionMany(node->arrayExpr.elements);
+    case astTupleExpr:
+        return isRedundantExpressionMany(node->tupleExpr.elements);
+    case astStructExpr:
+        return isRedundantStructExpression(node);
+    case astGroupExpr:
+        return isRedundantExpression(node->groupExpr.expr);
+    case astStmtExpr:
+        return isRedundantStatement(node->stmtExpr.stmt);
+    case astUnaryExpr: {
+        Operator op = node->unaryExpr.op;
+        return op != opPreInc && op != opPreDec && op != opPostInc &&
+               op != opPostDec &&
+               isRedundantExpression(node->unaryExpr.operand);
+    }
+
+    case astBinaryExpr:
+        return isRedundantExpression(node->binaryExpr.lhs) ||
+               isRedundantExpression(node->binaryExpr.rhs);
+
+    case astTernaryExpr:
+        return isRedundantExpression(node->ternaryExpr.cond) ||
+               isRedundantExpression(node->ternaryExpr.body) ||
+               isRedundantExpression(node->ternaryExpr.otherwise);
+    default:
+        return false;
+    }
+}
+
+bool isRedundantStatement(AstNode *node)
+{
+    if (nodeIs(node, BlockStmt))
+        return node->blockStmt.stmts == NULL;
+
+    if (!nodeIs(node, ExprStmt))
+        return false;
+
+    AstNode *expr = node->exprStmt.expr;
+    if (nodeIs(expr, ExprStmt))
+        return isRedundantStatement(expr);
+
+    return isRedundantExpression(expr);
+}
+
 static void visitProgram(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
     AstNode *decl = node->program.decls;
+    AstNodeList externals = {};
+
     astVisit(visitor, node->program.module);
     astVisitManyNodes(visitor, node->program.top);
+
     astModifierInit(&ctx->root, node);
+
+    if (isBuiltinsInitialized()) {
+        insertAstNode(&externals,
+                      makeExternReferenceToBuiltin(ctx, S_sptr_ref));
+        insertAstNode(&externals,
+                      makeExternReferenceToBuiltin(ctx, S_sptr_drop));
+    }
 
     for (; decl; decl = decl->next) {
         astModifierNext(&ctx->root, decl);
@@ -377,6 +496,11 @@ static void visitProgram(AstVisitor *visitor, AstNode *node)
         }
 
         astVisit(visitor, decl);
+    }
+
+    if (isBuiltinsInitialized()) {
+        externals.last->next = node->program.decls;
+        node->program.decls = externals.first;
     }
 }
 
@@ -421,6 +545,7 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
         target = makeAddrOffExpr(
             ctx->pool, &target->loc, this->flags, target, NULL, this->type);
     }
+    target->flags |= flgTransient;
     if (isVirtualDispatch(target, call)) {
         node->callExpr.callee = virtualDispatch(ctx, target, call);
         target->next = args;
@@ -521,6 +646,22 @@ static void visitPathExpr(AstVisitor *visitor, AstNode *node)
     node->memberExpr.member = elem;
 }
 
+static void visitStmtExpr(AstVisitor *visitor, AstNode *node)
+{
+    SimplifyContext *ctx = getAstVisitorContext(visitor);
+    astVisit(visitor, node->stmtExpr.stmt);
+    AstNode *stmt = node->stmtExpr.stmt;
+    if (nodeIs(stmt, BlockStmt)) {
+        if (stmt->blockStmt.stmts == NULL) {
+            astModifierRemoveCurrent(&ctx->block);
+        }
+        else if (stmt->blockStmt.stmts->next == NULL) {
+            replaceAstNode(node, stmt->blockStmt.stmts);
+            node->flags &= ~flgBlockValue;
+        }
+    }
+}
+
 static void visitStructDecl(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
@@ -570,8 +711,23 @@ void visitBlockStmt(AstVisitor *visitor, AstNode *node)
             continue;
         }
         astVisit(visitor, stmt);
+        if (!hasFlag(node, BlockReturns) || stmt->next != NULL) {
+            if (isRedundantStatement(stmt)) {
+                logWarningWithId(
+                    ctx->L,
+                    wrnRedundantStmt,
+                    &stmt->loc,
+                    "removing this statement because it is redundant",
+                    NULL);
+                astModifierRemoveCurrent(&ctx->block);
+                continue;
+            }
+        }
         last = stmt;
     }
+
+    if (last && hasFlag(node, BlockReturns))
+        last->flags |= flgBlockValue;
 
     node->blockStmt.last = last;
 }
@@ -678,13 +834,14 @@ static void createModuleInit(SimplifyContext *ctx, AstNode *program)
                 .func = {.retType = makeVoidType(ctx->types), .decl = func}});
     func->parentScope = program;
 
-    AstNode *ext = makeAstNode(ctx->pool,
-                               &func->loc,
-                               &(AstNode){.tag = astExternDecl,
-                                          .type = func->type,
-                                          .flags = func->flags | flgPublic,
-                                          .next = program->program.decls,
-                                          .externDecl.func = func});
+    AstNode *ext =
+        makeAstNode(ctx->pool,
+                    &func->loc,
+                    &(AstNode){.tag = astExternDecl,
+                               .type = func->type,
+                               .flags = func->flags | flgPublic | flgModuleInit,
+                               .next = program->program.decls,
+                               .externDecl.func = func});
     program->program.decls = ext;
     getLastAstNode(ext)->next = func;
 }
@@ -770,6 +927,16 @@ static void simplifyMainModule(SimplifyContext *ctx, AstNode *program)
     getLastAstNode(program->program.decls)->next = ctors;
 }
 
+static void withSavedStack(Visitor func, AstVisitor *visitor, AstNode *node)
+{
+    SimplifyContext *ctx = getAstVisitorContext(visitor);
+    __typeof(ctx->stack) stack = ctx->stack;
+
+    func(visitor, node);
+
+    ctx->stack = stack;
+}
+
 AstNode *simplifyAst(CompilerDriver *driver, AstNode *node)
 {
     SimplifyContext context = {.L = driver->L,
@@ -786,6 +953,7 @@ AstNode *simplifyAst(CompilerDriver *driver, AstNode *node)
         [astPathElem] = visitPathElement,
         [astIdentifier] = visitIdentifier,
         [astCallExpr] = visitCallExpr,
+        [astStmtExpr] = visitStmtExpr,
         [astForStmt] = visitForStmt,
         [astBlockStmt] = visitBlockStmt,
         [astIfStmt] = visitIfStmt,
@@ -795,7 +963,7 @@ AstNode *simplifyAst(CompilerDriver *driver, AstNode *node)
         [astVarDecl] = visitVarDecl,
         [astGenericDecl] = astVisitSkip,
         [astMacroDecl] = astVisitSkip
-    }, .fallback = astVisitFallbackVisitAll);
+    }, .fallback = astVisitFallbackVisitAll, .dispatch = withSavedStack);
     // clang-format on
 
     astVisit(&visitor, node);

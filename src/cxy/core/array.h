@@ -25,6 +25,7 @@ DynArray newDynArray(size_t elemSize);
 DynArray newDynArrayWithSize(size_t elemSize, size_t size);
 DynArray newDynArrayFromDataExplicit(void *, size_t, size_t);
 void pushOnDynArrayExplicit(DynArray *, const void *, size_t);
+void copyDynArray(DynArray *dst, const DynArray *src);
 static inline void pushStringOnDynArray(DynArray *array, const char *str)
 {
     pushOnDynArray(array, &str);

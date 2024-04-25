@@ -128,7 +128,7 @@ static void implementStructCopyFunction(AstVisitor *visitor,
 
         const Type *type = member->type;
         AstNode *expr = NULL;
-        if (typeIs(type, Struct) && hasFlag(type, ReferenceMembers)) {
+        if (isStructType(type) && hasFlag(type, ReferenceMembers)) {
             const NamedTypeMember *copy_ =
                 findStructMember(type, S_CopyOverload);
             csAssert0(copy_);
@@ -141,7 +141,7 @@ static void implementStructCopyFunction(AstVisitor *visitor,
                 NULL);
             refMembers = true;
         }
-        else if (typeIs(type, Class)) {
+        else if (isTupleType(type) && hasFlag(type, ReferenceMembers)) {
             expr = makeFieldExpr(ctx->pool,
                                  &copy->loc,
                                  member->structField.name,
@@ -190,14 +190,14 @@ static void implementStructCopyFunction(AstVisitor *visitor,
     }
 }
 
-static void implementDestructorFunction(AstVisitor *visitor,
-                                        AstNode *node,
-                                        AstNode *deinit)
+static void implementDeinitFunction(AstVisitor *visitor,
+                                    AstNode *node,
+                                    AstNode *deinit)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     csAssert0(nodeIs(node, StructDecl) || nodeIs(node, ClassDecl));
     csAssert0(nodeIs(deinit, FuncDecl) &&
-              deinit->funcDecl.name == S_DestructorOverload &&
+              deinit->funcDecl.name == S_DeinitOverload &&
               deinit->funcDecl.body == NULL);
 
     AstNode *member = node->structDecl.members;
@@ -218,7 +218,7 @@ static void implementDestructorFunction(AstVisitor *visitor,
         AstNode *call = NULL;
         if (typeIs(type, Struct) && hasFlag(type, ReferenceMembers)) {
             const NamedTypeMember *deinit_ =
-                findStructMember(type, S_DestructorOverload);
+                findStructMember(type, S_DeinitOverload);
             csAssert0(deinit_);
             call = implementCallStructDeinitMember(ctx, member, &deinit->loc);
         }
@@ -516,25 +516,30 @@ void implementClassOrStructBuiltins(AstVisitor *visitor, AstNode *node)
 {
     AstNode *member = node->structDecl.members;
     for (; member; member = member->next) {
-        if (!nodeIs(member, FuncDecl) || member->funcDecl.body != NULL)
+        if (!nodeIs(member, FuncDecl))
             continue;
 
         switch (member->funcDecl.operatorOverload) {
-        case opDestructorOverload:
-            implementDestructorFunction(visitor, node, member);
+        case opDeinitOverload:
+            node->flags |= flgImplementsDeinit;
+            if (member->funcDecl.body == NULL)
+                implementDeinitFunction(visitor, node, member);
             break;
         case opCopyOverload:
-            if (nodeIs(node, StructDecl))
+            if (member->funcDecl.body == NULL && nodeIs(node, StructDecl))
                 implementStructCopyFunction(visitor, node, member);
             break;
         case opHashOverload:
-            implementHashFunction(visitor, node, member);
+            if (member->funcDecl.body == NULL)
+                implementHashFunction(visitor, node, member);
             break;
         case opStringOverload:
-            implementStringFunction(visitor, node, member);
+            if (member->funcDecl.body == NULL)
+                implementStringFunction(visitor, node, member);
             break;
         case opDestructorFwd:
-            implementDestructorForwardFunction(visitor, node, member);
+            if (member->funcDecl.body == NULL)
+                implementDestructorForwardFunction(visitor, node, member);
             break;
         default:
             break;

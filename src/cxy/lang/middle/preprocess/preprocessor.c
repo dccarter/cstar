@@ -199,7 +199,7 @@ static void visitIfStmt(AstVisitor *visitor, AstNode *node)
         }
     }
     astVisit(visitor, then);
-    if (els == NULL)
+    if (els != NULL)
         astVisit(visitor, els);
 }
 

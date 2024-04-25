@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -92,6 +93,10 @@ void printUtf8(FormatState *state, uint32_t, bool);
 void printEscapedChar(FormatState *state, char chr);
 void writeFormatState(const FormatState *, FILE *);
 char *formatStateToString(FormatState *);
+static inline void appendString(FormatState *state, const char *s)
+{
+    append(state, s, strlen(s));
+}
 
 #ifdef __cplusplus
 }

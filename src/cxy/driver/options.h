@@ -50,6 +50,7 @@ typedef struct Options {
     DynArray defines;
     bool withoutBuiltins;
     bool noPIE;
+    bool withMemoryManager;
     OptimizationLevel optimizationLevel;
     struct {
         bool printIR;

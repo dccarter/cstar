@@ -107,7 +107,7 @@ static void createStructForClosure(AstVisitor *visitor, AstNode *node)
                     &(AstNode){.tag = astStructDecl,
                                .flags = flgClosure,
                                .structDecl = {.name = makeAnonymousVariable(
-                                                  ctx->strPool, "__Closure"),
+                                                  ctx->strings, "__Closure"),
                                               .members = NULL}});
 
     // func op_call(...) { ... }

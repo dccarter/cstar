@@ -16,6 +16,7 @@ AstNode *dumpCxySource(CompilerDriver *driver, AstNode *node, FILE *file);
 AstNode *preprocessAst(CompilerDriver *driver, AstNode *node);
 AstNode *bindAst(CompilerDriver *driver, AstNode *node);
 AstNode *checkAst(CompilerDriver *driver, AstNode *node);
+AstNode *memoryManageAst(CompilerDriver *driver, AstNode *node);
 AstNode *finalizeAst(CompilerDriver *driver, AstNode *node);
 AstNode *generateCode(CompilerDriver *driver, AstNode *node);
 AstNode *collectAst(CompilerDriver *driver, AstNode *node);

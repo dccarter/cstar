@@ -16,6 +16,7 @@ typedef struct DumpContext {
     FormatState *state;
     const AstNode *currentFunction;
     bool isSimplified;
+    bool dumpCleanAst;
 } DumpContext;
 
 static void dumpManyAstNodesEnclosed(ConstAstVisitor *visitor,
@@ -845,6 +846,17 @@ static void dumpFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
     dumpFuncDeclWithParams(visitor, node, NULL);
 }
 
+static void dumpExternDecl(ConstAstVisitor *visitor, const AstNode *node)
+{
+    AstNode func = *(node->externDecl.func);
+    if (nodeIs(&func, FuncDecl)) {
+        func.flags &= ~(flgAsync | flgVirtual);
+        func.flags |= flgExtern;
+        func.funcDecl.body = NULL;
+        dumpFuncDeclWithParams(visitor, &func, NULL);
+    }
+}
+
 static void dumpTypeDeclWithParams(ConstAstVisitor *visitor,
                                    const AstNode *node,
                                    const AstNode *params)
@@ -971,9 +983,11 @@ static void dumpGenericDecl(ConstAstVisitor *visitor, const AstNode *node)
 static void dumpProgram(ConstAstVisitor *visitor, const AstNode *node)
 {
     DumpContext *ctx = getConstAstVisitorContext(visitor);
-    format(ctx->state,
-           "// Cxy dump - source: {s}\n\n",
-           (FormatArg[]){{.s = node->loc.fileName ?: "<unknown>"}});
+    if (!ctx->dumpCleanAst) {
+        format(ctx->state,
+               "// Cxy dump - source: {s}\n\n",
+               (FormatArg[]){{.s = node->loc.fileName ?: "<unknown>"}});
+    }
 
     if (node->program.module) {
         astConstVisit(visitor, node->program.module);
@@ -1017,7 +1031,8 @@ AstNode *dumpCxySource(CompilerDriver *driver, AstNode *node, FILE *file)
     DumpContext context = {.state = &state,
                            .isSimplified =
                                nodeIs(node, Metadata) &&
-                               (node->metadata.stages & BIT(ccsSimplify))};
+                               (node->metadata.stages & BIT(ccsSimplify)),
+                           .dumpCleanAst = driver->options.dev.cleanAst};
 
     // clang-format off
     // sb.op__lshift7(this.b).op__lshift7(" -> ").op__lshift10(this.x)
@@ -1088,6 +1103,7 @@ AstNode *dumpCxySource(CompilerDriver *driver, AstNode *node, FILE *file)
         [astModuleDecl] = dumpModuleDecl,
         [astImportDecl] = dumpImportDecl,
         [astFuncDecl] = dumpFuncDecl,
+        [astExternDecl] = dumpExternDecl,
         [astGenericDecl] = dumpGenericDecl,
         });
 
