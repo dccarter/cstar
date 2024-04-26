@@ -622,6 +622,8 @@ bool isClassType(const Type *type)
 bool isStructType(const Type *type)
 {
     type = unwrapType(type, NULL);
+    //    if (typeIs(type, Info))
+    //        return isStructType(type->info.target);
     return typeIs(type, Struct) ||
            (typeIs(type, This) && typeIs(type->_this.that, Struct));
 }

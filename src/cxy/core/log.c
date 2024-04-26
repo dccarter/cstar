@@ -32,11 +32,12 @@ static bool compareWarningIds(const void *left, const void *right)
 static void registerWarnings(HashTable *warnings)
 {
 #define f(name, IDX)                                                           \
-    insertInHashTable(warnings,                                                \
-                      &(Warning){#name, strlen(#name), (u64)1 << IDX},         \
-                      hashStr(hashInit(), #name),                              \
-                      sizeof(Warning),                                         \
-                      compareWarningIds);
+    insertInHashTable(                                                         \
+        warnings,                                                              \
+        &(Warning) { #name, strlen(#name), (u64)1 << IDX },                    \
+        hashStr(hashInit(), #name),                                            \
+        sizeof(Warning),                                                       \
+        compareWarningIds);
     CXY_COMPILER_WARNINGS(f)
 #undef f
     insertInHashTable(warnings,
@@ -106,7 +107,8 @@ Log newLog(DiagnosticHandler handler, void *ctx)
                   .showDiagnostics = true,
                   .handler = handler,
                   .handlerCtx = ctx,
-                  .maxErrors = SIZE_MAX};
+                  .maxErrors = SIZE_MAX,
+                  .enabledWarnings.num = wrnAll & ~BIT(wrnMissingStage)};
     if (handler == printDiagnosticToConsole) {
         L.handlerCtx = NULL;
         L.handler = NULL;
@@ -417,11 +419,13 @@ void printDiagnosticToMemory(const Diagnostic *diag, void *ctx)
 
 u64 parseWarningLevels(Log *L, cstring str)
 {
-    WarningId warnings = wrnNone;
+    WarningId warnings = L->enabledWarnings.num;
+    if (str == NULL)
+        return warnings;
     char *copy = strdup(str);
     char *start = copy, *end = strchr(str, '|');
 
-    while (start) {
+    while (start && start[0] != '\0') {
         char *last = end;
         if (last) {
             *last = '\0';

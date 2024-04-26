@@ -134,7 +134,8 @@ typedef struct AppliedTypeParams {
     cstring name;                                                              \
     cstring ns;                                                                \
     const Type *from;                                                          \
-    void *codegen;
+    void *codegen;                                                             \
+    void *dbg;
 
 #ifdef __cpluplus
 

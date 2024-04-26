@@ -91,7 +91,7 @@ static bool cmdCompilerDefine(CmdParser *P,
                 name);
         return false;
     }
-    if (dst->array.elemSize == 0)
+    if (dst->array.elems == NULL)
         dst->array = newDynArray(sizeof(CompilerDefine));
 
     const char *it = str;
@@ -235,9 +235,9 @@ static void initializeOptions(StrPool *strings, Options *options)
 {
     options->cflags = newDynArray(sizeof(char *));
     options->libraries = newDynArray(sizeof(char *));
-    options->defines = newDynArray(sizeof(char *));
+    options->defines = newDynArray(sizeof(CompilerDefine));
 #ifdef __APPLE__
-    pushStringOnDynArray(&options->defines, "MACOS");
+    pushOnDynArray(&options->defines, &(CompilerDefine){"MACOS", "1"});
     FormatState state = newFormatState(NULL, true);
     exec("xcrun --show-sdk-path", &state);
     char *sdkPath = formatStateToString(&state);
@@ -269,7 +269,7 @@ static void fixCmdDevOptions(Options *options)
         options->dev.lastStage = ccsCodegen;
     }
     else if (options->dev.dumpMode != dmpNONE) {
-        options->dev.lastStage = MIN(options->dev.lastStage, ccsSimplify);
+        options->dev.lastStage = MIN(options->dev.lastStage, ccsMemoryMgmt);
     }
 }
 
@@ -294,7 +294,7 @@ bool parseCommandLineOptions(
             Help("Sets a list of enabled/disabled compiler warning (eg "
                  "'~Warning' disables a flag, 'Warn1|~Warn2' combines flag "
                  "configurations))"),
-            Def("None")),
+            Def("")),
         Opt(Name("warnings-all"), Help("enables all compiler warnings")),
         Opt(Name("no-color"),
             Help("disable colored output when formatting outputs")),
@@ -316,7 +316,10 @@ bool parseCommandLineOptions(
             Sf('D'),
             Help("Adds a compiler definition, e.g -DDISABLE_ASSERT, "
                  "-DAPP_VERSION=\\\"0.0.1\\\""),
-            Def("[]")));
+            Def("[]")),
+        Opt(Name("with-mm"),
+            Help("Compile program with builtin (RC) memory manager"),
+            Def("false")));
 
     int selected = argparse(argc, &argv, parser);
 
@@ -338,7 +341,7 @@ bool parseCommandLineOptions(
     if (getGlobalOption(cmd, 2))
         log->enabledWarnings.num = wrnAll;
     log->enabledWarnings.str = getGlobalString(cmd, 1);
-    log->enabledWarnings.num |=
+    log->enabledWarnings.num =
         parseWarningLevels(log, log->enabledWarnings.str);
     if (log->enabledWarnings.num & wrn_Error)
         return false;
@@ -358,7 +361,9 @@ bool parseCommandLineOptions(
     parseSpaceSeperatedList(&options->cflags, strings, str);
     options->noPIE = getGlobalOption(cmd, 6);
     options->optimizationLevel = getGlobalInt(cmd, 7);
-    options->defines = getGlobalArray(cmd, 8);
+    copyDynArray(&options->defines, &getGlobalArray(cmd, 8));
+    freeDynArray(&getGlobalArray(cmd, 8));
+    options->withMemoryManager = getGlobalBool(cmd, 9);
 
     file_count = *argc - 1;
 

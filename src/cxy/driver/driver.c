@@ -388,7 +388,7 @@ const Type *compileModule(CompilerDriver *driver,
         if (!compileProgram(driver, program, path))
             return NULL;
         AstNode *decls = program->program.decls;
-        if (nodeIs(decls, ExternDecl)) {
+        if (nodeIs(decls, ExternDecl) && hasFlag(decls, ModuleInit)) {
             // copy this declaration
             insertAstNode(&driver->startup, copyAstNode(driver->pool, decls));
         }

@@ -156,6 +156,46 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
     node->flags |= visited;
 }
 
+void evalTernaryExpr(AstVisitor *visitor, AstNode *node)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+
+    AstNode *cond = node->ternaryExpr.cond;
+    if (!evaluate(visitor, cond) || !evalBooleanCast(ctx, cond)) {
+        node->tag = astError;
+        return;
+    }
+
+    AstNode *next = node->next;
+    u64 visited = node->flags & flgVisited;
+
+    if (cond->boolLiteral.value) {
+        // select then branch & reclaim else branch if any x
+        AstNode *replacement = node->ternaryExpr.body;
+        replacement->parentScope = node->parentScope;
+        *node = *replacement;
+        node->next = next;
+    }
+    else {
+        // select otherwise, reclaim if branch
+        AstNode *replacement = node->ternaryExpr.otherwise;
+        // select next statement, reclaim if branch
+        replacement->parentScope = node->parentScope;
+        *node = *replacement;
+        node->next = next;
+    }
+
+    while (nodeIs(node, TernaryExpr) || hasFlag(node, Comptime)) {
+        node->flags &= ~flgComptime;
+        if (!evaluate(visitor, node)) {
+            node->tag = astError;
+            return;
+        }
+    }
+
+    node->flags |= visited;
+}
+
 void evalTupleExpr(AstVisitor *visitor, AstNode *node)
 {
     u64 i = 0;
@@ -215,8 +255,7 @@ void evalArrayExpr(AstVisitor *visitor, AstNode *node)
 void evalVarDecl(AstVisitor *visitor, AstNode *node)
 {
     EvalContext *ctx = getAstVisitorContext(visitor);
-    AstNode *names = node->varDecl.names;
-
+    AstNode *names = node->varDecl.names, *init = node->varDecl.init;
     if (names->next) {
         logError(ctx->L,
                  &node->loc,
@@ -228,12 +267,13 @@ void evalVarDecl(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    if (!evaluate(visitor, node->varDecl.init)) {
+    if (!evaluate(visitor, init)) {
         node->tag = astError;
         return;
     }
 
     // retain comptime
+    node->type = node->varDecl.init->type;
     node->flags = flgVisited | flgComptime;
 }
 
@@ -241,6 +281,15 @@ static void evalTypeDecl(AstVisitor *visitor, AstNode *node)
 {
     EvalContext *ctx = getAstVisitorContext(visitor);
     const Type *type = evalType(ctx, node);
+    node->tag = astTypeRef;
+    node->type = type;
+    clearAstBody(node);
+}
+
+static void evalRef(AstVisitor *visitor, AstNode *node)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    const Type *type = evalType(ctx, node->reference.target);
     node->tag = astTypeRef;
     node->type = type;
     clearAstBody(node);
@@ -261,13 +310,19 @@ void initEvalVisitor(AstVisitor *visitor, EvalContext *ctx)
         [astMemberExpr] = evalMemberExpr,
         [astArrayExpr]= evalArrayExpr,
         [astGroupExpr] = evalGroupExpr,
+        [astTernaryExpr] = evalTernaryExpr,
         [astEnumDecl] = evalEnumDecl,
         [astMacroCallExpr] = evalMacroCall,
         [astVarDecl] = evalVarDecl,
         [astFuncType] = evalTypeDecl,
         [astUnionDecl] = evalTypeDecl,
         [astTupleType] = evalTypeDecl,
-        [astArrayType] = evalTypeDecl
+        [astArrayType] = evalTypeDecl,
+        [astRef] = evalRef,
+        [astIdentifier] = astVisitSkip,
+        [astTypeRef] = astVisitSkip,
+        [astList] = astVisitSkip,
+        [astNoop] = astVisitSkip,
     }, .fallback = evalFallback);
 
     initComptime(ctx);

@@ -43,6 +43,30 @@ static BinaryOperatorKind getBinaryOperatorKind(Operator op)
     }
 }
 
+static bool checkClassBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    cstring name = getOpOverloadName(node->binaryExpr.op);
+    const Type *target = stripPointer(node->binaryExpr.lhs->type);
+    const NamedTypeMember *overload =
+        findOverloadMemberUpInheritanceChain(target, name);
+
+    const Type *rhs = checkType(visitor, node->binaryExpr.rhs);
+    if (typeIs(rhs, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return false;
+    }
+
+    if (overload == NULL)
+        return false;
+
+    transformToMemberCallExpr(
+        visitor, node, node->binaryExpr.lhs, name, node->binaryExpr.rhs);
+
+    checkType(visitor, node);
+    return true;
+}
+
 static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
@@ -77,16 +101,16 @@ static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
 void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    const Type *left = checkType(visitor, node->binaryExpr.lhs),
-               *left_ = stripAll(left);
+    AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;
+    const Type *left = checkType(visitor, lhs), *left_ = stripAll(left);
 
     Operator op = node->binaryExpr.op;
     BinaryOperatorKind opKind = getBinaryOperatorKind(op);
 
     if ((opKind == optComparison || opKind == optEquality) &&
         typeIs(unwrapType(left, NULL), String)) {
-        AstNode *lhs = node->binaryExpr.lhs,
-                *cStringDecl = findBuiltinDecl(S_CString);
+        lhs = node->binaryExpr.lhs;
+        AstNode *cStringDecl = findBuiltinDecl(S_CString);
         node->binaryExpr.lhs = makeStructExpr(
             ctx->pool,
             &lhs->loc,
@@ -104,12 +128,18 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
         left_ = stripAll(checkType(visitor, node->binaryExpr.lhs));
     }
 
-    if ((typeIs(left_, Struct) && !hasFlag(left_->tStruct.decl, Extern)) ||
-        typeIs(left_, Class)) {
-        if (!nodeIs(node->binaryExpr.rhs, NullLit) || !isPointerType(left)) {
+    if (typeIs(left_, Struct) && !hasFlag(left_->tStruct.decl, Extern)) {
+        if (!nodeIs(rhs, NullLit) || !isPointerType(left)) {
             checkBinaryOperatorOverload(visitor, node);
             return;
         }
+    }
+
+    if (typeIs(left_, Class) && !nodeIs(rhs, NullLit)) {
+        if (checkClassBinaryOperatorOverload(visitor, node))
+            return;
+        if (typeIs(node->type, Error))
+            return;
     }
 
     node->binaryExpr.rhs->parentScope = node;
@@ -184,9 +214,16 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
         break;
 
     case optEquality:
-        if (!typeIs(type, Primitive) && !typeIs(type, Pointer) &&
-            !typeIs(type, String) && !typeIs(type, Enum) &&
-            !typeIs(type, Opaque) && !typeIs(type, Func)) {
+        switch (type->tag) {
+        case typPrimitive:
+        case typPointer:
+        case typString:
+        case typOpaque:
+        case typEnum:
+        case typFunc:
+        case typClass:
+            break;
+        default:
             logError(ctx->L,
                      &node->loc,
                      "cannot perform equality binary operation '{s}' on "

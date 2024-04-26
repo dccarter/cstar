@@ -1,17 +1,7 @@
-//import { Vector } from "stdlib/vector.cxy"
-
-class Demo {
-    func `init`() {
-        stdout << "Initializing....\n"
-    }
-
-    func `deinit`() {
-        stdout << "De-initializing....\n"
-    }
-}
+import { Vector } from "stdlib/vector.cxy"
 
 pub func main() {
-    var x = make[Demo]();
-    ref(x)
-    deallocate(x)
+    var x = Vector[i64]();
+    100 + 100;
+    100 + 200;
 }

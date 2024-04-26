@@ -55,9 +55,10 @@ void evalPath(AstVisitor *visitor, AstNode *node)
         else {
             while (elem) {
                 cstring name = elem->pathElement.alt ?: elem->pathElement.name;
-                symbol = evalAstNodeMemberAccess(ctx, &elem->loc, symbol, name);
+                AstNode *tmp =
+                    evalAstNodeMemberAccess(ctx, &elem->loc, symbol, name);
 
-                if (symbol == NULL) {
+                if (tmp == NULL) {
                     logError(ctx->L,
                              &elem->loc,
                              "undefined compile time member named '{s}'",
@@ -65,6 +66,7 @@ void evalPath(AstVisitor *visitor, AstNode *node)
                     node->tag = astError;
                     return;
                 }
+                symbol = tmp;
                 elem = elem->next;
             }
         }

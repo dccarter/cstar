@@ -1168,6 +1168,7 @@ static AstNode *expression(Parser *P, bool allowStructs)
                        .flags = flags,
                        .typedExpr = {.expr = expr, .type = type}});
     }
+
     return expr;
 }
 
@@ -1449,7 +1450,7 @@ static OperatorOverload operatorOverload(Parser *P)
             op = (OperatorOverload){.f = opHashOverload, .s = S_HashOverload};
         }
         else if (name == S_Deref_) {
-            op = (OperatorOverload){.f = opHashOverload, .s = S_Deref};
+            op = (OperatorOverload){.f = opDeref, .s = S_Deref};
         }
 
         if (op.f == opInvalid) {

@@ -405,9 +405,17 @@ llvm::Value *LLVMContext::generateCastExpr(AstVisitor *visitor,
         auto value = cxy::codegen(visitor, expr);
         return ctx.builder.CreatePointerCast(value, ctx.getLLVMType(to));
     }
-    else {
-        unreachable("Unsupported cast");
+    else if (isClassType(to)) {
+        if (typeIs(from, Pointer) && typeIs(from->pointer.pointed, Null)) {
+            auto value = cxy::codegen(visitor, expr);
+            return ctx.builder.CreatePointerCast(value, ctx.getLLVMType(to));
+        }
     }
+    else if (from->tag == to->tag) {
+        return cxy::codegen(visitor, expr);
+    }
+
+    unreachable("Unsupported cast");
 }
 
 } // namespace cxy

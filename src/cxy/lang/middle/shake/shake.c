@@ -13,20 +13,6 @@
 
 #include "core/alloc.h"
 
-static void addNodeInBlock(ShakeAstContext *ctx, AstNode *node)
-{
-    AstNode *last = getLastAstNode(node);
-    if (ctx->block.previous == NULL) {
-        last->next = ctx->block.self->blockStmt.stmts;
-        ctx->block.self->blockStmt.stmts = node;
-    }
-    else {
-        last->next = ctx->block.current;
-        ctx->block.previous->next = node;
-    }
-    ctx->block.previous = last;
-}
-
 static AstNode *makeTupleMemberExpr(ShakeAstContext *ctx, AstNode *tuple, u64 i)
 {
     if (tuple == NULL)
@@ -207,7 +193,7 @@ static AstNode *shakeVariableInitializer(ShakeAstContext *ctx, AstNode *init)
     return makeVarDecl(ctx->pool,
                        &init->loc,
                        init->flags,
-                       makeAnonymousVariable(ctx->strPool, "_gi"),
+                       makeAnonymousVariable(ctx->strings, "_gi"),
                        NULL,
                        init,
                        NULL,
@@ -223,7 +209,7 @@ static AstNode *makeStrExprBuilder(ShakeAstContext *ctx, AstNode *node)
         ctx->pool,
         &node->loc,
         flgNone,
-        makeAnonymousVariable(ctx->strPool, S_sb),
+        makeAnonymousVariable(ctx->strings, S_sb),
         NULL,
         makeCallExpr(
             ctx->pool,
@@ -311,10 +297,10 @@ void shakeIfStmt(AstVisitor *visitor, AstNode *node)
     if (nodeIs(cond, VarDecl)) {
         AstNode *var = duplicateAstNode(ctx->pool, cond);
         var->varDecl.names = makeGenIdent(
-            ctx->pool, ctx->strPool, &cond->varDecl.names->loc, NULL);
+            ctx->pool, ctx->strings, &cond->varDecl.names->loc, NULL);
         var->varDecl.name = var->varDecl.names->ident.value;
 
-        addNodeInBlock(ctx, var);
+        astModifierAdd(&ctx->block, var);
 
         cond->tag = astPath;
         cond->path.elements = makePathElement(
@@ -359,10 +345,10 @@ void shakeWhileStmt(AstVisitor *visitor, AstNode *node)
     if (nodeIs(cond, VarDecl)) {
         AstNode *var = duplicateAstNode(ctx->pool, cond);
         var->varDecl.names = makeGenIdent(
-            ctx->pool, ctx->strPool, &cond->varDecl.names->loc, NULL);
+            ctx->pool, ctx->strings, &cond->varDecl.names->loc, NULL);
         var->varDecl.name = var->varDecl.names->ident.value;
 
-        addNodeInBlock(ctx, var);
+        astModifierAdd(&ctx->block, var);
 
         cond->tag = astGroupExpr;
         cond->groupExpr.expr = makeAstNode(
@@ -478,6 +464,18 @@ void shakeCallExpr(AstVisitor *visitor, AstNode *node)
     astVisitFallbackVisitAll(visitor, node);
 }
 
+void shakeGroupExpr(AstVisitor *visitor, AstNode *node)
+{
+    AstNode *expr = node->groupExpr.expr;
+    if (nodeIs(expr, BlockStmt)) {
+        expr->flags |= flgBlockReturns;
+        node->tag = astStmtExpr;
+        node->stmtExpr.stmt = expr;
+    }
+
+    astVisitFallbackVisitAll(visitor, node);
+}
+
 void shakeExprStmt(AstVisitor *visitor, AstNode *node)
 {
     if (nodeIs(node->exprStmt.expr, CallExpr) && findAttribute(node, S_sync)) {
@@ -496,14 +494,15 @@ void shakeMatchStmt(AstVisitor *visitor, AstNode *node)
             makeVarDecl(ctx->pool,
                         &expr->loc,
                         flgNone,
-                        makeAnonymousVariable(ctx->strPool, "_match"),
+                        makeAnonymousVariable(ctx->strings, "_match"),
                         NULL,
                         expr,
                         NULL,
                         NULL);
         node->matchStmt.expr =
             makePath(ctx->pool, &expr->loc, var->varDecl.name, flgNone, NULL);
-        addNodeInBlock(ctx, var);
+
+        astModifierAdd(&ctx->block, var);
     }
     astVisitManyNodes(visitor, node->matchStmt.cases);
 }
@@ -600,18 +599,13 @@ static void shakeForStmt(AstVisitor *visitor, AstNode *node)
 static void shakeBlockStmt(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
-    __typeof(ctx->block) block = ctx->block;
-    ctx->block.self = node;
-    ctx->block.previous = NULL;
+    astModifierInit(&ctx->block, node);
 
     AstNode *stmt = node->blockStmt.stmts;
     for (; stmt; stmt = stmt->next) {
-        ctx->block.current = stmt;
+        astModifierNext(&ctx->block, stmt);
         astVisit(visitor, stmt);
-        ctx->block.previous = stmt;
     }
-
-    ctx->block = block;
 }
 
 static void shakeArrayType(AstVisitor *visitor, AstNode *node)
@@ -666,16 +660,27 @@ static void shakeStringExpr(AstVisitor *visitor, AstNode *node)
     }
 
     var->next = sb;
-    addNodeInBlock(ctx, var);
+    astModifierAdd(&ctx->block, var);
+
     node->tag = astPath;
     node->path.elements = makePathElement(
         ctx->pool, &node->loc, var->varDecl.name, var->flags, NULL, NULL);
 }
 
+static void withSavedStack(Visitor func, AstVisitor *visitor, AstNode *node)
+{
+    ShakeAstContext *ctx = getAstVisitorContext(visitor);
+    __typeof(ctx->stack) stack = ctx->stack;
+
+    func(visitor, node);
+
+    ctx->stack = stack;
+}
+
 AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
 {
     ShakeAstContext context = {
-        .L = driver->L, .pool = driver->pool, .strPool = driver->strings};
+        .L = driver->L, .pool = driver->pool, .strings = driver->strings};
 
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context, {
@@ -689,10 +694,11 @@ AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
         [astStringExpr] = shakeStringExpr,
         [astClosureExpr] = shakeClosureExpr,
         [astCallExpr] = shakeCallExpr,
+        [astGroupExpr] = shakeGroupExpr,
         [astExprStmt] = shakeExprStmt,
         [astMatchStmt] = shakeMatchStmt,
         [astArrayType] = shakeArrayType
-    }, .fallback = astVisitFallbackVisitAll);
+    }, .fallback = astVisitFallbackVisitAll, .dispatch = withSavedStack);
     // clang-format on
 
     astVisit(&visitor, node);

@@ -77,6 +77,7 @@ struct StrPool;
     f(Ref)                  \
     f(Deleted)              \
     f(ComptimeOnly)         \
+    f(List)                 \
     f(ClosureCapture)       \
     f(Program)              \
     f(Metadata)             \
@@ -226,6 +227,10 @@ struct AstNode {
             CCodeKind kind;
             AstNode *what;
         } cCode;
+
+        struct {
+            AstNodeList nodes;
+        } nodesList;
 
         struct {
             AstNode *names;
@@ -586,6 +591,7 @@ struct AstNode {
             struct AstNode *stmts;
             struct AstNode *last;
             bool returned;
+            bool sealed;
         } blockStmt;
 
         struct {

@@ -62,6 +62,6 @@ void astConstVisitManyNodes(ConstAstVisitor *visitor, const AstNode *node);
 
 void astModifierInit(AstModifier *ctx, AstNode *node);
 void astModifierNext(AstModifier *ctx, AstNode *node);
-void astModifierRemoveCurrent(AstModifier *ctx);
 void astModifierAdd(AstModifier *ctx, AstNode *node);
 void astModifierAddAsNext(AstModifier *ctx, AstNode *node);
+void astModifierRemoveCurrent(AstModifier *ctx);

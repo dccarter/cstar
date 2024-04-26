@@ -179,6 +179,19 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
             operand = ERROR_TYPE(ctx);
         }
         break;
+    case opMove:
+        if (!nodeIsLeftValue(node->unaryExpr.operand) ||
+            hasFlag(node->unaryExpr.operand, Move)) {
+            logError(ctx->L,
+                     &node->unaryExpr.operand->loc,
+                     "operand of a move operator must be a left value",
+                     NULL);
+            operand = ERROR_TYPE(ctx);
+        }
+        else {
+            operand = node->unaryExpr.operand->type;
+        }
+        break;
     default:
         logError(ctx->L,
                  &node->unaryExpr.operand->loc,

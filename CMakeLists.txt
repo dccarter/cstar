@@ -186,7 +186,9 @@ set(CXY_MIDDLE_SOURCES
         src/cxy/lang/middle/preprocess/preprocessor.c
         src/cxy/lang/middle/preprocess/evaluate.c
 
-        src/cxy/lang/middle/simplify/simplify.c)
+        src/cxy/lang/middle/simplify/simplify.c
+
+        src/cxy/lang/middle/mem/sweep.c)
 
 set(CXY_LANG_BACKEND_SOURCES
         src/cxy/lang/backend/llvm/array.cpp

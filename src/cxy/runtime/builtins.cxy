@@ -10,8 +10,8 @@ pub extern func abort(): void;
 pub extern func printf(s: string, ...args: auto): i32
 pub extern func write(fd: i32, buf: &const void, len: u64) : i64
 
-@[pure, inline, linkage("External")]
-func __cxy_assert(cond: bool, file: string, line: u64, column: u64) {
+@[pure, inline]
+pub func __cxy_assert(cond: bool, file: string, line: u64, column: u64) {
     if (!cond) {
         var buf: [char, 64];
         write(2, "assertion failed: ", 18)
@@ -29,8 +29,8 @@ else {
     macro assert(cond) ()
 }
 
-@[pure, inline, linkage("External")]
-func __cxy_panic(file: string, line: u64, column: u64, msg: string) {
+@[pure, inline]
+pub func __cxy_panic(file: string, line: u64, column: u64, msg: string) {
     var buf: [char, 64];
     write(2, "panic: ", 7)
     write(2, msg, strlen(msg))
@@ -69,15 +69,22 @@ func __smart_ptr_alloc(size: u64, dctor: func(ptr: sptr) -> void = null) {
 
 @[pure, inline, linkage("External")]
 func __smart_ptr_get(ptr: sptr) {
+    printf("reg get %p\n", ptr)
+    if (ptr == null) {
+        panic!("reference to a null pointer")
+    }
+
     var mem = ((ptr !: &u8) + (-sizeof!(__mem))) !: &__mem;
     if (mem.magic != #{MEMORY_MAGIC}) {
-        panic!("invalid smart pointer")
+        panic!("invalid pointer")
     }
     mem.refs++
+    return ptr
 }
 
 @[pure, linkage("External")]
 func __smart_ptr_drop(ptr: sptr) {
+    printf("ref drop %p\n", ptr)
     if (ptr == null)
         return;
 
@@ -597,27 +604,135 @@ pub func ref[T](ptr: T) {
     return ptr
 }
 
+@[pure]
+pub func __deinit[T](t: T) {
+    #if (T.isStruct) {
+        #for (const member: T.members) {
+            #if (member.isField) {
+                #const M = member.Tinfo;
+                #if (M.isClass)
+                    t.#{mk_ident!(member.name)} = null
+                else #if (M.isStruct || M.isTuple)
+                    __deinit[M](t.#{mk_ident!(member.name)})
+            }
+        }
+    }
+    else #if (T.isTuple) {
+        #const i = 0;
+        #for (const member: 0..T.membersCount) {
+            #const M = typeat!(T, member);
+            #if (M.isClass)
+                t.#{member} = null
+            else #if (M.isStruct || M.isTuple)
+                __deinit(t.#{member})
+        }
+    }
+    else {
+        warn!("builtin de-initializer is not supported type `{t}`", #T)
+    }
+}
+
+/**
+ * Used internally by the compiler to copy structs and tuples, this
+ * makes sure that reference types are gracefully handled.
+ */
+@[pure, linkage("External")]
+pub func __copy[T](t: T) {
+    #if (T.hasReferenceMembers) {
+        #if (T.isStruct) {
+            #const nodes = mk_ast_list!();
+            #for (const member: T.members) {
+                #if (member.isField) {
+                    #const M = member.Tinfo;
+                    #if (M.isClass) {
+                        ast_list_add!(
+                            nodes,
+                            mk_field_expr!(
+                                member.name,
+                                __smart_ptr_get(t.#{mk_ident!(member.name)} !: &void) !: M
+                            )
+                        )
+                    }
+                    else #if (M.isStruct || M.isTuple) {
+                        ast_list_add!(
+                            nodes,
+                            mk_field_expr!(
+                                 member.name,
+                                __copy(t.#{mk_ident!(member.name)})
+                            )
+                        )
+                    }
+                    else {
+                        ast_list_add!(
+                            nodes,
+                            mk_field_expr!(member.name, t.#{mk_ident!(member.name)})
+                        )
+                    }
+                }
+            }
+            return mk_struct_expr!(#T, #{nodes})
+        }
+        else #if (T.isTuple) {
+            #const nodes = mk_ast_list!();
+            #for (const member: 0 .. T.membersCount) {
+                #const M = typeat!(T, member);
+                #if (M.isClass) {
+                    ast_list_add!(
+                        #{nodes},
+                        __smart_ptr_get(t.#{mk_integer!(member)} !: &void) !: M
+                    )
+                }
+                else #if (M.isStruct || M.isTuple) {
+                    ast_list_add!(
+                        #{nodes},
+                        __copy(t.#{mk_integer!(member)})
+                    )
+                }
+                else {
+                    ast_list_add!(
+                        #{nodes},
+                        t.#{mk_integer!(member)}
+                    )
+                }
+            }
+
+            return mk_tuple_expr!(#{nodes})
+        }
+        else
+            error!("copy operation not supported on `{t}`", #T)
+    }
+    else {
+        return &&t
+    }
+}
+
 @[pure, linkage("External")]
 func __deinit_fwd[T](ptr: sptr) {
-    (ptr !: &T).op__deinit()
+    @transient var obj = (ptr !: &T);
+    #if (T.has_deinit)
+        obj.op__deinit()
+
+    #for (const member: T.members) {
+        #if (member.isField) {
+            #const M = member.Tinfo;
+            #if (M.isClass)
+                obj.#{mk_ident!(member.name)} = null
+            else #if (M.isStruct || M.isTuple)
+                __deinit[M](obj.#{mk_ident!(member.name)})
+        }
+    }
 }
 
 pub func allocate[T](len: u32 = 0) {
     #if (T.isClass) {
-        var obj: T;
-        #if (T.has_deinit) {
-            obj = (__smart_ptr_alloc(sizeof!(#T), __deinit_fwd[T]) !: T)
-        }
-        else {
-            obj = (__smart_ptr_alloc(sizeof!(#T)) !: T)
-        }
+        var obj = (__smart_ptr_alloc(sizeof!(#T), __deinit_fwd[T]) !: T);
         // this will ensure that default values are assigned
         init_defaults!(obj)
         return obj
     }
     else {
-        var obj: T;
-        #if (T.has_deinit) {
+        var obj: &T = null;
+        #if (T.hasReferenceMembers) {
             obj = <&T> __smart_ptr_alloc(sizeof!(#T), __deinit_fwd[T])
         }
         else {
@@ -635,21 +750,16 @@ pub func allocate[T](len: u32 = 0) {
 pub func make[T](@transient ...args: auto) {
     require!(T.isClass, "type '{t}' unsupported by `make`", #T)
 
-    var obj: T;
-    #if (T.has_deinit) {
-        obj = (__smart_ptr_alloc(sizeof!(#T), __deinit_fwd[T]) !: T)
-    }
-    else {
-        obj = (__smart_ptr_alloc(sizeof!(#T)) !: T)
-    }
+    var obj = (__smart_ptr_alloc(sizeof!(#T), __deinit_fwd[T]) !: T);
     // this will ensure that default values are assigned
     init_defaults!(obj)
     obj.op__init(...args)
     return obj
 }
 
-@inline
+@[inline, pure]
 pub func deallocate[T](ptr: T) {
+    require!(T.isClass, "expecting type of deallocated object to be a class")
     __smart_ptr_drop(ptr: sptr)
 }
 

@@ -58,7 +58,8 @@ static void staticLog(AstVisitor *visitor,
         unreachable("ABORT COMPILE");
     }
 
-    FormatArg *params = mallocOrDie(countAstNodes(args->next));
+    FormatArg *params =
+        mallocOrDie(sizeof(FormatArg) * countAstNodes(args->next));
     int i = 0;
     for (AstNode *arg = args->next; arg; i++) {
         AstNode *it = arg;
@@ -221,6 +222,70 @@ static AstNode *makeLineNumberNode(AstVisitor *visitor,
                    .intLiteral.uValue = visitor->current->loc.begin.row});
 }
 
+static AstNode *makeAstNodeList(AstVisitor *visitor,
+                                attr(unused) const AstNode *node,
+                                attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 0))
+        return NULL;
+
+    return makeAstNode(ctx->pool,
+                       &node->loc,
+                       &(AstNode){.tag = astList,
+                                  .flags = flgComptime,
+                                  .type = makeAutoType(ctx->types)});
+}
+
+static AstNode *actionAstListAdd(AstVisitor *visitor,
+                                 attr(unused) const AstNode *node,
+                                 attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 2))
+        return NULL;
+    AstNode *list = args, *value = args->next;
+    AstNode *resolved = resolvePath(list);
+    if (!nodeIs(resolved, VarDecl) && !nodeIs(resolved->varDecl.init, List)) {
+        logError(ctx->L,
+                 &list->loc,
+                 "invalid argument passed to `make_struct_expr!` expecting a "
+                 "list of field expressions",
+                 NULL);
+        return NULL;
+    }
+
+    const Type *type = value->type ?: evalType(ctx, value);
+    csAssert0(type);
+
+    insertAstNode(&resolved->varDecl.init->nodesList.nodes, value);
+
+    args->next = NULL;
+    args->tag = astNoop;
+    return args;
+}
+
+static AstNode *makeAstPasteNode(AstVisitor *visitor,
+                                 attr(unused) const AstNode *node,
+                                 attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
+        return NULL;
+    AstNode *list = args;
+    AstNode *resolved = resolvePath(list);
+    if (!nodeIs(resolved, VarDecl) || !hasFlag(resolved, Comptime)) {
+        logError(ctx->L,
+                 &list->loc,
+                 "invalid argument passed to `ast_paste!` expecting a "
+                 "reference to a compile time variable",
+                 NULL);
+        return NULL;
+    }
+
+    return deepCloneAstNode(ctx->pool, resolved->varDecl.init);
+}
+
 static AstNode *makeColumnNumberNode(AstVisitor *visitor,
                                      attr(unused) const AstNode *node,
                                      attr(unused) AstNode *args)
@@ -258,6 +323,109 @@ static AstNode *makeSizeofNode(AstVisitor *visitor,
                                getPrimitiveType(ctx->types, prtU64));
 }
 
+static AstNode *makeAstFieldExprNode(AstVisitor *visitor,
+                                     attr(unused) const AstNode *node,
+                                     attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 2))
+        return NULL;
+    FileLoc loc = args->loc;
+    AstNode *name = args, *value = args->next;
+    if (!evaluate(visitor, name))
+        return NULL;
+    if (!nodeIs(name, StringLit) && !nodeIs(name, Identifier)) {
+        logError(ctx->L,
+                 &loc,
+                 "invalid argument passed to `make_field_expr!` expecting a "
+                 "string literal",
+                 NULL);
+        return NULL;
+    }
+
+    const Type *type = value->type ?: evalType(ctx, value);
+    if (typeIs(type, Error))
+        return NULL;
+
+    args->tag = astFieldExpr;
+    args->fieldExpr.name = nodeIs(name, Identifier) ? name->ident.value
+                                                    : name->stringLiteral.value;
+    args->fieldExpr.value = value;
+    args->type = value->type;
+    args->flags |= flgVisited;
+
+    return args;
+}
+
+static AstNode *makeAstStructExprNode(AstVisitor *visitor,
+                                      attr(unused) const AstNode *node,
+                                      attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 2))
+        return NULL;
+    FileLoc loc = args->loc;
+    AstNode *left = args, *value = args->next;
+    if (!evaluate(visitor, left))
+        return NULL;
+    if (!nodeIs(left, TypeRef) && !nodeIs(left, Ref)) {
+        logError(ctx->L,
+                 &loc,
+                 "invalid argument passed to `make_struct_expr!` expecting a "
+                 "type object",
+                 NULL);
+        return NULL;
+    }
+    left->next = NULL;
+
+    loc = value->loc;
+    AstNode *resolved = resolvePath(value);
+    if (!nodeIs(resolved, VarDecl) && !nodeIs(resolved->varDecl.init, List)) {
+        logError(ctx->L,
+                 &loc,
+                 "invalid argument passed to `make_struct_expr!` expecting a "
+                 "list of field expressions",
+                 NULL);
+        return NULL;
+    }
+    AstNode *fields = resolved->varDecl.init->nodesList.nodes.first;
+
+    value->tag = astStructExpr;
+    value->structExpr.left = left;
+    value->structExpr.fields = fields;
+    value->type = NULL;
+    value->flags = flgNone;
+
+    return value;
+}
+
+static AstNode *makeAstTupleExprNode(AstVisitor *visitor,
+                                     attr(unused) const AstNode *node,
+                                     attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
+        return NULL;
+
+    AstNode *list = args;
+    AstNode *resolved = resolvePath(list);
+    if (!nodeIs(resolved, VarDecl) && !nodeIs(resolved->varDecl.init, List)) {
+        logError(ctx->L,
+                 &list->loc,
+                 "invalid argument passed to `make_tuple_expr!` expecting a "
+                 "list of field expressions",
+                 NULL);
+        return NULL;
+    }
+
+    args->tag = astTupleExpr;
+    args->tupleExpr.elements = resolved->varDecl.init->nodesList.nodes.first;
+    args->flags = flgNone;
+    args->type = NULL;
+
+    return args;
+}
+
 static AstNode *makeAstIdentifierNode(AstVisitor *visitor,
                                       attr(unused) const AstNode *node,
                                       attr(unused) AstNode *args)
@@ -292,7 +460,7 @@ static AstNode *makeAstIdentifierNode(AstVisitor *visitor,
     args->tag = astIdentifier;
     args->ident.value = makeString(ctx->strings, str);
     free(str);
-    args->flags |= flgVisited;
+    args->type = makeAutoType(ctx->types);
     return args;
 }
 
@@ -687,7 +855,7 @@ static AstNode *makeTypeAtIdxNode(AstVisitor *visitor,
 
     const Type *type = args->type ?: evalType(ctx, args);
     csAssert0(type);
-    type = unwrapType(type, NULL);
+    type = resolveType(unwrapType(type, NULL));
 
     if (!evaluate(visitor, index) || !nodeIs(index, IntegerLit)) {
         logError(ctx->L,
@@ -826,8 +994,15 @@ static int compareBuiltinMacros(const void *lhs, const void *rhs)
     return strcmp(((BuiltinMacro *)lhs)->name, ((BuiltinMacro *)rhs)->name);
 }
 
+/**
+ * @note this list is in sorted order by name, optimizing for
+ * binary search (keep the same order)... might have to change to a hash-table,
+ * or a trie, but with these minimal entries, it's fast enough.
+ */
 static const BuiltinMacro builtinMacros[] = {
     {.name = "assert", makeAssertNode},
+    {.name = "ast_list_add", actionAstListAdd},
+    {.name = "ast_paste", makeAstPasteNode},
     {.name = "base_of", makeBaseOfNode},
     {.name = "column", makeColumnNumberNode},
     {.name = "cstr", makeCstrNode},
@@ -839,8 +1014,12 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "init_defaults", makeInitializeDefaults},
     {.name = "len", makeLenNode},
     {.name = "line", makeLineNumberNode},
+    {.name = "mk_ast_list", makeAstNodeList},
+    {.name = "mk_field_expr", makeAstFieldExprNode},
     {.name = "mk_ident", makeAstIdentifierNode},
     {.name = "mk_integer", makeAstIntegerNode},
+    {.name = "mk_struct_expr", makeAstStructExprNode},
+    {.name = "mk_tuple_expr", makeAstTupleExprNode},
     {.name = "ptroff", makePointerOfNode},
     {.name = "require", makeRequireNode},
     {.name = "sizeof", makeSizeofNode},

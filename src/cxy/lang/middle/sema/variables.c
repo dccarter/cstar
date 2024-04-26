@@ -21,6 +21,14 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
     const Type *type_ =
         type ? checkType(visitor, type) : makeAutoType(ctx->types);
     const Type *init_ = checkType(visitor, init);
+    if (typeIs(init_, Void)) {
+        logError(ctx->L,
+                 &init->loc,
+                 "variable initializer evaluates to `{t}` type",
+                 (FormatArg[]){{.t = init_}});
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
 
     if (isSliceType(type_) && nodeIs(init, ArrayExpr)) {
         AstNode *newVar = transformArrayExprToSliceCall(ctx, type_, init);
@@ -48,7 +56,7 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    if (!isTypeAssignableFrom(type_, init_)) {
+    if (!isTypeAssignableFrom(unThisType(type_), init_)) {
         logError(ctx->L,
                  &node->loc,
                  "variable initializer of type '{t}' is not assignable to "

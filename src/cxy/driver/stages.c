@@ -29,11 +29,12 @@ static bool compareStages(const void *left, const void *right)
 static void registerStages(HashTable *stages)
 {
 #define f(name, ...)                                                           \
-    insertInHashTable(stages,                                                  \
-                      &(Stage){#name, strlen(#name), ccs##name},               \
-                      hashStr(hashInit(), #name),                              \
-                      sizeof(Stage),                                           \
-                      compareStages);
+    insertInHashTable(                                                         \
+        stages,                                                                \
+        &(Stage) { #name, strlen(#name), ccs##name },                          \
+        hashStr(hashInit(), #name),                                            \
+        sizeof(Stage),                                                         \
+        compareStages);
     CXY_COMPILER_STAGES(f)
 #undef f
 }
@@ -194,13 +195,35 @@ static AstNode *executeSimplify(CompilerDriver *driver, AstNode *node)
     return node;
 }
 
+static AstNode *executeMemoryManagement(CompilerDriver *driver, AstNode *node)
+{
+    csAssert0(nodeIs(node, Metadata));
+    if (!driver->options.withMemoryManager)
+        return node;
+    if (!(node->metadata.stages & BIT(ccsSimplify))) {
+        logError(driver->L,
+                 builtinLoc(),
+                 "AST must be simplified before memory management",
+                 NULL);
+        return NULL;
+    }
+
+    node->metadata.node = memoryManageAst(driver, node->metadata.node);
+
+    if (hasErrors(driver->L))
+        return NULL;
+
+    node->metadata.stages |= BIT(ccsMemoryMgmt);
+    return node;
+}
+
 static AstNode *executeGenerateCode(CompilerDriver *driver, AstNode *node)
 {
     csAssert0(nodeIs(node, Metadata));
     if (!(node->metadata.stages & BIT(ccsSimplify))) {
         logError(driver->L,
                  builtinLoc(),
-                 "cannot generate code for an unbound ast",
+                 "cannot generate code before the AST has been memory managed",
                  NULL);
         return NULL;
     }
@@ -337,6 +360,7 @@ static CompilerStageExecutor compilerStageExecutors[ccsCOUNT] = {
     [ccsBind] = executeBindAst,
     [ccsTypeCheck] = executeTypeCheckAst,
     [ccsSimplify] = executeSimplify,
+    [ccsMemoryMgmt] = executeMemoryManagement,
     [ccsCodegen] = executeGenerateCode,
     // TODO causing issues
     // [ccsCollect] = executeCollect,

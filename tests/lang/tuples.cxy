@@ -6,7 +6,7 @@ func swap(tup: (string, i32)) : (i32, string) => (tup.1, tup.0)
 
 func main(args: [string]) {
     // tuple literals
-    // NOTE (x) is not a tuple literal
+    // NOTE!!! (x) is not a tuple literal, but a group expression
     (true, 10);
     ('a', true, 10, "Hello");
     ('a', ("World", 32, (true, 5.996)));
@@ -27,4 +27,6 @@ func main(args: [string]) {
     // Tuple references
     var f :&(i32, string) = &z;
     var k : (string, i32) = (f.1, f.0);
+    // unpacking
+    var num, str = swap(("Hello", 10));
 }

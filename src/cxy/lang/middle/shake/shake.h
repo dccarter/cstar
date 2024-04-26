@@ -6,21 +6,20 @@
 #define CXY_SHAKE_H
 
 #include "lang/frontend/ast.h"
+#include "lang/frontend/visitor.h"
 
 typedef struct {
     Log *L;
     MemPool *pool;
-    struct StrPool *strPool;
-    struct {
-        AstNode *current;
-        AstNode *previous;
-        AstNode *self;
-    } block;
+    struct StrPool *strings;
+
     union {
         struct {
+            AstModifier block;
             bool inClassOrStruct;
         };
         struct {
+            AstModifier block;
             bool inClassOrStruct;
         } stack;
     };

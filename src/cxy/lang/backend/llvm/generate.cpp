@@ -10,6 +10,7 @@
 
 #include <vector>
 
+static void moveVariable(cxy::LLVMContext &context, AstNode *pNode);
 extern "C" {
 #include "lang/frontend/flag.h"
 #include "lang/frontend/strings.h"
@@ -118,6 +119,9 @@ static void visitPrefixUnaryExpr(AstVisitor *visitor, AstNode *node)
     auto value = cxy::codegen(visitor, node->unaryExpr.operand);
     switch (node->unaryExpr.op) {
     case opPlus:
+        ctx.returnValue(value);
+        break;
+    case opMove:
         ctx.returnValue(value);
         break;
     case opMinus:
@@ -974,6 +978,15 @@ void visitTypeDecl(AstVisitor *visitor, AstNode *node)
     node->codegen = ctx.getLLVMType(node->type);
 }
 
+static void visitTypeRef(AstVisitor *visitor, AstNode *node)
+{
+    auto &ctx = cxy::LLVMContext::from(visitor);
+    auto load = ctx.stack().loadVariable(false);
+    astVisit(visitor, node->reference.target);
+    ctx.stack().loadVariable(load);
+    node->codegen = ctx.getLLVMType(node->type);
+}
+
 static void visitEnumDecl(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
@@ -1078,6 +1091,7 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
         [astUnionDecl] = visitUnionDecl,
         [astTypeDecl] = visitTypeDecl,
         [astEnumDecl] = visitEnumDecl,
+        [astTypeRef] = visitTypeRef,
         [astGenericDecl] = astVisitSkip,
         [astImportDecl] = astVisitSkip,
         [astMacroDecl] = astVisitSkip

@@ -159,7 +159,7 @@ static AstNode *getMembersCount(EvalContext *ctx,
     if (node == NULL)
         return NULL;
 
-    const Type *type = stripAll(node->type);
+    const Type *type = resolveType(stripAll(node->type));
     u64 count = 0;
     switch (type->tag) {
     case typTuple:
@@ -488,7 +488,7 @@ static AstNode *isClass(EvalContext *ctx,
                         attr(unused) AstNode *args)
 {
     const Type *type = node->type ?: evalType(ctx, node);
-    type = unwrapType(resolveType(type), NULL);
+    type = resolveAndUnThisType(unwrapType(type, NULL));
 
     return makeAstNode(ctx->pool,
                        loc,
@@ -544,7 +544,7 @@ static AstNode *isDestructible(EvalContext *ctx,
 {
 
     const Type *type = node->type ?: evalType(ctx, node);
-    type = unwrapType(type, NULL);
+    type = resolveAndUnThisType(unwrapType(type, NULL));
     AstNode *decl = getTypeDecl(type);
 
     return makeAstNode(
@@ -608,6 +608,20 @@ static AstNode *hasDeinit(EvalContext *ctx,
                        isClassOrStructType(type) &&
                        findMemberInType(type, S_DeinitOverload) != NULL});
 }
+static AstNode *typeHasReferenceMembers(EvalContext *ctx,
+                                        const FileLoc *loc,
+                                        AstNode *node,
+                                        attr(unused) AstNode *args)
+{
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = unwrapType(type, NULL);
+
+    return makeAstNode(
+        ctx->pool,
+        loc,
+        &(AstNode){.tag = astBoolLit,
+                   .boolLiteral.value = hasReferenceMembers(type)});
+}
 
 static AstNode *isField(EvalContext *ctx,
                         const FileLoc *loc,
@@ -659,6 +673,7 @@ static void initDefaultMembers(EvalContext *ctx)
     ADD_MEMBER("isCover", isCover);
     ADD_MEMBER("isFunction", isFunction);
     ADD_MEMBER("has_deinit", hasDeinit);
+    ADD_MEMBER("hasReferenceMembers", typeHasReferenceMembers);
 
 #undef ADD_MEMBER
 }

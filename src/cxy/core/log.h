@@ -12,7 +12,8 @@ extern "C" {
 // clang-format off
 #define CXY_COMPILER_WARNINGS(f)        \
     f(MissingStage,      0)             \
-    f(UnusedVariable,    1)
+    f(UnusedVariable,    1)             \
+    f(RedundantStmt,     2)
 
 // clang-format on
 
