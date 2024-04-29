@@ -1,37 +1,6 @@
 module io
 
-import "./c.cxy" as C
-
-pub func print[T](it: const T) {
-    @flatten
-    #if (T.isString) {
-        @flatten
-        #if (T.isStruct) {
-            C.write(C.STDOUT, it.str, it.count)
-        }
-        else {
-            C.write(C.STDOUT, it: string, len!(it))
-        }
-    }
-    else {
-        var j;
-        var str = f"${it}";
-        C.write(C.STDOUT, str.str, str.count)
-    }
-}
-
-@inline
-pub func println(@transient ...args: const auto) {
-    #const i = 0;
-
-    @flatten
-    #for (const T: args) {
-        print[#{T}](args.#{i})
-        #{i += 1}
-    }
-
-    C.write(C.STDOUT, "\n" : &const char, 1)
-}
+import "unistd.h" as stdio
 
 struct File {
     fd: i32 = -1
@@ -45,7 +14,7 @@ struct File {
         if (fd == -1)
             return null
 
-        var bytes = C.read(fd, data, size);
+        var bytes = stdio.read(fd, data, size);
         if (bytes == -1)
             return null
 
@@ -56,10 +25,10 @@ struct File {
         if (fd == -1)
             return null
 
-        if (C.lseek(fd, off, C.SEEK_SET) == -1)
+        if (stdio.lseek(fd, off, SEEK_SET!) == -1)
             return null
 
-        var bytes = C.read(fd, data, size);
+        var bytes = stdio.read(fd, data, size);
         if (bytes == -1)
             return null
 
@@ -70,8 +39,5 @@ struct File {
     func `!!`() => fd != -1
 
     @inline
-    func seek(off: u64, whence: i32 = C.SEEK_SET) => C.lseek(fd, off:i64, whence)
-
-    const func `str`(sb: StringBuilder) => {}
-    const func `hash`() => fd
+    func seek(off: u64, whence: i32 = SEEK_SET!) => stdio.lseek(fd, off:i64, whence)
 }

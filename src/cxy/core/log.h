@@ -13,7 +13,8 @@ extern "C" {
 #define CXY_COMPILER_WARNINGS(f)        \
     f(MissingStage,      0)             \
     f(UnusedVariable,    1)             \
-    f(RedundantStmt,     2)
+    f(RedundantStmt,     2)             \
+    f(CMacroRedefine,    3)
 
 // clang-format on
 
@@ -124,6 +125,12 @@ static inline FileLoc *locAfter(FileLoc *dst, const FileLoc *loc)
 }
 
 u64 parseWarningLevels(Log *L, cstring str);
+
+static inline bool isWarningEnabled_(Log *L, WarningId id)
+{
+    return L->enabledWarnings.num & id;
+}
+#define isWarningEnabled(L, NAME) isWarningEnabled_((L), BIT(wrn##NAME))
 
 #ifdef __cplusplus
 }

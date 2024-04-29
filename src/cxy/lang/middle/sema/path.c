@@ -193,4 +193,7 @@ void checkPath(AstVisitor *visitor, AstNode *node)
 
     node->type = type;
     node->flags |= flags;
+    if (hasFlag(node, Comptime)) {
+        node->type = checkType(visitor, node);
+    }
 }

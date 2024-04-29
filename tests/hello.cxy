@@ -1,7 +1,6 @@
-import { Vector } from "stdlib/vector.cxy"
+import "add.h" as Add
+import "stdio.h" as stdio
 
 pub func main() {
-    var x = Vector[i64]();
-    100 + 100;
-    100 + 200;
+    println(HELLO_WORLD!)
 }

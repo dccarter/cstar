@@ -1144,6 +1144,113 @@ AstNode *makeBackendCallExpr(MemPool *pool,
                    .backendCallExpr = {.func = func, .args = args}});
 }
 
+AstNode *makeEnumOptionAst(MemPool *pool,
+                           const FileLoc *loc,
+                           u64 flags,
+                           cstring name,
+                           AstNode *value,
+                           AstNode *next,
+                           const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astEnumOptionDecl,
+                   .flags = flags,
+                   .type = type,
+                   .next = NULL,
+                   .enumOption = {.name = name, .value = value}});
+}
+
+AstNode *makeEnumAst(MemPool *pool,
+                     const FileLoc *loc,
+                     u64 flags,
+                     cstring name,
+                     AstNode *base,
+                     AstNode *options,
+                     AstNode *next,
+                     const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){
+            .tag = astEnumDecl,
+            .flags = flags,
+            .type = type,
+            .next = NULL,
+            .enumDecl = {.base = base, .name = name, .options = options}});
+}
+
+AstNode *makeProgramAstNode(MemPool *pool,
+                            const FileLoc *loc,
+                            u64 flags,
+                            AstNode *module,
+                            AstNode *top,
+                            AstNode *decls,
+                            const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astProgram,
+                   .flags = flags,
+                   .type = type,
+                   .next = NULL,
+                   .program = {.module = module, .top = top, .decls = decls}});
+}
+
+AstNode *makeModuleAstNode(MemPool *pool,
+                           const FileLoc *loc,
+                           u64 flags,
+                           cstring name,
+                           Env *env,
+                           const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astModuleDecl,
+                                  .flags = flags,
+                                  .type = type,
+                                  .next = NULL,
+                                  .moduleDecl = {.name = name, .env = env}});
+}
+
+AstNode *makeTypeDeclAstNode(MemPool *pool,
+                             const FileLoc *loc,
+                             u64 flags,
+                             cstring name,
+                             AstNode *aliased,
+                             AstNode *next,
+                             const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astTypeDecl,
+                   .flags = flags,
+                   .type = type,
+                   .next = next,
+                   .typeDecl = {.name = name, .aliased = aliased}});
+}
+
+AstNode *makeMacroDeclAstNode(MemPool *pool,
+                              const FileLoc *loc,
+                              u64 flags,
+                              cstring name,
+                              AstNode *params,
+                              AstNode *body,
+                              AstNode *next)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){
+            .tag = astMacroDecl,
+            .flags = flags,
+            .macroDecl = {.name = name, .params = params, .body = body}});
+}
+
 AstNode *makeAstClosureCapture(MemPool *pool, AstNode *captured)
 {
     return makeAstNode(pool,

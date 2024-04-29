@@ -92,79 +92,23 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *callee = node->callExpr.callee;
     u64 flags = (callee->flags & ~flgTopLevelDecl);
-    const Type *target = unThisType(callee->type);
-    // turn S(...) => var tmp = S{}; tmp.init(...); tmp;
-
-    cstring name = makeAnonymousVariable(ctx->strings, "s");
-    // S{}
-    AstNode *structExpr =
-        typeIs(unwrapType(target, NULL), Struct)
-            ? makeStructExpr(ctx->pool,
-                             &callee->loc,
-                             flags,
-                             callee,
-                             makeStructInitializerForDefaults(ctx, callee),
-                             NULL,
-                             target)
-            : makeAllocateCall(ctx, callee);
-    // var name = S{}
-    AstNode *varDecl =
-        makeVarDecl(ctx->pool,
-                    &callee->loc,
-                    flags | flgImmediatelyReturned | flgTransient,
-                    name,
-                    NULL,
-                    structExpr,
-                    NULL,
-                    NULL);
-    const Type *type = checkType(visitor, varDecl);
-    if (typeIs(type, Error)) {
-        node->type = ERROR_TYPE(ctx);
-        return type;
-    }
-
-    // tmp.init
-    AstNode *newCallee = makePathWithElements(
+    const Type *target = resolveAndUnThisType(callee->type);
+    // find constructor
+    AstNode *ctor = isClassType(target) ? findBuiltinDecl(S___construct0)
+                                        : findBuiltinDecl(S___construct1);
+    csAssert0(ctor);
+    // __construct[T]
+    node->callExpr.callee = makeResolvedPathWithArgs(
         ctx->pool,
         &callee->loc,
+        getDeclarationName(ctor),
         flags,
-        makeResolvedPathElement(
-            ctx->pool,
-            &callee->loc,
-            name,
-            flags,
-            varDecl,
-            makePathElement(
-                ctx->pool, &callee->loc, S_InitOverload, flags, NULL, NULL),
-            NULL),
+        ctor,
+        makeTypeReferenceNode(ctx->pool, target, &callee->loc),
         NULL);
+    node->type = NULL;
 
-    //     name.init(...); tmp
-    AstNode *callExpr = makeCallExpr(ctx->pool,
-                                     &node->loc,
-                                     newCallee,
-                                     node->callExpr.args,
-                                     node->flags,
-                                     NULL,
-                                     NULL);
-    type = checkType(visitor, callExpr);
-    if (typeIs(type, Error)) {
-        node->type = ERROR_TYPE(ctx);
-        return type;
-    }
-    varDecl->next = callExpr;
-
-    addBlockLevelDeclaration(ctx, varDecl);
-
-    memset(&node->_body, 0, CXY_AST_NODE_BODY_SIZE);
-    clearAstBody(node);
-    node->tag = astIdentifier;
-    node->ident.value = name;
-    node->ident.resolvesTo = varDecl;
-    node->type = varDecl->type;
-    node->flags |= flgMove;
-
-    return node->type;
+    return checkType(visitor, node);
 }
 
 bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node)

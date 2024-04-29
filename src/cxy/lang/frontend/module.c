@@ -2,7 +2,7 @@
 // Created by Carter Mbotho on 2024-01-09.
 //
 
-#include "check.h"
+#include "lang/middle/sema/check.h"
 
 #include "lang/frontend/flag.h"
 #include "lang/frontend/strings.h"
@@ -50,7 +50,7 @@ static u64 addModuleTypeMember(NamedTypeMember *members,
     return index;
 }
 
-void buildModuleType(TypingContext *ctx, AstNode *node, bool isBuiltinModule)
+void buildModuleType(TypeTable *types, AstNode *node, bool isBuiltinModule)
 {
     u64 builtinsFlags = (isBuiltinModule ? flgBuiltin : flgNone);
     u64 count = countProgramDecls(node->program.decls) +
@@ -72,15 +72,10 @@ void buildModuleType(TypingContext *ctx, AstNode *node, bool isBuiltinModule)
     }
 
     node->type = makeModuleType(
-        ctx->types,
+        types,
         isBuiltinModule ? S___builtins : node->program.module->moduleDecl.name,
         node->loc.fileName,
         members,
         i);
     free(members);
-}
-
-void checkImportDecl(attr(unused) AstVisitor *visitor,
-                     attr(unused) AstNode *node)
-{
 }

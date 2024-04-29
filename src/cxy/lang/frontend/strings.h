@@ -82,6 +82,8 @@
     f(__init)                   \
     f(__startup)                \
     f(__name)                   \
+    f(__construct0)             \
+    f(__construct1)             \
     f(__fwd)                    \
     f(CXY__main)                \
     ff(__LLVM_global_ctors, "llvm.global_ctors") \

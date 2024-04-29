@@ -15,7 +15,7 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)
 endif ()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-c99-designator -Werror")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-c99-designator -Werror -fno-rtti")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g")
@@ -39,6 +39,7 @@ include(CxyUtils)
 include(FetchContent)
 
 find_package(LLVM REQUIRED CONFIG)
+find_package(Clang REQUIRED)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 include_directories(${LLVM_INCLUDE_DIRS})
@@ -90,10 +91,6 @@ CxyAmalgamate(builtins
         FILES
         src/cxy/runtime/builtins.cxy)
 
-
-set(CXY_3RD_PARTY_SOURCES
-        src/3rdParty/cJSON.c)
-
 set(CXY_CORE_SOURCES
         src/cxy/core/args.c
         src/cxy/core/array.c
@@ -117,6 +114,7 @@ set(CXY_FRONTEND_SOURCES
         src/cxy/lang/frontend/defines.c
         src/cxy/lang/frontend/decode.c
         src/cxy/lang/frontend/lexer.c
+        src/cxy/lang/frontend/module.c
         src/cxy/lang/frontend/operator.c
         src/cxy/lang/frontend/parser.c
         src/cxy/lang/frontend/strings.c
@@ -149,7 +147,6 @@ set(CXY_MIDDLE_SOURCES
         src/cxy/lang/middle/sema/interface.c
         src/cxy/lang/middle/sema/match.c
         src/cxy/lang/middle/sema/member.c
-        src/cxy/lang/middle/sema/module.c
         src/cxy/lang/middle/sema/new.c
         src/cxy/lang/middle/sema/node.c
         src/cxy/lang/middle/sema/path.c
@@ -202,7 +199,11 @@ set(CXY_DRIVER_SOURCES
         src/cxy/driver/driver.c
         src/cxy/driver/options.c
         src/cxy/driver/stages.c
-        src/cxy/driver/stats.c)
+        src/cxy/driver/stats.c
+
+        src/cxy/driver/c-import/context.cpp
+        src/cxy/driver/c-import/import.cpp
+)
 
 add_executable(cxy
         src/cxy/driver/main.c
@@ -224,7 +225,7 @@ llvm_map_components_to_libnames(llvm_libs
         TransformUtils
         CodeGen
 )
-
+list(APPEND llvm_libs clangAST clangBasic clangFrontend clangLex clangParse clangSema)
 message(STATUS ${llvm_libs})
 target_link_libraries(cxy msgpack-c yaml ${llvm_libs})
 target_compile_definitions(cxy PRIVATE

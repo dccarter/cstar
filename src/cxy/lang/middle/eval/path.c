@@ -52,6 +52,21 @@ void evalPath(AstVisitor *visitor, AstNode *node)
             }
             symbol = option->enumOption.value;
         }
+        else if (nodeIs(symbol, ImportDecl)) {
+            cstring name = elem->pathElement.alt ?: elem->pathElement.name;
+            AstNode *member = findMemberDeclInType(symbol->type, name);
+            if (member == NULL) {
+                logError(
+                    ctx->L,
+                    &node->loc,
+                    "module {s} does not define a comptime variable named {s}",
+                    (FormatArg[]){{.s = symbol->type->name}, {.s = name}});
+
+                node->tag = astError;
+                return;
+            }
+            symbol = member;
+        }
         else {
             while (elem) {
                 cstring name = elem->pathElement.alt ?: elem->pathElement.name;

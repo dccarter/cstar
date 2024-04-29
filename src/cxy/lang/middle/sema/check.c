@@ -392,7 +392,7 @@ static void checkProgram(AstVisitor *visitor, AstNode *node)
     }
 
     if (isBuiltinModule || node->program.module) {
-        buildModuleType(ctx, node, isBuiltinModule);
+        buildModuleType(ctx->types, node, isBuiltinModule);
     }
 }
 
@@ -604,7 +604,7 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astStructDecl] = checkStructDecl,
         [astClassDecl] = checkClassDecl,
         [astInterfaceDecl] = checkInterfaceDecl,
-        [astImportDecl] = checkImportDecl,
+        [astImportDecl] = astVisitSkip,
         [astReturnStmt] = checkReturnStmt,
         [astBlockStmt] = checkBlockStmt,
         [astDeferStmt] = checkDeferStmt,

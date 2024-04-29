@@ -376,7 +376,7 @@ AstNode *executeCompilerStage(CompilerDriver *driver,
         logWarningWithId(driver->L,
                          wrnMissingStage,
                          NULL,
-                         "unsupported compiler id '{s}'",
+                         "unsupported compiler stage id '{s}'",
                          (FormatArg[]){{.s = stageName}});
         return node;
     }

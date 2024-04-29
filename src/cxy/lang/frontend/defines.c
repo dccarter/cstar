@@ -97,6 +97,7 @@ void initCompilerPreprocessor(struct CompilerDriver *driver)
         preprocessorDefineMacro(&driver->preprocessor,
                                 makeString(driver->strings, define->name),
                                 node);
+        freeLexer(&lexer);
     }
 }
 
