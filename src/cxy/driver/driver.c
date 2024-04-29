@@ -6,6 +6,7 @@
 #include "core/mempool.h"
 #include "core/utils.h"
 
+#include "c.h"
 #include "lang/frontend/ast.h"
 #include "lang/frontend/flag.h"
 #include "lang/frontend/lexer.h"
@@ -266,6 +267,7 @@ bool initCompilerDriver(CompilerDriver *compiler,
     compiler->backend = initCompilerBackend(compiler, argc, argv);
     csAssert0(compiler->backend);
     initCompilerPreprocessor(compiler);
+    initCImporter(compiler);
 
     if (options->cmd == cmdBuild || !options->withoutBuiltins) {
         return compileBuiltin(compiler,
@@ -280,6 +282,8 @@ bool initCompilerDriver(CompilerDriver *compiler,
 void deinitCompilerDriver(CompilerDriver *driver)
 {
     deinitCompilerBackend(driver);
+    deinitCompilerPreprocessor(driver);
+    deinitCImporter(driver);
     freeHashTable(&driver->moduleCache);
     freeTypeTable(driver->types);
     deinitCommandLineOptions(&driver->options);
@@ -301,6 +305,12 @@ static bool configureDriverSourceDir(CompilerDriver *driver, cstring *fileName)
         makeStringSized(driver->strings, tmp, driver->sourceDirLen);
     *fileName = makeString(driver->strings, tmp);
     return true;
+}
+
+static inline bool isImportModuleACHeader(cstring module)
+{
+    cstring ext = strrchr(module, '.');
+    return ext != NULL && strcmp(ext + 1, "h") == 0;
 }
 
 static cstring getModuleLocation(CompilerDriver *driver, const AstNode *source)
@@ -353,45 +363,63 @@ static cstring getModuleLocation(CompilerDriver *driver, const AstNode *source)
 
 const Type *compileModule(CompilerDriver *driver,
                           const AstNode *source,
-                          AstNode *entities)
+                          AstNode *entities,
+                          AstNode *alias)
 {
-    cstring path = getModuleLocation(driver, source);
-    if (path == NULL)
-        return NULL;
-
-    AstNode *program = findCachedModule(driver, path);
+    AstNode *program = NULL;
     bool cached = true;
-    if (program == NULL) {
-        cached = false;
+    if (!isImportModuleACHeader(source->stringLiteral.value)) {
+        cstring path = getModuleLocation(driver, source);
+        if (path == NULL)
+            return NULL;
 
-        if (access(path, F_OK) != 0) {
-            logError(driver->L,
-                     &source->loc,
-                     "module source file '{s}' does not exist",
-                     (FormatArg[]){{.s = path}});
+        program = findCachedModule(driver, path);
+        if (program == NULL) {
+            cached = false;
+
+            if (access(path, F_OK) != 0) {
+                logError(driver->L,
+                         &source->loc,
+                         "module source file '{s}' does not exist",
+                         (FormatArg[]){{.s = path}});
+                return NULL;
+            }
+
+            program = parseFile(driver, path);
+            if (program == NULL)
+                return NULL;
+
+            if (program->program.module == NULL) {
+                logError(driver->L,
+                         &source->loc,
+                         "module source '{s}' is not declared as a module",
+                         (FormatArg[]){{.s = path}});
+                return NULL;
+            }
+
+            program->flags |= flgImportedModule;
+            if (!compileProgram(driver, program, path))
+                return NULL;
+            AstNode *decls = program->program.decls;
+            if (nodeIs(decls, ExternDecl) && hasFlag(decls, ModuleInit)) {
+                // copy this declaration
+                insertAstNode(&driver->startup,
+                              copyAstNode(driver->pool, decls));
+            }
+        }
+    }
+    else {
+        if (alias == NULL) {
+            logError(
+                driver->L,
+                &source->loc,
+                "importing a C header files requires an alias for the import",
+                NULL);
             return NULL;
         }
-
-        program = parseFile(driver, path);
+        program = importCHeader(driver, source, alias->ident.value);
         if (program == NULL)
             return NULL;
-
-        if (program->program.module == NULL) {
-            logError(driver->L,
-                     &source->loc,
-                     "module source '{s}' is not declared as a module",
-                     (FormatArg[]){{.s = path}});
-            return NULL;
-        }
-
-        program->flags |= flgImportedModule;
-        if (!compileProgram(driver, program, path))
-            return NULL;
-        AstNode *decls = program->program.decls;
-        if (nodeIs(decls, ExternDecl) && hasFlag(decls, ModuleInit)) {
-            // copy this declaration
-            insertAstNode(&driver->startup, copyAstNode(driver->pool, decls));
-        }
     }
 
     AstNode *entity = entities;
@@ -401,11 +429,11 @@ const Type *compileModule(CompilerDriver *driver,
         const NamedTypeMember *member =
             findModuleMember(module, entity->importEntity.name);
         if (member == NULL) {
-            logError(
-                driver->L,
-                &entity->loc,
-                "module {s} does not export declaration with name '{s}'",
-                (FormatArg[]){{.s = path}, {.s = entity->importEntity.name}});
+            logError(driver->L,
+                     &entity->loc,
+                     "module {s} does not export declaration with name '{s}'",
+                     (FormatArg[]){{.s = source->stringLiteral.value},
+                                   {.s = entity->importEntity.name}});
             continue;
         }
 
@@ -414,7 +442,8 @@ const Type *compileModule(CompilerDriver *driver,
                 driver->L,
                 &entity->loc,
                 "module {s} member'{s}' cannot be imported, it is not public",
-                (FormatArg[]){{.s = path}, {.s = entity->importEntity.name}});
+                (FormatArg[]){{.s = source->stringLiteral.value},
+                              {.s = entity->importEntity.name}});
             logNote(driver->L,
                     &member->decl->loc,
                     "`{s}` declared here",
@@ -429,7 +458,7 @@ const Type *compileModule(CompilerDriver *driver,
         return NULL;
 
     if (!cached)
-        addCachedModule(driver, path, program);
+        addCachedModule(driver, source->stringLiteral.value, program);
 
     return program->type;
 }

@@ -254,5 +254,7 @@ AstNode *preprocessAst(CompilerDriver *driver, AstNode *node)
 
     astVisit(&visitor, node);
 
+    environmentFree(&env);
+    
     return node;
 }

@@ -45,8 +45,11 @@ typedef struct Options {
     const char *buildDir;
     const char *rest;
     DynArray cflags;
-    DynArray libraries;
+    DynArray cDefines;
     DynArray librarySearchPaths;
+    DynArray importSearchPaths;
+    DynArray frameworkSearchPaths;
+    DynArray libraries;
     DynArray defines;
     bool withoutBuiltins;
     bool noPIE;

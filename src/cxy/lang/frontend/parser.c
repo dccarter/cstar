@@ -2538,7 +2538,7 @@ static AstNode *parseImportDecl(Parser *P)
     if (entities == NULL && match(P, tokAs))
         alias = parseIdentifier(P);
 
-    exports = compileModule(P->cc, module, entities);
+    exports = compileModule(P->cc, module, entities, alias);
     if (exports == NULL) {
         logWarning(P->L,
                    &tok.fileLoc,

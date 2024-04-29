@@ -30,6 +30,7 @@ typedef struct CompilerDriver {
     AstNodeList startup;
     CompilerPreprocessor preprocessor;
     void *backend;
+    void *cImporter;
 } CompilerDriver;
 
 typedef struct {
@@ -66,10 +67,13 @@ bool compileString(CompilerDriver *driver,
 
 const Type *compileModule(CompilerDriver *driver,
                           const AstNode *source,
-                          AstNode *entities);
+                          AstNode *entities,
+                          AstNode *alias);
 
 void *initCompilerBackend(CompilerDriver *driver, int argc, char **argv);
 void deinitCompilerBackend(CompilerDriver *driver);
 bool compilerBackendMakeExecutable(CompilerDriver *driver);
 void initCompilerPreprocessor(struct CompilerDriver *driver);
 void deinitCompilerPreprocessor(struct CompilerDriver *driver);
+void initCImporter(struct CompilerDriver *driver);
+void deinitCImporter(struct CompilerDriver *driver);

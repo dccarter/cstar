@@ -111,8 +111,8 @@ pub func __calloc(size: u64) => memset(malloc(size), 0, size)
 /* Builtin Optional Type */
 struct __Optional[T] {
     /* @note: Do not change the order of these members */
-    - ok: bool = false;
-    - val: T
+    ok: bool = false;
+    val: T
 
     @inline func `init`() { ok = false }
     @inline func `init`(value: T) { val = value; ok = true }
@@ -125,11 +125,11 @@ struct __Optional[T] {
 
 /* Creates a valid optional value */
 @inline
-pub func Some[T](@transient value: T) => __Optional[T](value)
+pub func Some[T](@transient value: T) => __Optional[T]{ok: true, val: value}
 
 /* Creates an invalid optional value */
 @inline
-pub func None[T]() => __Optional[T]()
+pub func None[T]() => __construct1[__Optional[T]]()
 
 pub type Hash = u32
 #const FNV_32_PRIME = 0x01000193
@@ -325,7 +325,7 @@ pub class OutputStream {
             #if (U.isClass)
                 append(val._data:  &const char, val.size())
             else
-                appendString(val)
+                appendString(__construct1[CString](val))
         else #if (U.isInteger)
             appendSignedInt(<i64>val)
         else #if (U.isFloat)
@@ -747,7 +747,7 @@ pub func allocate[T](len: u32 = 0) {
     }
 }
 
-pub func make[T](@transient ...args: auto) {
+pub func __construct0[T](@transient ...args: auto) {
     require!(T.isClass, "type '{t}' unsupported by `make`", #T)
 
     var obj = (__smart_ptr_alloc(sizeof!(#T), __deinit_fwd[T]) !: T);
@@ -758,13 +758,24 @@ pub func make[T](@transient ...args: auto) {
 }
 
 @[inline, pure]
-pub func deallocate[T](ptr: T) {
+pub func __construct1[T](@transient ...args: auto) {
+    require!(T.isStruct, "type '{t}' unsupported by `create`, only structs can be created", #T)
+
+    var obj: T;
+    // this will ensure that default values are assigned
+    init_defaults!(obj)
+    obj.op__init(...args)
+    return obj
+}
+
+@[inline, pure]
+pub func __destructor[T](ptr: T) {
     require!(T.isClass, "expecting type of deallocated object to be a class")
     __smart_ptr_drop(ptr: sptr)
 }
 
-pub var stdout: OutputStream = make[FileOutputStream](1);
-pub var stderr: OutputStream = make[FileOutputStream](2);
+pub var stdout: OutputStream = __construct0[FileOutputStream](1);
+pub var stderr: OutputStream = __construct0[FileOutputStream](2);
 
 @inline
 pub func print[T](data: const T) {

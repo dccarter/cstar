@@ -108,7 +108,8 @@ Log newLog(DiagnosticHandler handler, void *ctx)
                   .handler = handler,
                   .handlerCtx = ctx,
                   .maxErrors = SIZE_MAX,
-                  .enabledWarnings.num = wrnAll & ~BIT(wrnMissingStage)};
+                  .enabledWarnings.num = wrnAll & ~(BIT(wrnMissingStage) |
+                                                    BIT(wrnCMacroRedefine))};
     if (handler == printDiagnosticToConsole) {
         L.handlerCtx = NULL;
         L.handler = NULL;

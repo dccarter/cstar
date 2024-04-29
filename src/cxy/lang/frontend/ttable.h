@@ -195,6 +195,8 @@ const Type *expectInType(TypeTable *table,
                          cstring name,
                          const FileLoc *loc);
 
+void buildModuleType(TypeTable *types, AstNode *node, bool isBuiltinModule);
+
 const Type *getIntegerTypeForLiteral(TypeTable *table, i64 literal);
 
 bool isIntegerTypeInRange(const Type *type, i64 min, i64 max);

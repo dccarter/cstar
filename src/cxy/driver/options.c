@@ -125,6 +125,24 @@ static bool cmdCompilerDefine(CmdParser *P,
     return true;
 }
 
+static bool cmdArrayArgument(CmdParser *P,
+                             CmdFlagValue *dst,
+                             const char *str,
+                             const char *name)
+{
+    if (str == NULL || str[0] == '\0') {
+        sprintf(P->error,
+                "error: command line argument '%s' is missing a value",
+                name);
+        return false;
+    }
+    if (dst->array.elems == NULL)
+        dst->array = newDynArray(sizeof(cstring));
+
+    pushStringOnDynArray(&dst->array, str);
+    return true;
+}
+
 Command(
     dev,
     "development mode build, useful when debugging issues",
@@ -234,6 +252,10 @@ static void parseSpaceSeperatedList(DynArray *into,
 static void initializeOptions(StrPool *strings, Options *options)
 {
     options->cflags = newDynArray(sizeof(char *));
+    options->cDefines = newDynArray(sizeof(char *));
+    options->librarySearchPaths = newDynArray(sizeof(char *));
+    options->importSearchPaths = newDynArray(sizeof(char *));
+    options->frameworkSearchPaths = newDynArray(sizeof(char *));
     options->libraries = newDynArray(sizeof(char *));
     options->defines = newDynArray(sizeof(CompilerDefine));
 #ifdef __APPLE__
@@ -241,13 +263,22 @@ static void initializeOptions(StrPool *strings, Options *options)
     FormatState state = newFormatState(NULL, true);
     exec("xcrun --show-sdk-path", &state);
     char *sdkPath = formatStateToString(&state);
+    freeFormatState(&state);
     if (sdkPath && sdkPath[0] != '\0') {
         cstring trimmedSdkPath = makeTrimmedString(strings, sdkPath);
         pushStringOnDynArray(&options->cflags, "-isysroot");
         pushStringOnDynArray(&options->cflags, trimmedSdkPath);
         free(sdkPath);
+
+        state = newFormatState(NULL, true);
+        appendString(&state, trimmedSdkPath);
+        appendString(&state, "/usr/include");
+        char *sdkIncludeDir = formatStateToString(&state);
+        freeFormatState(&state);
+        pushStringOnDynArray(&options->importSearchPaths,
+                             makeString(strings, sdkIncludeDir));
+        free(sdkIncludeDir);
     }
-    freeFormatState(&state);
 #endif
 }
 
@@ -271,6 +302,12 @@ static void fixCmdDevOptions(Options *options)
     else if (options->dev.dumpMode != dmpNONE) {
         options->dev.lastStage = MIN(options->dev.lastStage, ccsMemoryMgmt);
     }
+}
+
+static void moveListOptions(DynArray *dst, DynArray *src)
+{
+    copyDynArray(dst, src);
+    freeDynArray(src);
 }
 
 bool parseCommandLineOptions(
@@ -319,7 +356,24 @@ bool parseCommandLineOptions(
             Def("[]")),
         Opt(Name("with-mm"),
             Help("Compile program with builtin (RC) memory manager"),
-            Def("false")));
+            Def("false")),
+        Use(cmdArrayArgument,
+            Name("c-define"),
+            Help("Adds a compiler definition that will be parsed to the C "
+                 "importer"),
+            Def("[]")),
+        Use(cmdArrayArgument,
+            Name("c-header-dir"),
+            Help("Adds a directory to search for C header files"),
+            Def("[]")),
+        Use(cmdArrayArgument,
+            Name("c-lib-dir"),
+            Help("Adds a directory to search for C libraries"),
+            Def("[]")),
+        Use(cmdArrayArgument,
+            Name("c-lib"),
+            Help("Adds library to link against"),
+            Def("[]")));
 
     int selected = argparse(argc, &argv, parser);
 
@@ -361,9 +415,12 @@ bool parseCommandLineOptions(
     parseSpaceSeperatedList(&options->cflags, strings, str);
     options->noPIE = getGlobalOption(cmd, 6);
     options->optimizationLevel = getGlobalInt(cmd, 7);
-    copyDynArray(&options->defines, &getGlobalArray(cmd, 8));
-    freeDynArray(&getGlobalArray(cmd, 8));
+    moveListOptions(&options->defines, &getGlobalArray(cmd, 8));
     options->withMemoryManager = getGlobalBool(cmd, 9);
+    moveListOptions(&options->cDefines, &getGlobalArray(cmd, 10));
+    moveListOptions(&options->importSearchPaths, &getGlobalArray(cmd, 11));
+    moveListOptions(&options->librarySearchPaths, &getGlobalArray(cmd, 12));
+    moveListOptions(&options->libraries, &getGlobalArray(cmd, 13));
 
     file_count = *argc - 1;
 
@@ -386,6 +443,10 @@ exit:
 void deinitCommandLineOptions(Options *options)
 {
     freeDynArray(&options->cflags);
+    freeDynArray(&options->cDefines);
+    freeDynArray(&options->frameworkSearchPaths);
+    freeDynArray(&options->importSearchPaths);
+    freeDynArray(&options->librarySearchPaths);
     freeDynArray(&options->libraries);
     freeDynArray(&options->defines);
 }

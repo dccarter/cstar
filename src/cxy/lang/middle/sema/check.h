@@ -170,8 +170,6 @@ static inline const Type *checkType(AstVisitor *visitor, AstNode *node)
 const Type *checkFunctionSignature(AstVisitor *visitor, AstNode *node);
 const Type *checkFunctionBody(AstVisitor *visitor, AstNode *node);
 
-void buildModuleType(TypingContext *ctx, AstNode *node, bool isBuiltinModule);
-
 void checkVarDecl(AstVisitor *visitor, AstNode *node);
 void checkPath(AstVisitor *visitor, AstNode *node);
 void checkFunctionParam(AstVisitor *visitor, AstNode *node);
@@ -182,7 +180,6 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node);
 void checkEnumDecl(AstVisitor *visitor, AstNode *node);
 void checkTypeDecl(AstVisitor *visitor, AstNode *node);
 void checkUnionDecl(AstVisitor *visitor, AstNode *node);
-void checkImportDecl(AstVisitor *visitor, attr(unused) AstNode *node);
 void checkGenericDecl(AstVisitor *visitor, AstNode *node);
 
 void checkBinaryExpr(AstVisitor *visitor, AstNode *node);

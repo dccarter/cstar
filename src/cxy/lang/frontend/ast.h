@@ -221,6 +221,7 @@ struct AstNode {
             struct AstNode *module;
             struct AstNode *top;
             struct AstNode *decls;
+            cstring path;
         } program;
 
         struct {
@@ -1057,6 +1058,54 @@ AstNode *makeBackendCallExpr(MemPool *pool,
                              BackendFuncId func,
                              AstNode *args,
                              const Type *type);
+
+AstNode *makeEnumOptionAst(MemPool *pool,
+                           const FileLoc *loc,
+                           u64 flags,
+                           cstring name,
+                           AstNode *value,
+                           AstNode *next,
+                           const Type *type);
+
+AstNode *makeEnumAst(MemPool *pool,
+                     const FileLoc *loc,
+                     u64 flags,
+                     cstring name,
+                     AstNode *base,
+                     AstNode *options,
+                     AstNode *next,
+                     const Type *type);
+
+AstNode *makeProgramAstNode(MemPool *pool,
+                            const FileLoc *loc,
+                            u64 flags,
+                            AstNode *module,
+                            AstNode *top,
+                            AstNode *decls,
+                            const Type *type);
+
+AstNode *makeModuleAstNode(MemPool *pool,
+                           const FileLoc *loc,
+                           u64 flags,
+                           cstring name,
+                           Env *env,
+                           const Type *type);
+
+AstNode *makeTypeDeclAstNode(MemPool *pool,
+                             const FileLoc *loc,
+                             u64 flags,
+                             cstring name,
+                             AstNode *aliased,
+                             AstNode *next,
+                             const Type *type);
+
+AstNode *makeMacroDeclAstNode(MemPool *pool,
+                              const FileLoc *loc,
+                              u64 flags,
+                              cstring name,
+                              AstNode *params,
+                              AstNode *body,
+                              AstNode *next);
 
 AstNode *makeAstClosureCapture(MemPool *pool, AstNode *captured);
 

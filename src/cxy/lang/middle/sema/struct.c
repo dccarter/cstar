@@ -268,8 +268,10 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
         initialized[member->decl->structField.index] = true;
     }
 
-    if (node->type == ERROR_TYPE(ctx))
+    if (node->type == ERROR_TYPE(ctx)) {
+        free(initialized);
         return;
+    }
 
     for (u64 i = 0; i < striped->tStruct.members->count; i++) {
         const AstNode *targetField = striped->tStruct.members->members[i].decl;
@@ -303,6 +305,7 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
 
     if (node->type != ERROR_TYPE(ctx))
         node->type = target;
+    free(initialized);
 }
 
 void checkStructDecl(AstVisitor *visitor, AstNode *node)
