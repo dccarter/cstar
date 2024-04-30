@@ -359,7 +359,11 @@ void astModifierRemoveCurrent(AstModifier *ctx)
 
 void astModifierAdd(AstModifier *ctx, AstNode *node)
 {
-    node->next = ctx->current;
+    if (node == NULL)
+        return;
+
+    AstNode *last = getLastAstNode(node);
+    last->next = ctx->current;
     if (ctx->previous) {
         ctx->previous->next = node;
     }
@@ -371,7 +375,7 @@ void astModifierAdd(AstModifier *ctx, AstNode *node)
         ctx->parent->blockStmt.stmts = node;
     }
 
-    ctx->previous = node;
+    ctx->previous = last;
 }
 
 void astModifierAddAsNext(AstModifier *ctx, AstNode *node)

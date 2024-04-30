@@ -201,15 +201,6 @@ static void checkDeferStmt(AstVisitor *visitor, AstNode *node)
         node->type = type;
         return;
     }
-
-    AstNode *block = node->deferStmt.block, *expr = node->exprStmt.expr;
-    if (!block->blockStmt.returned) {
-        expr->flags |= flgDeferred;
-        insertAstNode(&block->blockStmt.epilogue, expr);
-        node->tag = astNoop;
-        clearAstBody(node);
-    }
-
     node->type = makeVoidType(ctx->types);
 }
 

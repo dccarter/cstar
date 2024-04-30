@@ -6,12 +6,7 @@
 
 #include <core/strpool.h>
 #include <lang/frontend/visitor.h>
-
-typedef struct BlockScope {
-    struct BlockScope *next;
-    DynArray variables;
-    bool isConditionalBlock;
-} BlockScope;
+#include <lang/middle/scope.h>
 
 typedef struct VariableTrace {
     AstNode *variable;
@@ -24,8 +19,7 @@ typedef struct MemoryManagementContext {
     StrPool *strings;
     TypeTable *types;
     AstNode *program;
-    BlockScope *scope;
-    BlockScope *scopeCache;
+    BlockScopeContainer bsc;
     HashTable allVariables;
     union {
         struct {
