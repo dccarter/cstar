@@ -183,6 +183,7 @@ set(CXY_MIDDLE_SOURCES
         src/cxy/lang/middle/preprocess/preprocessor.c
         src/cxy/lang/middle/preprocess/evaluate.c
 
+        src/cxy/lang/middle/simplify/defer.c
         src/cxy/lang/middle/simplify/simplify.c
 
         src/cxy/lang/middle/mem/sweep.c)

@@ -63,6 +63,17 @@ static u64 levenshteinDistance(const char *lhs, const char *rhs, u64 minDist)
     return 1 + MIN(c, min);
 }
 
+static void blockScopeDeinitList(BlockScope *list)
+{
+    BlockScope *it = list;
+    while (it) {
+        BlockScope *scope = it;
+        it = it->next;
+        freeDynArray(&scope->data);
+        free(scope);
+    }
+}
+
 void suggestSimilarSymbol(const Env *env, Log *L, const char *name)
 {
     u64 minDist = 2;
@@ -442,4 +453,50 @@ void environmentFree(Env *env)
 {
     if (env)
         freeScopes(env->first);
+}
+
+void blockScopeContainerInit(BlockScopeContainer *container,
+                             u64 dataElementSize)
+{
+    csAssert0(container->scope == NULL && container->cache == NULL);
+    container->dataElementSize = dataElementSize;
+}
+
+void blockScopeContainerDeinit(BlockScopeContainer *container)
+{
+    blockScopeDeinitList(container->scope);
+    blockScopeDeinitList(container->cache);
+    container->cache = NULL;
+    container->scope = NULL;
+    container->dataElementSize = 0;
+}
+
+BlockScope *blockScopeContainerPush(BlockScopeContainer *container,
+                                    AstNode *node,
+                                    u64 flags)
+{
+    BlockScope *parent = container->scope, *scope = NULL;
+    if (container->cache) {
+        scope = container->cache;
+        container->cache = scope->next;
+    }
+    else {
+        scope = mallocOrDie(sizeof(BlockScope));
+    }
+    scope->data = newDynArray(container->dataElementSize);
+    scope->next = parent;
+    scope->node = node;
+    scope->flags = flags;
+    return container->scope = scope;
+}
+
+void blockScopeContainerPop(BlockScopeContainer *container)
+{
+    BlockScope *scope = container->scope;
+    if (scope == NULL)
+        return;
+    freeDynArray(&scope->data);
+    container->scope = scope->next;
+    scope->next = container->cache;
+    container->cache = scope;
 }

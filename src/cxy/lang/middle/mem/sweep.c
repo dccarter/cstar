@@ -13,6 +13,8 @@
 
 #include "lang/middle/builtins.h"
 
+#define bscConditionalBlock BIT(1)
+
 static inline bool isConditionalNode(MMContext *ctx, AstNode *block)
 {
     switch (block->tag) {
@@ -38,40 +40,24 @@ static inline bool isSharedMemorySupported(const Type *type)
     return isClassType(type);
 }
 
-static void pushBlockScope(MMContext *ctx, AstNode *node)
+static inline void pushBlockScope(MMContext *ctx, AstNode *node)
 {
-    BlockScope *parent = ctx->scope, *scope = NULL;
-    if (ctx->scopeCache) {
-        scope = ctx->scopeCache;
-        ctx->scopeCache = scope->next;
-    }
-    else {
-        scope = mallocOrDie(sizeof(BlockScope));
-    }
-    scope->variables = newDynArray(sizeof(VariableTrace));
-    scope->next = parent;
-    scope->isConditionalBlock = isConditionalNode(ctx, node);
-    ctx->scope = scope;
+    u64 flags = isConditionalNode(ctx, node) ? bscConditionalBlock : flgNone;
+    blockScopeContainerPush(&ctx->bsc, node, flags);
 }
 
-static void popBlockScope(MMContext *ctx)
+static inline void popBlockScope(MMContext *ctx)
 {
-    BlockScope *scope = ctx->scope;
-    if (scope == NULL)
-        return;
-    freeDynArray(&scope->variables);
-    ctx->scope = scope->next;
-    scope->next = ctx->scopeCache;
-    ctx->scopeCache = scope;
+    blockScopeContainerPop(&ctx->bsc);
 }
 
 static void addVariableToScope(MMContext *ctx, AstNode *variable)
 {
-    BlockScope *scope = ctx->scope;
+    BlockScope *scope = ctx->bsc.scope;
     if (scope == NULL)
         return;
 
-    pushOnDynArray(&scope->variables,
+    pushOnDynArray(&scope->data,
                    &(VariableTrace){.variable = variable, .scope = scope});
 
     insertInHashTable(&ctx->allVariables,
@@ -90,25 +76,6 @@ static VariableTrace *getVariableTrace(MMContext *ctx, AstNode *variable)
                            comparePointers);
 }
 
-static void deleteScopeList(BlockScope *list)
-{
-    BlockScope *it = list;
-    while (it) {
-        BlockScope *scope = it;
-        it = it->next;
-        freeDynArray(&scope->variables);
-        free(scope);
-    }
-}
-
-static void cleanupContextContext(MMContext *ctx)
-{
-    deleteScopeList(ctx->scope);
-    deleteScopeList(ctx->scopeCache);
-    ctx->scope = NULL;
-    ctx->scopeCache = NULL;
-}
-
 static bool moveWithoutNullifying(MMContext *ctx, AstNode *node)
 {
     if (!nodeIs(node, Identifier))
@@ -119,9 +86,9 @@ static bool moveWithoutNullifying(MMContext *ctx, AstNode *node)
     VariableTrace *trace = getVariableTrace(ctx, resolved);
     csAssert0(trace);
 
-    BlockScope *scope = ctx->scope;
+    BlockScope *scope = ctx->bsc.scope;
     while (scope != trace->scope) {
-        if (scope->isConditionalBlock)
+        if (scope->flags & bscConditionalBlock)
             return false;
         scope = scope->next;
     }
@@ -287,25 +254,25 @@ static void implementVariableCleanup(MMContext *ctx, AstNode *node)
                                 makeVoidType(ctx->types)));
 }
 
-static void sealScope(MMContext *ctx, BlockScope *scope)
+static void blockScopeSeal(MMContext *ctx, BlockScope *scope)
 {
     if (scope == NULL)
         return;
 
-    for (i64 i = (i64)scope->variables.size - 1; i >= 0; i--) {
+    for (i64 i = (i64)scope->data.size - 1; i >= 0; i--) {
         AstNode *variable =
-            dynArrayAt(VariableTrace *, &scope->variables, i).variable;
+            dynArrayAt(VariableTrace *, &scope->data, i).variable;
         if (!hasFlags(variable, flgMoved | flgTransient)) {
             implementVariableCleanup(ctx, variable);
         }
     }
 }
 
-static void sealAllScopes(MMContext *ctx)
+static void blockScopeSealAll(MMContext *ctx)
 {
-    BlockScope *scope = ctx->scope;
+    BlockScope *scope = ctx->bsc.scope;
     while (scope) {
-        sealScope(ctx, scope);
+        blockScopeSeal(ctx, scope);
         scope = scope->next;
     }
 }
@@ -493,7 +460,7 @@ static void visitBlockStmt(AstVisitor *visitor, AstNode *node)
     astModifierNext(&ctx->block, stmt);
 
     if (!node->blockStmt.sealed)
-        sealScope(ctx, ctx->scope);
+        blockScopeSeal(ctx, ctx->bsc.scope);
 
     if (!nodeIs(parent, FuncDecl))
         popBlockScope(ctx);
@@ -532,7 +499,7 @@ static void visitReturnStmt(AstVisitor *visitor, AstNode *node)
                                                            tmp->type);
         }
     }
-    sealAllScopes(ctx);
+    blockScopeSealAll(ctx);
     ctx->block.parent->blockStmt.sealed = true;
 }
 
@@ -573,8 +540,12 @@ AstNode *memoryManageAst(CompilerDriver *driver, AstNode *node)
     }, .fallback = astVisitFallbackVisitAll, .dispatch = withSavedStack);
     // clang-format on
 
+    blockScopeContainerInit(&context.bsc, sizeof(VariableTrace));
+
     if (isBuiltinsInitialized())
         astVisit(&visitor, node);
-    cleanupContextContext(&context);
+
+    blockScopeContainerDeinit(&context.bsc);
+
     return node;
 }

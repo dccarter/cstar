@@ -64,7 +64,8 @@ void checkIfStmt(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    if (!isTypeAssignableFrom(then_, otherwise_)) {
+    if (!(typeIs(then_, Void) || typeIs(otherwise_, Void)) &&
+        !isTypeAssignableFrom(then_, otherwise_)) {
         logError(ctx->L,
                  &otherwise->loc,
                  "inconsistent return type on if statement branches, then type "

@@ -2,6 +2,7 @@
 // Created by Carter Mbotho on 2024-01-10.
 //
 
+#include "simplify.h"
 #include "driver/driver.h"
 #include "lang/frontend/ast.h"
 #include "lang/frontend/capture.h"
@@ -937,7 +938,7 @@ static void withSavedStack(Visitor func, AstVisitor *visitor, AstNode *node)
     ctx->stack = stack;
 }
 
-AstNode *simplifyAst(CompilerDriver *driver, AstNode *node)
+static AstNode *simplifyCode(CompilerDriver *driver, AstNode *node)
 {
     SimplifyContext context = {.L = driver->L,
                                .types = driver->types,
@@ -977,4 +978,13 @@ AstNode *simplifyAst(CompilerDriver *driver, AstNode *node)
         simplifyMainModule(&context, node);
     }
     return node;
+}
+
+AstNode *simplifyAst(CompilerDriver *driver, AstNode *node)
+{
+    node = simplifyDeferStatements(driver, node);
+    if (node == NULL || hasErrors(driver->L))
+        return node;
+
+    return simplifyCode(driver, node);
 }

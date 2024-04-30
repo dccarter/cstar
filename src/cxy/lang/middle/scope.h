@@ -26,8 +26,20 @@ typedef struct Env {
     Scope *first;
 } Env;
 
-void environmentInit(Env *env, AstNode *node);
+typedef struct BlockScope {
+    struct BlockScope *next;
+    struct AstNode *node;
+    u64 flags;
+    DynArray data;
+} BlockScope;
 
+typedef struct BlockScopeContainer {
+    u64 dataElementSize;
+    BlockScope *scope;
+    BlockScope *cache;
+} BlockScopeContainer;
+
+void environmentInit(Env *env, AstNode *node);
 void environmentFree(Env *env);
 void environmentDump(const Env *env, const char *name);
 
@@ -100,3 +112,11 @@ void pushScope(Env *env, AstNode *node);
 void popScope(Env *env);
 
 Env *getBuiltinEnv(void);
+
+void blockScopeContainerInit(BlockScopeContainer *container,
+                             u64 dataElementSize);
+void blockScopeContainerDeinit(BlockScopeContainer *container);
+BlockScope *blockScopeContainerPush(BlockScopeContainer *container,
+                                    AstNode *node,
+                                    u64 flags);
+void blockScopeContainerPop(BlockScopeContainer *container);
