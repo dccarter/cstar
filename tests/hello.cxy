@@ -1,19 +1,14 @@
 import "add.h" as Add
 import "stdio.h" as stdio
 
-pub func main() {
-    defer println("Defer1")
-    println("Hello ")
-    var x = true;
-    while(x) {
-        defer println("> Defer2")
-        x  = false
-        if (x) {
-            defer println(">> Defer3")
-            break
-        }
-        else if (true) {
-            return 0
-        }
+struct Say[T] {
+    func say[U](t: T, u: U) {
+        println(t, u)
     }
+}
+
+pub func main() {
+    var x = Say[i32]{};
+    info!("{t}", typeof!(x))
+    x.say(10, "Hello")
 }

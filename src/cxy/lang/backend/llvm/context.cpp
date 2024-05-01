@@ -129,11 +129,12 @@ void LLVMContext::makeTypeName(llvm::raw_string_ostream &ss,
         if (node->parentScope && node->parentScope->type) {
             ss << "_";
         }
-        if (node->type) {
+
+        if (isMemberFunction(node))
+            ss << node->funcDecl.name;
+        else if (node->type) {
             ss << node->type->name;
         }
-        if (isMemberFunction(node) && node->funcDecl.index)
-            ss << node->funcDecl.index;
     }
     else {
         ss << node->type->name;

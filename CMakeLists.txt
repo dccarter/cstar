@@ -33,6 +33,13 @@ set(CMAKE_MODULE_PATH
         ${CMAKE_MODULE_PATH}
         ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
+if (LLVM_ROOT_DIR)
+    set(CMAKE_PREFIX_PATH
+            ${CMAKE_PREFIX_PATH}
+            ${LLVM_ROOT_DIR}/lib/cmake/llvm
+            ${LLVM_ROOT_DIR}/lib/cmake/clang)
+endif ()
+
 option(ENABLE_TESTS "Enable CMake tests" ON)
 
 include(CxyUtils)
@@ -124,8 +131,7 @@ set(CXY_FRONTEND_SOURCES
 
 set(CXY_MIDDLE_SOURCES
         src/cxy/lang/middle/builtins.c
-        src/cxy/lang/middle/eval/macro.c
-        src/cxy/lang/middle/bind/scope.c
+        src/cxy/lang/middle/mangle.c
 
         src/cxy/lang/middle/sema/array.c
         src/cxy/lang/middle/sema/assign.c
@@ -157,6 +163,7 @@ set(CXY_MIDDLE_SOURCES
         src/cxy/lang/middle/sema/unary.c
         src/cxy/lang/middle/sema/variables.c
 
+        src/cxy/lang/middle/eval/macro.c
         src/cxy/lang/middle/eval/binary.c
         src/cxy/lang/middle/eval/comptime.c
         src/cxy/lang/middle/eval/enum.c
@@ -169,9 +176,9 @@ set(CXY_MIDDLE_SOURCES
         src/cxy/lang/middle/eval/unary.c
 
         src/cxy/lang/middle/bind/bind.c
-        src/cxy/lang/middle/bind/bind.c
         src/cxy/lang/middle/bind/discover.c
         src/cxy/lang/middle/bind/resolve.c
+        src/cxy/lang/middle/bind/scope.c
 
         src/cxy/lang/middle/dump/json.c
         src/cxy/lang/middle/dump/yaml.c
@@ -183,7 +190,7 @@ set(CXY_MIDDLE_SOURCES
         src/cxy/lang/middle/preprocess/preprocessor.c
         src/cxy/lang/middle/preprocess/evaluate.c
 
-        src/cxy/lang/middle/simplify/defer.c
+        src/cxy/lang/middle/simplify/stage1.c
         src/cxy/lang/middle/simplify/simplify.c
 
         src/cxy/lang/middle/mem/sweep.c)
