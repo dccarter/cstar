@@ -470,11 +470,10 @@ AstNode *toCxy(IncludeContext &ctx, const clang::EnumDecl &decl)
     auto loc = toCxy(ctx, decl.getSourceRange());
     AstNodeList options = {};
     std::vector<EnumOptionDecl> members;
-    int i = 0;
     for (clang::EnumConstantDecl *option : decl.enumerators()) {
         auto memberName = makeStringSized(
             ctx.strings, option->getName().data(), option->getName().size());
-        auto &value = option->getInitVal();
+        auto value = option->getInitVal();
         auto optionLoc = toCxy(ctx, option->getSourceRange());
         auto expr = makeIntegerLiteral(
             ctx.pool, &optionLoc, value.getExtValue(), nullptr, type);

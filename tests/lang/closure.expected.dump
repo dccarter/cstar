@@ -15,75 +15,75 @@ func closureArg2(fn: (&void, func(_: &void, msg: string) -> void)) {
   closureArg1("hello", fn)
 }
 
-struct __Optional11 {
+struct __OptionalI_Tsi32_E {
   ok: bool = false
   val: (string, i32)
 }
 
-pub func __Optional11_op__init(this: &__Optional[(string, i32)]) {
+pub func __OptionalI_Tsi32_E_op__initI_E(this: &__Optional[(string, i32)]) {
   this.ok = false
 }
 
-pub func __Optional11_op__init(this: &__Optional[(string, i32)], value: (string, i32)) {
+pub func __OptionalI_Tsi32_E_op__initI_Tsi32_E(this: &__Optional[(string, i32)], value: (string, i32)) {
   this.val = value
   this.ok = true
 }
 
-pub func __Optional11_op__truthy(this: &__Optional[(string, i32)]): bool {
+pub func __OptionalI_Tsi32_E_op__truthyI_E(this: &__Optional[(string, i32)]): bool {
   return this.ok
 }
 
-pub func __Optional11_op__deref(this: &__Optional[(string, i32)]): (string, i32) {
+pub func __OptionalI_Tsi32_E_op__derefI_E(this: &__Optional[(string, i32)]): (string, i32) {
   return this.val
 }
 
-pub func __Optional11_op__truthy(this: const &__Optional[(string, i32)]): bool {
+pub func __OptionalI_Tsi32_E_op__truthyI_E(this: const &__Optional[(string, i32)]): bool {
   return this.ok
 }
 
-pub func __Optional11_op__deref(this: const &__Optional[(string, i32)]): (string, i32) {
+pub func __OptionalI_Tsi32_E_op__derefI_E(this: const &__Optional[(string, i32)]): (string, i32) {
   return this.val
 }
 
-pub func Some12(value: (string, i32)): __Optional[(string, i32)] {
-  return __Optional11{ok = true, val = value}
+pub func SomeI_Tsi32_E(value: (string, i32)): __Optional[(string, i32)] {
+  return __OptionalI_Tsi32_E{ok = true, val = value}
 }
 
-pub func __construct114(...args: ()): __Optional[(string, i32)] {
+pub func __construct1I_Z__OptionalI_Tsi32_E_T_E(...args: ()): __Optional[(string, i32)] {
   var obj: __Optional[(string, i32)]
   {
     obj.ok = false
   }
-  __Optional11_op__init(&obj)
+  __OptionalI_Tsi32_E_op__initI_E(&obj)
   return obj
 }
 
-pub func None13(): __Optional[(string, i32)] {
-  return __construct114(())
+pub func NoneI_Tsi32_E(): __Optional[(string, i32)] {
+  return __construct1I_Z__OptionalI_Tsi32_E_T_E(())
 }
 
-struct __Closure15 {
+struct __Closure4 {
   - i: i32
   - len: u64
   - data: &string
 }
 
-pub func __Closure15_op__call(this: &__Closure15): __Optional11 {
+pub func __Closure4_op__call(this: &__Closure4): __OptionalI_Tsi32_E {
   if (this.i < this.len) {
-    return Some12((this.data.[this.i], this.i++))
+    return SomeI_Tsi32_E((this.data.[this.i], this.i++))
   }
-  return None13()
+  return NoneI_Tsi32_E()
 }
 
 pub extern func hash_fnv1a_string(h: Hash, str: string): u32
 
-pub func hash16(val: string, init: Hash = 16777619): Hash {
+pub func hashI_sE(val: string, init: Hash = 16777619): Hash {
   return hash_fnv1a_string(init, val)
 }
 
 pub extern func CString_op__init(this: &CString, s: string)
 
-pub func __construct118(...args: (const string)): CString {
+pub func __construct1I_ZCString_TCs_E(...args: (const string)): CString {
   var obj: struct CString
   {
     obj.s = null
@@ -92,52 +92,52 @@ pub func __construct118(...args: (const string)): CString {
   return obj
 }
 
-pub extern func OutputStream_appendString(this: OutputStream, s: CString): void
+pub extern func OutputStream_appendStringI_ZCString_E(this: OutputStream, s: CString): void
 
-pub func OutputStream_op__lshift17(this: OutputStream, val: string): OutputStream {
-  OutputStream_appendString(this, __construct118((val)))
+pub func OutputStream_op__lshiftI_sE(this: OutputStream, val: string): OutputStream {
+  OutputStream_appendStringI_ZCString_E(this, __construct1I_ZCString_TCs_E((val)))
   return this
 }
 
-pub struct Slice10 {
+pub struct SliceI_sE {
   - data: &string
   - len: u64
 }
 
-pub func Slice10_op__init(this: &Slice[string], data: &string, len: u64) {
+pub func SliceI_sE_op__init(this: &Slice[string], data: &string, len: u64) {
   this.data = data
   this.len = len
 }
 
 pub extern func __cxy_assert(cond: bool, file: string, line: u64, column: u64)
 
-pub func Slice10_op__idx_assign(this: &Slice[string], index: i64, data: string) {
+pub func SliceI_sE_op__idx_assign(this: &Slice[string], index: i64, data: string) {
   __cxy_assert(index < this.len, "__builtins.cxy", 559, 9)
   this.data.[index] = data
 }
 
-pub func Slice10_op__idx(this: &Slice[string], index: i64): string {
+pub func SliceI_sE_op__idxI_i64E(this: &Slice[string], index: i64): string {
   __cxy_assert(index < this.len, "__builtins.cxy", 565, 9)
   return this.data.[index]
 }
 
-pub func Slice10_op__idx(this: const &Slice[string], index: i64): string {
+pub func SliceI_sE_op__idxI_i64E(this: const &Slice[string], index: i64): string {
   __cxy_assert(index < this.len, "__builtins.cxy", 571, 9)
   return this.data.[index]
 }
 
-pub func Slice10_op__range(this: const &Slice[string]): __Closure15 {
+pub func SliceI_sE_op__range(this: const &Slice[string]): __Closure4 {
   var i: i32 = 0
-  return __Closure15{i = i, len = this.len, data = this.data}
+  return __Closure4{i = i, len = this.len, data = this.data}
 }
 
-pub func Slice10_op__hash(this: const &Slice[string]): u32 {
+pub func SliceI_sE_op__hash(this: const &Slice[string]): u32 {
   var code: u32 = 16777619
   {
     const i = 0
     while (i != this.len)
     {
-      code = hash16(this.data.[i], code)
+      code = hashI_sE(this.data.[i], code)
     }
   }
   return code
@@ -145,32 +145,32 @@ pub func Slice10_op__hash(this: const &Slice[string]): u32 {
 
 pub extern func OutputStream_appendChar(this: OutputStream, ch: wchar)
 
-pub extern func OutputStream_appendString(this: OutputStream, s: string): void
+pub extern func OutputStream_appendStringI_sE(this: OutputStream, s: string): void
 
-pub func Slice10_op__str(this: const &Slice[string], sb: OutputStream) {
+pub func SliceI_sE_op__str(this: const &Slice[string], sb: OutputStream) {
   OutputStream_appendChar(sb, '[')
   {
     const i = 0
     while (i != this.len)
     {
       if (i != 0) {
-        OutputStream_appendString(sb, ", ")
+        OutputStream_appendStringI_sE(sb, ", ")
       }
-      OutputStream_op__lshift17(sb, this.data.[i])
+      OutputStream_op__lshiftI_sE(sb, this.data.[i])
     }
   }
   OutputStream_appendChar(sb, ']')
 }
 
-struct __Closure19{ }
+struct __Closure5{ }
 
-pub func __Closure19_op__call(this: &__Closure19): i8 {
+pub func __Closure5_op__call(this: &__Closure5): i8 {
   return 1
 }
 
 pub extern func String_op__deinit(this: String)
 
-func __deinit_fwd21(ptr: sptr) {
+func __deinit_fwdI_ZString_E(ptr: sptr) {
   var obj = ((ptr : &class String))
   String_op__deinit(obj)
 }
@@ -178,90 +178,90 @@ func __deinit_fwd21(ptr: sptr) {
 extern func __smart_ptr_alloc(size: u64, dctor: func(ptr: sptr) -> void = null): &void
 
 
-pub extern func String_op__init(this: String)
+pub extern func String_op__initI_E(this: String)
 
-pub func __construct020(...args: ()): String {
-  var obj = ((__smart_ptr_alloc(__bc(0, #String), __deinit_fwd21) : class String))
+pub func __construct0I_ZString_T_E(...args: ()): String {
+  var obj = ((__smart_ptr_alloc(__bc(0, #String), __deinit_fwdI_ZString_E) : class String))
   {
     obj.vtable = &String_vTable
     obj._capacity = 0
     obj._size = 0
     obj._data = null
   }
-  String_op__init(obj)
+  String_op__initI_E(obj)
   return obj
 }
 
-struct __Closure22{ }
+struct __Closure6{ }
 
-pub func __Closure22_op__call(this: &__Closure22, name: string): String {
-  var sb7 = __construct020(())
-  OutputStream_op__lshift17(OutputStream_op__lshift17(<OutputStream>sb7, "Hello "), name)
-  return sb7
+pub func __Closure6_op__call(this: &__Closure6, name: string): String {
+  var sb1 = __construct0I_ZString_T_E(())
+  OutputStream_op__lshiftI_sE(OutputStream_op__lshiftI_sE(<OutputStream>sb1, "Hello "), name)
+  return sb1
 }
 
 pub extern func OutputStream_appendSignedInt(this: OutputStream, num: i64)
 
-pub func OutputStream_op__lshift23(this: OutputStream, val: i8): OutputStream {
+pub func OutputStream_op__lshiftI_i8E(this: OutputStream, val: i8): OutputStream {
   OutputStream_appendSignedInt(this, <i64>val)
   return this
 }
 
-struct __Closure24 {
+struct __Closure7 {
   - b: string
   - x: i8
 }
 
-pub func __Closure24_op__call(this: &__Closure24): String {
-  var sb8 = __construct020(())
-  OutputStream_op__lshift23(OutputStream_op__lshift17(OutputStream_op__lshift17(<OutputStream>sb8, this.b), " -> "), this.x)
-  return sb8
+pub func __Closure7_op__call(this: &__Closure7): String {
+  var sb2 = __construct0I_ZString_T_E(())
+  OutputStream_op__lshiftI_i8E(OutputStream_op__lshiftI_sE(OutputStream_op__lshiftI_sE(<OutputStream>sb2, this.b), " -> "), this.x)
+  return sb2
 }
 
-struct __Closure25 {
+struct __Closure8 {
   - b: string
   - x: i8
 }
 
-pub func __Closure25_op__call(this: &__Closure25): String {
-  var sb9 = __construct020(())
-  OutputStream_op__lshift23(OutputStream_op__lshift17(OutputStream_op__lshift17(<OutputStream>sb9, this.b), " -> "), this.x)
-  return sb9
+pub func __Closure8_op__call(this: &__Closure8): String {
+  var sb3 = __construct0I_ZString_T_E(())
+  OutputStream_op__lshiftI_i8E(OutputStream_op__lshiftI_sE(OutputStream_op__lshiftI_sE(<OutputStream>sb3, this.b), " -> "), this.x)
+  return sb3
 }
 
-struct __Closure26 {
+struct __Closure9 {
   - b: string
   - x: i8
 }
 
-pub func __Closure26_op__call(this: &__Closure26) {
-  const g = __Closure25{b = b, x = x}
+pub func __Closure9_op__call(this: &__Closure9) {
+  const g = __Closure8{b = b, x = x}
 }
 
-struct __Closure27{ }
+struct __Closure10{ }
 
-pub func __Closure27_op__call(this: &__Closure27) { }
-
-
-func __Closure27__fwd(ptr: &void): void => __Closure27_op__call(<&__Closure27>ptr)
-
-struct __Closure28{ }
-
-pub func __Closure28_op__call(this: &__Closure28, msg: string) { }
+pub func __Closure10_op__call(this: &__Closure10) { }
 
 
-func __Closure28__fwd(ptr: &void, msg: string): void => __Closure28_op__call(<&__Closure28>ptr, msg)
+func __Closure10__fwd(ptr: &void): void => __Closure10_op__call(<&__Closure10>ptr)
 
-func main(args: Slice10) {
-  const one = __Closure19{}
-  __Closure19_op__call(&one)
-  __Closure22_op__call(&(__Closure22{}), "User")
+struct __Closure11{ }
+
+pub func __Closure11_op__call(this: &__Closure11, msg: string) { }
+
+
+func __Closure11__fwd(ptr: &void, msg: string): void => __Closure11_op__call(<&__Closure11>ptr, msg)
+
+func main(args: SliceI_sE) {
+  const one = __Closure5{}
+  __Closure5_op__call(&one)
+  __Closure6_op__call(&(__Closure6{}), "User")
   var x = 100
   var b = "Hello"
-  __Closure24_op__call(&(__Closure24{b = b, x = x}))
-  const f = __Closure26{b = b, x = x}
-  closureArg0((<&void>&__Closure27{}, __Closure27__fwd))
-  closureArg2((<&void>&__Closure28{}, __Closure28__fwd))
+  __Closure7_op__call(&(__Closure7{b = b, x = x}))
+  const f = __Closure9{b = b, x = x}
+  closureArg0((<&void>&__Closure10{}, __Closure10__fwd))
+  closureArg2((<&void>&__Closure11{}, __Closure11__fwd))
 }
 
 const llvm.global_ctors = [(0, __init, null)]

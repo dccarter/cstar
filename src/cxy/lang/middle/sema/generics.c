@@ -4,6 +4,7 @@
 #include "check.h"
 
 #include "../builtins.h"
+#include "../mangle.h"
 
 #include "lang/frontend/flag.h"
 #include "lang/frontend/strings.h"
@@ -300,8 +301,10 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
     substitute->flags |= flgGenerated;
     substitute->flags &= ~flgVariadic;
 
-    cstring name =
-        makeAnonymousVariable(ctx->strings, getDeclarationName(substitute));
+    cstring name = makeMangledName(ctx->strings,
+                                   getDeclarationName(substitute),
+                                   goi.s->applied.args,
+                                   goi.s->applied.argsCount);
     setDeclarationName(substitute, name);
 
     cstring namespace = pushGenericDeclNamespace(ctx->types, generic);

@@ -11,11 +11,12 @@
 #include "lang/frontend/ttable.h"
 #include "lang/frontend/visitor.h"
 
+#include "lang/middle/mangle.h"
 #include "lang/middle/scope.h"
 
 #define bscSealed BIT(1)
 
-typedef struct SimplifyDeferContext {
+typedef struct SimplifyStage1Context {
     Log *L;
     TypeTable *types;
     StrPool *strings;
@@ -31,11 +32,17 @@ typedef struct SimplifyDeferContext {
             AstModifier block;
         } stack;
     };
-} SimplifyDeferContext;
+} SimplifyStage1Context;
 
 static inline bool blockScopeIsSealed(BlockScope *scope)
 {
     return (scope->flags & bscSealed) == bscSealed;
+}
+
+static bool astNodeNameNeedsMangling(const AstNode *node)
+{
+    return nodeIs(node, FuncDecl) &&
+           (node->list.link != NULL || node->funcDecl.index > 0);
 }
 
 static inline bool blockScopeNeedsSealing(BlockScope *scope)
@@ -43,7 +50,7 @@ static inline bool blockScopeNeedsSealing(BlockScope *scope)
     return !blockScopeIsSealed(scope) && scope->data.size > 0;
 }
 
-static void blockScopeSealIntoList(SimplifyDeferContext *ctx,
+static void blockScopeSealIntoList(SimplifyStage1Context *ctx,
                                    AstNodeList *list,
                                    BlockScope *scope)
 {
@@ -53,7 +60,7 @@ static void blockScopeSealIntoList(SimplifyDeferContext *ctx,
     }
 }
 
-static void blockScopeSeal(SimplifyDeferContext *ctx, BlockScope *scope)
+static void blockScopeSeal(SimplifyStage1Context *ctx, BlockScope *scope)
 {
     AstNodeList expressions = {};
     blockScopeSealIntoList(ctx, &expressions, scope);
@@ -63,7 +70,7 @@ static void blockScopeSeal(SimplifyDeferContext *ctx, BlockScope *scope)
 
 static void visitDeferStmt(AstVisitor *visitor, AstNode *node)
 {
-    SimplifyDeferContext *ctx = getAstVisitorContext(visitor);
+    SimplifyStage1Context *ctx = getAstVisitorContext(visitor);
     BlockScope *scope = ctx->bsc.scope;
     pushOnDynArray(&scope->data, &node->deferStmt.expr);
     node->tag = astNoop;
@@ -72,7 +79,7 @@ static void visitDeferStmt(AstVisitor *visitor, AstNode *node)
 
 static void visitBlockStmt(AstVisitor *visitor, AstNode *node)
 {
-    SimplifyDeferContext *ctx = getAstVisitorContext(visitor);
+    SimplifyStage1Context *ctx = getAstVisitorContext(visitor);
     BlockScope *scope = blockScopeContainerPush(&ctx->bsc, node, flgNone);
 
     AstNode *stmt = node->blockStmt.stmts;
@@ -93,7 +100,7 @@ static void visitBlockStmt(AstVisitor *visitor, AstNode *node)
 
 static void visitBreakContinue(AstVisitor *visitor, AstNode *node)
 {
-    SimplifyDeferContext *ctx = getAstVisitorContext(visitor);
+    SimplifyStage1Context *ctx = getAstVisitorContext(visitor);
     BlockScope *scope = ctx->bsc.scope;
     AstNodeList expressions = {};
     while (scope) {
@@ -112,7 +119,7 @@ static void visitBreakContinue(AstVisitor *visitor, AstNode *node)
 
 static void visitReturnStmt(AstVisitor *visitor, AstNode *node)
 {
-    SimplifyDeferContext *ctx = getAstVisitorContext(visitor);
+    SimplifyStage1Context *ctx = getAstVisitorContext(visitor);
     BlockScope *scope = ctx->bsc.scope;
     AstNodeList expressions = {};
     while (scope) {
@@ -124,9 +131,21 @@ static void visitReturnStmt(AstVisitor *visitor, AstNode *node)
     astModifierAdd(&ctx->block, expressions.first);
 }
 
+static void visitFuncDecl(AstVisitor *visitor, AstNode *node)
+{
+    SimplifyStage1Context *ctx = getAstVisitorContext(visitor);
+    if (astNodeNameNeedsMangling(node)) {
+        node->funcDecl.name = makeMangledName(ctx->strings,
+                                              node->funcDecl.name,
+                                              node->type->func.params,
+                                              node->type->func.paramsCount);
+    }
+    astVisit(visitor, node->funcDecl.body);
+}
+
 static void withSavedStack(Visitor func, AstVisitor *visitor, AstNode *node)
 {
-    SimplifyDeferContext *ctx = getAstVisitorContext(visitor);
+    SimplifyStage1Context *ctx = getAstVisitorContext(visitor);
     __typeof(ctx->stack) stack = ctx->stack;
 
     func(visitor, node);
@@ -136,10 +155,10 @@ static void withSavedStack(Visitor func, AstVisitor *visitor, AstNode *node)
 
 AstNode *simplifyDeferStatements(CompilerDriver *driver, AstNode *node)
 {
-    SimplifyDeferContext context = {.L = driver->L,
-                                    .types = driver->types,
-                                    .strings = driver->strings,
-                                    .pool = driver->pool};
+    SimplifyStage1Context context = {.L = driver->L,
+                                     .types = driver->types,
+                                     .strings = driver->strings,
+                                     .pool = driver->pool};
 
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context, {
@@ -148,6 +167,7 @@ AstNode *simplifyDeferStatements(CompilerDriver *driver, AstNode *node)
         [astBlockStmt] = visitBlockStmt,
         [astReturnStmt] = visitReturnStmt,
         [astDeferStmt] = visitDeferStmt,
+        [astFuncDecl] = visitFuncDecl,
         [astGenericDecl] = astVisitSkip,
         [astMacroDecl] = astVisitSkip
     }, .fallback = astVisitFallbackVisitAll, .dispatch = withSavedStack);

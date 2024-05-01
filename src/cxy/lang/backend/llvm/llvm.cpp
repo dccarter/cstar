@@ -289,9 +289,15 @@ bool LLVMBackend::makeExecutable()
                  (FormatArg[]){{.s = error.message().c_str()}});
         return false;
     }
-
+#if LLVM_VERSION_MAJOR > 17
+    auto fileType = driver->options.dev.emitAssembly
+                        ? llvm::CodeGenFileType::AssemblyFile
+                        : llvm::CodeGenFileType::ObjectFile;
+#else
     auto fileType = driver->options.dev.emitAssembly ? llvm::CGFT_AssemblyFile
                                                      : llvm::CGFT_ObjectFile;
+#endif
+
     auto relocationModel = driver->options.noPIE ? llvm::Reloc::Model::Static
                                                  : llvm::Reloc::Model::PIC_;
     if (!emitMachineCode(temporaryOutputFilePath, fileType, relocationModel))

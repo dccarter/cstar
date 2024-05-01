@@ -11,75 +11,75 @@ func swap(tup: (string, i32)): (i32, string) {
   return (tup.1, tup.0)
 }
 
-struct __Optional9 {
+struct __OptionalI_Tsi32_E {
   ok: bool = false
   val: (string, i32)
 }
 
-pub func __Optional9_op__init(this: &__Optional[(string, i32)]) {
+pub func __OptionalI_Tsi32_E_op__initI_E(this: &__Optional[(string, i32)]) {
   this.ok = false
 }
 
-pub func __Optional9_op__init(this: &__Optional[(string, i32)], value: (string, i32)) {
+pub func __OptionalI_Tsi32_E_op__initI_Tsi32_E(this: &__Optional[(string, i32)], value: (string, i32)) {
   this.val = value
   this.ok = true
 }
 
-pub func __Optional9_op__truthy(this: &__Optional[(string, i32)]): bool {
+pub func __OptionalI_Tsi32_E_op__truthyI_E(this: &__Optional[(string, i32)]): bool {
   return this.ok
 }
 
-pub func __Optional9_op__deref(this: &__Optional[(string, i32)]): (string, i32) {
+pub func __OptionalI_Tsi32_E_op__derefI_E(this: &__Optional[(string, i32)]): (string, i32) {
   return this.val
 }
 
-pub func __Optional9_op__truthy(this: const &__Optional[(string, i32)]): bool {
+pub func __OptionalI_Tsi32_E_op__truthyI_E(this: const &__Optional[(string, i32)]): bool {
   return this.ok
 }
 
-pub func __Optional9_op__deref(this: const &__Optional[(string, i32)]): (string, i32) {
+pub func __OptionalI_Tsi32_E_op__derefI_E(this: const &__Optional[(string, i32)]): (string, i32) {
   return this.val
 }
 
-pub func Some10(value: (string, i32)): __Optional[(string, i32)] {
-  return __Optional9{ok = true, val = value}
+pub func SomeI_Tsi32_E(value: (string, i32)): __Optional[(string, i32)] {
+  return __OptionalI_Tsi32_E{ok = true, val = value}
 }
 
-pub func __construct112(...args: ()): __Optional[(string, i32)] {
+pub func __construct1I_Z__OptionalI_Tsi32_E_T_E(...args: ()): __Optional[(string, i32)] {
   var obj: __Optional[(string, i32)]
   {
     obj.ok = false
   }
-  __Optional9_op__init(&obj)
+  __OptionalI_Tsi32_E_op__initI_E(&obj)
   return obj
 }
 
-pub func None11(): __Optional[(string, i32)] {
-  return __construct112(())
+pub func NoneI_Tsi32_E(): __Optional[(string, i32)] {
+  return __construct1I_Z__OptionalI_Tsi32_E_T_E(())
 }
 
-struct __Closure13 {
+struct __Closure2 {
   - i: i32
   - len: u64
   - data: &string
 }
 
-pub func __Closure13_op__call(this: &__Closure13): __Optional9 {
+pub func __Closure2_op__call(this: &__Closure2): __OptionalI_Tsi32_E {
   if (this.i < this.len) {
-    return Some10((this.data.[this.i], this.i++))
+    return SomeI_Tsi32_E((this.data.[this.i], this.i++))
   }
-  return None11()
+  return NoneI_Tsi32_E()
 }
 
 pub extern func hash_fnv1a_string(h: Hash, str: string): u32
 
-pub func hash14(val: string, init: Hash = 16777619): Hash {
+pub func hashI_sE(val: string, init: Hash = 16777619): Hash {
   return hash_fnv1a_string(init, val)
 }
 
 pub extern func CString_op__init(this: &CString, s: string)
 
-pub func __construct116(...args: (const string)): CString {
+pub func __construct1I_ZCString_TCs_E(...args: (const string)): CString {
   var obj: struct CString
   {
     obj.s = null
@@ -88,52 +88,52 @@ pub func __construct116(...args: (const string)): CString {
   return obj
 }
 
-pub extern func OutputStream_appendString(this: OutputStream, s: CString): void
+pub extern func OutputStream_appendStringI_ZCString_E(this: OutputStream, s: CString): void
 
-pub func OutputStream_op__lshift15(this: OutputStream, val: string): OutputStream {
-  OutputStream_appendString(this, __construct116((val)))
+pub func OutputStream_op__lshiftI_sE(this: OutputStream, val: string): OutputStream {
+  OutputStream_appendStringI_ZCString_E(this, __construct1I_ZCString_TCs_E((val)))
   return this
 }
 
-pub struct Slice8 {
+pub struct SliceI_sE {
   - data: &string
   - len: u64
 }
 
-pub func Slice8_op__init(this: &Slice[string], data: &string, len: u64) {
+pub func SliceI_sE_op__init(this: &Slice[string], data: &string, len: u64) {
   this.data = data
   this.len = len
 }
 
 pub extern func __cxy_assert(cond: bool, file: string, line: u64, column: u64)
 
-pub func Slice8_op__idx_assign(this: &Slice[string], index: i64, data: string) {
+pub func SliceI_sE_op__idx_assign(this: &Slice[string], index: i64, data: string) {
   __cxy_assert(index < this.len, "__builtins.cxy", 559, 9)
   this.data.[index] = data
 }
 
-pub func Slice8_op__idx(this: &Slice[string], index: i64): string {
+pub func SliceI_sE_op__idxI_i64E(this: &Slice[string], index: i64): string {
   __cxy_assert(index < this.len, "__builtins.cxy", 565, 9)
   return this.data.[index]
 }
 
-pub func Slice8_op__idx(this: const &Slice[string], index: i64): string {
+pub func SliceI_sE_op__idxI_i64E(this: const &Slice[string], index: i64): string {
   __cxy_assert(index < this.len, "__builtins.cxy", 571, 9)
   return this.data.[index]
 }
 
-pub func Slice8_op__range(this: const &Slice[string]): __Closure13 {
+pub func SliceI_sE_op__range(this: const &Slice[string]): __Closure2 {
   var i: i32 = 0
-  return __Closure13{i = i, len = this.len, data = this.data}
+  return __Closure2{i = i, len = this.len, data = this.data}
 }
 
-pub func Slice8_op__hash(this: const &Slice[string]): u32 {
+pub func SliceI_sE_op__hash(this: const &Slice[string]): u32 {
   var code: u32 = 16777619
   {
     const i = 0
     while (i != this.len)
     {
-      code = hash14(this.data.[i], code)
+      code = hashI_sE(this.data.[i], code)
     }
   }
   return code
@@ -141,24 +141,24 @@ pub func Slice8_op__hash(this: const &Slice[string]): u32 {
 
 pub extern func OutputStream_appendChar(this: OutputStream, ch: wchar)
 
-pub extern func OutputStream_appendString(this: OutputStream, s: string): void
+pub extern func OutputStream_appendStringI_sE(this: OutputStream, s: string): void
 
-pub func Slice8_op__str(this: const &Slice[string], sb: OutputStream) {
+pub func SliceI_sE_op__str(this: const &Slice[string], sb: OutputStream) {
   OutputStream_appendChar(sb, '[')
   {
     const i = 0
     while (i != this.len)
     {
       if (i != 0) {
-        OutputStream_appendString(sb, ", ")
+        OutputStream_appendStringI_sE(sb, ", ")
       }
-      OutputStream_op__lshift15(sb, this.data.[i])
+      OutputStream_op__lshiftI_sE(sb, this.data.[i])
     }
   }
   OutputStream_appendChar(sb, ']')
 }
 
-func main(args: Slice8) {
+func main(args: SliceI_sE) {
   var x: (bool, i32) = (true, 10)
   x = (false, 20)
   var y: Tup2 = ('a', (6.000000e-01, "Hello", (true, 'A')))
@@ -169,9 +169,9 @@ func main(args: Slice8) {
   var z: (i32, string) = swap(<(string, i32)>("Hello", 10))
   var f: &(i32, string) = z&
   var k: (string, i32) = (f.1, f.0)
-  var _gi7 = swap(<(string, i32)>("Hello", 10))
-  var num = _gi7.0
-  var str = _gi7.1
+  var _gi1 = swap(<(string, i32)>("Hello", 10))
+  var num = _gi1.0
+  var str = _gi1.1
 }
 
 const llvm.global_ctors = [(0, __init, null)]

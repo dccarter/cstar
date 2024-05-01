@@ -42,7 +42,7 @@ static bool isRedundantExpression(AstNode *node);
 
 static bool isRedundantStatement(AstNode *node);
 
-bool compareNodeToExternDecl(const void *lhs, const void *rhs)
+static bool compareNodeToExternDecl(const void *lhs, const void *rhs)
 {
     return ((NodeToExternDecl *)lhs)->node == ((NodeToExternDecl *)rhs)->node;
 }
@@ -773,6 +773,7 @@ static void visitFuncDecl(AstVisitor *visitor, AstNode *node)
     if (node->funcDecl.this_) {
         node->funcDecl.signature->params = node->funcDecl.this_;
     }
+
     astVisitFallbackVisitAll(visitor, node);
     ctx->currentFunction = NULL;
 }
