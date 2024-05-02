@@ -6,6 +6,10 @@
 
 #include "lang/frontend/ast.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct CompilerDriver;
 
 // clang-format off
@@ -59,3 +63,7 @@ const char *getCompilerStageDescription(CompilerStage stage);
 AstNode *executeCompilerStage(struct CompilerDriver *driver,
                               CompilerStage stage,
                               AstNode *node);
+
+#ifdef __cplusplus
+}
+#endif

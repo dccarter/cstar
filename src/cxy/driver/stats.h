@@ -7,6 +7,10 @@
 
 #include <time.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct CompilerDriver;
 
 typedef struct {
@@ -30,3 +34,7 @@ void stopCompilerStats(struct CompilerDriver *driver);
 void compilerStatsSnapshot(struct CompilerDriver *driver);
 void compilerStatsRecord(struct CompilerDriver *driver, CompilerStage stage);
 void compilerStatsPrint(const struct CompilerDriver *driver);
+
+#ifdef __cplusplus
+}
+#endif

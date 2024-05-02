@@ -7,6 +7,10 @@
 #include "core/log.h"
 #include "token.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * The parser is LL(3), which means that it requires at most three tokens of
  * look-ahead. It is a simple recursive descent parser, implemented by hand,
@@ -35,3 +39,7 @@ typedef struct {
 Parser makeParser(Lexer *, CompilerDriver *);
 AstNode *parseProgram(Parser *);
 AstNode *parseExpression(Parser *P);
+
+#ifdef __cplusplus
+}
+#endif

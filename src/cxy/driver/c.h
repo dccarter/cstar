@@ -4,10 +4,11 @@
 
 #pragma once
 
+#include "driver.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include "driver.h"
 
 AstNode *importCHeader(CompilerDriver *driver,
                        const AstNode *node,

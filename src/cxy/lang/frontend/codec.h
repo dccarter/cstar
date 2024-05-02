@@ -6,6 +6,10 @@
 
 #include "ast.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct msgpack_sbuffer;
 
 bool binaryEncodeAstNode(struct msgpack_sbuffer *sbuf,
@@ -13,3 +17,7 @@ bool binaryEncodeAstNode(struct msgpack_sbuffer *sbuf,
                          const AstNode *node);
 
 AstNode *binaryDecodeAstNode(const void *encoded, size_t size);
+
+#ifdef __cplusplus
+}
+#endif

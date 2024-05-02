@@ -8,6 +8,10 @@
 #include "operator.h"
 #include "token.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct StrPool;
 
 // clang-format off
@@ -1314,3 +1318,7 @@ bool nodeIsLeftValue(const AstNode *node);
 bool nodeIsNoop(const AstNode *node);
 
 CCodeKind getCCodeKind(TokenTag tag);
+
+#ifdef __cplusplus
+}
+#endif

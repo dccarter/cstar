@@ -5,11 +5,9 @@
 #include "context.h"
 #include "llvm.h"
 
-extern "C" {
 #include "lang/frontend/flag.h"
 #include "lang/frontend/ttable.h"
 #include "lang/frontend/visitor.h"
-}
 
 namespace cxy {
 LLVMContext::LLVMContext(llvm::LLVMContext &context,

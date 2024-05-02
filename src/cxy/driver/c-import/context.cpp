@@ -5,10 +5,8 @@
 #include "context.hpp"
 #include "import.hpp"
 
-extern "C" {
 #include "lang/frontend/flag.h"
 #include "lang/frontend/ttable.h"
-}
 
 #include <filesystem>
 

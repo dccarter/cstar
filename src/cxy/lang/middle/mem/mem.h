@@ -8,6 +8,10 @@
 #include <lang/frontend/visitor.h>
 #include <lang/middle/scope.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct VariableTrace {
     AstNode *variable;
     const BlockScope *scope;
@@ -34,3 +38,7 @@ typedef struct MemoryManagementContext {
         } stack;
     };
 } MMContext;
+
+#ifdef __cplusplus
+}
+#endif

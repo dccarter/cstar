@@ -146,7 +146,7 @@ extern "C" {
 #define attr(A, ...) CXY_PASTE(cxy_, A)(__VA_ARGS__)
 
 #ifndef CXY_ALIGN
-#define CXY_ALIGN(S, A) (((S) + ((A)-1)) & ~((A)-1))
+#define CXY_ALIGN(S, A) (((S) + ((A) - 1)) & ~((A) - 1))
 #endif
 
 typedef uint8_t u8;
@@ -225,12 +225,13 @@ attr(noreturn) attr(format, printf, 1, 2) void cxyAbort(const char *fmt, ...);
 #define cBcxy "\x1B[1;36m"
 #define cBWHT "\x1B[1;37m"
 
-#define Pair(T1, T2)                                                           \
+#define CxyPair(T1, T2)                                                        \
     struct {                                                                   \
         T1 f;                                                                  \
         T2 s;                                                                  \
     }
 
+#ifndef __cplusplus
 #define make(T, ...) ((T){__VA_ARGS__})
 #define New(P, T, ...)                                                         \
     ({                                                                         \
@@ -238,6 +239,7 @@ attr(noreturn) attr(format, printf, 1, 2) void cxyAbort(const char *fmt, ...);
         *LINE_VAR(aNa) = make(T, __VA_ARGS__);                                 \
         LINE_VAR(aNa);                                                         \
     })
+#endif
 
 struct FormatState;
 

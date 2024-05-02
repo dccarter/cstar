@@ -1,8 +1,12 @@
 
 #pragma once
 
-#include "core/array.h"
+#include <core/array.h>
 #include <core/utils.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef struct Log Log;
 struct StrPool;
@@ -79,3 +83,7 @@ bool parseCommandLineOptions(int *argc,
                              Log *log);
 
 void deinitCommandLineOptions(Options *options);
+
+#ifdef __cplusplus
+}
+#endif

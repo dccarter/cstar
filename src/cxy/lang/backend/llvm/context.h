@@ -4,11 +4,8 @@
 
 #pragma once
 
-extern "C" {
 #include "lang/operations.h"
-}
 
-#undef make
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>

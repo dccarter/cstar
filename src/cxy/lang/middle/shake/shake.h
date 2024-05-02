@@ -2,11 +2,14 @@
 // Created by Carter on 2023-09-22.
 //
 
-#ifndef CXY_SHAKE_H
-#define CXY_SHAKE_H
+#pragma once
 
 #include "lang/frontend/ast.h"
 #include "lang/frontend/visitor.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef struct {
     Log *L;
@@ -29,4 +32,6 @@ AstNode *createClassOrStructBuiltins(MemPool *pool, AstNode *node);
 
 void shakeClosureExpr(struct AstVisitor *visitor, AstNode *node);
 
-#endif // CXY_SHAKE_H
+#ifdef __cplusplus
+}
+#endif

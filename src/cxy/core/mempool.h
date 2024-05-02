@@ -2,6 +2,10 @@
 
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * The memory pool is a block-based allocator that allocates blocks of memory of
  * fixed dim to hold the allocated data. The blocks are reclaimed when the
@@ -55,3 +59,7 @@ void freeMemToPoolCache(MemPool *, MemPoolCacheId, void *, size_t);
 void resetMemPool(MemPool *);
 void freeMemPool(MemPool *);
 void getMemPoolStats(const MemPool *, MemPoolStats *);
+
+#ifdef __cplusplus
+}
+#endif

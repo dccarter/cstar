@@ -199,6 +199,7 @@ set(CXY_LANG_BACKEND_SOURCES
         src/cxy/lang/backend/llvm/array.cpp
         src/cxy/lang/backend/llvm/binary.cpp
         src/cxy/lang/backend/llvm/context.cpp
+        src/cxy/lang/backend/llvm/debug.cpp
         src/cxy/lang/backend/llvm/llvm.cpp
         src/cxy/lang/backend/llvm/generate.cpp
 )

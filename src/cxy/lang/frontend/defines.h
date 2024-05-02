@@ -7,6 +7,10 @@
 #include "core/htable.h"
 #include "lang/frontend/ast.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct CompilerPreprocessor;
 
 bool preprocessorOverrideDefinedMacro(struct CompilerPreprocessor *preprocessor,
@@ -32,3 +36,7 @@ static inline AstNode *preprocessorFindMacro(
     preprocessorHasMacro(preprocessor, variable, &value);
     return value;
 }
+
+#ifdef __cplusplus
+}
+#endif

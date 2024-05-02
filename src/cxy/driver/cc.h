@@ -12,6 +12,10 @@
 
 #include "driver.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void compileCSourceFile(CompilerDriver *driver, const char *sourceFile);
 bool createSourceFile(CompilerDriver *driver,
                       const FormatState *code,
@@ -27,3 +31,7 @@ void addLinkLibrary(HashTable *linkedLibraries,
                     StrPool *strings,
                     cstring cxySource,
                     cstring source);
+
+#ifdef __cplusplus
+}
+#endif

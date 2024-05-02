@@ -7,6 +7,10 @@
 #include "driver/driver.h"
 #include "lang/frontend/ast.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct Symbol {
     u16 index;
     const char *name;
@@ -120,3 +124,7 @@ BlockScope *blockScopeContainerPush(BlockScopeContainer *container,
                                     AstNode *node,
                                     u64 flags);
 void blockScopeContainerPop(BlockScopeContainer *container);
+
+#ifdef __cplusplus
+}
+#endif

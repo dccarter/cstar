@@ -11,6 +11,10 @@
 #include "core/strpool.h"
 #include "types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct TypeTable {
     HashTable types;
     MemPool *memPool;
@@ -29,7 +33,7 @@ typedef struct TypeTable {
     const Type *optionalType;
 } TypeTable;
 
-typedef Pair(bool, const Type *) GetOrInset;
+typedef CxyPair(bool, const Type *) GetOrInset;
 
 TypeTable *newTypeTable(MemPool *pool, StrPool *strPool);
 
@@ -208,3 +212,7 @@ u64 pointerLevels(const Type *type);
 const Type *removeFromTypeTable(TypeTable *table, const Type *type);
 
 AstNode *getTypeDecl(const Type *type);
+
+#ifdef __cplusplus
+}
+#endif

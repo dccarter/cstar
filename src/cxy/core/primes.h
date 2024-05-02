@@ -3,6 +3,10 @@
 
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // This sequence of primes has been designed for hash table implementations.
 #define MIN_PRIME 7
 #define MAX_PRIME 1048583
@@ -47,3 +51,7 @@ static inline size_t modPrime(size_t i, size_t p)
         return i % p;
     }
 }
+
+#ifdef __cplusplus
+}
+#endif

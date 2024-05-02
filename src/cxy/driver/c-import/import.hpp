@@ -4,10 +4,7 @@
 
 #pragma once
 
-extern "C" {
 #include "driver/driver.h"
-#undef make
-}
 
 #include <clang/Basic/TargetInfo.h>
 #include <clang/Frontend/CompilerInstance.h>

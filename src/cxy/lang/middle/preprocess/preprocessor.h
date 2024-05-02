@@ -8,6 +8,10 @@
 #include "driver/driver.h"
 #include "lang/frontend/visitor.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct PreprocessorContext {
     Log *L;
     MemPool *pool;
@@ -29,3 +33,7 @@ typedef struct PreprocessorContext {
 void preprocessorEvalUnaryExpr(PreprocessorContext *ctx, AstNode *node);
 void preprocessorEvalBinaryExpr(PreprocessorContext *ctx, AstNode *node);
 bool preprocessorAsBoolean(PreprocessorContext *ctx, AstNode *node);
+
+#ifdef __cplusplus
+}
+#endif

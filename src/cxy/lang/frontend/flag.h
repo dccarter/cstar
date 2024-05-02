@@ -8,6 +8,10 @@
 #include "core/strpool.h"
 #include "core/utils.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // clang-format off
 #define CXY_LANG_FLAGS(f)                       \
     f(Native,               0)                  \
@@ -80,3 +84,7 @@ typedef u64 Flags;
 
 void appendFlagsAsString(FormatState *state, u64 flags);
 char *flagsToString(u64 flags);
+
+#ifdef __cplusplus
+}
+#endif

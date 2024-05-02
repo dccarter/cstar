@@ -4,9 +4,7 @@
 
 #include "context.h"
 
-extern "C" {
 #include "lang/frontend/flag.h"
-}
 
 static llvm::Constant *makeArrayLiteral(cxy::LLVMContext &ctx, AstNode *node)
 {
