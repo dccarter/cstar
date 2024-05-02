@@ -1,0 +1,5 @@
+// @TEST: FileCheck
+
+// CHECK: error: unterminated block comment
+/*
+  /* Unterminated nested block comment */

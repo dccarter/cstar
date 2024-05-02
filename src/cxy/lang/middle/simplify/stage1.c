@@ -138,7 +138,8 @@ static void visitFuncDecl(AstVisitor *visitor, AstNode *node)
         node->funcDecl.name = makeMangledName(ctx->strings,
                                               node->funcDecl.name,
                                               node->type->func.params,
-                                              node->type->func.paramsCount);
+                                              node->type->func.paramsCount,
+                                              hasFlag(node, Const));
     }
     astVisit(visitor, node->funcDecl.body);
 }

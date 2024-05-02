@@ -1496,12 +1496,14 @@ static AstNode *funcDecl(Parser *P, u64 flags)
     Token tok = *current(P);
     bool Extern = (flags & flgExtern) == flgExtern;
     bool Virtual = (flags & flgVirtual) == flgVirtual;
+    bool Member = (flags & flgMember) == flgMember;
+    flags &= ~flgMember; // Clear member flags, a function might be static
     flags |= match(P, tokAsync) ? flgAsync : flgNone;
 
     consume0(P, tokFunc);
     cstring name = NULL;
     Operator op = opInvalid;
-    if (check(P, tokQuote)) {
+    if (Member && check(P, tokQuote)) {
         OperatorOverload overload = operatorOverload(P);
         op = overload.f;
         name = overload.s;
@@ -1557,7 +1559,7 @@ static AstNode *funcDecl(Parser *P, u64 flags)
         if (match(P, tokFatArrow, tokLBrace)) {
             parserError(P,
                         &tmp.fileLoc,
-                        "unexpected function body after a function declaration",
+                        "extern functions cannot be declared with a body",
                         NULL);
         }
         // make semi-colon optional
@@ -2027,7 +2029,7 @@ static AstNode *parseClassOrStructMember(Parser *P)
     case tokAsync: {
         u64 flags = isVirtual ? flgVirtual : flgNone;
         flags |= isPrivate ? flgNone : flgPublic;
-        member = funcDecl(P, flags);
+        member = funcDecl(P, flags | flgMember);
         break;
     }
     case tokMacro:
@@ -2400,6 +2402,11 @@ static AstNode *declaration(Parser *P)
             advance(P);
             isExtern = true;
             break;
+        case tokAsync:
+            parserError(P,
+                        &current(P)->fileLoc,
+                        "an async function cannot be marked as extern",
+                        NULL);
         default:
             break;
         }
@@ -2443,7 +2450,7 @@ static AstNode *declaration(Parser *P)
     case tokExtern:
         parserError(P,
                     &current(P)->fileLoc,
-                    "native can only be used on top level struct, function or "
+                    "extern can only be used on top level struct, function or "
                     "variable declarations",
                     NULL);
         break;

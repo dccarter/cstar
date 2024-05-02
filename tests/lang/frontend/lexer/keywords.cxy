@@ -1,0 +1,100 @@
+// @TEST: FileCheck
+
+// Supported keywords
+
+// CHECK: 'virtual' @([[@LINE+1]]
+virtual
+// CHECK: 'auto' @([[@LINE+1]]
+auto
+// CHECK: 'true' @([[@LINE+1]]
+true
+// CHECK: 'false' @([[@LINE+1]]
+false
+// CHECK: 'null' @([[@LINE+1]]
+null
+// CHECK: 'if' @([[@LINE+1]]
+if
+// CHECK: 'else' @([[@LINE+1]]
+else
+// CHECK: 'match' @([[@LINE+1]]
+match
+// CHECK: 'for' @([[@LINE+1]]
+for
+// CHECK: 'in' @([[@LINE+1]]
+in
+// CHECK: 'while' @([[@LINE+1]]
+while
+// CHECK: 'break' @([[@LINE+1]]
+break
+// CHECK: 'return' @([[@LINE+1]]
+return
+// CHECK: 'continue' @([[@LINE+1]]
+continue
+// CHECK: 'func' @([[@LINE+1]]
+func
+// CHECK: 'var' @([[@LINE+1]]
+var
+// CHECK: 'const' @([[@LINE+1]]
+const
+// CHECK: 'type' @([[@LINE+1]]
+type
+// CHECK: 'native' @([[@LINE+1]]
+native
+// CHECK: 'extern' @([[@LINE+1]]
+extern
+// CHECK: 'struct' @([[@LINE+1]]
+struct
+// CHECK: 'enum' @([[@LINE+1]]
+enum
+// CHECK: 'pub' @([[@LINE+1]]
+pub
+// CHECK: 'opaque' @([[@LINE+1]]
+opaque
+// CHECK: 'async' @([[@LINE+1]]
+async
+// CHECK: 'await' @([[@LINE+1]]
+await
+// CHECK: 'switch' @([[@LINE+1]]
+switch
+// CHECK: 'case' @([[@LINE+1]]
+case
+// CHECK: 'default' @([[@LINE+1]]
+default
+// CHECK: 'defer' @([[@LINE+1]]
+defer
+// CHECK: 'macro' @([[@LINE+1]]
+macro
+// CHECK: 'void' @([[@LINE+1]]
+void
+// CHECK: 'string' @([[@LINE+1]]
+string
+// CHECK: 'range' @([[@LINE+1]]
+range
+// CHECK: 'module' @([[@LINE+1]]
+module
+// CHECK: 'import' @([[@LINE+1]]
+import
+// CHECK: 'cDefine' @([[@LINE+1]]
+cDefine
+// CHECK: 'cInclude' @([[@LINE+1]]
+cInclude
+// CHECK: 'cSources' @([[@LINE+1]]
+cSources
+// CHECK: 'as' @([[@LINE+1]]
+as
+// CHECK: 'from' @([[@LINE+1]]
+from
+// CHECK: 'unsafe' @([[@LINE+1]]
+unsafe
+// CHECK: 'interface' @([[@LINE+1]]
+interface
+// CHECK: 'this' @([[@LINE+1]]
+this
+// CHECK: 'This' @([[@LINE+1]]
+This
+// CHECK: 'super' @([[@LINE+1]]
+super
+// CHECK: 'class' @([[@LINE+1]]
+class
+// CHECK: 'defined' @([[@LINE+1]]
+defined

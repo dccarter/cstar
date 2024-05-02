@@ -1,0 +1,27 @@
+extern func hello(): void
+
+extern func hello(x: i32): void
+
+extern func hello(): (string, i32)
+
+pub extern func hello(): void
+
+pub extern func hello(...args: auto): void
+
+func hello() { }
+
+
+func hello(x: i32, y: i32): void { }
+
+
+func hello() => "Hello World"
+
+func hello(...args: i32) => args.1
+
+pub func hello() { }
+
+
+async func hello() { }
+
+
+pub async func hello() { }

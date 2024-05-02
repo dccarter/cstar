@@ -9,4 +9,5 @@
 cstring makeMangledName(struct StrPool *strings,
                         cstring name,
                         const Type **types,
-                        u64 count);
+                        u64 count,
+                        bool isConst);

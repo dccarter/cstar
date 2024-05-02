@@ -8,14 +8,12 @@
 #include <lang/frontend/flag.h>
 #include <lang/frontend/ttable.h>
 
-#include <ctype.h>
-
 static void mangleType(FormatState *state, const Type *type)
 {
     u64 flags = flgNone;
     type = unwrapType(type, &flags);
     if (flags & flgConst) {
-        append(state, "C", 1);
+        append(state, "c", 1);
     }
     type = resolveAndUnThisType(type);
 
@@ -72,14 +70,16 @@ static void mangleType(FormatState *state, const Type *type)
     }
 }
 
-cstring makeMangledName(StrPool *strings,
-                        cstring name,
-                        const Type **types,
-                        u64 count)
+cstring makeMangledName(
+    StrPool *strings, cstring name, const Type **types, u64 count, bool isConst)
 {
     FormatState state = newFormatState(NULL, true);
     appendString(&state, name);
-    append(&state, "I_", 2);
+    if (isConst)
+        append(&state, "Ic_", 3);
+    else
+        append(&state, "I_", 2);
+
     for (u64 i = 0; i < count; i++) {
         mangleType(&state, types[i]);
     }

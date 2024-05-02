@@ -61,7 +61,7 @@ void freeLexer(Lexer *lexer) { freeHashTable(&lexer->keywords); }
 
 static bool isEofReached(const Lexer *lexer)
 {
-    return lexer->fileSize == lexer->filePos.byteOffset;
+    return lexer->fileSize <= lexer->filePos.byteOffset;
 }
 
 static const char *getCurPtr(const Lexer *lexer)
@@ -92,6 +92,17 @@ static void skipChar(Lexer *lexer)
     lexer->filePos.byteOffset++;
 }
 
+static inline bool isSpaceOrPunctuation(char c)
+{
+    return c != '_' && (isspace(c) || ispunct(c));
+}
+
+static void skipUntilSpaceOrPunctuation(Lexer *lexer)
+{
+    while (!isSpaceOrPunctuation(getCurChar(lexer)))
+        advanceLexer(lexer);
+}
+
 static bool acceptChar(Lexer *lexer, char c)
 {
     if (!isEofReached(lexer)) {
@@ -116,15 +127,23 @@ static void skipSingleLineComment(Lexer *lexer)
         skipChar(lexer);
 }
 
-static void skipMultiLineComment(Lexer *lexer)
+static bool skipMultiLineComment(Lexer *lexer)
 {
-    while (!isEofReached(lexer)) {
-        while (acceptChar(lexer, '*')) {
+    u64 nest = 1;
+    while (nest > 0 && !isEofReached(lexer)) {
+        if (acceptChar(lexer, '/')) {
+            if (acceptChar(lexer, '*'))
+                nest++;
+            continue;
+        }
+        if (acceptChar(lexer, '*')) {
             if (acceptChar(lexer, '/'))
-                return;
+                nest--;
+            continue;
         }
         skipChar(lexer);
     }
+    return nest == 0;
 }
 
 static Token makeToken(Lexer *lexer, const FilePos *begin, TokenTag tag)
@@ -345,8 +364,11 @@ Token advanceLexer(Lexer *lexer)
                 continue;
             }
             else if (acceptChar(lexer, '*')) {
-                skipMultiLineComment(lexer);
-                continue;
+                if (skipMultiLineComment(lexer))
+                    continue;
+                else
+                    return makeInvalidToken(
+                        lexer, &begin, "unterminated block comment");
             }
             if (acceptChar(lexer, '='))
                 return makeToken(lexer, &begin, tokDivEqual);
@@ -452,6 +474,14 @@ Token advanceLexer(Lexer *lexer)
                     ptr = getCurPtr(lexer);
                     while (getCurChar(lexer) == '0' || getCurChar(lexer) == '1')
                         skipChar(lexer);
+                    if (!isSpaceOrPunctuation(getCurChar(lexer))) {
+                        skipUntilSpaceOrPunctuation(lexer);
+                        return makeInvalidToken(
+                            lexer,
+                            &begin,
+                            "binary digit contains invalid characters");
+                    }
+
                     return makeIntLiteral(
                         lexer, &begin, strtoumax(ptr, NULL, 2));
                 }
@@ -460,6 +490,15 @@ Token advanceLexer(Lexer *lexer)
                     ptr = getCurPtr(lexer);
                     while (isxdigit(getCurChar(lexer)))
                         skipChar(lexer);
+
+                    if (!isSpaceOrPunctuation(getCurChar(lexer))) {
+                        skipUntilSpaceOrPunctuation(lexer);
+                        return makeInvalidToken(
+                            lexer,
+                            &begin,
+                            "hexadecimal digit contains invalid characters");
+                    }
+
                     return makeIntLiteral(
                         lexer, &begin, strtoumax(ptr, NULL, 16));
                 }
@@ -468,6 +507,13 @@ Token advanceLexer(Lexer *lexer)
                     ptr = getCurPtr(lexer);
                     while (getCurChar(lexer) >= '0' && getCurChar(lexer) <= '7')
                         skipChar(lexer);
+                    if (!isSpaceOrPunctuation(getCurChar(lexer))) {
+                        skipUntilSpaceOrPunctuation(lexer);
+                        return makeInvalidToken(
+                            lexer,
+                            &begin,
+                            "octal digit contains invalid characters");
+                    }
                     return makeIntLiteral(
                         lexer, &begin, strtoumax(ptr, NULL, 8));
                 }

@@ -304,7 +304,8 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
     cstring name = makeMangledName(ctx->strings,
                                    getDeclarationName(substitute),
                                    goi.s->applied.args,
-                                   goi.s->applied.argsCount);
+                                   goi.s->applied.argsCount,
+                                   hasFlag(substitute, Const));
     setDeclarationName(substitute, name);
 
     cstring namespace = pushGenericDeclNamespace(ctx->types, generic);

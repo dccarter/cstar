@@ -1,6 +1,10 @@
 // Credits https://github.com/madmann91/fu/blob/master/src/fu/lang/lexer.h
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "core/htable.h"
 #include "core/log.h"
 #include "token.h"
@@ -38,3 +42,7 @@ Lexer newLexer(const char *fileName,
 void freeLexer(Lexer *);
 
 Token advanceLexer(Lexer *);
+
+#ifdef __cplusplus
+}
+#endif
