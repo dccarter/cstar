@@ -1,0 +1,29 @@
+// @TEST: FileCheck
+
+/* Extern functions cannot be async */
+// CHECK: error: an async function cannot be marked as extern
+extern async func hello() : void {}
+
+/* Extern functions need a return type */
+// CHECK: error: unexpected token ''=>'', expecting colon before function declaration return type
+extern func hello() => "hello"
+;
+/* Extern functions need a return type */
+// CHECK: error: extern functions cannot be declared with a body
+extern func hello() : string => "hello" ;
+
+/* Function decl needs a body */
+// CHECK: error: unexpected token '';'', expecting a function body
+func hello() ;;
+
+/* Function decl needs a body */
+// CHECK: error: unexpected token '';'', expecting a function body
+func hello() : void ;;
+
+/* Function names must be identifiers */
+// CHECK: error: unexpected token, expecting 'identifier', but got 'string literal'
+func "name"() : void {} ;
+
+/* Only member function names can be quoted */
+// CHECK: error: unexpected token, expecting 'identifier', but got ''`''
+func `[]`(id: i32): void {} ;;

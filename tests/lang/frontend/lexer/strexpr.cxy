@@ -1,0 +1,30 @@
+// @TEST: FileCheck
+
+// CHECK: `( @([[@LINE+3]]:1, [[@LINE+3]]:2)
+// CHECK: string literal("Hello")
+// CHECK: )` @([[@LINE+1]]:9, [[@LINE+1]]:9)
+f"Hello"
+// CHECK: `( @([[@LINE+9]]:1, [[@LINE+9]]:2)
+// CHECK: string literal("Hello ")
+// CHECK: ${ @([[@LINE+7]]:11, [[@LINE+7]]:11)
+// CHECK: identifier(name)
+// CHECK: string literal(" ")
+// CHECK: ${ @([[@LINE+4]]:19, [[@LINE+4]]:19)
+// CHECK: integer literal(200)
+// CHECK: string literal("")
+// CHECK: )` @([[@LINE+1]]:24, [[@LINE+1]]:24)
+f"Hello ${name} ${200}"
+
+// CHECK: `( @([[@LINE+8]]:1, [[@LINE+8]]:2)
+// CHECK: string literal("")
+// CHECK: ${ @([[@LINE+6]]:5, [[@LINE+6]]:5)
+// CHECK: identifier(a)
+// CHECK: '+' @([[@LINE+4]]:7, [[@LINE+4]]:8)
+// CHECK: integer literal(10)
+// CHECK: string literal("")
+// CHECK: )` @([[@LINE+1]]:13, [[@LINE+1]]:13)
+f"${a + 10}"
+
+// CHECK: `( @([[@LINE+2]]:1, [[@LINE+2]]:2)
+// CHECK: invalid token @([[@LINE+1]]:5, [[@LINE+2]]:1)
+f"${"

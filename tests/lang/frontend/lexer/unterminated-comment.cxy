@@ -1,0 +1,6 @@
+// @TEST: FileCheck
+
+// CHECK: error: unterminated block comment
+// CHECK: [[@LINE+1]] |/*
+/*
+ This comment is unterminated

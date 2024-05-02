@@ -10,12 +10,12 @@ struct CompilerDriver;
 
 // clang-format off
 #define CXY_PRIVATE_COMPILER_STAGES(f)                 \
-    f(_Parse,           "Parse")                       \
     f(_Dump,            "Dump Ast")                    \
     f(_DumpIR,          "Dump IR")                     \
     f(_First,           "First Marker")                \
 
 #define CXY_PUBLIC_COMPILER_STAGES(f)                  \
+    f(Parse,            "Parse")                       \
     f(Preprocess,       "Preprocess")                  \
     f(Shake,            "Shake")                       \
     f(Bind,             "Bind")                        \

@@ -1,0 +1,23 @@
+func closureArg0(fn: func() -> void) {
+  fn()
+}
+
+func closureArg1(msg: string, fn: func(msg: string) -> void) {
+  fn(msg)
+}
+
+func closureArg2(fn: func(msg: string) -> void) {
+  closureArg1("hello", fn)
+}
+
+func main(args: [string]) {
+  const one = 
+  one()
+  ()("User")
+  var x = 100
+  var b = "Hello"
+  ()()
+  const f = 
+  closureArg0()
+  closureArg2()
+}

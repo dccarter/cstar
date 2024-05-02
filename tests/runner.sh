@@ -140,9 +140,11 @@ timestamp() {
   fi
 }
 
-[ -z "${TESTS_DIR}" ] && TESTS_DIR=../tests
-[ -z "${CXY_COMPILER}" ] && CXY_COMPILER=./cxy
-[ -z "${CXY_STDLIB}" ] && CXY_STDLIB=./stdlib
+TESTS_DIR=$(realpath ../tests)
+CXY_DEFAULT_COMMAND=./cxy
+CXY_STDLIB=./stdlib
+CXY_DEFAULT_ARGS="dev --dump-ast CXY --no-color --clean-ast --warnings=~RedundantStmt"
+CXY_DEFAULT_SNAPSHOT_EXT=".cxy"
 
 POSITIONAL_ARGS=()
 while [[ $# -gt 0 ]]; do
@@ -155,6 +157,25 @@ while [[ $# -gt 0 ]]; do
       TEST_FILTER="$2"
       shift # past argument
       shift # past value
+      ;;
+    -d|--test-dir)
+      TESTS_DIR=$(realpath "$2")
+      shift # past argument
+      shift # past value
+      ;;
+    --cxy)
+      CXY_COMPILER="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    --lib)
+      CXY_STDLIB="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    --no-check)
+      CXY_FILE_CHECK_OFF=1
+      shift # past argument
       ;;
     --default)
       DEFAULT=YES
@@ -171,43 +192,124 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Find run configuration up directory stack
+__find_run_cfg() {
+  local dir=$1
+  while [ "$dir" != "$TESTS_DIR" ]
+  do
+    if [ -e "$dir/run.cfg" ]
+    then
+      echo "$dir/run.cfg"
+      break
+    fi
+    dir=$(dirname $dir)
+  done
+}
+
+__read_cfg() {
+    local cfg_path="$1"
+    local req_key="$2"
+    local default="$3"
+
+    local comment_prefix=";"
+    while read line
+    do
+      if [ -z "$line" ] || [[ "$line" == $comment_prefix* ]]; then
+        continue
+      fi
+      IFS='=' read -r key value <<< "$line"
+      if [ "${key}" == "${req_key}" ]; then
+          value="${value%\"}"
+          value="${value#\"}"
+          echo "$value"
+          return 0
+      fi
+    done < "$cfg_path"
+
+    default="${default%\"}"
+    default="${default#\"}"
+    echo "$default"
+}
+
 run_test () {
-  expected="${1%.cxy}.expected.dump"
+  test_path=$1
+  test_dir=$(dirname $test_path)
   test_case="${2}"
 
-  echo -e "Running test case ${test_case}"
-  output=$(${CXY_COMPILER} dev "${1}" --dump-ast CXY --no-color --clean-ast --with-named-enums --last-stage=Simplify  --warnings='~RedundantStmt')
-  [ $? -ne 0 ] && {
-      echo -e "  ${Bred}FAILED${reset}: Compilation failed for test case ${test_case}"
-      echo -e "${output}"
-      return 1
-  }
-  if [ -n "${UPDATE_SNAPSHOT}" ]
-  then
-    # Update snapshots
-    echo "${output}" > ${expected}
+  local snapshot_ext="${CXY_DEFAULT_SNAPSHOT_EXT}"
+  local run_args="${CXY_DEFAULT_ARGS}"
+  local run_cmd="${CXY_DEFAULT_COMMAND}"
+  # Load current configuration
+  local run_cfg=$(__find_run_cfg "$test_dir")
+
+  if [ -n "${run_cfg}" ]; then
+    snapshot_ext=$(__read_cfg "$run_cfg" "snapshot_ext" "$snapshot_ext")
+    run_args=$(__read_cfg "$run_cfg" "run_args" "$run_args")
+    run_cmd=$(__read_cfg "$run_cfg" "command" "$run_cmd")
   fi
 
-  if [ -f $expected ] ; then
-    match=$(diff <(cat "${expected}") <(echo "${output}") -U1 --label "${1}" --label "${expected}")
-    [ $? -ne 0 ] && {
-        echo -e "  ${Bred}FAILED${reset}: AST output does not match expected output"
-        echo -e "${match}"
+  echo -e "Running test case ${test_case}"
+  expected="${test_dir}/__snapshots/${2}${snapshot_ext}"
+  output=$(${run_cmd} $run_args $test_path 2>&1)
+  status=$?
+
+  if ! grep -m 1 -e "^//[[:blank:]]*@TEST:[[:blank:]]*FileCheck"  "$test_path" > /dev/null ; then
+    # Regular snapsho test
+    if [ $status -ne 0 ]; then
+      # If there is a failure snapshot, prefer it, otherwise fail the build
+      expected="${directory}/__snapshots/${2}.fail"
+      if [ ! -e "$expected" ] ; then
+        echo -e "  ${Bred}FAILED${reset}: Compilation failed for test case ${test_case}"
+        echo -e "${output}"
         return 1
-    }
+      fi
+    elif [ -e "${directory}/__snapshots/${2}.log" ] ; then
+      # Prefer log snapshot
+      expected="${directory}/__snapshots/${2}.log"
+    fi
+
+    if [ -n "${UPDATE_SNAPSHOT}" ]
+    then
+      # Update snapshots
+      mkdir -p "${test_dir}/__snapshots"
+      echo "${output}" > ${expected}
+    fi
+
+    if [ -f $expected ] ; then
+      match=$(diff <(cat "${expected}") <(echo "${output}") -U1 --label "${1}" --label "${expected}")
+      [ $? -ne 0 ] && {
+          echo -e "  ${Bred}FAILED${reset}: Compiler output does not match expected output"
+          echo -e "${match}"
+          return 1
+      }
+    fi
+  else
+    # This is a file check test
+    local file_check=FileCheck
+    if [ -z "${CXY_FILE_CHECK_OFF}" ]; then
+      [ -n "${FILE_CHECK}" ] && file_check="${FILE_CHECK}"
+
+      match=$(echo "${output}" | "${file_check}" $test_path)
+      [ $? -ne 0 ] && {
+          echo -e "  ${Bred}FAILED${reset}: FileCheck failed to verify compiler output"
+          echo -e "${match}"
+          return 1
+      }
+    else
+      echo "${output}"
+    fi
   fi
 
   return 0
 }
 
-LANG_TESTS=${TESTS_DIR}/lang
 TESTS_START=$(timestamp)
 FAILED_TESTS=0
 PASSED_TESTS=0
 declare -A TEST_RESULTS
 declare -A TEST_DURATIONS
-for test in ${LANG_TESTS}/*.cxy ; do
-  if [ -n ${TEST_FILTER} ] && ! echo $test | grep -Eq "${TEST_FILTER}"
+for test in $(find $TESTS_DIR -type f -name '*.cxy' -not -path '**/__snapshots/*') ; do
+  if [ -n "${TEST_FILTER}" ] && ! echo $test | grep -Eq "${TEST_FILTER}"
   then
     continue
   fi
@@ -262,4 +364,3 @@ echo -e "  Elapsed ${duration} ms"
 echo -e "----------------------------------------------------------"
 [ "${FAILED_TESTS}" -ne 0 ] && exit 1
 exit 0
-

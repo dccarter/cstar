@@ -115,7 +115,7 @@ static AstNode *parseFile(CompilerDriver *driver, const char *fileName)
     Lexer lexer = newLexer(fileName, fileData, file_size, driver->L);
     Parser parser = makeParser(&lexer, driver);
     AstNode *program = parseProgram(&parser);
-    compilerStatsRecord(driver, ccs_Parse);
+    compilerStatsRecord(driver, ccsParse);
 
     freeLexer(&lexer);
     free(fileData);
@@ -190,7 +190,7 @@ static bool compileProgram(CompilerDriver *driver,
                    .flags = program->flags & flgBuiltinsModule,
                    .metadata = {.filePath = fileName, .node = program}});
 
-    CompilerStage stage = ccs_First + 1,
+    CompilerStage stage = ccsParse + 1,
                   maxStage =
                       (options->cmd == cmdDev ? options->dev.lastStage + 1
                                               : ccsCOUNT);

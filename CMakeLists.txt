@@ -257,3 +257,23 @@ add_custom_target(
 )
 
 add_dependencies(cxy cxy-stdlib)
+
+if(NOT TARGET FileCheck)
+    # Download the LLVM FileCheck utility for tests.
+    set(FILE_CHECK_SRC_PATH "llvmorg-${LLVM_PACKAGE_VERSION}/llvm/utils/FileCheck/FileCheck.cpp")
+    set(FILE_CHECK_SRC_URL "https://raw.githubusercontent.com/llvm/llvm-project/${FILE_CHECK_SRC_PATH}")
+    set(FILE_CHECK_SRC_FILE "${CMAKE_CURRENT_BINARY_DIR}/${FILE_CHECK_SRC_PATH}")
+    if(NOT EXISTS "${FILE_CHECK_SRC_FILE}")
+        message(STATUS "Downloading LLVM FileCheck source from ${FILE_CHECK_SRC_URL}")
+        file(DOWNLOAD "${FILE_CHECK_SRC_URL}" "${FILE_CHECK_SRC_FILE}")
+    endif()
+    add_executable(FileCheck ${FILE_CHECK_SRC_FILE})
+    llvm_map_components_to_libnames(FILE_CHECK_NEEDED_LIBS filecheck support)
+    target_link_libraries(FileCheck ${FILE_CHECK_NEEDED_LIBS})
+endif()
+
+add_executable(lex-tester
+    tests/utils/lexer.cpp
+    src/cxy/lang/frontend/lexer.c
+    ${CXY_CORE_SOURCES}
+)

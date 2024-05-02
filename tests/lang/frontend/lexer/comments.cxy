@@ -1,0 +1,7 @@
+// This is a valid single line comment
+
+/* A valid block comment */
+
+/*
+    A valid /* nested */ block comment
+*/

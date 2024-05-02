@@ -1,0 +1,19 @@
+func varargs(...args: auto) { }
+
+
+func add(...nums: f32) {
+  var sum: f32 = 0
+  #for (const num: nums)
+  {
+    sum += num
+  }
+}
+
+func many(x: i32, ...rest: f32) {
+  add(<f32>x, )
+}
+
+func main(args: [string]) {
+  varargs(10, "Hello", 'c', 2.000600e+03)
+  many(10, 1.000000e+01, 1.006000e+02)
+}

@@ -1,0 +1,21 @@
+// @TEST: FileCheck
+
+/*
+ * Tests literals in cxy
+ */
+
+/* Invalid hex value */
+// CHECK: hexadecimal digit contains invalid characters
+0x10aGh
+
+/* Binary number */
+// CHECK: binary digit contains invalid characters
+// CHECK: [[@LINE+2]] |0b12333
+// CHECK-NEXT:        |^^^^^^^
+0b12333
+
+/* Invalid Octal number */
+// CHECK: octal digit contains invalid characters
+// CHECK: [[@LINE+2]] |0o1888
+// CHECK-NEXT:        |^^^^^^
+0o1888
