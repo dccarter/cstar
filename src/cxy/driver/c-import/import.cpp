@@ -5,14 +5,12 @@
 #include "import.hpp"
 #include "context.hpp"
 
-extern "C" {
 #include "core/alloc.h"
 #include "core/strpool.h"
 #include "driver/c.h"
 #include "lang/frontend/defines.h"
 #include "lang/frontend/flag.h"
 #include "lang/frontend/ttable.h"
-}
 
 #undef make
 #undef Pair

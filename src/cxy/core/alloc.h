@@ -1,6 +1,10 @@
 
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,3 +31,7 @@ static inline void *reallocOrDie(void *ptr, size_t size)
     csAssert(ptr, "out of memory, realloc() failed\n"); // GCOV_EXCL_LINE
     return ptr;
 }
+
+#ifdef __cplusplus
+}
+#endif

@@ -1,13 +1,13 @@
 // Credits https://github.com/madmann91/fu/blob/master/src/fu/lang/lexer.h
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include "core/htable.h"
 #include "core/log.h"
 #include "token.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * The lexer requires to have the entire file data in memory (or a memory mapped

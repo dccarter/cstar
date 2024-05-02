@@ -6,6 +6,10 @@
 
 #include "token.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // clang-format off
 
 #define AST_ARITH_EXPR_LIST(f)                     \
@@ -119,3 +123,7 @@ bool isPrefixOpKeyword(Operator op);
 int getMaxBinaryOpPrecedence(void);
 
 int getBinaryOpPrecedence(Operator op);
+
+#ifdef __cplusplus
+}
+#endif

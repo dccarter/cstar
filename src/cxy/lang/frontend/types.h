@@ -10,6 +10,10 @@
 
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * Front-end types, including a simple module system based on M. Lillibridge's
  * translucent sums, and HM-style polymorphism. Types should always be created
@@ -266,7 +270,7 @@ typedef struct Type {
     };
 } Type;
 
-typedef Pair(i64, u64) IntMinMax;
+typedef CxyPair(i64, u64) IntMinMax;
 
 #define CYX_TYPE_BODY_SIZE (sizeof(Type) - sizeof(((Type *)0)->_head))
 
@@ -466,3 +470,7 @@ void pushThisReference(const Type *_this, AstNode *node);
 void resolveThisReferences(TypeTable *table,
                            const Type *_this,
                            const Type *type);
+
+#ifdef __cplusplus
+}
+#endif

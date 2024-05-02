@@ -7,6 +7,10 @@
 #include "core/hash.h"
 #include "core/utils.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * This table only uses the lower bits of the hash value.
  * The highest bit is used to encode buckets that are used.
@@ -48,3 +52,7 @@ void enumerateHashTable(HashTable *,
                         void *ctx,
                         bool (*with)(void *ctx, const void *elem),
                         size_t elemSize);
+
+#ifdef __cplusplus
+}
+#endif

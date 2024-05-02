@@ -23,10 +23,8 @@
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 
-extern "C" {
 #include "lang/frontend/flag.h"
 #include "lang/frontend/ttable.h"
-}
 
 namespace {
 llvm::TargetMachine *createTargetMachine(Log *L)

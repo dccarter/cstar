@@ -6,6 +6,10 @@
 
 #include <core/strpool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct CompilerPreprocessor {
     MemPool *pool;
     HashTable symbols;
@@ -77,3 +81,7 @@ void initCompilerPreprocessor(struct CompilerDriver *driver);
 void deinitCompilerPreprocessor(struct CompilerDriver *driver);
 void initCImporter(struct CompilerDriver *driver);
 void deinitCImporter(struct CompilerDriver *driver);
+
+#ifdef __cplusplus
+}
+#endif

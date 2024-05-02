@@ -3,6 +3,10 @@
 
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * Dynamically-growing array implementation.
  * In debug mode, assertions check that the array is not used with the wrong
@@ -34,3 +38,7 @@ void resizeDynArray(DynArray *, size_t);
 void clearDynArray(DynArray *);
 void freeDynArray(DynArray *);
 #define dynArrayAt(T, arr, idx) ((T)(arr)->elems)[(idx)]
+
+#ifdef __cplusplus
+}
+#endif

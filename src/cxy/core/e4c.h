@@ -5,6 +5,10 @@
  * Licensed under the GNU Lesser General Public License
  */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef EXCEPTIONS4C_LITE
 #define EXCEPTIONS4C_LITE
 
@@ -120,4 +124,8 @@ extern void e4c_throw_ctx(const struct e4c_exception_type *exception_type,
 #pragma omp threadprivate(e4c)
 #endif
 
+#endif
+
+#ifdef __cplusplus
+}
 #endif

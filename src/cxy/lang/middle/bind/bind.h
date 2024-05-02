@@ -8,6 +8,10 @@
 
 #include "lang/frontend/visitor.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
     Log *L;
     MemPool *pool;
@@ -30,3 +34,7 @@ void defineDeclaration(BindContext *ctx, cstring name, AstNode *node);
 
 AstNode *bindAstPhase1(CompilerDriver *driver, Env *env, AstNode *node);
 void bindAstPhase2(CompilerDriver *driver, Env *env, AstNode *node);
+
+#ifdef __cplusplus
+}
+#endif

@@ -5,6 +5,10 @@
 #include "core/utils.h"
 #include "types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // clang-format off
 
 #define SYMBOL_LIST(f)              \
@@ -181,3 +185,7 @@ bool isPrimitiveIntegerType(TokenTag tag);
 bool isAssignmentOperator(TokenTag tag);
 PrtId tokenToPrimitiveTypeId(TokenTag tag);
 bool isKeyword(TokenTag tag);
+
+#ifdef __cplusplus
+}
+#endif

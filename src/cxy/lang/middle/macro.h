@@ -6,4 +6,12 @@
 
 #include <lang/frontend/ast.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 EvaluateMacro findBuiltinMacroByNode(AstNode *node);
+
+#ifdef __cplusplus
+}
+#endif

@@ -10,6 +10,10 @@
 
 #include <core/strpool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define ERROR_TYPE(CTX) makeErrorType((CTX)->types)
 
 typedef struct {
@@ -211,3 +215,7 @@ void checkFunctionType(AstVisitor *visitor, AstNode *node);
 void checkBuiltinType(AstVisitor *visitor, AstNode *node);
 void checkOptionalType(AstVisitor *visitor, AstNode *node);
 void checkPointerType(AstVisitor *visitor, AstNode *node);
+
+#ifdef __cplusplus
+}
+#endif

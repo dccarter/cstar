@@ -3,6 +3,10 @@
 
 #include "core/htable.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * The string pool is a hashed container for strings. Each string contained in
  * the pool is stored uniquely, which allows fast comparison (strings can then
@@ -36,3 +40,7 @@ const char *makeStringConcat_(StrPool *, const char *, ...);
 
 #define makeStringConcat(P, S1, ...)                                           \
     makeStringConcat_((P), (S1), ##__VA_ARGS__, NULL)
+
+#ifdef __cplusplus
+}
+#endif

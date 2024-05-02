@@ -7,6 +7,10 @@
 #include "core/utils.h"
 #include "operator.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // clang-format off
 #define CXY_BUILTIN_NAMES(f, ff)    \
     f(main)                         \
@@ -115,3 +119,7 @@ AST_ASSIGN_EXPR_LIST(f)
 typedef struct StrPool StrPool;
 
 void internCommonStrings(StrPool *pool);
+
+#ifdef __cplusplus
+}
+#endif

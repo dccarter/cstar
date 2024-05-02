@@ -12,9 +12,7 @@
 #include <llvm/Passes/StandardInstrumentations.h>
 #include <llvm/Transforms/IPO.h>
 
-extern "C" {
 #include "driver/driver.h"
-}
 
 namespace cxy {
 

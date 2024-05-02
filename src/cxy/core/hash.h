@@ -3,6 +3,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef uint32_t HashCode;
 
 HashCode hashInit();
@@ -14,3 +18,7 @@ HashCode hashUint64(HashCode, uint64_t);
 HashCode hashStr(HashCode, const char *);
 
 HashCode hashRawBytes(HashCode, const void *, size_t);
+
+#ifdef __cplusplus
+}
+#endif

@@ -4,10 +4,8 @@
 
 #include "context.h"
 
-extern "C" {
 #include "lang/frontend/flag.h"
 #include "lang/frontend/visitor.h"
-}
 
 #define CREATE_BINARY_OP(ctx, OP, lhs, rhs, ...)                               \
     do {                                                                       \

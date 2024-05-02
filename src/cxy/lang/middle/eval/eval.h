@@ -8,6 +8,10 @@
 
 #include "lang/frontend/visitor.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
     Log *L;
     MemPool *pool;
@@ -52,3 +56,7 @@ void evalMacroCall(AstVisitor *visitor, AstNode *node);
 
 void evalIfStmt(AstVisitor *visitor, AstNode *node);
 void evalForStmt(AstVisitor *visitor, AstNode *node);
+
+#ifdef __cplusplus
+}
+#endif

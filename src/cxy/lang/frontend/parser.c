@@ -1408,7 +1408,7 @@ static AstNode *macroDecl(Parser *P, bool isPublic)
             .macroDecl = {.name = name, .params = params, .body = body}});
 }
 
-typedef Pair(Operator, cstring) OperatorOverload;
+typedef CxyPair(Operator, cstring) OperatorOverload;
 
 static OperatorOverload operatorOverload(Parser *P)
 {

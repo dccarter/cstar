@@ -6,6 +6,10 @@
 
 #include "ast.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct AstVisitor AstVisitor;
 
 typedef void (*Visitor)(struct AstVisitor *, AstNode *);
@@ -65,3 +69,7 @@ void astModifierNext(AstModifier *ctx, AstNode *node);
 void astModifierAdd(AstModifier *ctx, AstNode *node);
 void astModifierAddAsNext(AstModifier *ctx, AstNode *node);
 void astModifierRemoveCurrent(AstModifier *ctx);
+
+#ifdef __cplusplus
+}
+#endif

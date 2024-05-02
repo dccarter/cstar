@@ -22,7 +22,7 @@
 #define CHUNK_SIZE 4096
 #endif
 
-typedef Pair(u32, u32) u32_u32_pair;
+typedef CxyPair(u32, u32) u32_u32_pair;
 
 static size_t convertStrToCharOrd(const char *ptr, int base, u32 *res)
 {

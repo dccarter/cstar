@@ -14,6 +14,10 @@
 
 #include <string.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifndef __cxy_builtins_string_builder_DEFAULT_CAPACITY
 #define __cxy_builtins_string_builder_DEFAULT_CAPACITY 32
 #endif
@@ -65,3 +69,7 @@ void stringBuilderAppendUInt(StringBuilder *sb, u64 num);
 void stringBuilderAppendFloat(StringBuilder *sb, f64 num);
 void stringBuilderAppendBool(StringBuilder *sb, bool v);
 char *stringBuilderRelease(StringBuilder *sb);
+
+#ifdef __cplusplus
+}
+#endif
