@@ -1,14 +1,13 @@
-import "add.h" as Add
-import "stdio.h" as stdio
 
-struct Say[T] {
-    func say[U](t: T, u: U) {
-        println(t, u)
-    }
+@pure
+func say(fn: func(msg: string) -> void) {
+    fn("Hell World")
+}
+
+func sayer(msg: string) {
+    println("You said ", msg)
 }
 
 pub func main() {
-    var x = Say[i32]{};
-    info!("{t}", typeof!(x))
-    x.say(10, "Hello")
+    say(sayer)
 }

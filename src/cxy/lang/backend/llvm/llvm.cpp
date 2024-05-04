@@ -8,6 +8,8 @@
 #include <llvm/Analysis/AliasAnalysis.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/CodeGen/CommandFlags.h>
+#include <llvm/IR/DIBuilder.h>
+#include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Linker/Linker.h>
@@ -91,6 +93,121 @@ LLVMBackend::LLVMBackend(CompilerDriver *driver, llvm::TargetMachine *TM)
     updateType(types->voidType, llvm::Type::getVoidTy(*_context));
     updateType(types->nullType,
                llvm::Type::getVoidTy(*_context)->getPointerTo());
+
+    // DI types
+    updateDebug(types->primitiveTypes[prtBool],
+                llvm::DIBasicType::get(*_context,
+                                       llvm::dwarf::DW_TAG_base_type,
+                                       types->primitiveTypes[prtBool]->name,
+                                       1 /* SizeInBits */,
+                                       0 /* AlignInBits */,
+                                       llvm::dwarf::DW_ATE_signed,
+                                       llvm::DINode::FlagZero));
+    updateDebug(types->primitiveTypes[prtI8],
+                llvm::DIBasicType::get(*_context,
+                                       llvm::dwarf::DW_TAG_base_type,
+                                       types->primitiveTypes[prtI8]->name,
+                                       8 /* SizeInBits */,
+                                       0 /* AlignInBits */,
+                                       llvm::dwarf::DW_ATE_signed,
+                                       llvm::DINode::FlagZero));
+    updateDebug(types->primitiveTypes[prtI16],
+                llvm::DIBasicType::get(*_context,
+                                       llvm::dwarf::DW_TAG_base_type,
+                                       types->primitiveTypes[prtI16]->name,
+                                       16 /* SizeInBits */,
+                                       0 /* AlignInBits */,
+                                       llvm::dwarf::DW_ATE_signed,
+                                       llvm::DINode::FlagZero));
+    updateDebug(types->primitiveTypes[prtI32],
+                llvm::DIBasicType::get(*_context,
+                                       llvm::dwarf::DW_TAG_base_type,
+                                       types->primitiveTypes[prtI32]->name,
+                                       32 /* SizeInBits */,
+                                       0 /* AlignInBits */,
+                                       llvm::dwarf::DW_ATE_signed,
+                                       llvm::DINode::FlagZero));
+    updateDebug(types->primitiveTypes[prtI64],
+                llvm::DIBasicType::get(*_context,
+                                       llvm::dwarf::DW_TAG_base_type,
+                                       types->primitiveTypes[prtI64]->name,
+                                       64 /* SizeInBits */,
+                                       0 /* AlignInBits */,
+                                       llvm::dwarf::DW_ATE_signed,
+                                       llvm::DINode::FlagZero));
+    updateDebug(types->primitiveTypes[prtU8],
+                llvm::DIBasicType::get(*_context,
+                                       llvm::dwarf::DW_TAG_base_type,
+                                       types->primitiveTypes[prtU8]->name,
+                                       8 /* SizeInBits */,
+                                       0 /* AlignInBits */,
+                                       llvm::dwarf::DW_ATE_unsigned,
+                                       llvm::DINode::FlagZero));
+    updateDebug(types->primitiveTypes[prtU16],
+                llvm::DIBasicType::get(*_context,
+                                       llvm::dwarf::DW_TAG_base_type,
+                                       types->primitiveTypes[prtU16]->name,
+                                       16 /* SizeInBits */,
+                                       0 /* AlignInBits */,
+                                       llvm::dwarf::DW_ATE_unsigned,
+                                       llvm::DINode::FlagZero));
+    updateDebug(types->primitiveTypes[prtU32],
+                llvm::DIBasicType::get(*_context,
+                                       llvm::dwarf::DW_TAG_base_type,
+                                       types->primitiveTypes[prtU32]->name,
+                                       32 /* SizeInBits */,
+                                       0 /* AlignInBits */,
+                                       llvm::dwarf::DW_ATE_unsigned,
+                                       llvm::DINode::FlagZero));
+    updateDebug(types->primitiveTypes[prtU64],
+                llvm::DIBasicType::get(*_context,
+                                       llvm::dwarf::DW_TAG_base_type,
+                                       types->primitiveTypes[prtU64]->name,
+                                       64 /* SizeInBits */,
+                                       0 /* AlignInBits */,
+                                       llvm::dwarf::DW_ATE_unsigned,
+                                       llvm::DINode::FlagZero));
+    updateDebug(types->primitiveTypes[prtCChar],
+                llvm::DIBasicType::get(*_context,
+                                       llvm::dwarf::DW_TAG_base_type,
+                                       types->primitiveTypes[prtCChar]->name,
+                                       8 /* SizeInBits */,
+                                       0 /* AlignInBits */,
+                                       llvm::dwarf::DW_ATE_signed_char,
+                                       llvm::DINode::FlagZero));
+    updateDebug(types->primitiveTypes[prtChar],
+                llvm::DIBasicType::get(*_context,
+                                       llvm::dwarf::DW_TAG_base_type,
+                                       types->primitiveTypes[prtChar]->name,
+                                       32 /* SizeInBits */,
+                                       0 /* AlignInBits */,
+                                       llvm::dwarf::DW_ATE_unsigned_char,
+                                       llvm::DINode::FlagZero));
+    updateDebug(types->primitiveTypes[prtF32],
+                llvm::DIBasicType::get(*_context,
+                                       llvm::dwarf::DW_TAG_base_type,
+                                       types->primitiveTypes[prtF32]->name,
+                                       32 /* SizeInBits */,
+                                       0 /* AlignInBits */,
+                                       llvm::dwarf::DW_ATE_float,
+                                       llvm::DINode::FlagZero));
+    updateDebug(types->primitiveTypes[prtF64],
+                llvm::DIBasicType::get(*_context,
+                                       llvm::dwarf::DW_TAG_base_type,
+                                       types->primitiveTypes[prtF64]->name,
+                                       64 /* SizeInBits */,
+                                       0 /* AlignInBits */,
+                                       llvm::dwarf::DW_ATE_float,
+                                       llvm::DINode::FlagZero));
+
+    updateDebug(types->voidType,
+                llvm::DIBasicType::get(*_context,
+                                       llvm::dwarf::DW_TAG_base_type,
+                                       types->voidType->name,
+                                       0 /* SizeInBits */,
+                                       0 /* AlignInBits */,
+                                       llvm::dwarf::DW_ATE_address,
+                                       llvm::DINode::FlagZero));
 }
 
 bool LLVMBackend::addModule(std::unique_ptr<llvm::Module> module)
@@ -122,7 +239,7 @@ bool LLVMBackend::linkModules()
     }
     modules.clear();
 
-    // optimizeModule(*_linkedModule);
+    optimizeModule(*_linkedModule);
     return true;
 }
 
@@ -240,6 +357,11 @@ bool LLVMBackend::linkGeneratedOutput(
     for (int i = 0; i < options.libraries.size; i++) {
         ccArgs.push_back("-l");
         ccArgs.push_back(dynArrayAt(const char **, &options.libraries, i));
+    }
+
+    if (options.debug) {
+        ccArgs.push_back("-g");
+        ccArgs.push_back("-O0");
     }
 
     std::vector<llvm::StringRef> ccArgStringRefs(ccArgs.begin(), ccArgs.end());

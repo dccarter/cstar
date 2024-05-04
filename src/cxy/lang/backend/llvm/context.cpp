@@ -3,11 +3,13 @@
 //
 
 #include "context.h"
+#include "debug.h"
 #include "llvm.h"
 
 #include "lang/frontend/flag.h"
 #include "lang/frontend/ttable.h"
 #include "lang/frontend/visitor.h"
+#include "lang/middle/builtins.h"
 
 namespace cxy {
 LLVMContext::LLVMContext(llvm::LLVMContext &context,
@@ -21,6 +23,10 @@ LLVMContext::LLVMContext(llvm::LLVMContext &context,
     _module = std::make_unique<llvm::Module>(fileName, context);
     _module->setTargetTriple(TM->getTargetTriple().getTriple());
     _module->setDataLayout(TM->createDataLayout());
+    /* Skip generating DI for builtins */
+    if (isBuiltinsInitialized() && driver->options.debug) {
+        _debugCtx.reset(new DebugContext(*_module, driver, _sourceFilename));
+    }
 }
 
 LLVMContext &LLVMContext::from(AstVisitor *visitor)
@@ -60,6 +66,10 @@ llvm::Type *LLVMContext::convertToLLVMType(const Type *type)
         return createStructType(type);
     case typInterface:
         return createInterfaceType(type);
+    case typWrapped: {
+        auto unwrapped = unwrapType(type, NULL);
+        return getLLVMType(unwrapped);
+    }
     default:
         return nullptr;
     }
@@ -415,6 +425,26 @@ llvm::Value *LLVMContext::generateCastExpr(AstVisitor *visitor,
     }
 
     unreachable("Unsupported cast");
+}
+
+llvm::Value *LLVMContext::withDebugLoc(const AstNode *node, llvm::Value *value)
+{
+    if (auto dbgContext = debugCtx()) {
+        dbgContext->emitDebugLoc(node, value);
+    }
+    return value;
+}
+
+void LLVMContext::emitDebugLocation(const AstNode *node)
+{
+    if (_debugCtx == nullptr)
+        return;
+    if (node == nullptr) {
+        builder.SetCurrentDebugLocation(llvm::DebugLoc{});
+    }
+    else {
+        builder.SetCurrentDebugLocation(_debugCtx->getDebugLoc(node));
+    }
 }
 
 } // namespace cxy

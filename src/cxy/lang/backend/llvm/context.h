@@ -33,6 +33,8 @@ public:
 #undef DEFINE_STACK_VAR
 };
 
+class DebugContext;
+
 struct LLVMContext {
     bool unreachable{false};
     Log *L{nullptr};
@@ -48,6 +50,8 @@ struct LLVMContext {
                          llvm::TargetMachine *TM);
 
     inline llvm::Module &module() { return *_module; }
+
+    inline DebugContext *debugCtx() { return _debugCtx.get(); }
 
     inline void returnValue(llvm::Value *value) { _value = value; }
     inline llvm::Value *value() { return _value; }
@@ -97,6 +101,9 @@ struct LLVMContext {
     llvm::Type *createStructType(const Type *type);
     llvm::Type *createInterfaceType(const Type *type);
 
+    llvm::Value *withDebugLoc(const AstNode *node, llvm::Value *value);
+    void emitDebugLocation(const AstNode *node);
+
 private:
     llvm::Type *createTupleType(const Type *type);
     llvm::Type *createFunctionType(const Type *type);
@@ -115,6 +122,7 @@ private:
     llvm::Value *_value = {nullptr};
     Stack _stack{};
     const char *_sourceFilename{nullptr};
+    std::unique_ptr<DebugContext> _debugCtx{nullptr};
 };
 
 llvm::Value *codegen(AstVisitor *visitor, AstNode *node);
