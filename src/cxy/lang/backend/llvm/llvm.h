@@ -55,4 +55,10 @@ static inline void *updateType(const Type *type, void *codegen)
     return codegen;
 }
 
+static inline void *updateDebug(const Type *type, void *codegen)
+{
+    const_cast<Type *>(type)->dbg = codegen;
+    return codegen;
+}
+
 } // namespace cxy

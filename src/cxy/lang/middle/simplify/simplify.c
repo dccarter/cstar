@@ -901,7 +901,7 @@ static void simplifyMainModule(SimplifyContext *ctx, AstNode *program)
     AstNode *ctors = makeVarDecl(
         ctx->pool,
         builtinLoc(),
-        flgTopLevelDecl | flgConst,
+        flgTopLevelDecl | flgConst | flgDiDisable,
         makeString(ctx->strings, S___LLVM_global_ctors),
         NULL,
         makeArrayExpr(

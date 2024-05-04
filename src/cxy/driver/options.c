@@ -373,7 +373,10 @@ bool parseCommandLineOptions(
         Use(cmdArrayArgument,
             Name("c-lib"),
             Help("Adds library to link against"),
-            Def("[]")));
+            Def("[]")),
+        Opt(Sf('g'),
+            Name("debug"),
+            Help("Produce debug information for the program")));
 
     int selected = argparse(argc, &argv, parser);
 
@@ -421,6 +424,7 @@ bool parseCommandLineOptions(
     moveListOptions(&options->importSearchPaths, &getGlobalArray(cmd, 11));
     moveListOptions(&options->librarySearchPaths, &getGlobalArray(cmd, 12));
     moveListOptions(&options->libraries, &getGlobalArray(cmd, 13));
+    options->debug = getGlobalBool(cmd, 14);
 
     file_count = *argc - 1;
 

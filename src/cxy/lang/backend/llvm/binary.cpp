@@ -15,6 +15,7 @@
 static void generateLogicAndOr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
 
     auto &builder = ctx.builder;
     auto func = builder.GetInsertBlock()->getParent();
@@ -77,6 +78,8 @@ void generateBinaryExpr(AstVisitor *visitor, AstNode *node)
     }
 
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
+
     AstNode *left = node->binaryExpr.lhs, *right = node->binaryExpr.rhs;
     const Type *type = node->type;
 

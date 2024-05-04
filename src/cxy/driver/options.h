@@ -58,6 +58,7 @@ typedef struct Options {
     bool withoutBuiltins;
     bool noPIE;
     bool withMemoryManager;
+    bool debug;
     OptimizationLevel optimizationLevel;
     struct {
         bool printIR;

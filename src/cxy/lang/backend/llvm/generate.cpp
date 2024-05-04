@@ -3,6 +3,7 @@
 //
 
 #include "context.h"
+#include "debug.h"
 #include "llvm.h"
 
 #include <llvm/IR/Attributes.h>
@@ -103,6 +104,8 @@ static llvm::Function *generateFunctionProto(AstVisitor *visitor, AstNode *node)
 static void visitPrefixUnaryExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
+
     auto op = node->unaryExpr.op;
     if (op == opPreInc || op == opPreDec) {
         // transform to assignment operator
@@ -117,22 +120,20 @@ static void visitPrefixUnaryExpr(AstVisitor *visitor, AstNode *node)
     }
 
     auto value = cxy::codegen(visitor, node->unaryExpr.operand);
+    node->codegen = value;
     switch (node->unaryExpr.op) {
     case opPlus:
-        ctx.returnValue(value);
-        break;
     case opMove:
-        ctx.returnValue(value);
         break;
     case opMinus:
         if (isFloatType(node->type))
-            ctx.returnValue(ctx.builder.CreateFNeg(value));
+            value = ctx.builder.CreateFNeg(value);
         else
-            ctx.returnValue(ctx.builder.CreateNeg(value));
+            value = ctx.builder.CreateNeg(value);
         break;
     case opNot:
     case opCompl:
-        ctx.returnValue(ctx.builder.CreateNot(value));
+        value = ctx.builder.CreateNot(value);
         break;
     default:
         logError(ctx.L,
@@ -140,14 +141,18 @@ static void visitPrefixUnaryExpr(AstVisitor *visitor, AstNode *node)
                  "unsupported prefix unary operator `{s}`",
                  (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)}});
         ctx.returnValue(nullptr);
-        break;
+        return;
     }
+
+    ctx.returnValue(value);
 }
 
 static void visitNullLit(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     AstNode *parent = node->parentScope;
+    ctx.emitDebugLocation(node);
+
     if (nodeIs(parent, AssignExpr)) {
         ctx.returnValue(llvm::ConstantPointerNull::get(
             llvm::dyn_cast<llvm::PointerType>(ctx.getLLVMType(parent->type))));
@@ -175,18 +180,21 @@ static void visitNullLit(AstVisitor *visitor, AstNode *node)
 static void visitBoolLit(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
     ctx.returnValue(ctx.builder.getInt1(node->boolLiteral.value));
 }
 
 static void visitCharLit(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
     ctx.returnValue(ctx.builder.getInt32(node->charLiteral.value));
 }
 
 static void visitIntegerLit(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
     ctx.returnValue(llvm::ConstantInt::get(ctx.getLLVMType(node->type),
                                            node->intLiteral.uValue,
                                            node->intLiteral.isNegative));
@@ -195,6 +203,7 @@ static void visitIntegerLit(AstVisitor *visitor, AstNode *node)
 static void visitFloatLit(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
     ctx.returnValue(llvm::ConstantFP::get(
         ctx.context, llvm::APFloat(node->floatLiteral.value)));
 }
@@ -202,6 +211,7 @@ static void visitFloatLit(AstVisitor *visitor, AstNode *node)
 static void visitStringLit(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
     ctx.returnValue(
         ctx.builder.CreateGlobalStringPtr(node->stringLiteral.value));
 }
@@ -211,6 +221,7 @@ static void visitIdentifierExpr(AstVisitor *visitor, AstNode *node)
     auto &ctx = cxy::LLVMContext::from(visitor);
     auto target = node->ident.resolvesTo;
     auto value = static_cast<llvm::Value *>(target->codegen);
+    ctx.emitDebugLocation(node);
 
     target = nodeIs(target, ExternDecl) ? target->externDecl.func : target;
     if (ctx.stack().loadVariable() && !nodeIs(target, FuncDecl)) {
@@ -226,6 +237,7 @@ static void visitMemberExpr(AstVisitor *visitor, AstNode *node)
     auto &ctx = cxy::LLVMContext::from(visitor);
     auto target = node->memberExpr.target;
     auto type = target->type;
+    ctx.emitDebugLocation(node);
 
     auto load =
         ctx.stack().loadVariable(typeIs(type, Pointer) || isClassType(type));
@@ -288,6 +300,8 @@ static void visitCastExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     auto to = unwrapType(node->castExpr.to->type, nullptr);
+    ctx.emitDebugLocation(node);
+
     auto value = ctx.generateCastExpr(
         visitor, to, node->castExpr.expr, node->castExpr.idx);
     ctx.returnValue(value);
@@ -296,6 +310,8 @@ static void visitCastExpr(AstVisitor *visitor, AstNode *node)
 static void visitAddrOfExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
+
     AstNode *operand = node->unaryExpr.operand;
     if (nodeIs(operand, StructExpr)) {
         auto ptr = ctx.createStackVariable(operand->type);
@@ -314,6 +330,8 @@ static void visitAddrOfExpr(AstVisitor *visitor, AstNode *node)
 static void visitIndexExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
+
     auto type = unwrapType(node->indexExpr.target->type, nullptr);
 
     auto load =
@@ -352,6 +370,8 @@ static void visitIndexExpr(AstVisitor *visitor, AstNode *node)
 static void visitTypedExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
+
     auto to = node->typedExpr.type->type, from = node->typedExpr.expr->type;
     auto load = ctx.stack().loadVariable(ctx.stack().loadVariable() &
                                          !typeIs(from, Array));
@@ -381,6 +401,8 @@ static void visitTypedExpr(AstVisitor *visitor, AstNode *node)
 static void visitAssignExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
+
     if (node->binaryExpr.op != opAssign) {
         node->binaryExpr.rhs =
             makeBinaryExpr(ctx.pool,
@@ -433,6 +455,8 @@ static void visitUnaryExpr(AstVisitor *visitor, AstNode *node)
     }
 
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
+
     auto operand = node->unaryExpr.operand;
     auto op = node->unaryExpr.op;
     auto value = cxy::codegen(visitor, operand);
@@ -451,6 +475,7 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     auto type = node->callExpr.callee->type;
+    ctx.emitDebugLocation(node);
 
     auto callee = cxy::codegen(visitor, node->callExpr.callee);
     llvm::FunctionType *funcType = nullptr;
@@ -478,6 +503,7 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
 static void visitStructExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
     if (node->structExpr.fields) {
         auto obj = ctx.createUndefined(node->type);
 
@@ -499,6 +525,8 @@ static void visitStructExpr(AstVisitor *visitor, AstNode *node)
 static void visitTupleExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
+
     if (node->tupleExpr.elements) {
         auto obj = ctx.createUndefined(node->type);
 
@@ -517,6 +545,8 @@ static void visitTupleExpr(AstVisitor *visitor, AstNode *node)
 static void visitUnionValue(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
+
     auto unionType = ctx.getLLVMType(node->type);
     auto type = static_cast<llvm::Type *>(
         node->type->tUnion.members[node->unionValue.idx].codegen);
@@ -540,6 +570,8 @@ static void visitUnionValue(AstVisitor *visitor, AstNode *node)
 void visitReturnStmt(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
+
     if (node->returnStmt.expr) {
         auto expr = node->returnStmt.expr, func = ctx.stack().currentFunction();
         auto funcReturnType = unwrapType(func->type->func.retType, nullptr);
@@ -556,6 +588,8 @@ void visitReturnStmt(AstVisitor *visitor, AstNode *node)
 void visitIfStmt(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
+
     auto &builder = ctx.builder;
     auto cond = cxy::codegen(visitor, node->ifStmt.cond);
     if (cond == nullptr)
@@ -612,6 +646,8 @@ void visitIfStmt(AstVisitor *visitor, AstNode *node)
 void visitBreakStmt(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
+
     auto &builder = ctx.builder;
     csAssert0(ctx.stack().loopEnd());
     ctx.returnValue(builder.CreateBr(
@@ -622,6 +658,8 @@ void visitBreakStmt(AstVisitor *visitor, AstNode *node)
 void visitContinueStmt(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
+
     auto &builder = ctx.builder;
     csAssert0(ctx.stack().loopCondition());
     if (ctx.stack().loopUpdate()) {
@@ -638,6 +676,8 @@ void visitContinueStmt(AstVisitor *visitor, AstNode *node)
 void visitWhileStmt(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
+
     auto &builder = ctx.builder;
     auto func = builder.GetInsertBlock()->getParent();
 
@@ -688,6 +728,8 @@ void visitWhileStmt(AstVisitor *visitor, AstNode *node)
 static void visitSwitchStmt(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
+
     auto func = ctx.builder.GetInsertBlock()->getParent();
     auto current = ctx.builder.GetInsertBlock();
     auto condition = cxy::codegen(visitor, node->switchStmt.cond);
@@ -733,6 +775,8 @@ static void visitSwitchStmt(AstVisitor *visitor, AstNode *node)
 static void visitMatchStmt(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
+
     auto func = ctx.builder.GetInsertBlock()->getParent();
     auto current = ctx.builder.GetInsertBlock();
 
@@ -819,6 +863,10 @@ void visitVariableDecl(AstVisitor *visitor, AstNode *node)
             var->setExternallyInitialized(true);
         }
         node->codegen = var;
+        if (!hasFlag(node, DiDisable)) {
+            if (auto debugCtx = ctx.debugCtx())
+                debugCtx->emitGlobalVariable(node);
+        }
         ctx.returnValue(var);
         return;
     }
@@ -828,7 +876,10 @@ void visitVariableDecl(AstVisitor *visitor, AstNode *node)
                                  func->getEntryBlock().begin());
     auto variable = ctx.createStackVariable(node->type, node->varDecl.name);
     node->codegen = variable;
+    if (auto debugCtx = ctx.debugCtx())
+        debugCtx->emitLocalVariable(node, ctx.builder.GetInsertBlock());
 
+    ctx.emitDebugLocation(node);
     if (!node->varDecl.init) {
         ctx.returnValue(variable);
         return;
@@ -872,6 +923,9 @@ void visitFuncDecl(AstVisitor *visitor, AstNode *node)
         return;
     }
 
+    if (auto debugCtx = ctx.debugCtx())
+        debugCtx->emitFunctionDecl(node);
+
     if (findAttribute(node, S_inline) != nullptr)
         func->addFnAttr(llvm::Attribute::AlwaysInline);
 
@@ -880,23 +934,34 @@ void visitFuncDecl(AstVisitor *visitor, AstNode *node)
     ctx.stack().funcEnd(end);
     ctx.builder.SetInsertPoint(bb);
 
+    ctx.emitDebugLocation(nullptr);
     AstNode *param = node->funcDecl.signature->params;
+    u64 index = 0;
     for (auto &arg : func->args()) {
         // Allocate a local variable for each argument
         auto binding =
             ctx.createStackVariable(arg.getType(), param->funcParam.name);
-        ctx.builder.CreateStore(&arg, binding);
+
         param->codegen = binding;
+        if (auto debugCtx = ctx.debugCtx()) {
+            debugCtx->emitParamDecl(
+                param, ++index, ctx.builder.GetInsertBlock());
+        }
+
+        ctx.builder.CreateStore(&arg, binding);
+
         param = param->next;
     }
 
     llvm::AllocaInst *result{nullptr};
+    ctx.emitDebugLocation(node->funcDecl.body);
     if (!typeIs(type->func.retType, Void)) {
         result = ctx.createStackVariable(type->func.retType, "res");
         ctx.stack().result(result);
     }
 
     ctx.stack().currentFunction(node);
+
     auto value = cxy::codegen(visitor, node->funcDecl.body);
     if (result && !nodeIs(node->funcDecl.body, BlockStmt)) {
         ctx.builder.CreateStore(value, result);
@@ -917,6 +982,9 @@ void visitFuncDecl(AstVisitor *visitor, AstNode *node)
     else {
         ctx.builder.CreateRetVoid();
     }
+
+    if (auto debugCtx = ctx.debugCtx())
+        debugCtx->sealFunctionDecl(node);
 
     llvm::verifyFunction(*func);
     ctx.returnValue(func);
@@ -1030,6 +1098,9 @@ static void generateProgram(AstVisitor *visitor, AstNode *node)
     for (; decl; decl = decl->next) {
         astVisit(visitor, decl);
     }
+
+    if (auto debugCtx = ctx.debugCtx())
+        debugCtx->finalize();
 }
 
 llvm::Value *cxy::codegen(AstVisitor *visitor, AstNode *node)

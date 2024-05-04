@@ -70,7 +70,8 @@ extern "C" {
     f(ModuleInit,           53)                 \
     f(Move,                 54)                 \
     f(Moved,                55)                 \
-    f(BlockValue,           56)
+    f(BlockValue,           56)                 \
+    f(DiDisable,            57)
 
 // clang-format on
 static const u64 flgNone = 0;

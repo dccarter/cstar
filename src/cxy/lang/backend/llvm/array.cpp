@@ -12,6 +12,7 @@ static llvm::Constant *makeArrayLiteral(cxy::LLVMContext &ctx, AstNode *node)
     auto elem = node->arrayExpr.elements;
     auto elementType = ctx.getLLVMType(node->type->array.elementType);
     for (; elem; elem = elem->next) {
+        ctx.emitDebugLocation(elem);
         if (isIntegerType(elem->type)) {
             elements.push_back(
                 llvm::ConstantInt::get(elementType,
@@ -47,6 +48,7 @@ void generateArrayExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     auto array = ctx.createUndefined(node->type);
+    ctx.emitDebugLocation(node);
 
     auto elem = node->arrayExpr.elements;
     for (u64 i = 0; elem; elem = elem->next, i++) {
