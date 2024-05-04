@@ -171,6 +171,7 @@ llvm::DIType *DebugContext::createClassType(const Type *type)
     if (type->tClass.inheritance->base) {
         derivedFrom = getDIType(type->tClass.inheritance->base);
         auto fwd =
+#if LLVM_VERSION_MAJOR > 17
             builder.createClassType(currentScope(),
                                     type->name,
                                     compileUnit->getFile(),
@@ -185,6 +186,21 @@ llvm::DIType *DebugContext::createClassType(const Type *type)
                                     nullptr /* VTableHolder */,
                                     nullptr /* TemplateParms */,
                                     llvm::StringRef() /* UniqueIdentifier */);
+#else
+            builder.createClassType(currentScope(),
+                                    type->name,
+                                    compileUnit->getFile(),
+                                    decl->loc.begin.row,
+                                    classLayout->getSizeInBits(),
+                                    classLayout->getAlignment().value() * 8,
+                                    0 /* OffsetInBits */,
+                                    llvm::DINode::FlagFwdDecl,
+                                    nullptr /* DerivedFrom */,
+                                    nullptr /* Elements */,
+                                    nullptr /* VTableHolder */,
+                                    nullptr /* TemplateParms */,
+                                    llvm::StringRef() /* UniqueIdentifier */);
+#endif
         auto dt = builder.createInheritance(fwd,
                                             derivedFrom,
                                             0 /* BaseOffset */,
@@ -195,6 +211,7 @@ llvm::DIType *DebugContext::createClassType(const Type *type)
     addFields(membersMetadata, *classLayout, *type->tClass.members);
 
     auto ret =
+#if LLVM_VERSION_MAJOR > 17
         builder.createClassType(currentScope(),
                                 type->name,
                                 compileUnit->getFile(),
@@ -209,6 +226,21 @@ llvm::DIType *DebugContext::createClassType(const Type *type)
                                 nullptr /* VTableHolder  */,
                                 nullptr /* TemplateParms */,
                                 llvm::StringRef() /* UniqueIdentifier */);
+#else
+        builder.createClassType(currentScope(),
+                                type->name,
+                                compileUnit->getFile(),
+                                decl->loc.begin.row,
+                                classLayout->getSizeInBits(),
+                                classLayout->getAlignment().value() * 8,
+                                0 /* OffsetInBits */,
+                                llvm::DINode::FlagZero,
+                                derivedFrom,
+                                builder.getOrCreateArray(membersMetadata),
+                                nullptr /* VTableHolder  */,
+                                nullptr /* TemplateParms */,
+                                llvm::StringRef() /* UniqueIdentifier */);
+#endif
 
     return builder.replaceTemporary(llvm::TempMDNode(diClassType), ret);
 }
