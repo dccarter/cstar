@@ -19,11 +19,7 @@ DebugContext::DebugContext(llvm::Module &module,
                            cstring fileName)
     : builder(module), module{module}, types{driver->types}
 {
-    llvm::SmallString<128> path(fileName);
-    llvm::sys::fs::make_absolute(path);
-
-    llvm::DIFile *diFile =
-        builder.createFile(path, llvm::sys::path::parent_path(path));
+    llvm::DIFile *diFile = getFile(fileName);
     bool isOptimized = driver->options.optimizationLevel > O0;
     auto emissionKind = llvm::DICompileUnit::DebugEmissionKind::FullDebug;
     compileUnit =
@@ -128,7 +124,7 @@ llvm::DIType *DebugContext::createStructType(const Type *type)
         llvm::dwarf::DW_TAG_structure_type,
         type->name,
         currentScope(),
-        compileUnit->getFile(),
+        currentScope()->getFile(),
         decl->loc.begin.row);
     updateDebug(type, diStructType);
 
@@ -139,7 +135,7 @@ llvm::DIType *DebugContext::createStructType(const Type *type)
     auto ret =
         builder.createStructType(currentScope(),
                                  type->name,
-                                 compileUnit->getFile(),
+                                 currentScope()->getFile(),
                                  type->tStruct.decl->loc.begin.row,
                                  structLayout->getSizeInBits(),
                                  structLayout->getAlignment().value() * 8,
@@ -163,7 +159,7 @@ llvm::DIType *DebugContext::createClassType(const Type *type)
         llvm::dwarf::DW_TAG_structure_type,
         type->name,
         currentScope(),
-        compileUnit->getFile(),
+        currentScope()->getFile(),
         decl->loc.begin.row);
     updateDebug(type, diClassType);
 
@@ -174,7 +170,7 @@ llvm::DIType *DebugContext::createClassType(const Type *type)
 #if LLVM_VERSION_MAJOR > 17
             builder.createClassType(currentScope(),
                                     type->name,
-                                    compileUnit->getFile(),
+                                    currentScope()->getFile(),
                                     decl->loc.begin.row,
                                     classLayout->getSizeInBits(),
                                     classLayout->getAlignment().value() * 8,
@@ -189,7 +185,7 @@ llvm::DIType *DebugContext::createClassType(const Type *type)
 #else
             builder.createClassType(currentScope(),
                                     type->name,
-                                    compileUnit->getFile(),
+                                    currentScope()->getFile(),
                                     decl->loc.begin.row,
                                     classLayout->getSizeInBits(),
                                     classLayout->getAlignment().value() * 8,
@@ -214,7 +210,7 @@ llvm::DIType *DebugContext::createClassType(const Type *type)
 #if LLVM_VERSION_MAJOR > 17
         builder.createClassType(currentScope(),
                                 type->name,
-                                compileUnit->getFile(),
+                                currentScope()->getFile(),
                                 decl->loc.begin.row,
                                 classLayout->getSizeInBits(),
                                 classLayout->getAlignment().value() * 8,
@@ -229,7 +225,7 @@ llvm::DIType *DebugContext::createClassType(const Type *type)
 #else
         builder.createClassType(currentScope(),
                                 type->name,
-                                compileUnit->getFile(),
+                                currentScope()->getFile(),
                                 decl->loc.begin.row,
                                 classLayout->getSizeInBits(),
                                 classLayout->getAlignment().value() * 8,
@@ -242,7 +238,9 @@ llvm::DIType *DebugContext::createClassType(const Type *type)
                                 llvm::StringRef() /* UniqueIdentifier */);
 #endif
 
-    return builder.replaceTemporary(llvm::TempMDNode(diClassType), ret);
+    return builder.createPointerType(
+        builder.replaceTemporary(llvm::TempMDNode(diClassType), ret),
+        layout.getPointerSize());
 }
 
 llvm::DIType *DebugContext::createTupleType(const Type *type)
@@ -267,7 +265,7 @@ llvm::DIType *DebugContext::createTupleType(const Type *type)
         membersMetadata.push_back(
             builder.createMemberType(currentScope(),
                                      std::to_string(i),
-                                     compileUnit->getFile(),
+                                     currentScope()->getFile(),
                                      1 /* LineNo */,
                                      diTypeSize,
                                      alignment,
@@ -279,7 +277,7 @@ llvm::DIType *DebugContext::createTupleType(const Type *type)
     auto members = builder.getOrCreateArray(membersMetadata);
     return builder.createStructType(currentScope(),
                                     llvmType->getStructName(),
-                                    compileUnit->getFile(),
+                                    currentScope()->getFile(),
                                     0,
                                     structLayout->getSizeInBits(),
                                     structLayout->getAlignment().value() * 8,
@@ -303,7 +301,7 @@ llvm::DIType *DebugContext::createUnionType(const Type *type)
         auto diTypeAlign = layout.getABITypeAlign(elLlvmType).value() * 8;
         metadata.push_back(builder.createMemberType(currentScope(),
                                                     std::to_string(i),
-                                                    compileUnit->getFile(),
+                                                    currentScope()->getFile(),
                                                     1 /* LineNo */,
                                                     diTypeSize,
                                                     diTypeAlign,
@@ -316,7 +314,7 @@ llvm::DIType *DebugContext::createUnionType(const Type *type)
     auto diUnionType = builder.createUnionType(
         currentScope(),
         llvm::StringRef() /* Name */,
-        compileUnit->getFile(),
+        currentScope()->getFile(),
         1 /* LineNumber */,
         layout.getTypeSizeInBits(llvmType->getContainedType(1)),
         layout.getABITypeAlign(llvmType->getContainedType(1)).value() * 8,
@@ -339,7 +337,7 @@ llvm::DIType *DebugContext::createUnionType(const Type *type)
     metadata.push_back(builder.createMemberType(
         currentScope(),
         "tag" /* Name */,
-        compileUnit->getFile(),
+        currentScope()->getFile(),
         1 /* LineNo */,
         layout.getTypeSizeInBits(llvmType->getContainedType(0)),
         diTagAlign * 8,
@@ -350,7 +348,7 @@ llvm::DIType *DebugContext::createUnionType(const Type *type)
     metadata.push_back(builder.createMemberType(
         currentScope(),
         "value" /* Name */,
-        compileUnit->getFile(),
+        currentScope()->getFile(),
         1 /* LineNo */,
         layout.getTypeSizeInBits(llvmType->getContainedType(1)),
         layout.getABITypeAlign(llvmType->getContainedType(1)).value() * 8,
@@ -374,6 +372,7 @@ llvm::DIType *DebugContext::createEnumType(const Type *type)
 {
     auto llvmBaseType = getLLVMType(type->tEnum.base);
     auto &layout = module.getDataLayout();
+    auto decl = type->tEnum.decl;
     std::vector<llvm::Metadata *> optionsDescriptors;
     for (u64 i = 0; i < type->tEnum.optionsCount; i++) {
         auto &option = type->tEnum.options[i];
@@ -385,8 +384,8 @@ llvm::DIType *DebugContext::createEnumType(const Type *type)
     return builder.createEnumerationType(
         currentScope(),
         type->name,
-        compileUnit->getFile(),
-        type->tEnum.decl->loc.begin.row,
+        currentScope()->getFile(),
+        decl->loc.begin.row,
         layout.getTypeSizeInBits(llvmBaseType),
         layout.getABITypeAlign(llvmBaseType).value() * 8,
         enumeratorArray,
@@ -436,7 +435,7 @@ void DebugContext::addFields(std::vector<llvm::Metadata *> &elements,
         elements.push_back(
             builder.createMemberType(currentScope(),
                                      member.name,
-                                     compileUnit->getFile(),
+                                     currentScope()->getFile(),
                                      member.decl->loc.begin.row,
                                      diTypeSize,
                                      alignment,
@@ -470,7 +469,7 @@ llvm::DILocalVariable *DebugContext::emitParamDecl(const AstNode *node,
         builder.createParameterVariable(currentScope(),
                                         node->funcParam.name,
                                         index,
-                                        compileUnit->getFile(),
+                                        currentScope()->getFile(),
                                         node->loc.begin.row,
                                         diType,
                                         true);
@@ -500,7 +499,7 @@ llvm::DILocalVariable *DebugContext::emitLocalVariable(const AstNode *node,
     auto diType = getDIType(node->type);
     auto diLocalVar = builder.createAutoVariable(currentScope(),
                                                  node->funcParam.name,
-                                                 compileUnit->getFile(),
+                                                 currentScope()->getFile(),
                                                  node->loc.begin.row,
                                                  diType);
     builder.insertDeclare(value,
@@ -519,7 +518,7 @@ void DebugContext::emitGlobalVariable(const AstNode *node)
         builder.createGlobalVariableExpression(currentScope(),
                                                node->varDecl.name,
                                                value->getName(),
-                                               compileUnit->getFile(),
+                                               currentScope()->getFile(),
                                                node->loc.begin.row,
                                                getDIType(node->type),
                                                false);
@@ -549,7 +548,7 @@ void DebugContext::emitFunctionDecl(const AstNode *node)
         sub = builder.createMethod(currentScope(),
                                    node->funcDecl.name,
                                    func->getName(),
-                                   compileUnit->getFile(),
+                                   getFile(node->loc.fileName),
                                    node->loc.begin.row,
                                    diType,
                                    0 /* VTableIndex */,
@@ -562,7 +561,7 @@ void DebugContext::emitFunctionDecl(const AstNode *node)
         sub = builder.createFunction(currentScope(),
                                      node->funcDecl.name,
                                      func->getName(),
-                                     compileUnit->getFile(),
+                                     getFile(node->loc.fileName),
                                      node->loc.begin.row,
                                      diType,
                                      node->loc.begin.row,
@@ -583,5 +582,23 @@ void DebugContext::sealFunctionDecl(const AstNode *node)
 }
 
 void DebugContext::finalize() { builder.finalize(); }
+
+llvm::DIFile *DebugContext::getFile(llvm::StringRef filePath)
+{
+    if (filePath.empty())
+        return compileUnit->getFile();
+
+    auto it = files.find(filePath);
+    if (it != files.end()) {
+        return it->second;
+    }
+    llvm::SmallString<128> path(filePath);
+    llvm::sys::fs::make_absolute(path);
+
+    llvm::DIFile *diFile =
+        builder.createFile(path, llvm::sys::path::parent_path(path));
+    files.insert({filePath, diFile});
+    return diFile;
+}
 
 } // namespace cxy

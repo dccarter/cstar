@@ -52,6 +52,7 @@ private:
     void addFields(std::vector<llvm::Metadata *> &elements,
                    const llvm::StructLayout &structLayout,
                    TypeMemberContainer &members);
+    llvm::DIFile *getFile(llvm::StringRef filePath);
 
     llvm::DIScope *currentScope()
     {
@@ -81,6 +82,7 @@ private:
 private:
     llvm::DIBuilder builder;
     llvm::DICompileUnit *compileUnit{nullptr};
+    llvm::SmallDenseMap<llvm::StringRef, llvm::DIFile *> files{};
     llvm::Module &module;
     TypeTable *types{nullptr};
     llvm::SmallVector<llvm::DIScope *, 4> scopes{};

@@ -39,6 +39,7 @@ private:
                          llvm::CodeGenFileType fileType,
                          llvm::Reloc::Model model);
     bool moveFile(llvm::Twine src, llvm::Twine dst);
+    bool moveDirectory(llvm::Twine src, llvm::Twine dst);
     bool linkGeneratedOutput(llvm::SmallString<128> generatedOutputPath);
     void optimizeModule(llvm::Module &module);
 
