@@ -56,6 +56,18 @@ llvm::TargetMachine *createTargetMachine(Log *L)
     return TM;
 }
 
+std::string getDsymutil()
+{
+    if (auto path = llvm::sys::findProgramByName("dsymutil")) {
+        return std::move(*path);
+    }
+    if (auto llvmDIR = std::getenv("LLVM_PATH")) {
+        return std::string{llvmDIR} + "/bin/dsymutil";
+    }
+
+    return "";
+}
+
 } // namespace
 
 namespace cxy {
@@ -359,13 +371,16 @@ bool LLVMBackend::linkGeneratedOutput(
         ccArgs.push_back(dynArrayAt(const char **, &options.libraries, i));
     }
 
-    if (options.debug) {
-        ccArgs.push_back("-g");
-        ccArgs.push_back("-O0");
-    }
-
     std::vector<llvm::StringRef> ccArgStringRefs(ccArgs.begin(), ccArgs.end());
     int ccExitStatus = llvm::sys::ExecuteAndWait(ccArgs[0], ccArgStringRefs);
+
+    if (ccExitStatus == 0 && options.debug) {
+        // generate debug symbols
+        auto dsymutil = getDsymutil();
+        std::vector<llvm::StringRef> dsymArgs{dsymutil.c_str(),
+                                              temporaryExecutablePath.c_str()};
+        ccExitStatus = llvm::sys::ExecuteAndWait(dsymArgs[0], dsymArgs);
+    }
 
     if (auto error = llvm::sys::fs::remove(generatedOutputPath)) {
         logWarning(driver->L,
@@ -385,6 +400,15 @@ bool LLVMBackend::linkGeneratedOutput(
     }
     else {
         llvm::sys::path::append(outputFilePath, llvm::Twine("app"));
+    }
+
+    if (options.debug) {
+        llvm::SmallString<255> temporaryDebugSYMS{temporaryExecutablePath};
+        llvm::SmallString<255> outputDebugSYMS{outputFilePath};
+        temporaryDebugSYMS.append(".dSYM");
+        outputDebugSYMS.append(".dSYM");
+        // ignore errors
+        moveDirectory(temporaryDebugSYMS, outputDebugSYMS);
     }
 
     return moveFile(temporaryExecutablePath, outputFilePath);
@@ -517,6 +541,30 @@ bool LLVMBackend::moveFile(llvm::Twine src, llvm::Twine dst)
         logWarning(driver->L,
                    nullptr,
                    "deleting temporary output file '{s}' failed: {s}",
+                   (FormatArg[]){{.s = dst.str().data()},
+                                 {.s = error.message().data()}});
+    }
+    return true;
+}
+
+bool LLVMBackend::moveDirectory(llvm::Twine src, llvm::Twine dst)
+{
+    // delete destination directory if it exists
+    llvm::sys::fs::remove_directories(dst);
+    if (auto error = llvm::sys::fs::copy_file(src, dst)) {
+        logError(driver->L,
+                 nullptr,
+                 "error copying directory '{s}' to '{s}': {s}",
+                 (FormatArg[]){{.s = src.str().data()},
+                               {.s = dst.str().data()},
+                               {.s = error.message().data()}});
+        return false;
+    }
+
+    if (auto error = llvm::sys::fs::remove_directories(src)) {
+        logWarning(driver->L,
+                   nullptr,
+                   "deleting directory '{s}' failed: {s}",
                    (FormatArg[]){{.s = dst.str().data()},
                                  {.s = error.message().data()}});
     }

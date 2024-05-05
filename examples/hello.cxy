@@ -1,13 +1,13 @@
-
-@pure
-func say(fn: func(msg: string) -> void) {
-    fn("Hell World")
-}
-
-func sayer(msg: string) {
-    println("You said ", msg)
-}
+import { Vector } from "stdlib/vector.cxy"
 
 pub func main() {
-    say(sayer)
+    var vec = Vector[i32]();
+
+    for (const i: 0..10) {
+        vec.push(i*3)
+    }
+
+    for (const m,_: vec) {
+        stdout << m
+    }
 }
