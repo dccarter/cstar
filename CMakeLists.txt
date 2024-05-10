@@ -205,6 +205,7 @@ set(CXY_LANG_BACKEND_SOURCES
 )
 
 set(CXY_DRIVER_SOURCES
+        src/cxy/driver/cc.c
         src/cxy/driver/driver.c
         src/cxy/driver/options.c
         src/cxy/driver/stages.c
@@ -242,7 +243,7 @@ target_compile_definitions(cxy PRIVATE
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/stdlib)
 set(CXY_STD_LIB_SOURCES
-        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/dns
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/native
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/c.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/io.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/json.cxy
@@ -251,10 +252,18 @@ set(CXY_STD_LIB_SOURCES
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/tcp.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/vector.cxy)
 
+file(GLOB_RECURSE
+    CXY_STD_LIB_SOURCES_DEPS
+    "${CMAKE_SOURCE_DIR}/src/cxy/stdlib/*.cxy"
+    "${CMAKE_SOURCE_DIR}/src/cxy/stdlib/*.h"
+    "${CMAKE_SOURCE_DIR}/src/cxy/stdlib/*.c"
+)
+
+message("${CXY_STD_LIB_SOURCES}")
 add_custom_target(
         cxy-stdlib ALL
         COMMAND cp -rf ${CXY_STD_LIB_SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/stdlib/
-        DEPENDS ${CXY_STD_LIB_SOURCES}
+        DEPENDS ${CXY_STD_LIB_SOURCES_DEPS}
 )
 
 add_dependencies(cxy cxy-stdlib)

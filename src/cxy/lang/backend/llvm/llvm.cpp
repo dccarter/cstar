@@ -68,6 +68,27 @@ std::string getDsymutil()
     return "";
 }
 
+template <typename T>
+struct AppendCommandLineComponentCtx {
+    std::function<void(T &)> fn;
+};
+
+template <typename T>
+static bool enumerate_hash(void *ctx, const void *value)
+{
+    auto context = static_cast<AppendCommandLineComponentCtx<T> *>(ctx);
+    auto concrete = (T *)value;
+    context->fn(*concrete);
+    return true;
+}
+
+template <typename T>
+static void for_each(HashTable &table, std::function<void(T &)> fn)
+{
+    auto ctx = AppendCommandLineComponentCtx<T>{fn};
+    enumerateHashTable(&table, &ctx, enumerate_hash<T>, sizeof(T));
+}
+
 } // namespace
 
 namespace cxy {
@@ -354,6 +375,9 @@ bool LLVMBackend::linkGeneratedOutput(
         generatedOutputPath.c_str(),
     };
 
+    for_each<cstring>(driver->nativeSources,
+                      [&](auto source) { ccArgs.push_back(source); });
+
     ccArgs.push_back("-o");
     ccArgs.push_back(temporaryExecutablePath.c_str());
     for (int i = 0; i < options.cflags.size; i++) {
@@ -370,6 +394,11 @@ bool LLVMBackend::linkGeneratedOutput(
         ccArgs.push_back("-l");
         ccArgs.push_back(dynArrayAt(const char **, &options.libraries, i));
     }
+
+    for_each<cstring>(driver->linkLibraries, [&](auto lib) {
+        ccArgs.push_back("-l");
+        ccArgs.push_back(lib);
+    });
 
     std::vector<llvm::StringRef> ccArgStringRefs(ccArgs.begin(), ccArgs.end());
     int ccExitStatus = llvm::sys::ExecuteAndWait(ccArgs[0], ccArgStringRefs);

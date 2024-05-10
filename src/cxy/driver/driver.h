@@ -81,6 +81,7 @@ void initCompilerPreprocessor(struct CompilerDriver *driver);
 void deinitCompilerPreprocessor(struct CompilerDriver *driver);
 void initCImporter(struct CompilerDriver *driver);
 void deinitCImporter(struct CompilerDriver *driver);
+void driverAddNativeSource(struct CompilerDriver *driver, cstring source);
 
 #ifdef __cplusplus
 }

@@ -1,13 +1,7 @@
-import { Vector } from "stdlib/vector.cxy"
+// import "add.h" as add
+import { getRemoteAddress } from "stdlib/net.cxy"
 
 pub func main() {
-    var vec = Vector[i32]();
-
-    for (const i: 0..10) {
-        vec.push(i*3)
-    }
-
-    for (const m,_: vec) {
-        stdout << m
-    }
+    const addr = getRemoteAddress("google.com", 80);
+    println(addr)
 }

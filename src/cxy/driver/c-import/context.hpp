@@ -8,11 +8,16 @@
 
 #include <clang/Frontend/CompilerInstance.h>
 #include <llvm/ADT/StringRef.h>
+#include <stack>
 
 namespace cxy {
 class CImporter;
 
 struct IncludeContext {
+    struct CurrentRecord {
+        const clang::RecordDecl *decl{nullptr};
+        const Type *type{nullptr};
+    };
     IncludeContext(CompilerDriver *driver, clang::CompilerInstance &ci);
 
     void addDeclaration(AstNode *node);
@@ -28,8 +33,10 @@ struct IncludeContext {
     llvm::DenseMap<llvm::StringRef, AstNodeList> modules{};
     cxy::CImporter &importer;
     FileLoc loc{};
+    std::stack<CurrentRecord> recordsStack{};
 
 private:
+    AstNode *buildModule(llvm::StringRef path, AstNodeList &nodes);
     AstNodeList *enterFile(clang::StringRef path);
 };
 } // namespace cxy

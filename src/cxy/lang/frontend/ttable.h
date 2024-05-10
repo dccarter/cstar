@@ -125,6 +125,9 @@ const Type *makeStructType(TypeTable *table,
                            AstNode *decl,
                            u64 flags);
 
+const Type *findStructType(TypeTable *table, cstring name, u64 flags);
+const Type *findEnumType(TypeTable *table, cstring name, u64 flags);
+
 const Type *makeClassType(TypeTable *table,
                           cstring name,
                           NamedTypeMember *members,
@@ -141,6 +144,11 @@ const Type *replaceStructType(TypeTable *table,
                               u64 membersCount,
                               AstNode *decl,
                               u64 flags);
+
+const Type *replaceAliasType(TypeTable *table,
+                             const Type *og,
+                             const Type *aliased,
+                             u64 flags);
 
 const Type *replaceClassType(TypeTable *table,
                              const Type *og,
@@ -163,7 +171,8 @@ const Type *makeModuleType(TypeTable *table,
                            cstring name,
                            cstring path,
                            NamedTypeMember *members,
-                           u64 memberCount);
+                           u64 memberCount,
+                           u64 flags);
 
 const Type *makeEnum(TypeTable *table, const Type *init);
 

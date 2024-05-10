@@ -259,6 +259,12 @@ static void visitMemberExpr(AstVisitor *visitor, AstNode *node)
                                                 resolvesTo->fieldExpr.name);
         }
         else if (nodeIs(resolvesTo, EnumOptionDecl)) {
+            if (hasFlag(resolvesTo->type, Extern) &&
+                resolvesTo->codegen == nullptr) //
+            {
+                resolvesTo->codegen =
+                    cxy::codegen(visitor, resolvesTo->enumOption.value);
+            }
             value = static_cast<llvm::ConstantInt *>(resolvesTo->codegen);
             ctx.returnValue(value);
             return;
@@ -282,6 +288,9 @@ static void visitMemberExpr(AstVisitor *visitor, AstNode *node)
             }
             ctx.returnValue(value);
             return;
+        }
+        else {
+            printf("What the func\n");
         }
     }
     else {
@@ -668,7 +677,7 @@ void visitContinueStmt(AstVisitor *visitor, AstNode *node)
     }
     else {
         ctx.returnValue(builder.CreateBr(
-            static_cast<llvm::BasicBlock *>(ctx.stack().loopEnd())));
+            static_cast<llvm::BasicBlock *>(ctx.stack().loopCondition())));
     }
     ctx.unreachable = true;
 }

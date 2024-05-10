@@ -3,22 +3,28 @@ pub extern func sprintf(s: &char, fmt: string, ...args: auto) : i64;
 pub extern func strcmp(s1: const string, s2: const string): i32
 pub extern func memmove(dst: &void, src: &const void, num: u64) : &void;
 pub extern func memset(ptr: &void, value: i32, num: u64) : &void;
+pub extern func memcpy(dst: &void, src: &const void, n: u64): &void
 pub extern func malloc(s: u64): &void
 pub extern func realloc(ptr: &void, s: u64): &void
 pub extern func free(ptr: &void): void
 pub extern func abort(): void;
 pub extern func printf(s: string, ...args: auto): i32
 pub extern func write(fd: i32, buf: &const void, len: u64) : i64
+pub extern func lltoa(num: i64, buf: &char, radix: i32): &char
+
+func __cxy_assert_abort(file: string, line: u64, column: u64) {
+    var buf: [char, 64];
+    write(2, "assertion failed: ", 18)
+    write(2, file, strlen(file))
+    var len = sprintf(buf, ":%u:%u\n", line, column);
+    write(2, buf, len)
+    abort()
+}
 
 @[pure, inline]
 pub func __cxy_assert(cond: bool, file: string, line: u64, column: u64) {
     if (!cond) {
-        var buf: [char, 64];
-        write(2, "assertion failed: ", 18)
-        write(2, file, strlen(file))
-        var len = sprintf(buf, ":%u:%u\n", line, column);
-        write(2, buf, len)
-        abort()
+        __cxy_assert_abort(file, line, column)
     }
 }
 
@@ -42,6 +48,29 @@ pub func __cxy_panic(file: string, line: u64, column: u64, msg: string) {
 }
 
 macro panic(msg) __cxy_panic(file!, line!, column!, msg!)
+
+@inline
+pub func __bswap_16(x: u16) => <u16>(((x >> 8) & 0xff) | ((x & 0xff) << 8))
+
+@inline
+pub func __bswap_32(x: u32) => (
+      ((x & 0xff000000:u32) >> 24)
+    | ((x & 0x00ff0000:u32) >> 8)
+    | ((x & 0x0000ff00:u32) << 8)
+    | ((x & 0x000000ff:u32) << 24)
+)
+
+@inline
+pub func __bswap_64(x: u64) => (
+      ((x & 0xff00000000000000:u64) >> 56)
+    | ((x & 0x00ff000000000000:u64) >> 40)
+    | ((x & 0x0000ff0000000000:u64) >> 24)
+    | ((x & 0x000000ff00000000:u64) >> 8)
+    | ((x & 0x00000000ff000000:u64) << 8)
+    | ((x & 0x0000000000ff0000:u64) << 24)
+    | ((x & 0x000000000000ff00:u64) << 40)
+    | ((x & 0x00000000000000ff:u64) << 56)
+)
 
 type sptr = &void
 
@@ -167,7 +196,7 @@ pub func hash_fnv1a_bytes(h: Hash,
                          ptr: &const void,
                          size: u64)
 {
-    const p = ptr: &const u8;
+    const p = ptr !: &const u8;
     for (const i: 0..size-1)
         h = hash_fnv1a_uint8(h, p.[i]);
     return h
@@ -248,12 +277,12 @@ pub class OutputStream {
 
     @inline
     func appendString(s: string) : void {
-        append(s: &const char, strlen(s))
+        append(s !: &const char, strlen(s))
     }
 
     @inline
     func appendString(s: CString) : void {
-        append(s.s: &const char, s.size())
+        append(s.s !: &const char, s.size())
     }
 
     func appendSignedInt(num: i64) {
@@ -309,21 +338,21 @@ pub class OutputStream {
     @inline
     func appendBool(val: bool) {
         if (val)
-            append("true": &const char, 4)
+            append("true" !: &const char, 4)
         else
-            append("false": &const char, 5)
+            append("false" !: &const char, 5)
     }
 
     func appendPointer[T](ptr: &const T) {
         var data: [char, 32];
-        const len = sprintf(data, "%p", ptr: &const void);
+        const len = sprintf(data, "%p", ptr !: &const void);
         append(data, len)
     }
 
     func `<<`[U](val: const U) : OutputStream {
         #if (U.isString)
             #if (U.isClass)
-                append(val._data:  &const char, val.size())
+                append(val._data !: &const char, val.size())
             else
                 appendString(__construct1[CString](val))
         else #if (U.isInteger)
@@ -471,7 +500,7 @@ pub class String : OutputStream {
 
     @inline
     const func compare(other: const string) =>
-        compare(other: &const char, strlen(other))
+        compare(other !: &const char, strlen(other))
 
     @inline
     const func `==`(other: const String) => compare(other) == 0
@@ -600,7 +629,7 @@ pub struct Slice[T] {
 
 @[pure, inline]
 pub func ref[T](ptr: T) {
-    __smart_ptr_get(ptr: sptr)
+    __smart_ptr_get(ptr !: sptr)
     return ptr
 }
 
@@ -771,7 +800,7 @@ pub func __construct1[T](@transient ...args: auto) {
 @[inline, pure]
 pub func __destructor[T](ptr: T) {
     require!(T.isClass, "expecting type of deallocated object to be a class")
-    __smart_ptr_drop(ptr: sptr)
+    __smart_ptr_drop(ptr !: sptr)
 }
 
 pub var stdout: OutputStream = __construct0[FileOutputStream](1);

@@ -70,6 +70,8 @@ llvm::Type *LLVMContext::convertToLLVMType(const Type *type)
         auto unwrapped = unwrapType(type, NULL);
         return getLLVMType(unwrapped);
     }
+    case typOpaque:
+        return getLLVMType(types->voidType);
     default:
         return nullptr;
     }
