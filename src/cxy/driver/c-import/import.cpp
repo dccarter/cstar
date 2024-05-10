@@ -194,29 +194,45 @@ static FileLoc toCxy(IncludeContext &ctx, const clang::Token &token)
     return ctx.loc;
 }
 
-static AstNode *toCxy(IncludeContext &ctx, const clang::RecordDecl *record)
+static AstNode *toCxy(IncludeContext &ctx, const clang::RecordDecl &decl);
+
+static const Type *toCxy(IncludeContext &ctx, const clang::RecordDecl *record)
 {
+    if (!ctx.recordsStack.empty() && record == ctx.recordsStack.top().decl) {
+        // the type needs to be this
+        return ctx.recordsStack.top().type;
+    }
+
+    auto name = getCDeclName(ctx, *record);
+    auto type = findStructType(ctx.types, name, flgExtern | flgPublic);
+    if (type != nullptr)
+        return type;
+
+    if (name[0] == '\0') {
+        if (record->getLexicalParent()->getDeclKind() == clang::Decl::Record) {
+            // inner struct
+            auto decl = toCxy(ctx, *record);
+            ctx.addDeclaration(decl);
+            return decl->type;
+        }
+    }
+
     auto loc = toCxy(ctx, llvm::cast<clang::Decl>(*record));
     auto node = AstNode{.tag = astTypeDecl,
                         .flags = flgExtern | flgPublic,
-                        .structDecl = {.name = getCDeclName(ctx, *record)}};
-
+                        .typeDecl = {.name = name}};
     auto decl = makeAstNode(ctx.pool, &loc, &node);
-    decl->type = makeOpaqueType(ctx.types, getDeclarationName(decl), decl);
-    return decl;
+    decl->type = makeOpaqueType(ctx.types, name, decl);
+    return decl->type;
 }
 
-static AstNode *toCxy(IncludeContext &ctx, const clang::EnumDecl *enum_)
+static const Type *toCxy(IncludeContext &ctx, const clang::EnumDecl *enum_)
 {
-    auto range = enum_->getSourceRange();
-    auto loc = toCxy(ctx, enum_->getSourceRange());
-    auto node = AstNode{.tag = astEnumDecl,
-                        .flags = flgExtern | flgPublic,
-                        .structDecl = {.name = getCDeclName(ctx, *enum_)}};
+    auto name = getCDeclName(ctx, *enum_);
+    if (auto type = findEnumType(ctx.types, name, flgExtern | flgPublic))
+        return type;
 
-    auto decl = makeAstNode(ctx.pool, &loc, &node);
-    decl->type = makeOpaqueType(ctx.types, getDeclarationName(decl), decl);
-    return decl;
+    return getPrimitiveType(ctx.types, prtI32);
 }
 
 static const Type *toCxy(IncludeContext &ctx,
@@ -278,7 +294,7 @@ static const Type *toCxy(IncludeContext &ctx, const clang::QualType qualtype)
                      llvm::cast<clang::ElaboratedType>(type).getNamedType());
     case clang::Type::Record: {
         auto record = llvm::cast<clang::RecordType>(type).getDecl();
-        return toCxy(ctx, record)->type;
+        return toCxy(ctx, record);
     }
     case clang::Type::Paren:
         return toCxy(ctx, llvm::cast<clang::ParenType>(type).getInnerType());
@@ -310,14 +326,12 @@ static const Type *toCxy(IncludeContext &ctx, const clang::QualType qualtype)
                      llvm::cast<clang::DecayedType>(type).getDecayedType());
     case clang::Type::Enum: {
         auto &enumType = llvm::cast<clang::EnumType>(type);
-        auto name = getCDeclName(ctx, *enumType.getDecl());
-
-        if (name[0] == '\0') {
+        if (enumType.getDecl()->getName().empty()) {
             return withFlags(
                 ctx, toCxy(ctx, enumType.getDecl()->getIntegerType()), flags);
         }
         else {
-            return withFlags(ctx, toCxy(ctx, enumType.getDecl())->type, flags);
+            return withFlags(ctx, toCxy(ctx, enumType.getDecl()), flags);
         }
     }
     default:
@@ -332,13 +346,17 @@ static const Type *toCxy(IncludeContext &ctx, const clang::QualType qualtype)
 
 static AstNode *toCxy(IncludeContext &ctx, const clang::FieldDecl &decl)
 {
+    cstring name;
     if (decl.getName().empty())
-        return nullptr;
+        name = makeAnonymousVariable(ctx.strings, "__ext_f");
+    else
+        name = getCDeclName(ctx, decl);
+
     auto loc = toCxy(ctx, llvm::cast<clang::Decl>(decl));
     auto type = toCxy(ctx, decl.getType());
     auto node = makeStructField(ctx.pool,
                                 &loc,
-                                getCDeclName(ctx, decl),
+                                name,
                                 flgPublic,
                                 makeTypeReferenceNode(ctx.pool, type, &loc),
                                 nullptr,
@@ -351,16 +369,20 @@ static AstNode *toCxy(IncludeContext &ctx, const clang::RecordDecl &decl)
 {
     auto loc = toCxy(ctx, llvm::cast<clang::Decl>(decl));
     AstNodeList fields = {};
-    auto node = makeStructDecl(ctx.pool,
-                               &loc,
-                               flgPublic,
-                               getCDeclName(ctx, decl),
-                               nullptr,
-                               nullptr,
-                               nullptr);
+    auto flags = flgExtern | flgPublic;
+    auto name = decl.getName().empty()
+                    ? makeAnonymousVariable(ctx.strings, "__ext_s")
+                    : getCDeclName(ctx, decl);
+
+    ctx.recordsStack.push({&decl, makeThisType(ctx.types, name, flags)});
+    auto node =
+        makeStructDecl(ctx.pool, &loc, flags, name, nullptr, nullptr, nullptr);
+
     std::vector<NamedTypeMember> members;
+    u64 index = 0;
     for (auto *field : decl.fields()) {
         if (auto fieldDecl = toCxy(ctx, *field)) {
+            fieldDecl->structField.index = index++;
             insertAstNode(&fields, fieldDecl);
             members.push_back(
                 NamedTypeMember{.name = fieldDecl->structField.name,
@@ -369,16 +391,25 @@ static AstNode *toCxy(IncludeContext &ctx, const clang::RecordDecl &decl)
             fieldDecl->parentScope = node;
         }
         else {
-            logError(ctx.L, &loc, "cxy cannot import unnamed C types", nullptr);
-            return nullptr;
+            loc = toCxy(ctx, field->getSourceRange());
+            logWarningWithId(ctx.L,
+                             wrnCUnsupportedField,
+                             &loc,
+                             "unsupported field detected in C struct",
+                             nullptr);
         }
     }
+
     node->type = makeStructType(ctx.types,
                                 node->structDecl.name,
                                 members.data(),
                                 members.size(),
                                 node,
-                                flgExtern | flgPublic);
+                                flags);
+
+    const_cast<Type *>(ctx.recordsStack.top().type)->_this.that = node->type;
+    ctx.recordsStack.pop();
+
     return node;
 }
 
@@ -401,7 +432,7 @@ static AstNode *toCxy(IncludeContext &ctx, const clang::VarDecl &decl)
     auto type = toCxy(ctx, decl.getType());
     return makeVarDecl(ctx.pool,
                        &loc,
-                       flgNone,
+                       flgPublic | flgExtern | flgTopLevelDecl,
                        getCDeclName(ctx, decl),
                        makeTypeReferenceNode(ctx.pool, type, &loc),
                        nullptr,
@@ -508,6 +539,8 @@ AstNode *toCxy(IncludeContext &ctx, const clang::EnumDecl &decl)
                             .optionsCount = members.size(),
                             .decl = node}};
     node->type = makeEnum(ctx.types, &enum_);
+    for (AstNode *it = options.first; it; it = it->next)
+        it->type = node->type;
     return node;
 }
 
@@ -527,14 +560,10 @@ struct CToCxyConverter : clang::ASTConsumer {
                 ctx.addDeclaration(
                     toCxy(ctx, *llvm::cast<clang::FunctionDecl>(decl)));
                 break;
-            case clang::Decl::Record: {
-                if (!decl->isFirstDecl())
-                    break;
-
+            case clang::Decl::Record:
                 ctx.addDeclaration(
                     toCxy(ctx, llvm::cast<clang::RecordDecl>(*decl)));
                 break;
-            }
             case clang::Decl::Enum: {
                 ctx.addDeclaration(
                     toCxy(ctx, llvm::cast<clang::EnumDecl>(*decl)));
@@ -583,12 +612,40 @@ struct MacroImporter : clang::PPCallbacks {
                                 token,
                                 toCxy(ctx, name.getLocation()));
             break;
+        case clang::tok::identifier:
+            importMacroCall(name.getIdentifierInfo()->getName(),
+                            token,
+                            toCxy(ctx, name.getLocation()));
+            break;
         default:
             break;
         }
     }
 
 private:
+    void importMacroCall(llvm::StringRef name,
+                         const clang::Token &token,
+                         FilePos start)
+    {
+        AstNode *value{nullptr};
+        auto identifier = token.getIdentifierInfo()->getName();
+        auto variable =
+            makeStringSized(ctx.strings, identifier.data(), identifier.size());
+        if (preprocessorHasMacro(ctx.preprocessor, variable, &value)) {
+            auto loc = toCxy(ctx, token);
+            loc.begin = start;
+            auto macro = makeMacroDeclAstNode(
+                ctx.pool,
+                &loc,
+                flgPublic | flgExtern,
+                makeStringSized(ctx.strings, name.data(), name.size()),
+                NULL,
+                deepCloneAstNode(ctx.pool, value->macroDecl.body),
+                NULL);
+            defineMacro(macro);
+        }
+    }
+
     void importMacroConstant(llvm::StringRef name,
                              const clang::Token &token,
                              FilePos start)
@@ -597,7 +654,8 @@ private:
         if (!result.isUsable())
             return;
         clang::Expr *parsed = result.get();
-        auto loc = toCxy(ctx, token);
+        auto valueLoc = toCxy(ctx, token);
+        auto loc = valueLoc;
         loc.begin = start;
         if (auto *intLiteral = llvm::dyn_cast<clang::IntegerLiteral>(parsed)) {
             auto type = toCxy(ctx, parsed->getType());
@@ -610,7 +668,7 @@ private:
                 makeStringSized(ctx.strings, name.data(), name.size()),
                 NULL,
                 makeIntegerLiteral(
-                    ctx.pool, builtinLoc(), value.getSExtValue(), NULL, type),
+                    ctx.pool, &valueLoc, value.getSExtValue(), NULL, type),
                 NULL);
             defineMacro(macro);
         }
@@ -624,11 +682,8 @@ private:
                 flgPublic | flgExtern,
                 makeStringSized(ctx.strings, name.data(), name.size()),
                 NULL,
-                makeFloatLiteral(ctx.pool,
-                                 builtinLoc(),
-                                 value.convertToDouble(),
-                                 NULL,
-                                 type),
+                makeFloatLiteral(
+                    ctx.pool, &valueLoc, value.convertToDouble(), NULL, type),
                 NULL);
             defineMacro(macro);
         }

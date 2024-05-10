@@ -9,6 +9,7 @@
 #include "lexer.h"
 #include "strings.h"
 
+#include "driver/cc.h"
 #include "driver/driver.h"
 
 #include "core/alloc.h"
@@ -312,10 +313,20 @@ static inline AstNode *parseChar(Parser *P)
 static inline AstNode *parseInteger(Parser *P)
 {
     const Token *tok = consume0(P, tokIntLiteral);
-    return newAstNode(
+    AstNode *type = NULL;
+    AstNode *node = newAstNode(
         P,
         &tok->fileLoc.begin,
         &(AstNode){.tag = astIntegerLit, .intLiteral.uValue = tok->iVal});
+    if (match(P, tokColon)) {
+        type = parseType(P);
+        return newAstNode(
+            P,
+            &tok->fileLoc.begin,
+            &(AstNode){.tag = astTypedExpr,
+                       .typedExpr = {.expr = node, .type = type}});
+    }
+    return node;
 }
 
 static inline AstNode *parseFloat(Parser *P)
@@ -1158,8 +1169,8 @@ static AstNode *expression(Parser *P, bool allowStructs)
     AstNode *expr = ternary(P, primary);
     expr->attrs = attrs;
     Token *tok = NULL;
-    if (!P->inCase && (tok = match(P, tokColon, tokBangColon))) {
-        u64 flags = tok->tag == tokBangColon ? flgUnsafeCast : flgNone;
+    if (!P->inCase && (tok = match(P, tokBangColon))) {
+        u64 flags = flgUnsafeCast;
         AstNode *type = parseType(P);
         return newAstNode(
             P,
@@ -2559,6 +2570,7 @@ static AstNode *parseImportDecl(Parser *P)
                        &tok.fileLoc,
                        &(AstNode){.tag = astImportDecl,
                                   .type = exports,
+                                  .flags = exports->flags,
                                   .import = {.module = module,
                                              .alias = alias,
                                              .entities = entities}});
@@ -2582,8 +2594,12 @@ static AstNode *parseTopLevelDecl(Parser *P)
     else if (check(P, tokCDefine, tokCInclude, tokCSources)) {
         return parseCCode(P);
     }
-    else
-        csAssert0(false);
+
+    Token tok = *consume0(P, tokCBuild);
+    Token srcToken = *consume0(P, tokStringLiteral);
+    cstring src = getTokenString(P, &srcToken, true);
+    addNativeSourceFile(P->cc, tok.fileLoc.fileName, src);
+    return NULL;
 }
 
 static void synchronizeUntil(Parser *P, TokenTag tag)
@@ -2619,11 +2635,13 @@ AstNode *parseProgram(Parser *P)
 
     while (check(P, tokImport) ||
            (check(P, tokAt) &&
-            checkPeek(P, 1, tokCDefine, tokCInclude, tokCSources) &&
+            checkPeek(P, 1, tokCDefine, tokCInclude, tokCSources, tokCBuild) &&
             match(P, tokAt))) {
         E4C_TRY_BLOCK(
             {
-                listAddAstNode(&topLevel, parseTopLevelDecl(P));
+                AstNode *node = parseTopLevelDecl(P);
+                if (node != NULL)
+                    listAddAstNode(&topLevel, node);
             } E4C_CATCH(ParserException) { synchronize(E4C_EXCEPTION.ctx); })
     }
 

@@ -1248,7 +1248,24 @@ AstNode *makeMacroDeclAstNode(MemPool *pool,
         &(AstNode){
             .tag = astMacroDecl,
             .flags = flags,
+            .next = next,
             .macroDecl = {.name = name, .params = params, .body = body}});
+}
+
+AstNode *makeMacroCallAstNode(MemPool *pool,
+                              const FileLoc *loc,
+                              u64 flags,
+                              AstNode *callee,
+                              AstNode *args,
+                              AstNode *next)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astMacroCallExpr,
+                   .flags = flags,
+                   .next = next,
+                   .macroCallExpr = {.callee = callee, .args = args}});
 }
 
 AstNode *makeAstClosureCapture(MemPool *pool, AstNode *captured)

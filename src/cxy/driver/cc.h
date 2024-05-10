@@ -16,21 +16,10 @@
 extern "C" {
 #endif
 
-void compileCSourceFile(CompilerDriver *driver, const char *sourceFile);
-bool createSourceFile(CompilerDriver *driver,
-                      const FormatState *code,
-                      cstring *filePath,
-                      u64 flags);
-bool generateAllBuiltinSources(CompilerDriver *driver);
-
-void addNativeSourceFile(HashTable *nativeSources,
-                         StrPool *strings,
+void addNativeSourceFile(CompilerDriver *driver,
                          cstring cxySource,
                          cstring source);
-void addLinkLibrary(HashTable *linkedLibraries,
-                    StrPool *strings,
-                    cstring cxySource,
-                    cstring source);
+void addLinkLibrary(CompilerDriver *driver, cstring library);
 
 #ifdef __cplusplus
 }

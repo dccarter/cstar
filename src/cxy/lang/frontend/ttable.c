@@ -59,7 +59,10 @@ static HashCode hashType(HashCode hash, const Type *type)
         hash = hashType(hash, type->map.value);
         break;
     case typAlias:
-        hash = hashType(hash, type->alias.aliased);
+        if (hasFlag(type, Extern))
+            hash = hashStr(hash, type->name);
+        else
+            hash = hashType(hash, type->alias.aliased);
         break;
     case typOpaque:
     case typContainer:
@@ -158,7 +161,11 @@ static bool compareTypes(const Type *lhs, const Type *rhs)
         return compareTypes(left->map.key, right->map.key) &&
                compareTypes(left->map.value, right->map.value);
     case typAlias:
-        return compareTypes(left->alias.aliased, right->alias.aliased);
+        if (hasFlag(left, Extern))
+            return left->name == right->name;
+        else
+            return compareTypes(left->alias.aliased, right->alias.aliased);
+
     case typOptional:
         return compareTypes(left->optional.target, right->optional.target);
     case typOpaque:
@@ -252,6 +259,19 @@ static GetOrInset getOrInsertTypeScoped(TypeTable *table, const Type *type)
 
     newType->index = table->typeCount++;
     return (GetOrInset){false, newType};
+}
+
+static const Type *findTypeScoped(TypeTable *table, const Type *type)
+{
+    u32 hash = hashType(hashInit(), type);
+    const Type **found = findInHashTable(&table->types, //
+                                         &type,
+                                         hash,
+                                         sizeof(Type *),
+                                         compareTypesWrapper);
+    if (found)
+        return *found;
+    return NULL;
 }
 
 static Type *replaceTypeScoped(TypeTable *table,
@@ -804,6 +824,18 @@ const Type *makeStructType(TypeTable *table,
     return ret.s;
 }
 
+const Type *findStructType(TypeTable *table, cstring name, u64 flags)
+{
+    return findTypeScoped(
+        table, &(Type){.tag = typStruct, .name = name, .flags = flags});
+}
+
+const Type *findEnumType(TypeTable *table, cstring name, u64 flags)
+{
+    return findTypeScoped(
+        table, &(Type){.tag = typEnum, .name = name, .flags = flags});
+}
+
 const Type *makeClassType(TypeTable *table,
                           cstring name,
                           NamedTypeMember *members,
@@ -838,6 +870,16 @@ const Type *replaceStructType(TypeTable *table,
 {
     removeFromTypeTable(table, og);
     return makeStructType(table, og->name, members, membersCount, decl, flags);
+}
+
+const Type *replaceAliasType(TypeTable *table,
+                             const Type *og,
+                             const Type *aliased,
+                             u64 flags)
+{
+    cstring name = og->name;
+    removeFromTypeTable(table, og);
+    return makeAliasType(table, aliased, name, flags);
 }
 
 const Type *replaceClassType(TypeTable *table,
@@ -885,12 +927,13 @@ const Type *makeModuleType(TypeTable *table,
                            cstring name,
                            cstring path,
                            NamedTypeMember *members,
-                           u64 membersCount)
+                           u64 membersCount,
+                           u64 flags)
 {
     Type type = make(Type,
                      .tag = typModule,
                      .name = name,
-                     .flags = flgNone,
+                     .flags = flags,
                      .module = {.path = path});
     GetOrInset ret = getOrInsertType(table, &type);
     if (!ret.f) {

@@ -76,6 +76,7 @@ void buildModuleType(TypeTable *types, AstNode *node, bool isBuiltinModule)
         isBuiltinModule ? S___builtins : node->program.module->moduleDecl.name,
         node->loc.fileName,
         members,
-        i);
+        i,
+        builtinsFlags | node->flags);
     free(members);
 }

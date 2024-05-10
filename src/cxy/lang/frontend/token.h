@@ -121,6 +121,7 @@ extern "C" {
     f(Super,     "super")           \
     f(Class,     "class")           \
     f(Defined,   "defined")         \
+    f(CBuild,    "__cc")            \
     PRIM_TYPE_LIST(f)
 
 #define SPECIAL_TOKEN_LIST(f)                   \

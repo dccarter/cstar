@@ -258,6 +258,8 @@ bool initCompilerDriver(CompilerDriver *compiler,
     compiler->strings = strings;
     compiler->types = newTypeTable(compiler->pool, compiler->strings);
     compiler->moduleCache = newHashTable(sizeof(CachedModule));
+    compiler->nativeSources = newHashTable(sizeof(cstring));
+    compiler->linkLibraries = newHashTable(sizeof(cstring));
     compiler->L = log;
     compiler->currentDir = makeString(compiler->strings, getcwd(tmp, PATH_MAX));
     compiler->currentDirLen = strlen(compiler->currentDir);
@@ -285,6 +287,8 @@ void deinitCompilerDriver(CompilerDriver *driver)
     deinitCompilerPreprocessor(driver);
     deinitCImporter(driver);
     freeHashTable(&driver->moduleCache);
+    freeHashTable(&driver->linkLibraries);
+    freeHashTable(&driver->nativeSources);
     freeTypeTable(driver->types);
     deinitCommandLineOptions(&driver->options);
 }

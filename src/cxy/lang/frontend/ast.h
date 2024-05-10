@@ -1111,6 +1111,13 @@ AstNode *makeMacroDeclAstNode(MemPool *pool,
                               AstNode *body,
                               AstNode *next);
 
+AstNode *makeMacroCallAstNode(MemPool *pool,
+                              const FileLoc *loc,
+                              u64 flags,
+                              AstNode *callee,
+                              AstNode *args,
+                              AstNode *next);
+
 AstNode *makeAstClosureCapture(MemPool *pool, AstNode *captured);
 
 AstNode *makeAstNop(MemPool *pool, const FileLoc *loc);

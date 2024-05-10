@@ -1,0 +1,3 @@
+module _
+
+@__cc "dns/dns.c"

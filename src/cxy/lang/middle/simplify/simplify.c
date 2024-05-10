@@ -617,6 +617,10 @@ static void visitPathExpr(AstVisitor *visitor, AstNode *node)
     }
 
     AstNode *elem = node->path.elements;
+    AstNode *resolved = elem->pathElement.resolvesTo;
+    if (hasFlag(resolved, Extern) && nodeIs(resolved, ImportDecl))
+        elem = elem->next;
+    
     AstNode *next = elem->next;
     astVisit(visitor, elem);
     if (next == NULL) {

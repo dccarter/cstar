@@ -14,7 +14,8 @@ extern "C" {
     f(MissingStage,      0)             \
     f(UnusedVariable,    1)             \
     f(RedundantStmt,     2)             \
-    f(CMacroRedefine,    3)
+    f(CMacroRedefine,    3)             \
+    f(CUnsupportedField, 4)
 
 // clang-format on
 
