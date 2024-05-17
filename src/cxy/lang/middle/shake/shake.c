@@ -296,8 +296,6 @@ void shakeIfStmt(AstVisitor *visitor, AstNode *node)
     AstNode *cond = node->ifStmt.cond;
     if (nodeIs(cond, VarDecl)) {
         AstNode *var = duplicateAstNode(ctx->pool, cond);
-        var->varDecl.names = makeGenIdent(
-            ctx->pool, ctx->strings, &cond->varDecl.names->loc, NULL);
         var->varDecl.name = var->varDecl.names->ident.value;
 
         astModifierAdd(&ctx->block, var);
@@ -344,8 +342,6 @@ void shakeWhileStmt(AstVisitor *visitor, AstNode *node)
 
     if (nodeIs(cond, VarDecl)) {
         AstNode *var = duplicateAstNode(ctx->pool, cond);
-        var->varDecl.names = makeGenIdent(
-            ctx->pool, ctx->strings, &cond->varDecl.names->loc, NULL);
         var->varDecl.name = var->varDecl.names->ident.value;
 
         astModifierAdd(&ctx->block, var);

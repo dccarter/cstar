@@ -407,6 +407,9 @@ static void checkField(AstVisitor *visitor, AstNode *node)
         return;
     }
 
+    if (node->structField.value)
+        node->structField.value->parentScope = node;
+
     const Type *value = checkType(visitor, node->structField.value);
     if (typeIs(value, Error)) {
         node->type = ERROR_TYPE(ctx);

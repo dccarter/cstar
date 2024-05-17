@@ -99,6 +99,14 @@ void initCompilerPreprocessor(struct CompilerDriver *driver)
                                 node);
         freeLexer(&lexer);
     }
+    // add backend call ID's
+#define f(ID)                                                                  \
+    preprocessorDefineMacro(                                                   \
+        &driver->preprocessor,                                                 \
+        makeString(driver->strings, "bfi" #ID),                                \
+        makeIntegerLiteral(driver->pool, builtinLoc(), bfi##ID, NULL, NULL));
+    BACKEND_FUNC_IDS(f)
+#undef f
 }
 
 void deinitCompilerPreprocessor(struct CompilerDriver *driver)

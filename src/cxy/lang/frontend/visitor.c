@@ -189,8 +189,7 @@
         MODE##VisitManyNodes(visitor, node->callExpr.args);                    \
         break;                                                                 \
     case astBackendCall:                                                       \
-        MODE##Visit(visitor, node->callExpr.callee);                           \
-        MODE##VisitManyNodes(visitor, node->callExpr.args);                    \
+        MODE##VisitManyNodes(visitor, node->backendCallExpr.args);             \
         break;                                                                 \
     case astMacroCallExpr:                                                     \
         MODE##Visit(visitor, node->macroCallExpr.callee);                      \

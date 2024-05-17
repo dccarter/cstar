@@ -580,8 +580,8 @@ void bindMacroCallExpr(AstVisitor *visitor, AstNode *node)
     if (macro == NULL) {
         logError(ctx->L,
                  &node->macroCallExpr.callee->loc,
-                 "currently only native macros are supported",
-                 NULL);
+                 "unsupported/unknown macro `{s}`",
+                 (FormatArg[]){{.s = node->macroCallExpr.callee->ident.value}});
         return;
     }
 

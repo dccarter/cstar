@@ -382,6 +382,30 @@ static void simplifyCastExpression(SimplifyContext *ctx,
     }
 }
 
+static void simplifyCondition(SimplifyContext *ctx, AstNode *cond)
+{
+    AstNode *rhs = NULL, *lhs = deepCloneAstNode(ctx->pool, cond);
+    if (isIntegerType(cond->type)) {
+        rhs = makeIntegerLiteral(ctx->pool, &cond->loc, 0, NULL, cond->type);
+    }
+    else if (isFloatType(cond->type)) {
+        rhs = makeFloatLiteral(ctx->pool, &cond->loc, 0.0, NULL, cond->type);
+    }
+    else if (isCharacterType(cond->type)) {
+        rhs = makeCharLiteral(ctx->pool, &cond->loc, 0, NULL, cond->type);
+    }
+    else if (isPointerType(cond->type)) {
+        rhs = makeNullLiteral(ctx->pool, &cond->loc, NULL, cond->type);
+    }
+    else {
+        unreachable("Shouldn't be a thing!");
+    }
+    cond->tag = astBinaryExpr;
+    cond->binaryExpr.op = opNe;
+    cond->binaryExpr.lhs = lhs;
+    cond->binaryExpr.rhs = rhs;
+}
+
 static bool isRedundantExpressionMany(AstNode *node)
 {
     AstNode *it = node;
@@ -620,7 +644,7 @@ static void visitPathExpr(AstVisitor *visitor, AstNode *node)
     AstNode *resolved = elem->pathElement.resolvesTo;
     if (hasFlag(resolved, Extern) && nodeIs(resolved, ImportDecl))
         elem = elem->next;
-    
+
     AstNode *next = elem->next;
     astVisit(visitor, elem);
     if (next == NULL) {
@@ -694,7 +718,7 @@ static void visitStructDecl(AstVisitor *visitor, AstNode *node)
     // node->tag = astStructDecl;
 }
 
-void visitForStmt(AstVisitor *visitor, AstNode *node)
+static void visitForStmt(AstVisitor *visitor, AstNode *node)
 {
     AstNode *range = node->forStmt.range;
     if (nodeIs(range, RangeExpr))
@@ -703,7 +727,7 @@ void visitForStmt(AstVisitor *visitor, AstNode *node)
         simplifyForArrayStmt(visitor, node);
 }
 
-void visitBlockStmt(AstVisitor *visitor, AstNode *node)
+static void visitBlockStmt(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
     astModifierInit(&ctx->block, node);
@@ -742,29 +766,19 @@ void visitIfStmt(AstVisitor *visitor, AstNode *node)
     SimplifyContext *ctx = getAstVisitorContext(visitor);
 
     AstNode *cond = node->ifStmt.cond;
-    if (!isBooleanType(node->ifStmt.cond->type)) {
-        AstNode *rhs = NULL, *lhs = deepCloneAstNode(ctx->pool, cond);
-        if (isIntegerType(cond->type)) {
-            rhs =
-                makeIntegerLiteral(ctx->pool, &node->loc, 0, NULL, cond->type);
-        }
-        else if (isFloatType(cond->type)) {
-            rhs =
-                makeFloatLiteral(ctx->pool, &node->loc, 0.0, NULL, cond->type);
-        }
-        else if (isCharacterType(cond->type)) {
-            rhs = makeCharLiteral(ctx->pool, &node->loc, 0, NULL, cond->type);
-        }
-        else if (isPointerType(cond->type)) {
-            rhs = makeNullLiteral(ctx->pool, &node->loc, NULL, cond->type);
-        }
-        else {
-            unreachable("Shouldn't be a thing!");
-        }
-        cond->tag = astBinaryExpr;
-        cond->binaryExpr.op = opNe;
-        cond->binaryExpr.lhs = lhs;
-        cond->binaryExpr.rhs = rhs;
+    if (!isBooleanType(cond->type)) {
+        simplifyCondition(ctx, cond);
+    }
+    astVisitFallbackVisitAll(visitor, node);
+}
+
+static void visitWhileStmt(AstVisitor *visitor, AstNode *node)
+{
+    SimplifyContext *ctx = getAstVisitorContext(visitor);
+
+    AstNode *cond = node->whileStmt.cond;
+    if (!isBooleanType(cond->type)) {
+        simplifyCondition(ctx, cond);
     }
     astVisitFallbackVisitAll(visitor, node);
 }
@@ -962,6 +976,7 @@ static AstNode *simplifyCode(CompilerDriver *driver, AstNode *node)
         [astStmtExpr] = visitStmtExpr,
         [astForStmt] = visitForStmt,
         [astBlockStmt] = visitBlockStmt,
+        [astWhileStmt] = visitWhileStmt,
         [astIfStmt] = visitIfStmt,
         [astStructDecl] = visitStructDecl,
         [astClassDecl] = visitStructDecl,
