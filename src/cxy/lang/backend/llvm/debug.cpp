@@ -415,6 +415,7 @@ void DebugContext::addFields(std::vector<llvm::Metadata *> &elements,
                              TypeMembersContainer &members)
 {
     auto layout = module.getDataLayout();
+    u64 j = 0;
     for (u64 i = 0; i < members.count; i++) {
         auto &member = members.members[i];
         if (!nodeIs(member.decl, FieldDecl))
@@ -439,7 +440,7 @@ void DebugContext::addFields(std::vector<llvm::Metadata *> &elements,
                                      member.decl->loc.begin.row,
                                      diTypeSize,
                                      alignment,
-                                     structLayout.getElementOffsetInBits(i),
+                                     structLayout.getElementOffsetInBits(j++),
                                      flags,
                                      diType));
     }

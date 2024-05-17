@@ -8,6 +8,7 @@
 #include "lang/frontend/strings.h"
 
 #include "core/alloc.h"
+#include "lang/middle/builtins.h"
 
 static inline bool isInlineFunction(const AstNode *node)
 {

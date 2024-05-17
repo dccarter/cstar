@@ -139,8 +139,10 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
     if (isLeftAuto) {
         csAssert0(nodeIs(left, Path));
         AstNode *resolvesTo = left->path.elements->pathElement.resolvesTo;
-        csAssert0(resolvesTo);
+        csAssert0(nodeIs(resolvesTo, VarDecl));
         resolvesTo->type = rhs;
+        left->path.elements->type = rhs;
+        left->type = rhs;
         node->type = rhs;
     }
     else {

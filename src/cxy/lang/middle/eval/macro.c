@@ -39,7 +39,7 @@ static inline bool validateMacroArgumentCount(EvalContext *ctx,
     if (count != expected) {
         logError(ctx->L,
                  loc,
-                 "unsupported number of arguments given to macro len, "
+                 "unsupported number of arguments given to macro, "
                  "expecting '{u64}', got '{u64}'",
                  (FormatArg[]){{.u64 = expected}, {.u64 = count}});
         return false;
@@ -555,6 +555,53 @@ static AstNode *makeTypeinfoNode(AstVisitor *visitor,
     return info;
 }
 
+static AstNode *makeBackendCallNode(AstVisitor *visitor,
+                                    const AstNode *node,
+                                    AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    u64 count = args ? countAstNodes(args) : 0;
+    if (count < 2) {
+        logError(ctx->L,
+                 &node->loc,
+                 "unsupported number of arguments given to macro 'mk_bc!', "
+                 "expecting at least 2 arguments, got '{u64}'",
+                 (FormatArg[]){{.u64 = count}});
+        return NULL;
+    }
+    if (!nodeIs(args, IntegerLit)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "the first argument of `mk_bc!` must be the ID of the API",
+                 NULL);
+        return NULL;
+    }
+    if (!hasFlag(args->next, Typeinfo)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "the second argument of `mk_bc!` must be the return type of "
+                 "the call",
+                 NULL);
+        return NULL;
+    }
+
+    i64 id = args->intLiteral.value;
+    AstNode *arg = args->next;
+    for (; arg; arg = arg->next) {
+        const Type *type = args->type ?: evalType(ctx, args->next);
+        if (type == NULL || typeIs(type, Error))
+            return NULL;
+    }
+    arg = args->next;
+
+    args->tag = astBackendCall;
+    args->backendCallExpr.func = id;
+    args->backendCallExpr.args = arg->next;
+    args->type = arg->type;
+    args->next = NULL;
+    return args;
+}
+
 static AstNode *makeLenNode(AstVisitor *visitor,
                             const AstNode *node,
                             AstNode *args)
@@ -1015,6 +1062,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "len", makeLenNode},
     {.name = "line", makeLineNumberNode},
     {.name = "mk_ast_list", makeAstNodeList},
+    {.name = "mk_bc", makeBackendCallNode},
     {.name = "mk_field_expr", makeAstFieldExprNode},
     {.name = "mk_ident", makeAstIdentifierNode},
     {.name = "mk_integer", makeAstIntegerNode},

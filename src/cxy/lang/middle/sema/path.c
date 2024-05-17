@@ -188,7 +188,7 @@ void checkPath(AstVisitor *visitor, AstNode *node)
             return;
         }
         flags = elem->flags;
-        prev = type;
+        prev = stripAll(type);
     }
 
     node->type = type;

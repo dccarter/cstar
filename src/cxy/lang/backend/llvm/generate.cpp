@@ -444,7 +444,8 @@ static void visitAssignExpr(AstVisitor *visitor, AstNode *node)
 
     if (value == nullptr)
         return;
-    ctx.returnValue(ctx.builder.CreateStore(value, variable));
+    ctx.builder.CreateStore(value, variable);
+    ctx.returnValue(variable);
 }
 
 static void visitTernaryExpr(AstVisitor *visitor, AstNode *node)
@@ -576,7 +577,7 @@ static void visitUnionValue(AstVisitor *visitor, AstNode *node)
     ctx.returnValue(obj);
 }
 
-void visitReturnStmt(AstVisitor *visitor, AstNode *node)
+static void visitReturnStmt(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     ctx.emitDebugLocation(node);
@@ -594,7 +595,7 @@ void visitReturnStmt(AstVisitor *visitor, AstNode *node)
     ctx.unreachable = true;
 }
 
-void visitIfStmt(AstVisitor *visitor, AstNode *node)
+static void visitIfStmt(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     ctx.emitDebugLocation(node);
@@ -652,7 +653,7 @@ void visitIfStmt(AstVisitor *visitor, AstNode *node)
     }
 }
 
-void visitBreakStmt(AstVisitor *visitor, AstNode *node)
+static void visitBreakStmt(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     ctx.emitDebugLocation(node);
@@ -664,7 +665,7 @@ void visitBreakStmt(AstVisitor *visitor, AstNode *node)
     ctx.unreachable = true;
 }
 
-void visitContinueStmt(AstVisitor *visitor, AstNode *node)
+static void visitContinueStmt(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     ctx.emitDebugLocation(node);
@@ -682,7 +683,7 @@ void visitContinueStmt(AstVisitor *visitor, AstNode *node)
     ctx.unreachable = true;
 }
 
-void visitWhileStmt(AstVisitor *visitor, AstNode *node)
+static void visitWhileStmt(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     ctx.emitDebugLocation(node);
@@ -839,7 +840,7 @@ static void visitMatchStmt(AstVisitor *visitor, AstNode *node)
     ctx.returnValue(switchInst);
 }
 
-void visitVariableDecl(AstVisitor *visitor, AstNode *node)
+static void visitVariableDecl(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     if (hasFlag(node, TopLevelDecl)) {

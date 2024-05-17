@@ -36,6 +36,9 @@ static const Type *determineMemberTargetType(TypingContext *ctx,
     case astFieldExpr:
         type = parent->type;
         break;
+    case astFieldDecl:
+        type = parent->structField.type ? parent->structField.type->type : NULL;
+        break;
     default:
         break;
     }

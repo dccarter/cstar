@@ -162,7 +162,7 @@ typedef struct {
 // clang-format on
 
 typedef enum {
-#define f(NN) bfi##NN
+#define f(NN) bfi##NN,
     BACKEND_FUNC_IDS(f)
 #undef f
 } BackendFuncId;

@@ -90,6 +90,9 @@ extern "C" {
     f(__construct1)             \
     f(__fwd)                    \
     f(CXY__main)                \
+    f(resolve)                  \
+    f(reject)                   \
+    f(result)                   \
     ff(__LLVM_global_ctors, "llvm.global_ctors") \
     ff(ctor_section,        ".ctor")\
     ff(sptr_ref,            "__smart_ptr_get")   \

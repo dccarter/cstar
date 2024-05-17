@@ -1,28 +1,32 @@
 
-import "./net.cxy" as net
+import { Address } from "./net.cxy"
+import "fcntl.h" as fcntl
+import "sys/socket.h" as socket
+import "errno.h" as errno
+import "unistd.h" as unistd
 
 func configureSocket(fd: i32)  {
     /* Make the socket non-blocking. */
-    var opt = C.fcntl(fd, F_GETFL!, 0);
+    var opt = fcntl.fcntl(fd, F_GETFL!, 0);
     if (opt == -1)
         opt = 0;
-    var rc = C.fcntl(fd, F_SETFL!, opt | O_NONBLOCK!);
+    var rc = fcntl.fcntl(fd, F_SETFL!, opt | O_NONBLOCK!);
     assert!(rc != -1);
     /*  Allow re-using the same local address rapidly. */
     opt = 1;
-    rc = net.setsockopt(fd, SOL_SOCKET!, SO_REUSEADDR!, &opt, <u32>sizeof!(opt));
+    rc = socket.setsockopt(fd, SOL_SOCKET!, SO_REUSEADDR!, &opt, <u32>sizeof!(opt));
     assert!(rc == 0);
 
     opt = 1;
-    rc = net.setsockopt(fd, SOL_SOCKET!, SO_NOSIGPIPE!, &opt, sizeof!(opt):u32);
-    assert!(rc == 0 || errno == EINVAL);
+    rc = socket.setsockopt(fd, SOL_SOCKET!, SO_NOSIGPIPE!, &opt, sizeof!(opt) !:u32);
+    assert!(rc == 0 || errno == EINVAL!);
 }
 
 pub class TcpSocket {
-    - addr: net.Address
+    - addr: Address
     - fd: i32
 
-    func `init`(fd: i32, addr: net.Address) {
+    func `init`(fd: i32, addr: Address) {
         this.fd = fd
         this.addr = addr
         configureSocket(this.fd)
@@ -47,14 +51,14 @@ pub class TcpSocket {
         var total: u64 = 0;
 
         while (fd != -1 && remaining > 0) {
-            var sz = net.recv(fd, &data.[total], remaining, 0);
+            var sz = socket.recv(fd, &data.[total], remaining, 0);
             if (sz == 0) {
                 close()
                 return total
             }
 
             if (sz == -1) {
-                if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                if (errno != EAGAIN! && errno != EWOULDBLOCK!) {
                     return null
                 }
 
@@ -82,20 +86,20 @@ pub class TcpSocket {
         var remaining = size;
         var total: u64 = 0;
         while (fd != -1 && remaining > 0) {
-            var sz = net.send(fd, &data.[total], remaining, 0);
+            var sz = socket.send(fd, &data.[total], remaining, 0);
             if (sz == -1) {
-                if(errno == EPIPE) {
-                    errno = ECONNRESET
+                if(errno == EPIPE!) {
+                    errno = ECONNRESET!
                     close()
                     return null
                 }
 
-                if(errno != EAGAIN && errno != EWOULDBLOCK)
+                if(errno != EAGAIN! && errno != EWOULDBLOCK!)
                     return null
 
                 var rc = fdWaitOut(fd, deadline);
                 if (rc == 0) {
-                    errno = ETIMEDOUT
+                    errno = ETIMEDOUT!
                     return null
                 }
                 continue
@@ -137,10 +141,10 @@ pub class TcpSocket {
 }
 
 pub class TcpListener {
-    - bind: net.Address
+    - bind: Address
     - fd: i32
 
-    func `init`(addr: net.Address) {
+    func `init`(addr: Address) {
         bind = addr
         fd = -1
     }
@@ -148,19 +152,19 @@ pub class TcpListener {
     func `!!`() => (<&void> this) != null && fd != -1
 
     func listen(backlog: i32 = 127) {
-        fd = net.socket(bind.family(), net.SOCK_STREAM, 0)
+        fd = socket.socket(bind.family(), SOCK_STREAM!, 0)
         if (fd == -1) {
             return false
         }
         configureSocket(fd)
 
-        var rc = net.bind(fd, bind.nativeAddr(), bind.len());
+        var rc = socket.bind(fd, bind.nativeAddr(), bind.len());
         if (rc == -1) {
             close()
             return false
         }
 
-        rc = net.listen(fd, backlog)
+        rc = socket.listen(fd, backlog)
         if (rc != 0) {
             close()
             return false
@@ -168,7 +172,7 @@ pub class TcpListener {
 
         if (bind.port() == 0) {
             var len = sizeof!(bind): u32;
-            rc = net.getsockname(fd, bind.nativeAddr(), &len)
+            rc = socket.getsockname(fd, bind.nativeAddr(), &len)
             if (rc == -1) {
                 close()
                 return false
@@ -183,17 +187,17 @@ pub class TcpListener {
         while (this) {
             /* Try to get new connection (non-blocking). */
             var len = sizeof!(addr): u32;
-            var accepted = net.accept(fd, addr.nativeAddr(), &len);
+            var accepted = socket.accept(fd, addr.nativeAddr(), &len);
             if (accepted >= 0) {
                 return TcpSocket(accepted, addr)
             }
 
-            if (errno != EAGAIN && errno != EWOULDBLOCK)
+            if (errno != EAGAIN! && errno != EWOULDBLOCK!)
                 return null
             /* Wait till new connection is available. */
             var rc = fdWaitIn(fd, deadline);
             if (rc != EV_IN) {
-                errno = ETIMEDOUT;
+                errno = ETIMEDOUT!;
                 return null
             }
         }
@@ -203,28 +207,28 @@ pub class TcpListener {
     @inline
     func close() : void => shutdown()
 
-    func shutdown(how: i32 = net.SHUT_RDWR): void {
+    func shutdown(how: i32 = SHUT_RDWR!): void {
         if (fd != -1) {
-            net.shutdown(fd, net.SHUT_RD)
-            C.close(fd)
+            socket.shutdown(fd, SHUT_RD!)
+            unistd.close(fd)
             fd = -1
         }
     }
 }
 
-pub async func tcpConnect(addr: net.Address, deadline: i64 = 0) : TcpSocket {
+pub async func tcpConnect(addr: Address, deadline: i64 = 0) : TcpSocket {
     /* Open a socket. */
-    var fd = net.socket(addr.family(), net.SOCK_STREAM, 0);
+    var fd = socket.socket(addr.family(), SOCK_STREAM!, 0);
     if (fd == -1)
         return null
 
     var sock = TcpSocket(fd, addr);
 
     /* Connect to the remote endpoint. */
-    var rc = net.connect(fd, addr.addr: &net.sockaddr, addr.len():i32);
+    var rc = socket.connect(fd, addr.nativeAddr(), addr.len():i32);
     if (rc != 0) {
         assert!(rc == -1)
-        if (errno != EINPROGRESS)
+        if (errno != EINPROGRESS!)
             return null
 
         rc = fdWaitIn(fd, deadline)
@@ -234,22 +238,22 @@ pub async func tcpConnect(addr: net.Address, deadline: i64 = 0) : TcpSocket {
         }
 
         var err: i32;
-        var errSize = sizeof!(err) : u32;
-        rc = net.getsockopt(fd, net.SOL_SOCKET, net.SO_ERROR, &err : &void, &errSize)
+        var errSize = sizeof!(err) !: u32;
+        rc = socket.getsockopt(fd, SOL_SOCKET!, SO_ERROR!, &err : &void, &errSize)
         if (rc != 0) {
             err = errno
-            C.close(fd)
+            unistd.close(fd)
             errno = err
             return null
         }
 
         if (err != 0) {
-            C.close(fd)
+            unistd.close(fd)
             errno = err
             return null
         }
     }
 
     errno = 0
-    return getref(sock)
+    return sock
 }
