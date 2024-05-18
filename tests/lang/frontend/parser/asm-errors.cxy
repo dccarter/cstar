@@ -1,0 +1,35 @@
+// @TEST: FileCheck
+
+func main() {
+    /* missing assembly code */
+    // CHECK: error: unexpected token, expecting 'string literal', but got '')''
+    { asm() }
+
+    /* invalid outputs */
+    // CHECK: error: unexpected token, expecting 'string literal', but got 'identifier'
+    { asm("nop": x) }
+
+    // CHECK: error: unexpected inline assembly output constraints, expecting constraint to start with '=' followed by a character, got "hell"
+    { asm("nop": "hell"(x)) }
+
+    // CHECK: error: unexpected token, expecting ''('', but got 'identifier'
+    { asm("nop": "=r"x) }
+
+    // CHECK: error: expecting an L-value for inline assembly output
+    { asm("nop": "=r"(10)) }
+
+    // CHECK: error: unexpected token, expecting 'string literal', but got 'integer literal'
+    { asm("nop" :: 10) }
+
+    // CHECK: error: unexpected token, expecting ''('', but got 'integer literal'
+    { asm("nop" :: "r"10) }
+
+    // CHECK: error: unexpected token, expecting 'string literal', but got 'identifier'
+    { asm("nop" ::: x) }
+
+    // CHECK: error: unexpected token, expecting 'string literal', but got 'integer literal'
+    { asm("nop" :::: 10) }
+
+    // CHECK:  error: unexpected token, expecting '')'', but got '':''
+    { asm("nop" ::::: 10) }
+}

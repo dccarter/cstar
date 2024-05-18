@@ -30,3 +30,10 @@ floating-point literal(1.9e-05) @(37:1, 37:7)
 string literal("") @(40:1, 40:3)
 string literal("Hello World") @(41:1, 41:14)
 string literal("Hello 世界") @(42:1, 42:15)
+string literal("Hello multi line") @(45:3, 45:21)
+integer literal(10) @(46:1, 46:3)
+string literal("
+Hello World
+Hello 世界
+"こんにちは世界"
+") @(47:3, 51:2)

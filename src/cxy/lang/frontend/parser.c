@@ -254,6 +254,29 @@ static AstNode *parseMany(Parser *P,
     return list.first;
 }
 
+static AstNode *parseMany2(Parser *P,
+                           TokenTag stop1,
+                           TokenTag stop2,
+                           TokenTag sep,
+                           AstNode *(with)(Parser *))
+{
+    AstNodeList list = {NULL};
+    while (!check(P, stop1, stop2) && !isEoF(P)) {
+        listAddAstNode(&list, with(P));
+        if (!match(P, sep) && !check(P, stop1, stop2)) {
+            parserError(P,
+                        &current(P)->fileLoc,
+                        "unexpected token '{s}', expecting '{s}/{s}' or '{s}'",
+                        (FormatArg[]){{.s = token_tag_to_str(current(P)->tag)},
+                                      {.s = token_tag_to_str(stop1)},
+                                      {.s = token_tag_to_str(stop2)},
+                                      {.s = token_tag_to_str(sep)}});
+        }
+    }
+
+    return list.first;
+}
+
 static inline AstNode *parseManyNoSeparator(Parser *P,
                                             TokenTag stop,
                                             AstNode *(with)(Parser *))
@@ -948,6 +971,91 @@ static AstNode *block(Parser *P)
                       &(AstNode){.tag = astBlockStmt,
                                  .flags = unsafe,
                                  .blockStmt = {.stmts = stmts.first}});
+}
+
+static AstNode *assemblyOutput(Parser *P)
+{
+    Token tok = *consume0(P, tokStringLiteral);
+    cstring constraint = getTokenString(P, &tok, true);
+    if (constraint[0] != '=' || constraint[1] == '\0') {
+        parserError(
+            P,
+            &tok.fileLoc,
+            "unexpected inline assembly output constraints, expecting "
+            "constraint to start with '=' followed by a character, got \"{s}\"",
+            (FormatArg[]){{.s = constraint}});
+    }
+
+    consume0(P, tokLParen);
+    AstNode *expr = expressionWithoutStructs(P);
+    consume0(P, tokRParen);
+
+    if (!nodeIsLeftValue(expr)) {
+        parserError(P,
+                    &expr->loc,
+                    "expecting an L-value for inline assembly output",
+                    NULL);
+    }
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astAsmOperand,
+                   .asmOperand = {.constraint = constraint, .operand = expr}});
+}
+
+static AstNode *assemblyInput(Parser *P)
+{
+    Token tok = *consume0(P, tokStringLiteral);
+    cstring constraint = getTokenString(P, &tok, true);
+    if (constraint[0] == '\0') {
+        parserError(P,
+                    &tok.fileLoc,
+                    "unexpected inline assembly input constraints, expecting "
+                    "a non empty string, got \"{s}\"",
+                    (FormatArg[]){{.s = constraint}});
+    }
+
+    consume0(P, tokLParen);
+    AstNode *expr = expressionWithoutStructs(P);
+    consume0(P, tokRParen);
+
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astAsmOperand,
+                   .asmOperand = {.constraint = constraint, .operand = expr}});
+}
+
+static AstNode *assembly(Parser *P)
+{
+    AstNodeList stmts = {NULL};
+    Token tok = *consume0(P, tokAsm);
+
+    consume0(P, tokLParen);
+    cstring template = getTokenString(P, consume0(P, tokStringLiteral), true);
+    AstNode *outputs = NULL, *inputs = NULL, *clobbers = NULL, *flags = NULL;
+    if (match(P, tokColon)) {
+        outputs = parseMany2(P, tokColon, tokRParen, tokComma, assemblyOutput);
+    }
+    if (match(P, tokColon)) {
+        inputs = parseMany2(P, tokColon, tokRParen, tokComma, assemblyInput);
+    }
+    if (match(P, tokColon)) {
+        clobbers = parseMany2(P, tokColon, tokRParen, tokComma, parseString);
+    }
+    if (match(P, tokColon)) {
+        flags = parseMany2(P, tokColon, tokRParen, tokComma, parseString);
+    }
+    consume0(P, tokRParen);
+
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astAsm,
+                                 .inlineAssembly = {.text = template,
+                                                    .outputs = outputs,
+                                                    .inputs = inputs,
+                                                    .clobbers = clobbers,
+                                                    .flags = flags}});
 }
 
 static AstNode *array(Parser *P)
@@ -1888,6 +1996,9 @@ static AstNode *statement(Parser *P, bool exprOnly)
         break;
     case tokLBrace:
         stmt = block(P);
+        break;
+    case tokAsm:
+        stmt = assembly(P);
         break;
     default: {
         AstNode *expr = expression(P, false);

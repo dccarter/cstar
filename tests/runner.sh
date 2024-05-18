@@ -140,7 +140,7 @@ timestamp() {
   fi
 }
 
-TESTS_DIR=$(realpath ../tests)
+TESTS_DIR=$(realpath $(dirname "$0"))
 CXY_DEFAULT_COMMAND=./cxy
 CXY_STDLIB=./stdlib
 CXY_DEFAULT_ARGS="dev --dump-ast CXY --no-color --clean-ast --warnings=~RedundantStmt"
@@ -249,7 +249,7 @@ run_test () {
   fi
 
   echo -e "Running test case ${test_case}"
-  expected="${test_dir}/__snapshots/${2}${snapshot_ext}"
+  expected="${test_dir}/__snapshots/$(basename $2)${snapshot_ext}"
   output=$(${run_cmd} $run_args $test_path 2>&1)
   status=$?
 
@@ -265,7 +265,7 @@ run_test () {
       fi
     elif [ -e "${directory}/__snapshots/${2}.log" ] ; then
       # Prefer log snapshot
-      expected="${directory}/__snapshots/${2}.log"
+      expected="${directory}/__snapshots/$(basename $2).log"
     fi
 
     if [ -n "${UPDATE_SNAPSHOT}" ]
@@ -314,8 +314,8 @@ for test in $(find $TESTS_DIR -type f -name '*.cxy' -not -path '**/__snapshots/*
     continue
   fi
 
-  test_case=$(basename -- "${test}")
-  test_case=${test_case%.cxy}
+  test_case="${test#"$TESTS_DIR"/}"
+  test_case=${test_case%.*}
   run_test "${test}" "${test_case}"
   status=$?
   test_start=$(timestamp)

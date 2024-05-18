@@ -113,6 +113,7 @@ extern "C" {
     f(CInclude,"cInclude")          \
     f(CSources, "cSources")         \
     f(As,      "as")                \
+    f(Asm,     "asm")               \
     f(From,    "from")              \
     f(Unsafe,  "unsafe")            \
     f(Interface, "interface")       \

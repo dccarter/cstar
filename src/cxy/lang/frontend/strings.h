@@ -94,10 +94,12 @@ extern "C" {
     f(reject)                   \
     f(result)                   \
     ff(__LLVM_global_ctors, "llvm.global_ctors") \
-    ff(ctor_section,        ".ctor")\
+    ff(ctor_section,        ".ctor")             \
     ff(sptr_ref,            "__smart_ptr_get")   \
     ff(sptr_drop,           "__smart_ptr_drop")  \
-    ff(copy,                "__copy")
+    ff(copy,                "__copy")            \
+    ff(AsmInputPrefix,      "\"r\"")             \
+    ff(AsmOutputPrefix,     "\"=r\"")
 
 // clang-format on
 

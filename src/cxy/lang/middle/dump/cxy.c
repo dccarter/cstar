@@ -60,6 +60,24 @@ static void dumpManyAstNodes(ConstAstVisitor *visitor,
         format(ctx->state, " ", NULL);                                         \
     }
 
+static void dumpStringLiteral(DumpContext *ctx, cstring value, bool quotes)
+{
+    if (quotes)
+        format(ctx->state, "{$}\"", (FormatArg[]){{.style = stringStyle}});
+    else
+        format(ctx->state, "{$}", (FormatArg[]){{.style = stringStyle}});
+
+    cstring p = value;
+    while (*p) {
+        printEscapedChar(ctx->state, *p++);
+    }
+
+    if (quotes)
+        format(ctx->state, "\"{$}", (FormatArg[]){{.style = resetStyle}});
+    else
+        format(ctx->state, "{$}", (FormatArg[]){{.style = resetStyle}});
+}
+
 static void dumpFunctionName(DumpContext *ctx, const AstNode *node)
 {
     if (ctx->isSimplified && isMemberFunction(node)) {
@@ -93,6 +111,66 @@ static void dumpBackendCall(ConstAstVisitor *visitor, const AstNode *node)
                              node->backendCallExpr.args ? ", " : NULL,
                              ", ",
                              ")");
+}
+
+static void dumpInlineAssembly(ConstAstVisitor *visitor, const AstNode *node)
+{
+    DumpContext *ctx = getConstAstVisitorContext(visitor);
+    printKeyword(ctx->state, "asm");
+    format(
+        ctx->state, "({>}\n", (FormatArg[]){{.s = node->inlineAssembly.text}});
+    dumpStringLiteral(ctx, node->inlineAssembly.text, true);
+    format(ctx->state, " :", NULL);
+
+    if (node->inlineAssembly.outputs) {
+        AstNode *output = node->inlineAssembly.outputs;
+        format(ctx->state, "\n", NULL);
+        for (; output; output = output->next) {
+            format(ctx->state,
+                   "{$}\"{s}\"{$}(",
+                   (FormatArg[]){{.style = stringStyle},
+                                 {.s = output->asmOperand.constraint},
+                                 {.style = resetStyle}});
+            astConstVisit(visitor, output->asmOperand.operand);
+            format(ctx->state, ")", NULL);
+            if (output->next) {
+                format(ctx->state, ", ", NULL);
+            }
+        }
+        format(ctx->state, " ", NULL);
+    }
+    format(ctx->state, ":", NULL);
+
+    if (node->inlineAssembly.inputs) {
+        AstNode *input = node->inlineAssembly.inputs;
+        format(ctx->state, "\n", NULL);
+        for (; input; input = input->next) {
+            format(ctx->state,
+                   "{$}\"{s}\"{$}(",
+                   (FormatArg[]){{.style = stringStyle},
+                                 {.s = input->asmOperand.constraint},
+                                 {.style = resetStyle}});
+            astConstVisit(visitor, input->asmOperand.operand);
+            format(ctx->state, ")", NULL);
+            if (input->next) {
+                format(ctx->state, ", ", NULL);
+            }
+        }
+        format(ctx->state, " ", NULL);
+    }
+    format(ctx->state, ":", NULL);
+
+    if (node->inlineAssembly.clobbers) {
+        dumpManyAstNodesEnclosed(
+            visitor, node->inlineAssembly.clobbers, "\n", ", ", " ");
+    }
+    format(ctx->state, ":", NULL);
+
+    if (node->inlineAssembly.flags) {
+        dumpManyAstNodesEnclosed(
+            visitor, node->inlineAssembly.flags, "\n", ", ", NULL);
+    }
+    format(ctx->state, "{<}\n)", NULL);
 }
 
 static void dumpTypeRef(ConstAstVisitor *visitor, const AstNode *node)
@@ -181,24 +259,6 @@ static void dumpGenericParam(ConstAstVisitor *visitor, const AstNode *node)
         format(ctx->state, ": ", NULL);
         dumpManyAstNodes(visitor, node->genericParam.constraints, " | ");
     }
-}
-
-static void dumpStringLiteral(DumpContext *ctx, cstring value, bool quotes)
-{
-    if (quotes)
-        format(ctx->state, "{$}\"", (FormatArg[]){{.style = stringStyle}});
-    else
-        format(ctx->state, "{$}", (FormatArg[]){{.style = stringStyle}});
-
-    cstring p = value;
-    while (*p) {
-        printEscapedChar(ctx->state, *p++);
-    }
-
-    if (quotes)
-        format(ctx->state, "\"{$}", (FormatArg[]){{.style = resetStyle}});
-    else
-        format(ctx->state, "{$}", (FormatArg[]){{.style = resetStyle}});
 }
 
 static void dumpStructField(ConstAstVisitor *visitor, const AstNode *node)
@@ -1046,6 +1106,7 @@ AstNode *dumpCxySource(CompilerDriver *driver, AstNode *node, FILE *file)
         [astGenericParam] = dumpGenericParam,
         [astImportEntity] = dumpImportEntity,
         [astBackendCall] = dumpBackendCall,
+        [astAsm] = dumpInlineAssembly,
         [astTypeRef] = dumpTypeRef,
         [astNullLit] = dumpNullLit,
         [astBoolLit] = dumpBoolLit,

@@ -106,7 +106,6 @@ static void skipUntilSpaceOrPunctuation(Lexer *lexer)
 static bool acceptChar(Lexer *lexer, char c)
 {
     if (!isEofReached(lexer)) {
-        const char x = getCurChar(lexer);
         if (getCurChar(lexer) == c) {
             skipChar(lexer);
             return true;
@@ -177,6 +176,29 @@ static Token makeInvalidToken(Lexer *lexer,
     Token token = makeToken(lexer, begin, tokError);
     logError(lexer->log, &token.fileLoc, errMsg, NULL);
     return token;
+}
+
+static Token multilineString(Lexer *lexer)
+{
+    FilePos begin = lexer->filePos;
+    skipChar(lexer);
+    while (!isEofReached(lexer)) {
+        if (acceptChar(lexer, '"')) {
+            FilePos end = lexer->filePos;
+            if (getCurChar(lexer) == '"' && peekNextChar(lexer) == '"') {
+                skipChar(lexer);
+                skipChar(lexer);
+                return (Token){.fileLoc = {.fileName = lexer->fileName,
+                                           .begin = begin,
+                                           .end = end},
+                               .tag = tokStringLiteral};
+            }
+        }
+        else {
+            skipChar(lexer);
+        }
+    }
+    return makeInvalidToken(lexer, &begin, "unterminated multiline string");
 }
 
 Token advanceLexer(Lexer *lexer)
@@ -376,6 +398,11 @@ Token advanceLexer(Lexer *lexer)
         }
 
         if (acceptChar(lexer, '\"')) {
+            if (getCurChar(lexer) == '\"' && peekNextChar(lexer) == '\"') {
+                skipChar(lexer);
+                return multilineString(lexer);
+            }
+
             parsingStringLiteral = true;
         lexerLexString:
             while (getCurChar(lexer) != '\"') {

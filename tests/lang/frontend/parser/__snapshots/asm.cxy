@@ -1,0 +1,38 @@
+func main(args: [string]) {
+  asm(
+    "nop" ::::
+  )
+  var x: i32
+  var y: f64
+  asm(
+    "nop" :
+    "=r"(x), "=r"(y) :::
+  )
+  asm(
+    "nop" :
+    "=r"(x) :
+    "r"(10), "r"(y) ::
+  )
+  asm(
+    "nop" :
+    "=r"(y) :
+    "r"(1.000000e+01) :
+    "eax", "memory" :
+  )
+  asm(
+    "nop" :
+    "=r"(y) :
+    "r"(1.000000e+01) :
+    "eax", "memory" :
+    "noinline"
+  )
+  asm(
+    "nop" :::
+    "eax", "memory" :
+    "noinline"
+  )
+  asm(
+    "\n    nop\n    mov $$1234, $0\n    " :
+    "=r"(x) :::
+  )
+}

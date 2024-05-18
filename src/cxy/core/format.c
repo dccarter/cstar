@@ -341,6 +341,9 @@ void printEscapedChar(FormatState *state, char chr)
     case '\0':
         writeStr(state, "\\0");
         return;
+    case '\"':
+        writeStr(state, "\\\"");
+        return;
     case '\n':
         writeStr(state, "\\n");
         return;

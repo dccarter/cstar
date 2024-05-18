@@ -82,6 +82,8 @@ cInclude
 cSources
 // CHECK: 'as' @([[@LINE+1]]
 as
+// CHECK: 'asm' @([[@LINE+1]]
+asm
 // CHECK: 'from' @([[@LINE+1]]
 from
 // CHECK: 'unsafe' @([[@LINE+1]]

@@ -442,6 +442,40 @@ static void visitDefine(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "args", node->define.container);
 }
 
+static void visitBackendCall(ConstAstVisitor *visitor, const AstNode *node)
+{
+    YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
+    nodeAddHeader(visitor, node);
+
+    emitMapKey(ctx, node, "func");
+    emitUInteger(ctx, node, node->backendCallExpr.func);
+    manyNodesToYaml(visitor, "args", node->backendCallExpr.args);
+}
+
+static void visitAsmOperand(ConstAstVisitor *visitor, const AstNode *node)
+{
+
+    YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
+    nodeAddHeader(visitor, node);
+
+    emitMapKey(ctx, node, "constraint");
+    emitStringLiteral(ctx, node, node->asmOperand.constraint);
+    nodeToYaml(visitor, "operand", node->asmOperand.operand);
+}
+
+static void visitInlineAssembly(ConstAstVisitor *visitor, const AstNode *node)
+{
+    YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
+    nodeAddHeader(visitor, node);
+
+    emitMapKey(ctx, node, "template");
+    emitStringLiteral(ctx, node, node->inlineAssembly.text);
+    manyNodesToYaml(visitor, "outputs", node->inlineAssembly.outputs);
+    manyNodesToYaml(visitor, "inputs", node->inlineAssembly.inputs);
+    manyNodesToYaml(visitor, "clobbers", node->inlineAssembly.clobbers);
+    manyNodesToYaml(visitor, "flags", node->inlineAssembly.flags);
+}
+
 static void visitImport(ConstAstVisitor *visitor, const AstNode *node)
 {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
@@ -1031,6 +1065,9 @@ AstNode *dumpAstToYaml(CompilerDriver *driver, AstNode *node, FILE *file)
         [astStringLit] = visitLiteral,
         [astStringExpr] = visitStrExpr,
         [astDefine] = visitDefine,
+        [astBackendCall] = visitBackendCall,
+        [astAsmOperand] = visitAsmOperand,
+        [astAsm] = visitInlineAssembly,
         [astImportDecl] = visitImport,
         [astImportEntity] = visitImportEntity,
         [astModuleDecl] = visitModuleDecl,

@@ -9,6 +9,7 @@
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/Verifier.h>
 
+#include <llvm/IR/InlineAsm.h>
 #include <vector>
 
 static void moveVariable(cxy::LLVMContext &context, AstNode *pNode);
@@ -915,7 +916,86 @@ static void visitVariableDecl(AstVisitor *visitor, AstNode *node)
     ctx.returnValue(variable);
 }
 
-void visitFuncDecl(AstVisitor *visitor, AstNode *node)
+static void visitInlineAssembly(AstVisitor *visitor, AstNode *node)
+{
+    auto &ctx = cxy::LLVMContext::from(visitor);
+    std::string constraints{};
+    llvm::raw_string_ostream ss(constraints);
+
+    llvm::Type *outputType = nullptr;
+    ctx.emitDebugLocation(node);
+
+    if (node->inlineAssembly.outputs) {
+        AstNode *output = node->inlineAssembly.outputs;
+        llvm::SmallVector<llvm::Type *, 4> outputs{};
+        for (; output; output = output->next) {
+            ss << output->asmOperand.constraint;
+            if (output->next)
+                ss << ",";
+            outputs.push_back(ctx.getLLVMType(output->type));
+        }
+
+        if (outputs.size() == 1) {
+            outputType = outputs[0];
+        }
+        else {
+            outputType = llvm::StructType::get(ctx.context, outputs);
+        }
+    }
+    else {
+        outputType = llvm::Type::getVoidTy(ctx.context);
+    }
+
+    llvm::SmallVector<llvm::Type *, 4> inputTypes;
+    llvm::SmallVector<llvm::Value *, 4> inputValues;
+    if (node->inlineAssembly.inputs) {
+        if (!constraints.empty())
+            ss << ",";
+
+        AstNode *input = node->inlineAssembly.inputs;
+        for (; input; input = input->next) {
+            ss << input->asmOperand.constraint;
+            if (input->next)
+                ss << ",";
+            inputValues.push_back(
+                cxy::codegen(visitor, input->asmOperand.operand));
+            inputTypes.push_back(ctx.getLLVMType(input->type));
+        }
+    }
+
+    if (node->inlineAssembly.clobbers) {
+        if (!constraints.empty())
+            ss << ",";
+        AstNode *clobber = node->inlineAssembly.clobbers;
+        for (; clobber; clobber = clobber->next) {
+            ss << "~{" << clobber->stringLiteral.value << "}";
+            if (clobber->next)
+                ss << ",";
+        }
+    }
+
+    auto funcType = llvm::FunctionType::get(outputType, inputTypes, false);
+    auto func = llvm::InlineAsm::get(
+        funcType, node->inlineAssembly.text, constraints, false);
+    auto value = ctx.builder.CreateCall(funcType, func, inputValues);
+    if (node->inlineAssembly.outputs) {
+        auto load = ctx.stack().loadVariable(false);
+        AstNode *output = node->inlineAssembly.outputs;
+        if (output->next == nullptr) {
+            auto variable = cxy::codegen(visitor, output->asmOperand.operand);
+            ctx.builder.CreateStore(value, variable);
+            return;
+        }
+
+        for (u32 i = 1; output; output = output->next, i++) {
+            auto variable = cxy::codegen(visitor, output->asmOperand.operand);
+            auto extracted = ctx.builder.CreateExtractValue(value, {i});
+            ctx.builder.CreateStore(extracted, variable);
+        }
+    }
+}
+
+static void visitFuncDecl(AstVisitor *visitor, AstNode *node)
 {
     if (hasFlag(node, Abstract))
         return;
@@ -1000,7 +1080,7 @@ void visitFuncDecl(AstVisitor *visitor, AstNode *node)
     ctx.returnValue(func);
 }
 
-void visitExternDecl(AstVisitor *visitor, AstNode *node)
+static void visitExternDecl(AstVisitor *visitor, AstNode *node)
 {
     if (hasFlag(node, Abstract)) {
         return;
@@ -1020,25 +1100,25 @@ void visitExternDecl(AstVisitor *visitor, AstNode *node)
     }
 }
 
-void visitStructDecl(AstVisitor *visitor, AstNode *node)
+static void visitStructDecl(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     ctx.getLLVMType(node->type);
 }
 
-void visitClassDecl(AstVisitor *visitor, AstNode *node)
+static void visitClassDecl(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     ctx.getLLVMType(node->type);
 }
 
-void visitInterfaceDecl(AstVisitor *visitor, AstNode *node)
+static void visitInterfaceDecl(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     ctx.getLLVMType(node->type);
 }
 
-void visitUnionDecl(AstVisitor *visitor, AstNode *node)
+static void visitUnionDecl(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     auto load = ctx.stack().loadVariable(false);
@@ -1047,7 +1127,7 @@ void visitUnionDecl(AstVisitor *visitor, AstNode *node)
     node->codegen = ctx.getLLVMType(node->type);
 }
 
-void visitTypeDecl(AstVisitor *visitor, AstNode *node)
+static void visitTypeDecl(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     auto load = ctx.stack().loadVariable(false);
@@ -1134,6 +1214,7 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context, {
         [astProgram] = generateProgram,
+        [astAsm] = visitInlineAssembly,
         [astBackendCall] = generateBackendCall,
         [astIdentifier] = visitIdentifierExpr,
         [astIntegerLit] = visitIntegerLit,
