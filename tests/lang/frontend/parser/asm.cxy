@@ -1,0 +1,16 @@
+func main(args: [string]) {
+    asm("nop")
+    var x: i32;
+    var y: f64;
+    asm("nop": "=r"(x), "=r"(y))
+    asm("nop": "=r"(x): "r"(10), "r"(y))
+    asm("nop": "=r"(y): "r"(10.0): "eax", "memory")
+    asm("nop": "=r"(y): "r"(10.0): "eax", "memory": "noinline")
+    asm("nop"::: "eax", "memory": "noinline")
+    asm(
+    """
+    nop
+    mov $$1234, $0
+    """:
+    "=r"(x))
+}

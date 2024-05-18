@@ -1,7 +1,9 @@
 // import "add.h" as add
-import { getRemoteAddress } from "stdlib/net.cxy"
+// import { getRemoteAddress } from "stdlib/net.cxy"
 
 pub func main() {
-    const addr = getRemoteAddress("google.com", 80);
-    println(addr)
+    var x = 0:i32;
+
+    asm("mov $$1234, $0" : "=r"(x))
+    println(x)
 }

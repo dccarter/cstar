@@ -397,6 +397,29 @@ static void withSavedStack(Visitor func, AstVisitor *visitor, AstNode *node)
     ctx->stack = stack;
 }
 
+static void checkInlineAssembly(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    AstNode *input = node->inlineAssembly.inputs,
+            *output = node->inlineAssembly.outputs;
+
+    for (; input; input = input->next) {
+        input->type = checkType(visitor, input->asmOperand.operand);
+        if (typeIs(input->type, Error)) {
+            node->type = ERROR_TYPE(ctx);
+        }
+    }
+    if (typeIs(node->type, Error))
+        return;
+
+    for (; output; output = output->next) {
+        output->type = checkType(visitor, output->asmOperand.operand);
+        if (typeIs(output->type, Error)) {
+            node->type = ERROR_TYPE(ctx);
+        }
+    }
+}
+
 static void checkField(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
@@ -594,6 +617,7 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astUnionDecl] = checkUnionDecl,
         [astEnumDecl] = checkEnumDecl,
         [astGenericDecl] = checkGenericDecl,
+        [astAsm] = checkInlineAssembly,
         [astFieldDecl] = checkField,
         [astStructDecl] = checkStructDecl,
         [astClassDecl] = checkClassDecl,

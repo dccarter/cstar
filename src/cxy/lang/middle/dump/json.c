@@ -210,6 +210,56 @@ static void visitDefine(ConstAstVisitor *visitor, const AstNode *node)
     Return(ctx, jsonNode);
 }
 
+static void visitBackendCall(ConstAstVisitor *visitor, const AstNode *node)
+{
+    JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
+    cJSON *jsonNode = nodeCreateJSON(visitor, node);
+
+    cJSON_AddNumberToObject(jsonNode, "func", node->backendCallExpr.func);
+
+    cJSON_AddItemToObject(
+        jsonNode, "args", manyNodesToJson(visitor, node->backendCallExpr.args));
+
+    Return(ctx, jsonNode);
+}
+
+static void visitAsmOperand(ConstAstVisitor *visitor, const AstNode *node)
+{
+    JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
+    cJSON *jsonNode = nodeCreateJSON(visitor, node);
+
+    cJSON_AddStringToObject(
+        jsonNode, "constraint", node->asmOperand.constraint);
+    cJSON_AddItemToObject(
+        jsonNode, "operand", nodeToJson(visitor, node->asmOperand.operand));
+}
+
+static void visitInlineAssembly(ConstAstVisitor *visitor, const AstNode *node)
+{
+    JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
+    cJSON *jsonNode = nodeCreateJSON(visitor, node);
+
+    cJSON_AddStringToObject(jsonNode, "template", node->inlineAssembly.text);
+
+    cJSON_AddItemToObject(
+        jsonNode,
+        "outputs",
+        manyNodesToJson(visitor, node->inlineAssembly.outputs));
+    cJSON_AddItemToObject(
+        jsonNode,
+        "inputs",
+        manyNodesToJson(visitor, node->inlineAssembly.inputs));
+    cJSON_AddItemToObject(
+        jsonNode,
+        "clobbers",
+        manyNodesToJson(visitor, node->inlineAssembly.clobbers));
+    cJSON_AddItemToObject(jsonNode,
+                          "flags",
+                          manyNodesToJson(visitor, node->inlineAssembly.flags));
+
+    Return(ctx, jsonNode);
+}
+
 static void visitImport(ConstAstVisitor *visitor, const AstNode *node)
 {
     JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
@@ -901,6 +951,9 @@ AstNode *dumpAstJson(CompilerDriver *driver, AstNode *node, FILE *file)
         [astStringLit] = visitLiteral,
         [astStringExpr] = visitStrExpr,
         [astDefine] = visitDefine,
+        [astBackendCall] = visitBackendCall,
+        [astAsmOperand] = visitAsmOperand,
+        [astAsm] = visitInlineAssembly,
         [astImportDecl] = visitImport,
         [astImportEntity] = visitImportEntity,
         [astModuleDecl] = visitModuleDecl,

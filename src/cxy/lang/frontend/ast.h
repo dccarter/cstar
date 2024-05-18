@@ -112,6 +112,8 @@ struct StrPool;
     f(IntegerLit)           \
     f(FloatLit)             \
     f(StringLit)            \
+    f(Asm)                  \
+    f(AsmOperand)           \
     CXY_LANG_AST_EXP_TAGS(f)    \
     CXY_LANG_AST_STMT_TAGS(f)   \
     CXY_LANG_AST_DECL_TAGS(f)
@@ -266,6 +268,19 @@ struct AstNode {
         struct {
             const Type *target;
         } destructorRef;
+
+        struct {
+            cstring constraint;
+            AstNode *operand;
+        } asmOperand;
+
+        struct {
+            cstring text;
+            AstNode *outputs;
+            AstNode *inputs;
+            AstNode *clobbers;
+            AstNode *flags;
+        } inlineAssembly;
 
         struct {
             cstring value;

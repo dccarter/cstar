@@ -37,6 +37,15 @@
         MODE##Visit(visitor, node->define.type);                               \
         MODE##Visit(visitor, node->define.container);                          \
         break;                                                                 \
+    case astAsmOperand:                                                        \
+        MODE##Visit(visitor, node->asmOperand.operand);                        \
+        break;                                                                 \
+    case astAsm:                                                               \
+        MODE##VisitManyNodes(visitor, node->inlineAssembly.outputs);           \
+        MODE##VisitManyNodes(visitor, node->inlineAssembly.inputs);            \
+        MODE##VisitManyNodes(visitor, node->inlineAssembly.clobbers);          \
+        MODE##VisitManyNodes(visitor, node->inlineAssembly.flags);             \
+        break;                                                                 \
     case astProgram:                                                           \
         MODE##VisitManyNodes(visitor, node->program.top);                      \
         MODE##VisitManyNodes(visitor, node->program.decls);                    \

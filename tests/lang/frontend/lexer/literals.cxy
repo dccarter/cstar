@@ -40,3 +40,12 @@ false
 ""
 "Hello World"
 "Hello 世界"
+
+// Multiline string
+"""Hello multi line"""
+10
+"""
+Hello World
+Hello 世界
+"こんにちは世界"
+"""

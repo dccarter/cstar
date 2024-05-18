@@ -1,5 +1,5 @@
 
-### C template
+### C text
 # Prerequisites
 *.d
 
@@ -51,7 +51,7 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
-### C++ template
+### C++ text
 # Prerequisites
 
 # Compiled Object files
