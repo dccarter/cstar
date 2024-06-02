@@ -1682,6 +1682,17 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
     case astPath:
         CLONE_MANY(path, elements);
         break;
+    case astBackendCall:
+        CLONE_MANY(backendCallExpr, args);
+        break;
+    case astAsm:
+        CLONE_MANY(inlineAssembly, outputs);
+        CLONE_MANY(inlineAssembly, inputs);
+        CLONE_MANY(inlineAssembly, clobbers);
+        break;
+    case astAsmOperand:
+        CLONE_ONE(asmOperand, operand);
+        break;
     case astGenericParam:
         CLONE_MANY(genericParam, constraints);
         break;

@@ -40,7 +40,7 @@ static u64 addModuleTypeMember(NamedTypeMember *members,
     if (nodeIs(decl, Define)) {
         return addDefineToModuleMembers(members, index, decl, builtinFlags);
     }
-    else if (!nodeIs(decl, CCode)) {
+    else if (!nodeIs(decl, CCode) && !nodeIs(decl, Noop)) {
         decl->flags |= builtinFlags;
         members[index++] = (NamedTypeMember){
             .decl = decl, .name = getDeclarationName(decl), .type = decl->type};

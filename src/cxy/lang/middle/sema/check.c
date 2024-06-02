@@ -356,7 +356,12 @@ static void checkStmtExpr(AstVisitor *visitor, AstNode *node)
 
 static void checkGroupExpr(AstVisitor *visitor, AstNode *node)
 {
-    node->type = checkType(visitor, node->groupExpr.expr);
+    AstNode *expr = node->groupExpr.expr;
+    if (nodeIs(expr, BlockStmt)) {
+        node->tag = astStmtExpr;
+        expr->flags |= flgBlockReturns;
+    }
+    node->type = checkType(visitor, node->stmtExpr.stmt);
 }
 
 static void checkMacroCallExpr(AstVisitor *visitor, AstNode *node)

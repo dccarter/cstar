@@ -7,6 +7,7 @@
 #include "llvm.h"
 
 #include "lang/frontend/flag.h"
+#include "lang/frontend/strings.h"
 #include "lang/frontend/ttable.h"
 #include "lang/frontend/visitor.h"
 #include "lang/middle/builtins.h"
@@ -213,16 +214,17 @@ llvm::Type *LLVMContext::createStructType(const Type *type)
     std::vector<llvm::Type *> members{};
     AstNode *node = type->tStruct.decl;
     llvm::StructType *structType = nullptr;
-    if (type->tStruct.decl == nullptr) {
+    if (node == nullptr) {
         structType =
             llvm::StructType::create(context, makeTypeName(type, "Struct."));
     }
     else {
-        structType =
-            llvm::StructType::create(context, makeTypeName(type->tStruct.decl));
+        structType = llvm::StructType::create(context, makeTypeName(node));
     }
+
     node->codegen = structType;
     updateType(type, structType);
+    u64 size = 0;
 
     for (u64 i = 0; i < type->tStruct.members->count; i++) {
         NamedTypeMember *member = &type->tStruct.members->members[i];
@@ -233,9 +235,26 @@ llvm::Type *LLVMContext::createStructType(const Type *type)
             members.push_back(getLLVMType(member->type)->getPointerTo());
         else
             members.push_back(getLLVMType(member->type));
+
+        size += module().getDataLayout().getTypeAllocSize(members.back());
+    }
+
+    if (auto align = findAttribute(node, S_align)) {
+        size = module().getDataLayout().getTypeAllocSize(
+            llvm::StructType::create(context, members));
+        if (auto value = getAttributeArgument(NULL, NULL, align, 0)) {
+            csAssert0(nodeIs(value, IntegerLit));
+            if (size % value->intLiteral.value != 0) {
+                // add padding
+                auto alignedSize = CXY_ALIGN(size, value->intLiteral.value);
+                members.push_back(llvm::ArrayType::get(
+                    llvm::Type::getInt8Ty(context), alignedSize - size));
+            }
+        }
     }
 
     structType->setBody(members);
+
     return structType;
 }
 
@@ -288,29 +307,39 @@ llvm::Type *LLVMContext::createUnionType(const Type *type)
         }
     }
 
-    llvm::Type *tag = nullptr;
-    if (alignment == 1)
-        tag = llvm::Type::getInt8Ty(context);
-    else if (alignment == 2)
-        tag = llvm::Type::getInt16Ty(context);
-    else if (alignment == 4)
-        tag = llvm::Type::getInt32Ty(context);
-    else
-        tag = llvm::Type::getInt64Ty(context);
+    if (!hasFlag(type, Native)) {
+        llvm::Type *tag = nullptr;
+        if (alignment == 1)
+            tag = llvm::Type::getInt8Ty(context);
+        else if (alignment == 2)
+            tag = llvm::Type::getInt16Ty(context);
+        else if (alignment == 4)
+            tag = llvm::Type::getInt32Ty(context);
+        else
+            tag = llvm::Type::getInt64Ty(context);
 
-    ((Type *)type)->tUnion.codegenTag = tag;
-    auto unionType = llvm::StructType::create(
-        context,
-        {tag, llvm::ArrayType::get(llvm::Type::getInt8Ty(context), maxSize)},
-        str);
+        ((Type *)type)->tUnion.codegenTag = tag;
+        auto unionType = llvm::StructType::create(
+            context,
+            {tag,
+             llvm::ArrayType::get(llvm::Type::getInt8Ty(context), maxSize)},
+            str);
 
-    for (u64 i = 0; i < type->tUnion.count; i++) {
-        auto member = getLLVMType(type->tUnion.members[i].type);
-        type->tUnion.members[i].codegen = llvm::StructType::create(
-            context, {tag, member}, str + "." + std::to_string(i));
+        for (u64 i = 0; i < type->tUnion.count; i++) {
+            auto member = getLLVMType(type->tUnion.members[i].type);
+            type->tUnion.members[i].codegen = llvm::StructType::create(
+                context, {tag, member}, str + "." + std::to_string(i));
+        }
+
+        return unionType;
     }
-
-    return unionType;
+    else {
+        auto unionType = llvm::StructType::create(
+            context,
+            {llvm::ArrayType::get(llvm::Type::getInt8Ty(context), maxSize)},
+            str);
+        return unionType;
+    }
 }
 
 llvm::Value *LLVMContext::castFromUnion(AstVisitor *visitor,
@@ -342,6 +371,9 @@ llvm::Value *LLVMContext::generateCastExpr(AstVisitor *visitor,
 
     to = unThisType(resolveType(to));
     if (to == unThisType(from))
+        return cxy::codegen(visitor, expr);
+
+    if (typeIs(from, Enum))
         return cxy::codegen(visitor, expr);
 
     if (typeIs(from, Union))

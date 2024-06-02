@@ -22,8 +22,11 @@ static void substituteAstNode(AstVisitor *visitor,
     AstNode *body =
         (clone && nodeIs(with, MacroDecl)) ? with->macroDecl.body : with;
     AstNodeList replacements = {};
-    for (; body; body = body->next) {
+    for (; body;) {
         AstNode *substitute = clone ? deepCloneAstNode(ctx->pool, body) : body;
+        body = body->next;
+        substitute->parentScope = node->parentScope;
+        substitute->next = NULL;
         astVisit(visitor, substitute);
         insertAstNode(&replacements, substitute);
     }
@@ -248,13 +251,13 @@ AstNode *preprocessAst(CompilerDriver *driver, AstNode *node)
         [astBinaryExpr] = visitBinaryExpr,
         [astTernaryExpr] = visitTernaryExpr,
         [astIfStmt] = visitIfStmt,
-        [astMacroDecl] = visitMacroDecl
+        [astMacroDecl] = visitMacroDecl,
     }, .fallback = astVisitFallbackVisitAll, .dispatch = dispatch);
     // clang-format on
 
     astVisit(&visitor, node);
 
     environmentFree(&env);
-    
+
     return node;
 }

@@ -1,0 +1,360 @@
+module coro
+
+import "alloca.h" as mem
+import "setjmp.h" as jmp
+import "unistd.h" as unistd
+import "sys/mman.h" as vmem
+
+import "./native/index.cxy"
+
+import "native/evloop/ae.h" as ae
+
+type Context = &jmp.sigjmp_buf
+type Stack = &void
+
+pub type State = ae.State
+
+struct List[T] {
+    head: &T = null
+    tail: &T = null
+    count: u64 = 0;
+
+    func push(item: &T) {
+        if (head ==  null) {
+            head = item
+        }
+        else {
+            this.tail.link = item
+        }
+        count++
+        tail = item
+    }
+
+    func pop() {
+        var item = head;
+        if (head != null) {
+            count--
+            head = this.head.link
+            if (head == null)
+                tail = null
+            item.link = null
+        }
+
+        return item
+    }
+}
+
+#if (defined __x86_64) {
+
+macro __cxy_coro_setjmp(ctx) =({
+    var ret: i32 = 0;
+    asm("""
+        lea LJMPRET${:uid}(%rip), %rcx
+        xor $0, $0
+        movq %rbx,   ($1)
+        movq %rbp,  8($1)
+        movq %r12, 16($1)
+        movq %r13, 24($1)
+        movq %r14, 32($1)
+        movq %r15, 40($1)
+        movq %rsp, 48($1)
+        movq %rcx, 56($1)
+        LJMPRET${:uid}:
+        """ :
+        "=&r"(ret) :
+        "r" (ctx!) :
+        "memory", "rcx", "rsi", "rdi", "r8", "r9", "r10", "r11", "cc"
+    )
+    ret;
+})
+
+macro __cxy_coro_longjmp(ctx) {
+    asm("""
+        movq      $$1, %rdx
+        movq 56($0), %rcx
+        movq 48($0), %rsp
+        movq 40($0), %r15
+        movq 32($0), %r14
+        movq 24($0), %r13
+        movq 16($0), %r12
+        movq  8($0), %rbp
+        movq   ($0), %rbx
+        .cfi_def_cfa %rdx, 0
+        .cfi_offset %rbx, 0
+        .cfi_offset %rbp, 8
+        .cfi_offset %r12, 16
+        .cfi_offset %r13, 24
+        .cfi_offset %r14, 32
+        .cfi_offset %r15, 40
+        .cfi_offset %rsp, 48
+        .cfi_offset %rip, 56
+        jmp    *%rcx
+        """ ::
+        "r"(ctx!) :
+        "rdx"
+    )
+}
+
+macro alloca(T) mk_bc!(bfiAlloca!, #&void, T!)
+
+macro __cxy_coro_setsp(x) {
+    alloca!(#u64)
+    @volatile asm("leaq (%rax), %rsp" :: "rax"(x!))
+}
+
+}
+
+@align(16)
+struct Coroutine {
+    link: &This = null;
+    id: i32 = -1;
+    result: i32 = 0;
+    /* When the coroutine is suspended 'ctx' holds the context (registers and such).*/
+    ctx: jmp.sigjmp_buf
+    ready : bool = false; /* Set when the coroutine has finished its execution. */
+    promise: &void = null
+    name: string = null
+
+    #if (defined CORO_VALGRIND) {
+        /*
+         * Valgrind stack identifier. This way, valgrind knows which areas of
+         * memory are used as stacks, and so it doesn't produce spurious warnings.
+         * Well, sort of. The mechanism is not perfect, but it's still better
+         * than nothing.
+         */
+        sid: i32 = -1;
+    }
+
+    func `init`(name: string = null, id: i32 = -1) {
+        this.name = name
+        this.id = id
+    }
+}
+
+@inline
+func stackAlign(size: u64, align: u64) =>
+    ((size + (align - 1)) & ~(align - 1)) + align
+
+#if (! defined CORO_STACK_SIZE) {
+    // 256kb stack by default
+    macro CORO_STACK_SIZE() 256:u64 * 1024:u64
+}
+
+var stackSize = stackAlign(CORO_STACK_SIZE!, unistd.sysconf(_SC_PAGE_SIZE!));
+
+struct CachedStack {
+    link: &This
+}
+
+macro MAX_CACHED_STACKS() 32:u64
+
+class CoroutineScheduler {
+    running: &Coroutine = null; /* Currently running coroutine. */
+    /* List of coroutines ready for execution. */
+    - ready: List[Coroutine] = List[Coroutine]{};
+    /* Coroutine that we don't launch */
+    - main: Coroutine = Coroutine("main", -1);
+    /* Cache some stacks */
+    - stacks: List[CachedStack] = List[CachedStack]{};
+    /* Coroutine ID generator */
+    - idGenerator: i32 = 0;
+    /* Counter used in rescheduling coroutines */
+    - counter : i32 = 0;
+    /* Event loop for handling IO events */
+    - eventLoop : &ae.aeEventLoop = null;
+
+    func `init`() {
+        // by default the running coroutine should be main
+        running = &main
+        eventLoop = ae.aeCreateEventLoop(this !: &void, 10);
+    }
+
+    - func allocStack() {
+        var ptr: &void = null;
+        var stack = this.stacks.pop();
+        if (stack != null) {
+            ptr = stack !: &void;
+        }
+        else {
+            ptr = vmem.mmap(
+                null,
+                stackSize,
+                PROT_READ! | PROT_WRITE!,
+                MAP_PRIVATE! | MAP_ANONYMOUS!,
+                -1,
+                0
+            );
+        }
+        var top = (ptr !: &u8) + stackSize;
+        return top !: &void
+    }
+
+    - func freeStack(ptr: &void) {
+        if (this.stacks.count >= MAX_CACHED_STACKS!) {
+            // delete the oldest stack
+            var stack = this.stacks.pop();
+            vmem.munmap(stack !: &void, stackSize)
+        }
+        else {
+            // cache the stack
+            var base = (ptr !: &u8) + (-stackSize);
+            this.stacks.push(base !: &CachedStack);
+        }
+    }
+
+    @inline
+    - func eventLoopWait(timeout: i64 = -1) {
+        ae.aeProcessEvents(
+            eventLoop,
+            ae.Flags.AE_FILE_EVENTS | ae.Flags.AE_TIME_EVENTS,
+            timeout
+        )
+    }
+
+    @[static]
+    func eventLoopCallback(loop: &ae.aeEventLoop, fd: i32, arg: &void, mask: i32) {
+        // resume the coroutine waiting for the event
+        var scheduler = loop.context !: This;
+        scheduler.resume(arg !: &Coroutine, mask)
+    }
+
+    @[static]
+    func eventLoopTimerFired(loop: &ae.aeEventLoop, id: i64, arg: &void): ae.Status {
+        // resume the coroutine waiting for the timer
+        var scheduler = loop.context !: This;
+        scheduler.resume(arg !: &Coroutine, <i32>id)
+        return ae.Status.AE_NO_MORE;
+    }
+
+    func suspend() : i32 {
+        if(counter >= 103) {
+            eventLoopWait(0)
+            counter = 0
+        }
+
+        if (running != null) {
+            if (__cxy_coro_setjmp!(&this.running.ctx))
+                return this.running.result
+        }
+
+        while (true) {
+            var coro = this.ready.pop();
+            if (coro != null) {
+                counter++;
+                coro.ready = false
+                running = coro
+                __cxy_coro_longjmp!(&coro.ctx)
+            }
+            eventLoopWait();
+            counter = 0;
+        }
+        return 0;
+    }
+
+    func resume(cr: &Coroutine, res: i32): void {
+        cr.ready = true;
+        cr.result = res
+        this.ready.push(cr)
+    }
+
+    func yield() {
+        resume(running, 0)
+        suspend()
+    }
+
+    func prologue(name: string, file: string, line: u64) {
+        var stack = allocStack();
+        var cr = ptroff!((stack !: &Coroutine) + (-1));
+        cr.link = null
+        cr.id = idGenerator++
+        cr.ready = false;
+        cr.name = name
+        resume(running, 0)
+        running = cr
+        return cr
+    }
+
+    func epilogue() {
+        var cr = running;
+        var sp = ptroff!(cr + 1);
+        running = null
+        freeStack(sp !: &void)
+
+        // this will reschedule a ready coroutine
+        suspend()
+    }
+
+    func fdWaitWrite(fd: i32) {
+        var status = ae.aeCreateFileEvent(
+            eventLoop,
+            fd,
+            ae.State.AE_WRITABLE,
+            eventLoopCallback,
+            running !: &void
+        );
+        if (status == ae.Status.AE_OK) {
+            // suspend the current coroutine
+            var result = suspend();
+            return result
+        }
+        return status
+    }
+
+    func fdWaitRead(fd: i32) {
+        var status = ae.aeCreateFileEvent(
+            eventLoop,
+            fd,
+            ae.State.AE_READABLE,
+            eventLoopCallback,
+            running !: &void
+        );
+        if (status == .AE_OK) {
+            // suspend the current coroutine
+            var result = suspend();
+            return result
+        }
+        return status
+    }
+
+    func sleep(ms: i64) {
+        if (ms > 0) {
+            var status = ae.aeCreateTimeEvent(
+                eventLoop,
+                ms,
+                eventLoopTimerFired,
+                running !: &void,
+                null
+            );
+            assert!(status != .AE_ERR)
+            suspend()
+        }
+    }
+
+    const func `str`(os: OutputStream) : OutputStream {
+        os << "CoroutineScheduler<" << (this !: &void) << ">";
+        return os;
+    }
+
+    func `deinit`() {
+    }
+}
+
+// @global installs the variable into the global scope
+@[thread, __override_builtin("__scheduler"), linkage("External")]
+var __cxy_coro_scheduler = CoroutineScheduler();
+macro yield() __scheduler.yield()
+macro running() __scheduler.running
+macro evin(FD) __scheduler.fdWaitRead(FD!)
+macro evout(FD) __scheduler.fdWaitWrite(FD!)
+macro sleep(MS) __scheduler.sleep(MS!)
+
+macro __spawn(CALL, NAME) {
+    if (__cxy_coro_setjmp!(&__scheduler.running.ctx) == 0) {
+        var cr = __scheduler.prologue(NAME!, file!, line!);
+        __cxy_coro_setsp!(cr !: &void)
+        CALL!
+        __scheduler.epilogue()
+    }
+}
+
+macro spawn(BLOCK) __spawn!(BLOCK!, null)

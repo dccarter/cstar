@@ -189,7 +189,10 @@ static void visitCharLit(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     ctx.emitDebugLocation(node);
-    ctx.returnValue(ctx.builder.getInt32(node->charLiteral.value));
+    if (node->type->primitive.id == prtChar)
+        ctx.returnValue(ctx.builder.getInt32(node->charLiteral.value));
+    else
+        ctx.returnValue(ctx.builder.getInt8(node->charLiteral.value));
 }
 
 static void visitIntegerLit(AstVisitor *visitor, AstNode *node)
@@ -713,7 +716,7 @@ static void visitWhileStmt(AstVisitor *visitor, AstNode *node)
     if (condition == nullptr)
         return;
     builder.CreateCondBr(condition, body, end);
-    cond = builder.GetInsertBlock();
+    // cond = builder.GetInsertBlock();
 
     // generate body
     func->insert(func->end(), body);
@@ -885,7 +888,8 @@ static void visitVariableDecl(AstVisitor *visitor, AstNode *node)
     auto func = ctx.builder.GetInsertBlock()->getParent();
     llvm::IRBuilder<> tmpBuilder(&func->getEntryBlock(),
                                  func->getEntryBlock().begin());
-    auto variable = ctx.createStackVariable(node->type, node->varDecl.name);
+    auto variable =
+        ctx.createStackVariable(node->type, node->varDecl.name ?: "");
     node->codegen = variable;
     if (auto debugCtx = ctx.debugCtx())
         debugCtx->emitLocalVariable(node, ctx.builder.GetInsertBlock());
@@ -1173,6 +1177,11 @@ static void generateBackendCall(AstVisitor *visitor, AstNode *node)
                 ctx.getLLVMType(node->type),
                 ctx.module().getDataLayout().getTypeAllocSize(
                     ctx.getLLVMType(type)));
+        break;
+    }
+    case bfiAlloca: {
+        const Type *type = node->backendCallExpr.args->type;
+        value = ctx.builder.CreateAlloca(ctx.getLLVMType(type));
         break;
     }
     }

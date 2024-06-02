@@ -10,10 +10,11 @@ import "errno.h" as errno
 
 import "native/dns/dns.h" as dns
 
-// allow compiler
+// This will get native sources compiled
 import "./native/index.cxy"
+// bring in coroutine stuff
+import "./coro.cxy"
 
-@inline
 func htons(x: u16) : u16 {
     #if (BYTE_ORDER! == BIG_ENDIAN!) {
         return x
@@ -248,6 +249,7 @@ pub func getLocalAddress(name: string, port: u16, mode: IPVersion = IPVersion.An
             it = it.ifa_next
             continue
         }
+
         var addr = (it.ifa_addr !: &socket.sockaddr);
         if (addr.sa_family == AF_INET!) {
             assert!(ipv4 == null)
@@ -280,6 +282,7 @@ pub func getLocalAddress(name: string, port: u16, mode: IPVersion = IPVersion.An
         var inaddr = addr.addr !: &inet6.sockaddr_in6;
         memcpy(inaddr, ipv6.ifa_addr, sizeof!(#inet6.sockaddr_in6))
         inaddr.sin6_port = htons(port)
+        printf("size is %d\n", sizeof!(#inet6.sockaddr_in6))
     }
 
     ifaddrs.freeifaddrs(ifaces);
@@ -339,7 +342,7 @@ pub async func getRemoteAddress(name: string, port: u16, mode: IPVersion = IPVer
         if (rc == EAGAIN!) {
             var fd = dns.dns_ai_pollfd(ai);
             assert!(fd >= 0)
-            // TODO await evin(fd)
+            evin!(fd)
             continue
         }
 

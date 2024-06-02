@@ -11,6 +11,7 @@ pub extern func abort(): void;
 pub extern func printf(s: string, ...args: auto): i32
 pub extern func write(fd: i32, buf: &const void, len: u64) : i64
 pub extern func lltoa(num: i64, buf: &char, radix: i32): &char
+pub extern func __error(): &i32
 
 func __cxy_assert_abort(file: string, line: u64, column: u64) {
     var buf: [char, 64];
@@ -34,6 +35,8 @@ pub func __cxy_assert(cond: bool, file: string, line: u64, column: u64) {
 else {
     macro assert(cond) ()
 }
+
+macro errno() =(*__error())
 
 @[pure, inline]
 pub func __cxy_panic(file: string, line: u64, column: u64, msg: string) {
@@ -113,7 +116,6 @@ func __smart_ptr_get(ptr: sptr) {
 
 @[pure, linkage("External")]
 func __smart_ptr_drop(ptr: sptr) {
-    printf("ref drop %p\n", ptr)
     if (ptr == null)
         return;
 
@@ -738,16 +740,18 @@ pub func __copy[T](t: T) {
 @[pure, linkage("External")]
 func __deinit_fwd[T](ptr: sptr) {
     @transient var obj = (ptr !: &T);
-    #if (T.has_deinit)
+    #if (T.has_deinit) {
         obj.op__deinit()
-
-    #for (const member: T.members) {
-        #if (member.isField) {
-            #const M = member.Tinfo;
-            #if (M.isClass)
-                obj.#{mk_ident!(member.name)} = null
-            else #if (M.isStruct || M.isTuple)
-                __deinit[M](obj.#{mk_ident!(member.name)})
+    }
+    else {
+        #for (const member: T.members) {
+            #if (member.isField) {
+                #const M = member.Tinfo;
+                #if (M.isClass)
+                    obj.#{mk_ident!(member.name)} = null
+                else #if (M.isStruct || M.isTuple)
+                    __deinit[M](obj.#{mk_ident!(member.name)})
+            }
         }
     }
 }

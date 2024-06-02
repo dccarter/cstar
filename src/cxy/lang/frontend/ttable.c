@@ -651,6 +651,24 @@ const Type *makeUnionType(TypeTable *table, UnionMember *members, u64 count)
     return ret.s;
 }
 
+const Type *makeCUnionType(TypeTable *table, UnionMember *members, u64 count)
+{
+    Type type = make(Type,
+                     .tag = typUnion,
+                     .flags = flgNative,
+                     .tUnion = {.members = members, .count = count});
+
+    GetOrInset ret = getOrInsertType(table, &type);
+    if (!ret.f) {
+        UnionMember *dest =
+            allocFromMemPool(table->memPool, sizeof(UnionMember) * count);
+        memcpy(dest, members, sizeof(UnionMember) * count);
+        ((Type *)ret.s)->tUnion.members = dest;
+    }
+
+    return ret.s;
+}
+
 const Type *makeTupleType(TypeTable *table,
                           const Type **members,
                           u64 count,
@@ -815,6 +833,26 @@ const Type *makeStructType(TypeTable *table,
         table, &(Type){.tag = typStruct, .name = name, .flags = flags});
 
     if (!ret.f) {
+        Type *type = (Type *)ret.s;
+        type->tStruct.members =
+            makeTypeMembersContainer(table, members, membersCount);
+        type->tStruct.decl = decl;
+    }
+
+    return ret.s;
+}
+
+const Type *makeReplaceStructType(TypeTable *table,
+                                  cstring name,
+                                  NamedTypeMember *members,
+                                  u64 membersCount,
+                                  AstNode *decl,
+                                  u64 flags)
+{
+    GetOrInset ret = getOrInsertType(
+        table, &(Type){.tag = typStruct, .name = name, .flags = flags});
+
+    if (!ret.f || ret.s->tStruct.members->count == 0) {
         Type *type = (Type *)ret.s;
         type->tStruct.members =
             makeTypeMembersContainer(table, members, membersCount);

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "core/utils.h"
+#include "lang/middle/builtins.h"
 #include "operator.h"
 
 #ifdef __cplusplus
@@ -55,6 +56,7 @@ extern "C" {
     f(typeof)                   \
     f(allocate)                 \
     f(alias)                    \
+    f(align)                    \
     f(name)                     \
     f(None)                     \
     f(Some)                     \
@@ -83,12 +85,14 @@ extern "C" {
     f(Appending)                \
     f(linkage)                  \
     f(section)                  \
+    f(packed)                   \
     f(__init)                   \
     f(__startup)                \
     f(__name)                   \
     f(__construct0)             \
     f(__construct1)             \
     f(__fwd)                    \
+    f(__override_builtin)       \
     f(CXY__main)                \
     f(resolve)                  \
     f(reject)                   \
@@ -107,6 +111,7 @@ extern "C" {
 CXY_BUILTIN_NAMES(f, f)
 AST_UNARY_EXPR_LIST(f)
 AST_BINARY_EXPR_LIST(f)
+OVERRIDABLE_BUILTINS(f)
 f(Truthy);
 #undef f
 

@@ -464,6 +464,44 @@ static AstNode *makeAstIdentifierNode(AstVisitor *visitor,
     return args;
 }
 
+static AstNode *makeAstStringNode(AstVisitor *visitor,
+                                  attr(unused) const AstNode *node,
+                                  attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (args == NULL) {
+        logError(ctx->L,
+                 &node->loc,
+                 "invalid number of arguments passed to `mk_str!` macro, "
+                 "expecting at least 1, got 0",
+                 NULL);
+        return NULL;
+    }
+
+    StringBuilder sb = {0};
+    stringBuilderInit(&sb);
+
+    for (AstNode *arg = args; arg;) {
+        AstNode *it = arg;
+        arg = arg->next;
+        if (!evaluate(visitor, it)) {
+            return NULL;
+        }
+
+        if (!evalStringBuilderAppend(ctx, &sb, it))
+            return NULL;
+    }
+
+    memset(args, 0, sizeof(*args));
+
+    char *str = stringBuilderRelease(&sb);
+    args->tag = astStringLit;
+    args->stringLiteral.value = makeString(ctx->strings, str);
+    free(str);
+    args->type = makeStringType(ctx->types);
+    return args;
+}
+
 static AstNode *makeAstIntegerNode(AstVisitor *visitor,
                                    attr(unused) const AstNode *node,
                                    attr(unused) AstNode *args)
@@ -588,7 +626,7 @@ static AstNode *makeBackendCallNode(AstVisitor *visitor,
     i64 id = args->intLiteral.value;
     AstNode *arg = args->next;
     for (; arg; arg = arg->next) {
-        const Type *type = args->type ?: evalType(ctx, args->next);
+        const Type *type = arg->type ?: evalType(ctx, arg);
         if (type == NULL || typeIs(type, Error))
             return NULL;
     }
@@ -1066,6 +1104,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "mk_field_expr", makeAstFieldExprNode},
     {.name = "mk_ident", makeAstIdentifierNode},
     {.name = "mk_integer", makeAstIntegerNode},
+    {.name = "mk_str", makeAstStringNode},
     {.name = "mk_struct_expr", makeAstStructExprNode},
     {.name = "mk_tuple_expr", makeAstTupleExprNode},
     {.name = "ptroff", makePointerOfNode},

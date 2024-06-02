@@ -126,10 +126,13 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
     if (paramsCount > argsCount) {
         // Add default parameters to function call
         AstNode *decl = callee_->func.decl;
-        AstNode *param = getNodeAtIndex(nodeIs(decl, FuncDecl)
-                                            ? decl->funcDecl.signature->params
-                                            : decl->funcType.params,
-                                        argsCount);
+        AstNode *params = nodeIs(decl, FuncDecl)
+                              ? decl->funcDecl.signature->params
+                              : decl->funcType.params;
+        if (params->funcParam.name == S_this)
+            params = params->next;
+
+        AstNode *param = getNodeAtIndex(params, argsCount);
         csAssert0(param);
 
         if (node->callExpr.args == NULL) {

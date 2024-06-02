@@ -4,6 +4,7 @@
 
 #include "bind.h"
 
+#include "lang/middle/builtins.h"
 #include "lang/middle/scope.h"
 
 #include "lang/frontend/capture.h"
@@ -63,6 +64,28 @@ void bindDeclaration(AstVisitor *visitor, AstNode *node)
     defineDeclaration(ctx, getDeclarationName(node), node);
 }
 
+void bindVariableDecl(AstVisitor *visitor, AstNode *node)
+{
+    BindContext *ctx = getAstVisitorContext(visitor);
+    const AstNode *override = findAttribute(node, S___override_builtin);
+    if (override == NULL)
+        return;
+    const AstNode *name =
+        getAttributeArgument(ctx->L, &override->loc, override, 0);
+    if (name == NULL)
+        return;
+    if (!nodeIs(name, StringLit)) {
+        logError(ctx->L,
+                 &name->loc,
+                 "expecting the name of the builtin variable to override "
+                 "(string literal)",
+                 NULL);
+        return;
+    }
+
+    overrideBuiltin(name->stringLiteral.value, node);
+}
+
 AstNode *bindAstPhase1(CompilerDriver *driver, Env *env, AstNode *node)
 {
     BindContext context = {.env = env, .L = driver->L, .pool = driver->pool};
@@ -80,6 +103,7 @@ AstNode *bindAstPhase1(CompilerDriver *driver, Env *env, AstNode *node)
         [astStructDecl] = bindDeclaration,
         [astClassDecl] = bindDeclaration,
         [astInterfaceDecl] = bindDeclaration,
+        [astVarDecl] = bindVariableDecl
     }, .fallback = astVisitFallbackVisitAll);
     // clang-format on
 
