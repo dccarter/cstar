@@ -1,8 +1,11 @@
+module tcp
 
 import { Address } from "./net.cxy"
-import "fcntl.h" as fcntl
+import { State } from "./coro.cxy"
+
+import "sys/fcntl.h" as fcntl
 import "sys/socket.h" as socket
-import "errno.h" as errno
+import "sys/errno.h" as errno
 import "unistd.h" as unistd
 
 func configureSocket(fd: i32)  {
@@ -19,7 +22,7 @@ func configureSocket(fd: i32)  {
 
     opt = 1;
     rc = socket.setsockopt(fd, SOL_SOCKET!, SO_NOSIGPIPE!, &opt, sizeof!(opt) !:u32);
-    assert!(rc == 0 || errno == EINVAL!);
+    assert!(rc == 0 && errno! != EINVAL!);
 }
 
 pub class TcpSocket {
@@ -37,17 +40,19 @@ pub class TcpSocket {
     }
 
     @inline
-    const func `hash`() => addr.op__hash()
+    const func `hash`() => this.addr.op__hash()
 
     @inline
-    const func `!!`() => (<&void>this) != null && fd != -1
+    const func `!!`() {
+        return (this !: &void) != null && fd != -1
+    }
 
     @inline
     const func address() => addr
 
-    func receive(buffer: &void, size: u64, deadline: i64 = 0) : u64? {
+    func receive(buffer: &void, size: u64, deadline: i64 = 0): u64? {
         var remaining = size;
-        var data = buffer : &char;
+        var data = buffer !: &char;
         var total: u64 = 0;
 
         while (fd != -1 && remaining > 0) {
@@ -58,16 +63,16 @@ pub class TcpSocket {
             }
 
             if (sz == -1) {
-                if (errno != EAGAIN! && errno != EWOULDBLOCK!) {
+                if (errno! != EAGAIN! && errno! != EWOULDBLOCK!) {
                     return null
                 }
 
                 if (total > 0)
                     return total
 
-                var rc = fdWaitIn(fd, deadline);
-                if (rc != EV_IN) {
-                    errno = ETIMEDOUT!;
+                var rc = evin!(fd);
+                if (rc != State.AE_READABLE) {
+                    errno! = ETIMEDOUT!;
                     return null
                 }
 
@@ -81,25 +86,25 @@ pub class TcpSocket {
         return total
     }
 
-    func sendBuffer(buffer: &const void, size: u64, deadline: i64 = 0) : u64? {
-        var data = buffer : &const char;
+    func sendBuffer(buffer: &const void, size: u64, deadline: i64 = 0): u64? {
+        var data = buffer !: &const char;
         var remaining = size;
         var total: u64 = 0;
         while (fd != -1 && remaining > 0) {
             var sz = socket.send(fd, &data.[total], remaining, 0);
             if (sz == -1) {
-                if(errno == EPIPE!) {
-                    errno = ECONNRESET!
+                if(errno! == EPIPE!) {
+                    errno! = ECONNRESET!
                     close()
                     return null
                 }
 
-                if(errno != EAGAIN! && errno != EWOULDBLOCK!)
+                if(errno! != EAGAIN! && errno! != EWOULDBLOCK!)
                     return null
 
-                var rc = fdWaitOut(fd, deadline);
-                if (rc == 0) {
-                    errno = ETIMEDOUT!
+                var rc = evout!(fd);
+                if (rc != State.AE_WRITABLE) {
+                    errno! = ETIMEDOUT!
                     return null
                 }
                 continue
@@ -108,17 +113,17 @@ pub class TcpSocket {
             total += sz
             remaining -= sz
         }
-        errno = 0
+        errno! = 0
         return total
     }
 
     func send[T](data: T, deadline: i64 = 0) {
         #if (T.isString) {
             #if (T.isStruct) {
-                return sendBuffer(data.str: &void, len!(data), deadline)
+                return sendBuffer(data.str !: &void, len!(data), deadline)
             }
             else {
-                return sendBuffer(data: &void, len!(data), deadline)
+                return sendBuffer(data !: &void, len!(data), deadline)
             }
         }
         else #if (T.isSlice) {
@@ -129,15 +134,19 @@ pub class TcpSocket {
         }
     }
 
-    func close() : void {
+    func close(): void {
         if (fd != -1) {
-            C.close(fd)
+            unistd.close(fd)
             fd = -1
         }
     }
 
     @inline
-    func `deinit`()  => close()
+    func `deinit`()  { close() }
+
+    const func `str`(os: OutputStream) {
+        return os << addr
+    }
 }
 
 pub class TcpListener {
@@ -149,16 +158,16 @@ pub class TcpListener {
         fd = -1
     }
 
-    func `!!`() => (<&void> this) != null && fd != -1
+    func `!!`() => (this !: &void) != null && fd != -1
 
     func listen(backlog: i32 = 127) {
-        fd = socket.socket(bind.family(), SOCK_STREAM!, 0)
+        fd = socket.socket(this.bind.family(), SOCK_STREAM!, 0)
         if (fd == -1) {
             return false
         }
         configureSocket(fd)
 
-        var rc = socket.bind(fd, bind.nativeAddr(), bind.len());
+        var rc = socket.bind(fd, this.bind.nativeAddr(), <u32>this.bind.len());
         if (rc == -1) {
             close()
             return false
@@ -170,9 +179,9 @@ pub class TcpListener {
             return false
         }
 
-        if (bind.port() == 0) {
-            var len = sizeof!(bind): u32;
-            rc = socket.getsockname(fd, bind.nativeAddr(), &len)
+        if (this.bind.port() == 0) {
+            var len = <u32> sizeof!(bind);
+            rc = socket.getsockname(fd, this.bind.nativeAddr(), &len)
             if (rc == -1) {
                 close()
                 return false
@@ -183,21 +192,21 @@ pub class TcpListener {
     }
 
     func accept(deadline: i64 = 0): TcpSocket? {
-        var addr: net.Address;
+        var addr: Address;
         while (this) {
             /* Try to get new connection (non-blocking). */
-            var len = sizeof!(addr): u32;
+            var len = <u32> sizeof!(addr);
             var accepted = socket.accept(fd, addr.nativeAddr(), &len);
             if (accepted >= 0) {
                 return TcpSocket(accepted, addr)
             }
 
-            if (errno != EAGAIN! && errno != EWOULDBLOCK!)
+            if (errno! != EAGAIN! && errno! != EWOULDBLOCK!)
                 return null
             /* Wait till new connection is available. */
-            var rc = fdWaitIn(fd, deadline);
-            if (rc != EV_IN) {
-                errno = ETIMEDOUT!;
+            var rc = evin!(fd);
+            if (rc != State.AE_READABLE) {
+                errno! = ETIMEDOUT!;
                 return null
             }
         }
@@ -205,7 +214,7 @@ pub class TcpListener {
     }
 
     @inline
-    func close() : void => shutdown()
+    func close() : void { shutdown() }
 
     func shutdown(how: i32 = SHUT_RDWR!): void {
         if (fd != -1) {
@@ -214,9 +223,11 @@ pub class TcpListener {
             fd = -1
         }
     }
+
+    func `deinit`() { close(); }
 }
 
-pub async func tcpConnect(addr: Address, deadline: i64 = 0) : TcpSocket {
+pub async func tcpConnect(addr: Address, deadline: i64 = 0): TcpSocket {
     /* Open a socket. */
     var fd = socket.socket(addr.family(), SOCK_STREAM!, 0);
     if (fd == -1)
@@ -225,35 +236,35 @@ pub async func tcpConnect(addr: Address, deadline: i64 = 0) : TcpSocket {
     var sock = TcpSocket(fd, addr);
 
     /* Connect to the remote endpoint. */
-    var rc = socket.connect(fd, addr.nativeAddr(), addr.len():i32);
+    var rc = socket.connect(fd, addr.nativeAddr(), <i32>addr.len());
     if (rc != 0) {
         assert!(rc == -1)
-        if (errno != EINPROGRESS!)
+        if (errno! != EINPROGRESS!)
             return null
 
-        rc = fdWaitIn(fd, deadline)
+        rc = evin!(fd)
         if (rc == 0) {
-            errno = ETIMEDOUT
+            errno! = ETIMEDOUT!
             return null
         }
 
         var err: i32;
-        var errSize = sizeof!(err) !: u32;
-        rc = socket.getsockopt(fd, SOL_SOCKET!, SO_ERROR!, &err : &void, &errSize)
+        var errSize = <u32>sizeof!(err);
+        rc = socket.getsockopt(fd, SOL_SOCKET!, SO_ERROR!, &err !: &void, &errSize)
         if (rc != 0) {
-            err = errno
+            err = errno!
             unistd.close(fd)
-            errno = err
+            errno! = err
             return null
         }
 
         if (err != 0) {
             unistd.close(fd)
-            errno = err
+            errno! = err
             return null
         }
     }
 
-    errno = 0
+    errno! = 0
     return sock
 }

@@ -175,10 +175,10 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
         return;
 
     case optInteger:
-        if (!isIntegerType(type)) {
+        if (!isIntegralType(type)) {
             logError(ctx->L,
                      &node->loc,
-                     "cannot perform binary operation '{s}' on non-integer "
+                     "cannot perform binary operation '{s}' on non-integeral "
                      "type '{t}'",
                      (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
             node->type = ERROR_TYPE(ctx);

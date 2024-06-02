@@ -80,6 +80,8 @@ const Type *checkMember(AstVisitor *visitor, const Type *parent, AstNode *node)
         break;
     case typThis:
         return checkMember(visitor, parent->_this.that, node);
+    case typAlias:
+        return checkMember(visitor, parent->alias.aliased, node);
     case typStruct:
     case typClass:
         decl = resolveMemberUpInheritance(ctx, parent, node, &flags, name, 0);

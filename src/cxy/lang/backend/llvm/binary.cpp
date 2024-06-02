@@ -35,10 +35,14 @@ static void generateLogicAndOr(AstVisitor *visitor, AstNode *node)
     if (lhs == nullptr)
         return;
 
-    if (op == opLOr)
+    if (op == opLOr) {
         ctx.builder.CreateCondBr(lhs, logicPHI, logicRHS);
-    else
+        lhs = llvm::ConstantInt::getBool(ctx.context, true);
+    }
+    else {
         ctx.builder.CreateCondBr(lhs, logicRHS, logicPHI);
+        lhs = llvm::ConstantInt::getBool(ctx.context, false);
+    }
     logicLHS = builder.GetInsertBlock();
 
     // Generate right hand side and branch to phi
@@ -88,13 +92,18 @@ void generateBinaryExpr(AstVisitor *visitor, AstNode *node)
     if (left->type != right->type &&
         !(typeIs(left->type, Pointer) || typeIs(left->type, Func))) {
         // implicitly cast to the bigger type
-        if (isPrimitiveTypeBigger(left->type, right->type)) {
-            rhs = ctx.generateCastExpr(visitor, left->type, right);
+        const Type *leftType =
+            typeIs(left->type, Enum) ? left->type->tEnum.base : left->type;
+        const Type *rightType =
+            typeIs(right->type, Enum) ? right->type->tEnum.base : right->type;
+
+        if (isPrimitiveTypeBigger(leftType, rightType)) {
+            rhs = ctx.generateCastExpr(visitor, leftType, right);
             lhs = cxy::codegen(visitor, left);
             type = left->type;
         }
         else {
-            lhs = ctx.generateCastExpr(visitor, right->type, left);
+            lhs = ctx.generateCastExpr(visitor, rightType, left);
             rhs = cxy::codegen(visitor, right);
             type = right->type;
         }

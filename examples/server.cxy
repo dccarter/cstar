@@ -1,9 +1,7 @@
-import { println } from "stdlib/io.cxy"
-
 import { Address } from "stdlib/net.cxy"
-import { tcpConnect, TcpSocket, TcpListener } from "stdlib/tcp.cxy"
+import { TcpSocket, TcpListener } from "stdlib/tcp.cxy"
 
-async func handleConnection(sock: TcpSocket) {
+func handleConnection(sock: TcpSocket) {
     var buffer: [char, 512];
     sock.send("Welcome...\n")
     while (sock) {
@@ -11,20 +9,21 @@ async func handleConnection(sock: TcpSocket) {
         if (len) {
             sock.send("You said: ")
             sock.sendBuffer(buffer, *len)
-            if ((buffer.[0] == <char>'Q') && (buffer.[1] == <char>'U')) {
+            if ((buffer.[0] == 'Q':char) && (buffer.[1] == 'U':char)) {
                 // Quit signal
                 sock.close()
-                stopScheduler()
             }
         }
     }
+    // TODO remove once auto memory management is implemented
+    __destructor(sock)
 }
 
-async func server() {
+pub func main(args: const [string]) {
     var addr = Address("0.0.0.0", 8080);
     var listener = TcpListener(addr);
     println("listening at ", addr)
-    if (!listener.listen(512)) {
+    if (!listener.listen(1024)) {
         println("failed to listen")
         return;
     }
@@ -32,11 +31,9 @@ async func server() {
     while (listener) {
         var sock = listener.accept();
         if (!sock)
-            return;
-        handleConnection(*sock)
-    }
-}
+            continue;
 
-func main(args: const [string]) {
-    @sync server()
+        spawn! { handleConnection(*sock) }
+    }
+    println("done")
 }

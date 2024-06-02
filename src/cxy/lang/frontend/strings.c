@@ -9,6 +9,7 @@
 CXY_BUILTIN_NAMES(f, f)
 AST_UNARY_EXPR_LIST(f)
 AST_BINARY_EXPR_LIST(f)
+OVERRIDABLE_BUILTINS(f)
 f(Truthy);
 #undef f
 
@@ -29,6 +30,7 @@ void internCommonStrings(StrPool *pool)
 #define ff(name, str) S_##name = makeString(pool, str);
     CXY_BUILTIN_NAMES(f, ff);
 #undef ff
+    OVERRIDABLE_BUILTINS(f)
 #undef f
 
 #define f(name, _0, _1, str) S_##name = makeString(pool, "op__" str);

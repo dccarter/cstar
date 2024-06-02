@@ -311,50 +311,65 @@ llvm::DIType *DebugContext::createUnionType(const Type *type)
         auto size = layout.getTypeAllocSize(elLlvmType);
     }
 
-    auto diUnionType = builder.createUnionType(
-        currentScope(),
-        llvm::StringRef() /* Name */,
-        currentScope()->getFile(),
-        1 /* LineNumber */,
-        layout.getTypeSizeInBits(llvmType->getContainedType(1)),
-        layout.getABITypeAlign(llvmType->getContainedType(1)).value() * 8,
-        llvm::DINode::FlagZero,
-        builder.getOrCreateArray(metadata));
+    auto unionType = llvmType->getContainedType(hasFlag(type, Native) ? 0 : 1);
+    auto diUnionType =
+        builder.createUnionType(currentScope(),
+                                llvm::StringRef() /* Name */,
+                                currentScope()->getFile(),
+                                1 /* LineNumber */,
+                                layout.getTypeSizeInBits(unionType),
+                                layout.getABITypeAlign(unionType).value() * 8,
+                                llvm::DINode::FlagZero,
+                                builder.getOrCreateArray(metadata));
 
-    metadata.clear();
-    llvm::DIType *tag = nullptr;
-    auto diTagAlign =
-        layout.getABITypeAlign(llvmType->getContainedType(0)).value();
-    if (diTagAlign == 1)
-        tag = getDIType(getPrimitiveType(types, prtU8));
-    else if (diTagAlign == 2)
-        tag = getDIType(getPrimitiveType(types, prtU16));
-    else if (diTagAlign == 4)
-        tag = getDIType(getPrimitiveType(types, prtU32));
-    else
-        tag = getDIType(getPrimitiveType(types, prtU64));
+    if (!hasFlag(type, Native)) {
+        metadata.clear();
+        llvm::DIType *tag = nullptr;
+        auto diTagAlign =
+            layout.getABITypeAlign(llvmType->getContainedType(0)).value();
+        if (diTagAlign == 1)
+            tag = getDIType(getPrimitiveType(types, prtU8));
+        else if (diTagAlign == 2)
+            tag = getDIType(getPrimitiveType(types, prtU16));
+        else if (diTagAlign == 4)
+            tag = getDIType(getPrimitiveType(types, prtU32));
+        else
+            tag = getDIType(getPrimitiveType(types, prtU64));
 
-    metadata.push_back(builder.createMemberType(
-        currentScope(),
-        "tag" /* Name */,
-        currentScope()->getFile(),
-        1 /* LineNo */,
-        layout.getTypeSizeInBits(llvmType->getContainedType(0)),
-        diTagAlign * 8,
-        0 /* OffsetInBits */,
-        llvm::DINode::FlagZero,
-        tag));
+        metadata.push_back(builder.createMemberType(
+            currentScope(),
+            "tag" /* Name */,
+            currentScope()->getFile(),
+            1 /* LineNo */,
+            layout.getTypeSizeInBits(llvmType->getContainedType(0)),
+            diTagAlign * 8,
+            0 /* OffsetInBits */,
+            llvm::DINode::FlagZero,
+            tag));
 
-    metadata.push_back(builder.createMemberType(
-        currentScope(),
-        "value" /* Name */,
-        currentScope()->getFile(),
-        1 /* LineNo */,
-        layout.getTypeSizeInBits(llvmType->getContainedType(1)),
-        layout.getABITypeAlign(llvmType->getContainedType(1)).value() * 8,
-        unionLayout->getElementOffsetInBits(1),
-        llvm::DINode::FlagZero,
-        diUnionType));
+        metadata.push_back(builder.createMemberType(
+            currentScope(),
+            "value" /* Name */,
+            currentScope()->getFile(),
+            1 /* LineNo */,
+            layout.getTypeSizeInBits(unionType),
+            layout.getABITypeAlign(unionType).value() * 8,
+            unionLayout->getElementOffsetInBits(1),
+            llvm::DINode::FlagZero,
+            diUnionType));
+    }
+    else {
+        metadata.push_back(builder.createMemberType(
+            currentScope(),
+            "value" /* Name */,
+            currentScope()->getFile(),
+            1 /* LineNo */,
+            layout.getTypeSizeInBits(unionType),
+            layout.getABITypeAlign(unionType).value() * 8,
+            unionLayout->getElementOffsetInBits(0),
+            llvm::DINode::FlagZero,
+            diUnionType));
+    }
 
     return builder.createStructType(currentScope(),
                                     llvmType->getStructName(),

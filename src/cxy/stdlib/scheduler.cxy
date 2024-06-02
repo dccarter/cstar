@@ -1,0 +1,63 @@
+module scheduler
+
+import "native/evloop/ae.h" as ae
+import "native/coro/minicoro.h" as mco
+
+pub type Coro = mco.mco_coro
+pub type EventLoop = ae.aeEventLoop
+
+struct CoroutineList {
+    head: &Coro
+    tail: &Coro
+}
+
+struct Scheduler {
+    pending: CoroutineList = CoroutineList{head: null, tail: null}
+    loopCoro: &Coro = null
+    schedCoro: &Coro = null
+    cleanupCoro: &Coro = null
+    eventLoop: &EventLoop = null
+    running: bool = true
+
+    - func pop() {
+        if (pending.head == null)
+            return null
+        var co = pending.head;
+        if (co == pending.tail) {
+            pending.head = null
+            pending.tail = null
+        }
+        else {
+            pending.first = co.next
+        }
+        return co
+    }
+
+    - func push(co: &Coro) {
+        if (pending.tail != null) {
+            pending.tail.next = co
+        }
+        else {
+            pending.head = co
+        }
+        pending.tail = co
+    }
+
+    @[pure,static]
+    func schedulerCoro(sc: &Coro, arg: &void) {
+        while (running) {
+            var co = pop();
+            if (co == null)
+                co = loopCoro
+            mco.mco_swap(schedCoro, co, null)
+        }
+    }
+
+    @[pure,static]
+    func eventLoopCoro()
+
+    func stop() {
+        running = false
+        mco.mco_swap(mco.mco_running(), schedCoro, NULL)
+    }
+}

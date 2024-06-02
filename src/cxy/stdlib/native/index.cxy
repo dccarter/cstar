@@ -1,3 +1,5 @@
 module _
 
 @__cc "dns/dns.c"
+@__cc "coro/minicoro.c"
+@__cc "evloop/ae.c"

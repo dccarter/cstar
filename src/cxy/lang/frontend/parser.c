@@ -327,10 +327,21 @@ static inline AstNode *parseBool(Parser *P)
 static inline AstNode *parseChar(Parser *P)
 {
     const Token *tok = consume0(P, tokCharLiteral);
-    return newAstNode(
+    AstNode *node = newAstNode(
         P,
         &tok->fileLoc.begin,
         &(AstNode){.tag = astCharLit, .charLiteral.value = tok->cVal});
+
+    if (match(P, tokColon)) {
+        AstNode *type = parseType(P);
+        return newAstNode(
+            P,
+            &tok->fileLoc.begin,
+            &(AstNode){.tag = astTypedExpr,
+                       .typedExpr = {.expr = node, .type = type}});
+    }
+
+    return node;
 }
 
 static inline AstNode *parseInteger(Parser *P)
@@ -355,10 +366,19 @@ static inline AstNode *parseInteger(Parser *P)
 static inline AstNode *parseFloat(Parser *P)
 {
     const Token *tok = consume0(P, tokFloatLiteral);
-    return newAstNode(
+    AstNode *node = newAstNode(
         P,
         &tok->fileLoc.begin,
         &(AstNode){.tag = astFloatLit, .floatLiteral.value = tok->fVal});
+    if (match(P, tokColon)) {
+        AstNode *type = parseType(P);
+        return newAstNode(
+            P,
+            &tok->fileLoc.begin,
+            &(AstNode){.tag = astTypedExpr,
+                       .typedExpr = {.expr = node, .type = type}});
+    }
+    return node;
 }
 
 static inline AstNode *parseString(Parser *P)
@@ -912,8 +932,16 @@ static AstNode *macroExpression(Parser *P, AstNode *callee)
         args = parseMany(P, tokRParen, tokComma, expressionWithStructs);
         consume0(P, tokRParen);
     }
-    else if (check(P, tokLBrace))
-        args = block(P);
+
+    if (check(P, tokLBrace)) {
+        AstNode *lastArg = block(P);
+        if (args == NULL) {
+            args = lastArg;
+        }
+        else {
+            getLastAstNode(args)->next = lastArg;
+        }
+    }
 
     return newAstNode(
         P,
@@ -1510,7 +1538,11 @@ static AstNode *macroDecl(Parser *P, bool isPublic)
         consume0(P, tokRParen);
     }
 
-    if (match(P, tokLParen)) {
+    if (check(P, tokAssign) && peek(P, tokLParen)) {
+        consume0(P, tokAssign);
+        body = expression(P, true);
+    }
+    else if (match(P, tokLParen)) {
         body = parseManyNoSeparator(P, tokRParen, statementOnly);
         consume0(P, tokRParen);
     }

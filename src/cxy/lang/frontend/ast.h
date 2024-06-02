@@ -159,7 +159,8 @@ typedef struct {
 
 // clang-format off
 #define BACKEND_FUNC_IDS(f)    \
-    f(SizeOf)
+    f(SizeOf)                  \
+    f(Alloca)
 
 // clang-format on
 

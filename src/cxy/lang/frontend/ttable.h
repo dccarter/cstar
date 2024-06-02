@@ -104,6 +104,7 @@ static inline const Type *makeOpaqueType(TypeTable *table,
 }
 
 const Type *makeUnionType(TypeTable *table, UnionMember *members, u64 count);
+const Type *makeCUnionType(TypeTable *table, UnionMember *members, u64 count);
 
 const Type *makeTupleType(TypeTable *table,
                           const Type **members,
@@ -124,6 +125,12 @@ const Type *makeStructType(TypeTable *table,
                            u64 memberCount,
                            AstNode *decl,
                            u64 flags);
+const Type *makeReplaceStructType(TypeTable *table,
+                                  cstring name,
+                                  NamedTypeMember *members,
+                                  u64 memberCount,
+                                  AstNode *decl,
+                                  u64 flags);
 
 const Type *findStructType(TypeTable *table, cstring name, u64 flags);
 const Type *findEnumType(TypeTable *table, cstring name, u64 flags);

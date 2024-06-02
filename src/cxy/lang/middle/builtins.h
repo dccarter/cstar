@@ -10,11 +10,18 @@
 extern "C" {
 #endif
 
+// clang-format off
+#define OVERRIDABLE_BUILTINS(f)    \
+    f(__scheduler)
+
+// clang-format on
+
 bool isBuiltinsInitialized();
 void initializeBuiltins(Log *L, const FileLoc *loc, const Type *module);
 AstNode *findBuiltinDecl(cstring name);
 const Type *findBuiltinType(cstring name);
 bool isBuiltinString(const Type *type);
+bool overrideBuiltin(cstring name, AstNode *node);
 
 #ifdef __cplusplus
 }

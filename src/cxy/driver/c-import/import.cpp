@@ -149,7 +149,7 @@ static FilePos toCxy(IncludeContext &ctx, const clang::SourceLocation &loc)
 
     return {.row = presumedLoc.getLine(),
             .col = presumedLoc.getColumn(),
-            .byteOffset = ctx.SM.getFileOffset(loc)};
+            .byteOffset = ctx.SM.getFileOffset(ctx.SM.getFileLoc(loc))};
 }
 
 static FileLoc toCxy(IncludeContext &ctx, const clang::Decl &decl)
@@ -208,13 +208,13 @@ static const Type *toCxy(IncludeContext &ctx, const clang::RecordDecl *record)
     if (type != nullptr)
         return type;
 
-    if (name[0] == '\0') {
-        if (record->getLexicalParent()->getDeclKind() == clang::Decl::Record) {
-            // inner struct
-            auto decl = toCxy(ctx, *record);
-            ctx.addDeclaration(decl);
-            return decl->type;
-        }
+    bool isInnerStruct =
+        record->getLexicalParent()->getDeclKind() == clang::Decl::Record;
+    if (isInnerStruct) {
+        // inner struct
+        auto decl = toCxy(ctx, *record);
+        ctx.addDeclaration(decl);
+        return decl->type;
     }
 
     auto loc = toCxy(ctx, llvm::cast<clang::Decl>(*record));
@@ -379,6 +379,7 @@ static AstNode *toCxy(IncludeContext &ctx, const clang::RecordDecl &decl)
         makeStructDecl(ctx.pool, &loc, flags, name, nullptr, nullptr, nullptr);
 
     std::vector<NamedTypeMember> members;
+    std::vector<UnionMember> unionMembers;
     u64 index = 0;
     for (auto *field : decl.fields()) {
         if (auto fieldDecl = toCxy(ctx, *field)) {
@@ -388,6 +389,7 @@ static AstNode *toCxy(IncludeContext &ctx, const clang::RecordDecl &decl)
                 NamedTypeMember{.name = fieldDecl->structField.name,
                                 .type = fieldDecl->type,
                                 .decl = fieldDecl});
+            unionMembers.push_back({.type = fieldDecl->type});
             fieldDecl->parentScope = node;
         }
         else {
@@ -400,12 +402,18 @@ static AstNode *toCxy(IncludeContext &ctx, const clang::RecordDecl &decl)
         }
     }
 
-    node->type = makeStructType(ctx.types,
-                                node->structDecl.name,
-                                members.data(),
-                                members.size(),
-                                node,
-                                flags);
+    if (decl.isUnion()) {
+        node->type =
+            makeCUnionType(ctx.types, unionMembers.data(), unionMembers.size());
+    }
+    else {
+        node->type = makeReplaceStructType(ctx.types,
+                                           node->structDecl.name,
+                                           members.data(),
+                                           members.size(),
+                                           node,
+                                           flags);
+    }
 
     const_cast<Type *>(ctx.recordsStack.top().type)->_this.that = node->type;
     ctx.recordsStack.pop();
@@ -445,6 +453,7 @@ AstNode *toCxy(IncludeContext &ctx, const clang::FunctionDecl &decl)
     auto loc = toCxy(ctx, llvm::cast<clang::Decl>(decl));
     std::vector<const Type *> paramTypes{};
     AstNodeList params = {};
+    u64 flags = decl.isVariadic() ? flgVariadic : flgNone;
 
     for (int i = 0; i < decl.getNumParams(); i++) {
         auto &param = *decl.getParamDecl(i);
@@ -461,10 +470,22 @@ AstNode *toCxy(IncludeContext &ctx, const clang::FunctionDecl &decl)
                                         nullptr));
     }
 
+    if (decl.isVariadic()) {
+        insertAstNode(&params,
+                      makeFunctionParam(
+                          ctx.pool,
+                          builtinLoc(),
+                          makeString(ctx.strings, "_"),
+                          makeTypeReferenceNode(
+                              ctx.pool, makeAutoType(ctx.types), builtinLoc()),
+                          nullptr,
+                          flags,
+                          nullptr));
+    }
+
     Type func = {.tag = typFunc,
                  .name = getCDeclName(ctx, decl),
-                 .flags = (decl.isVariadic() ? flgVariadic : flgNone) |
-                          flgExtern | flgPublic,
+                 .flags = flags | flgExtern | flgPublic,
                  .func = {
                      .paramsCount = (u16)paramTypes.size(),
                      .retType = toCxy(ctx, decl.getReturnType()),
@@ -480,7 +501,7 @@ AstNode *toCxy(IncludeContext &ctx, const clang::FunctionDecl &decl)
         makeTypeReferenceNode(
             ctx.pool, toCxy(ctx, decl.getReturnType()), &retLoc),
         nullptr,
-        flgExtern | flgPublic,
+        flgExtern | flgPublic | flags,
         nullptr,
         nullptr);
 

@@ -31,6 +31,8 @@ static void evaluateStructMembers(AstVisitor *visitor, AstNode *node)
                     prev->next = member->next;
                 }
                 member = member->next;
+                if (member == NULL)
+                    break;
                 member->parentScope = node;
             }
         }

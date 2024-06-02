@@ -372,8 +372,9 @@ const Type *compileModule(CompilerDriver *driver,
 {
     AstNode *program = NULL;
     bool cached = true;
+    cstring path = source->stringLiteral.value;
     if (!isImportModuleACHeader(source->stringLiteral.value)) {
-        cstring path = getModuleLocation(driver, source);
+        path = getModuleLocation(driver, source);
         if (path == NULL)
             return NULL;
 
@@ -462,7 +463,7 @@ const Type *compileModule(CompilerDriver *driver,
         return NULL;
 
     if (!cached)
-        addCachedModule(driver, source->stringLiteral.value, program);
+        addCachedModule(driver, path, program);
 
     return program->type;
 }
