@@ -772,6 +772,11 @@ void printType_(FormatState *state, const Type *type, bool keyword)
             printType_(state, type->tUnion.members[i].type, keyword);
         }
         break;
+    case typUntaggedUnion:
+        format(state, "@[tagged] ", NULL);
+        printKeyword(state, "union ");
+        printNamedType(state, type);
+        break;
     case typFunc:
         printKeyword(state, "func");
         format(state, "(", NULL);
@@ -994,6 +999,9 @@ AstNode *findMemberDeclInType(const Type *type, cstring name)
         return member ? (AstNode *)member->decl : NULL;
     case typClass:
         member = findClassMember(type, name);
+        return member ? (AstNode *)member->decl : NULL;
+    case typUntaggedUnion:
+        member = findUntaggedUnionMember(type, name);
         return member ? (AstNode *)member->decl : NULL;
     case typEnum: {
         const EnumOptionDecl *option = findEnumOption(type, name);

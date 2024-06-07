@@ -2627,17 +2627,23 @@ static void synchronize(Parser *P)
         switch (current(P)->tag) {
         case tokType:
         case tokStruct:
+        case tokClass:
         case tokEnum:
         case tokVar:
         case tokConst:
         case tokAsync:
         case tokFunc:
         case tokAt:
-        case tokEoF:
         case tokDefine:
         case tokCDefine:
         case tokInterface:
         case tokPub:
+        case tokMacro:
+        case tokIf:
+        case tokFor:
+        case tokSwitch:
+        case tokWhile:
+        case tokMatch:
             return;
         default:
             advance(P);

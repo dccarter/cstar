@@ -204,7 +204,10 @@ static const Type *toCxy(IncludeContext &ctx, const clang::RecordDecl *record)
     }
 
     auto name = getCDeclName(ctx, *record);
-    auto type = findStructType(ctx.types, name, flgExtern | flgPublic);
+    auto type =
+        record->isUnion()
+            ? findUntaggedUnionType(ctx.types, name, flgExtern | flgPublic)
+            : findStructType(ctx.types, name, flgExtern | flgPublic);
     if (type != nullptr)
         return type;
 
@@ -379,7 +382,6 @@ static AstNode *toCxy(IncludeContext &ctx, const clang::RecordDecl &decl)
         makeStructDecl(ctx.pool, &loc, flags, name, nullptr, nullptr, nullptr);
 
     std::vector<NamedTypeMember> members;
-    std::vector<UnionMember> unionMembers;
     u64 index = 0;
     for (auto *field : decl.fields()) {
         if (auto fieldDecl = toCxy(ctx, *field)) {
@@ -389,7 +391,6 @@ static AstNode *toCxy(IncludeContext &ctx, const clang::RecordDecl &decl)
                 NamedTypeMember{.name = fieldDecl->structField.name,
                                 .type = fieldDecl->type,
                                 .decl = fieldDecl});
-            unionMembers.push_back({.type = fieldDecl->type});
             fieldDecl->parentScope = node;
         }
         else {
@@ -403,8 +404,8 @@ static AstNode *toCxy(IncludeContext &ctx, const clang::RecordDecl &decl)
     }
 
     if (decl.isUnion()) {
-        node->type =
-            makeCUnionType(ctx.types, unionMembers.data(), unionMembers.size());
+        node->type = makeReplaceUntaggedUnionType(
+            ctx.types, node, members.data(), members.size());
     }
     else {
         node->type = makeReplaceStructType(ctx.types,

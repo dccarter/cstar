@@ -12,7 +12,11 @@ extern "C" {
 
 // clang-format off
 #define OVERRIDABLE_BUILTINS(f)    \
-    f(__scheduler)
+    f(__scheduler)                 \
+    f(timestamp)                   \
+    f(evin)                        \
+    f(evout)                       \
+    f(sleep)
 
 // clang-format on
 

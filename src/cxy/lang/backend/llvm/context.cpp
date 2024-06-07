@@ -61,6 +61,8 @@ llvm::Type *LLVMContext::convertToLLVMType(const Type *type)
         return createFunctionType(type);
     case typUnion:
         return createUnionType(type);
+    case typUntaggedUnion:
+        return createUntaggedUnionType(type);
     case typClass:
         return createClassType(type);
     case typStruct:
@@ -239,8 +241,20 @@ llvm::Type *LLVMContext::createStructType(const Type *type)
         size += module().getDataLayout().getTypeAllocSize(members.back());
     }
 
+    auto isPacked = findAttribute(node, S_packed) != nullptr;
+    appendStructAlignment(members, node, isPacked);
+
+    structType->setBody(members, isPacked);
+
+    return structType;
+}
+
+void LLVMContext::appendStructAlignment(std::vector<llvm::Type *> &members,
+                                        const AstNode *node,
+                                        bool isPacked)
+{
     if (auto align = findAttribute(node, S_align)) {
-        size = module().getDataLayout().getTypeAllocSize(
+        auto size = module().getDataLayout().getTypeAllocSize(
             llvm::StructType::create(context, members));
         if (auto value = getAttributeArgument(NULL, NULL, align, 0)) {
             csAssert0(nodeIs(value, IntegerLit));
@@ -252,10 +266,6 @@ llvm::Type *LLVMContext::createStructType(const Type *type)
             }
         }
     }
-
-    structType->setBody(members);
-
-    return structType;
 }
 
 llvm::Type *LLVMContext::createInterfaceType(const Type *type)
@@ -307,39 +317,49 @@ llvm::Type *LLVMContext::createUnionType(const Type *type)
         }
     }
 
-    if (!hasFlag(type, Native)) {
-        llvm::Type *tag = nullptr;
-        if (alignment == 1)
-            tag = llvm::Type::getInt8Ty(context);
-        else if (alignment == 2)
-            tag = llvm::Type::getInt16Ty(context);
-        else if (alignment == 4)
-            tag = llvm::Type::getInt32Ty(context);
-        else
-            tag = llvm::Type::getInt64Ty(context);
+    llvm::Type *tag = nullptr;
+    if (alignment == 1)
+        tag = llvm::Type::getInt8Ty(context);
+    else if (alignment == 2)
+        tag = llvm::Type::getInt16Ty(context);
+    else if (alignment == 4)
+        tag = llvm::Type::getInt32Ty(context);
+    else
+        tag = llvm::Type::getInt64Ty(context);
 
-        ((Type *)type)->tUnion.codegenTag = tag;
-        auto unionType = llvm::StructType::create(
-            context,
-            {tag,
-             llvm::ArrayType::get(llvm::Type::getInt8Ty(context), maxSize)},
-            str);
+    ((Type *)type)->tUnion.codegenTag = tag;
+    auto unionType = llvm::StructType::create(
+        context,
+        {tag, llvm::ArrayType::get(llvm::Type::getInt8Ty(context), maxSize)},
+        str);
 
-        for (u64 i = 0; i < type->tUnion.count; i++) {
-            auto member = getLLVMType(type->tUnion.members[i].type);
-            type->tUnion.members[i].codegen = llvm::StructType::create(
-                context, {tag, member}, str + "." + std::to_string(i));
+    for (u64 i = 0; i < type->tUnion.count; i++) {
+        auto member = getLLVMType(type->tUnion.members[i].type);
+        type->tUnion.members[i].codegen = llvm::StructType::create(
+            context, {tag, member}, str + "." + std::to_string(i));
+    }
+
+    return unionType;
+}
+
+llvm::Type *LLVMContext::createUntaggedUnionType(const Type *type)
+{
+    u64 maxSize = 0;
+    AstNode *node = type->untaggedUnion.decl;
+    auto str = makeTypeName(type);
+    for (u64 i = 0; i < type->untaggedUnion.members->count; i++) {
+        auto member = getLLVMType(type->untaggedUnion.members->members[i].type);
+        auto size = module().getDataLayout().getTypeAllocSize(member);
+        if (size >= maxSize) {
+            maxSize = size;
         }
+    }
 
-        return unionType;
-    }
-    else {
-        auto unionType = llvm::StructType::create(
-            context,
-            {llvm::ArrayType::get(llvm::Type::getInt8Ty(context), maxSize)},
-            str);
-        return unionType;
-    }
+    std::vector<llvm::Type *> members = {
+        llvm::ArrayType::get(llvm::Type::getInt8Ty(context), maxSize)};
+    auto isPacked = findAttribute(node, S_packed) != nullptr;
+    appendStructAlignment(members, node, isPacked);
+    return llvm::StructType::create(context, members, str, isPacked);
 }
 
 llvm::Value *LLVMContext::castFromUnion(AstVisitor *visitor,

@@ -108,6 +108,7 @@ private:
     llvm::Type *createTupleType(const Type *type);
     llvm::Type *createFunctionType(const Type *type);
     llvm::Type *createUnionType(const Type *type);
+    llvm::Type *createUntaggedUnionType(const Type *type);
     llvm::Value *castFromUnion(AstVisitor *visitor,
                                const Type *to,
                                AstNode *node,
@@ -115,6 +116,9 @@ private:
     void makeTypeName(llvm::raw_string_ostream &ss, const AstNode *node);
     static std::string makeTypeName(const Type *type, const char *alt = "");
     llvm::Type *convertToLLVMType(const Type *type);
+    void appendStructAlignment(std::vector<llvm::Type *> &members,
+                               const AstNode *node,
+                               bool isPacked);
 
 private:
     std::unique_ptr<llvm::Module> _module{nullptr};

@@ -84,6 +84,8 @@ llvm::DIType *DebugContext::convertToDIType(const Type *type)
         return createFunctionType(type);
     case typUnion:
         return createUnionType(type);
+    case typUntaggedUnion:
+        return createUntaggedUnionType(type);
     case typClass:
         return createClassType(type);
     case typStruct:
@@ -381,6 +383,44 @@ llvm::DIType *DebugContext::createUnionType(const Type *type)
                                     llvm::DINode::FlagZero,
                                     nullptr /* DerivedFrom */,
                                     builder.getOrCreateArray(metadata));
+}
+
+llvm::DIType *DebugContext::createUntaggedUnionType(const Type *type)
+{
+    auto &layout = module.getDataLayout();
+    auto llvmType = getLLVMType(type);
+    auto unionLayout = layout.getStructLayout(
+        llvm::dyn_cast_or_null<llvm::StructType>(llvmType));
+    std::vector<llvm::Metadata *> metadata;
+
+    for (u64 i = 0; i < type->untaggedUnion.members->count; i++) {
+        auto elLlvmType =
+            getLLVMType(type->untaggedUnion.members->members[i].type);
+        auto diType = getDIType(type->untaggedUnion.members->members[i].type);
+        auto diTypeSize = layout.getTypeSizeInBits(elLlvmType);
+        auto diTypeAlign = layout.getABITypeAlign(elLlvmType).value() * 8;
+        metadata.push_back(builder.createMemberType(
+            currentScope(),
+            type->untaggedUnion.members->members[i].name,
+            currentScope()->getFile(),
+            1 /* LineNo */,
+            diTypeSize,
+            diTypeAlign,
+            0 /* OffsetInBits */,
+            llvm::DINode::FlagZero,
+            diType));
+    }
+
+    auto unionType = llvmType->getContainedType(0);
+    return builder.createUnionType(currentScope(),
+                                   type->name /* Name */,
+                                   currentScope()->getFile(),
+                                   1 /* LineNumber */,
+                                   layout.getTypeSizeInBits(unionType),
+                                   layout.getABITypeAlign(unionType).value() *
+                                       8,
+                                   llvm::DINode::FlagZero,
+                                   builder.getOrCreateArray(metadata));
 }
 
 llvm::DIType *DebugContext::createEnumType(const Type *type)

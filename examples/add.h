@@ -2,16 +2,19 @@
 // Created by Carter Mbotho on 2024-04-26.
 //
 
-#include <alloca.h>
-#include <arpa/inet.h>
-#include <errno.h>
-#include <ifaddrs.h>
-#include <netinet/in.h>
-
-struct Hello {
-    int age;
+struct Create {
+    int id;
+    double value;
 };
 
-#define HELLO_WORLD (int)100
+struct Delete {
+    int id;
+    double value;
+};
 
-int add(int a, int b) { sockaddr_in6; }
+union Command {
+    struct Create create;
+    struct Delete del;
+};
+
+void sendCommand(union Command *command);

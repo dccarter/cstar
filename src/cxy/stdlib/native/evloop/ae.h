@@ -138,4 +138,6 @@ int aeResizeSetSize(aeEventLoop *eventLoop, int setsize);
 
 void aeGetTime(long *seconds, long *milliseconds);
 
+int64_t aeOsTime();
+
 #endif

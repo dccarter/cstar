@@ -12,7 +12,8 @@
 #ifdef __APPLE__
 
 #include <AvailabilityMacros.h>
-
+#include <mach/mach_time.h>
+__thread static mach_timebase_info_data_t mill_mtid = {0};
 #endif
 
 #define zmalloc malloc
@@ -817,6 +818,26 @@ void aeGetTime(long *seconds, long *milliseconds)
     gettimeofday(&tv, NULL);
     *seconds = tv.tv_sec;
     *milliseconds = tv.tv_usec / 1000;
+}
+
+int64_t aeOsTime()
+{
+#if defined __APPLE__
+    if (!mill_mtid.denom)
+        mach_timebase_info(&mill_mtid);
+    uint64_t ticks = mach_absolute_time();
+    return (int64_t)(ticks * mill_mtid.numer / mill_mtid.denom / 1000000);
+#elif defined CLOCK_MONOTONIC
+    struct timespec ts;
+    int rc = clock_gettime(CLOCK_MONOTONIC, &ts);
+    mill_assert(rc == 0);
+    return ((int64_t)ts.tv_sec) * 1000 + (((int64_t)ts.tv_nsec) / 1000000);
+#else
+    struct timeval tv;
+    int rc = gettimeofday(&tv, NULL);
+    assert(rc == 0);
+    return ((int64_t)tv.tv_sec) * 1000 + (((int64_t)tv.tv_usec) / 1000);
+#endif
 }
 
 static void aeAddMillisecondsToNow(long long milliseconds, long *sec, long *ms)

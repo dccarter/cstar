@@ -1,6 +1,5 @@
 module coro
 
-import "alloca.h" as mem
 import "setjmp.h" as jmp
 import "unistd.h" as unistd
 import "sys/mman.h" as vmem
@@ -34,7 +33,7 @@ struct List[T] {
         var item = head;
         if (head != null) {
             count--
-            head = this.head.link
+            head = head.link
             if (head == null)
                 tail = null
             item.link = null
@@ -94,8 +93,6 @@ macro __cxy_coro_longjmp(ctx) {
         "rdx"
     )
 }
-
-macro alloca(T) mk_bc!(bfiAlloca!, #&void, T!)
 
 macro __cxy_coro_setsp(x) {
     alloca!(#u64)
@@ -171,7 +168,7 @@ class CoroutineScheduler {
 
     - func allocStack() {
         var ptr: &void = null;
-        var stack = this.stacks.pop();
+        var stack = stacks.pop();
         if (stack != null) {
             ptr = stack !: &void;
         }
@@ -190,15 +187,15 @@ class CoroutineScheduler {
     }
 
     - func freeStack(ptr: &void) {
-        if (this.stacks.count >= MAX_CACHED_STACKS!) {
+        if (stacks.count >= MAX_CACHED_STACKS!) {
             // delete the oldest stack
-            var stack = this.stacks.pop();
+            var stack = stacks.pop();
             vmem.munmap(stack !: &void, stackSize)
         }
         else {
             // cache the stack
             var base = (ptr !: &u8) + (-stackSize);
-            this.stacks.push(base !: &CachedStack);
+            stacks.push(base !: &CachedStack);
         }
     }
 
@@ -234,11 +231,11 @@ class CoroutineScheduler {
 
         if (running != null) {
             if (__cxy_coro_setjmp!(&this.running.ctx))
-                return this.running.result
+                return running.result
         }
 
         while (true) {
-            var coro = this.ready.pop();
+            var coro = ready.pop();
             if (coro != null) {
                 counter++;
                 coro.ready = false
@@ -254,7 +251,7 @@ class CoroutineScheduler {
     func resume(cr: &Coroutine, res: i32): void {
         cr.ready = true;
         cr.result = res
-        this.ready.push(cr)
+        ready.push(cr)
     }
 
     func yield() {
@@ -344,9 +341,6 @@ class CoroutineScheduler {
 var __cxy_coro_scheduler = CoroutineScheduler();
 macro yield() __scheduler.yield()
 macro running() __scheduler.running
-macro evin(FD) __scheduler.fdWaitRead(FD!)
-macro evout(FD) __scheduler.fdWaitWrite(FD!)
-macro sleep(MS) __scheduler.sleep(MS!)
 
 macro __spawn(CALL, NAME) {
     if (__cxy_coro_setjmp!(&__scheduler.running.ctx) == 0) {
@@ -358,3 +352,15 @@ macro __spawn(CALL, NAME) {
 }
 
 macro spawn(BLOCK) __spawn!(BLOCK!, null)
+
+@[inline, __override_builtin("timestamp")]
+func __now() => ae.aeOsTime()
+
+@[inline, __override_builtin("evin")]
+func __evin(fd: i32, timeout: i64 = -1) => __scheduler.fdWaitRead(fd)
+
+@[inline, __override_builtin("evout")]
+func __evout(fd: i32, timeout: i64 = -1) => __scheduler.fdWaitWrite(fd)
+
+@[inline, __override_builtin("sleep")]
+func __sleep(ms: i64) { __scheduler.sleep(ms) }

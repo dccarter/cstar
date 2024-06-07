@@ -12,6 +12,27 @@
 #include "lang/frontend/strings.h"
 #include "lang/frontend/visitor.h"
 
+static void overrideBuiltinDecl(BindContext *ctx, AstNode *node)
+{
+    const AstNode *override = findAttribute(node, S___override_builtin);
+    if (override == NULL)
+        return;
+    const AstNode *name =
+        getAttributeArgument(ctx->L, &override->loc, override, 0);
+    if (name == NULL)
+        return;
+    if (!nodeIs(name, StringLit)) {
+        logError(ctx->L,
+                 &name->loc,
+                 "expecting the name of the builtin variable to override "
+                 "(string literal)",
+                 NULL);
+        return;
+    }
+
+    overrideBuiltin(name->stringLiteral.value, node);
+}
+
 static void bindDefine(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
@@ -62,28 +83,21 @@ void bindDeclaration(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
     defineDeclaration(ctx, getDeclarationName(node), node);
+    switch (node->tag) {
+    case astStructDecl:
+    case astFuncDecl:
+    case astClassDecl:
+        overrideBuiltinDecl(ctx, node);
+        break;
+    default:
+        break;
+    }
 }
 
 void bindVariableDecl(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
-    const AstNode *override = findAttribute(node, S___override_builtin);
-    if (override == NULL)
-        return;
-    const AstNode *name =
-        getAttributeArgument(ctx->L, &override->loc, override, 0);
-    if (name == NULL)
-        return;
-    if (!nodeIs(name, StringLit)) {
-        logError(ctx->L,
-                 &name->loc,
-                 "expecting the name of the builtin variable to override "
-                 "(string literal)",
-                 NULL);
-        return;
-    }
-
-    overrideBuiltin(name->stringLiteral.value, node);
+    overrideBuiltinDecl(ctx, node);
 }
 
 AstNode *bindAstPhase1(CompilerDriver *driver, Env *env, AstNode *node)
