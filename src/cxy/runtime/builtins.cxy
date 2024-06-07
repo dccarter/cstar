@@ -827,3 +827,5 @@ pub func println(...args: auto) {
     }
     stdout << '\n'
 }
+
+macro alloca(T) mk_bc!(bfiAlloca!, #&void, T!)

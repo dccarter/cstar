@@ -1,35 +1,14 @@
-import { Address } from "stdlib/net.cxy"
-import { TcpListener, TcpSocket } from "stdlib/tcp.cxy"
+struct User {
+    name: string
+}
 
-func chat(sock: TcpSocket) {
-    while (sock) {
-        var data: [char, 256];
-        var size = sock.receive(data, 256);
-        if (size) {
-            var sz = *size - 1;
-            data.[sz] = '\0'
-            println(sock, "said: ", data !: string)
-            sock.send("you said: ");
-            sock.sendBuffer(data, sz)
-        }
-        else {
-            println("Goodbye ", sock)
-        }
+struct Account {
+    user: User
+
+    const func `str`(os: OutputStream) {
+        os << user.name
     }
 }
 
 pub func main() {
-    var address = Address("127.0.0.1", 8000);
-    println("listening on address: ", address);
-    var listener = TcpListener(address);
-    listener.listen();
-    while(true) {
-        var sock = listener.accept();
-        if (sock) {
-            println("accepted ", sock);
-            __spawn!(chat(*sock), "chat")
-        } else {
-            break;
-        }
-    }
 }

@@ -624,10 +624,10 @@ static void visitPathElement(AstVisitor *visitor, AstNode *node)
 static void visitPathExpr(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
-    if (hasFlag(node, AddThis)) {
+    AstNode *base = node->path.elements;
+    if (hasFlag(base, AddThis)) {
         AstNode *this = getMemberFunctionThis(ctx->currentFunction);
         csAssert0(this);
-        AstNode *base = node->path.elements;
         node->path.elements = makeResolvedPathElement(
             ctx->pool, &node->loc, S_this, flgNone, this, base, this->type);
 

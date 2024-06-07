@@ -49,6 +49,7 @@ private:
     llvm::DIType *createFunctionType(const Type *type);
     llvm::DIType *createEnumType(const Type *type);
     llvm::DIType *createUnionType(const Type *type);
+    llvm::DIType *createUntaggedUnionType(const Type *type);
     void addFields(std::vector<llvm::Metadata *> &elements,
                    const llvm::StructLayout &structLayout,
                    TypeMemberContainer &members);

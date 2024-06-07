@@ -40,7 +40,7 @@ pub class TcpSocket {
     }
 
     @inline
-    const func `hash`() => this.addr.op__hash()
+    const func `hash`() => addr.op__hash()
 
     @inline
     const func `!!`() {
@@ -70,7 +70,7 @@ pub class TcpSocket {
                 if (total > 0)
                     return total
 
-                var rc = evin!(fd);
+                var rc = evin(fd);
                 if (rc != State.AE_READABLE) {
                     errno! = ETIMEDOUT!;
                     return null
@@ -102,7 +102,7 @@ pub class TcpSocket {
                 if(errno! != EAGAIN! && errno! != EWOULDBLOCK!)
                     return null
 
-                var rc = evout!(fd);
+                var rc = evout(fd);
                 if (rc != State.AE_WRITABLE) {
                     errno! = ETIMEDOUT!
                     return null
@@ -161,13 +161,13 @@ pub class TcpListener {
     func `!!`() => (this !: &void) != null && fd != -1
 
     func listen(backlog: i32 = 127) {
-        fd = socket.socket(this.bind.family(), SOCK_STREAM!, 0)
+        fd = socket.socket(bind.family(), SOCK_STREAM!, 0)
         if (fd == -1) {
             return false
         }
         configureSocket(fd)
 
-        var rc = socket.bind(fd, this.bind.nativeAddr(), <u32>this.bind.len());
+        var rc = socket.bind(fd, bind.nativeAddr(), <u32>bind.len());
         if (rc == -1) {
             close()
             return false
@@ -179,9 +179,9 @@ pub class TcpListener {
             return false
         }
 
-        if (this.bind.port() == 0) {
+        if (bind.port() == 0) {
             var len = <u32> sizeof!(bind);
-            rc = socket.getsockname(fd, this.bind.nativeAddr(), &len)
+            rc = socket.getsockname(fd, bind.nativeAddr(), &len)
             if (rc == -1) {
                 close()
                 return false
@@ -204,7 +204,7 @@ pub class TcpListener {
             if (errno! != EAGAIN! && errno! != EWOULDBLOCK!)
                 return null
             /* Wait till new connection is available. */
-            var rc = evin!(fd);
+            var rc = evin(fd);
             if (rc != State.AE_READABLE) {
                 errno! = ETIMEDOUT!;
                 return null
@@ -242,7 +242,7 @@ pub async func tcpConnect(addr: Address, deadline: i64 = 0): TcpSocket {
         if (errno! != EINPROGRESS!)
             return null
 
-        rc = evin!(fd)
+        rc = evin(fd)
         if (rc == 0) {
             errno! = ETIMEDOUT!
             return null

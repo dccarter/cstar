@@ -73,6 +73,7 @@ typedef enum {
     typMap,
     typAlias,
     typUnion,
+    typUntaggedUnion,
     typOpaque,
     typTuple,
     typFunc,
@@ -202,6 +203,11 @@ typedef struct Type {
             UnionMember *members;
             void *codegenTag;
         } tUnion;
+
+        struct {
+            TypeMembersContainer *members;
+            AstNode *decl;
+        } untaggedUnion;
 
         struct {
             u64 count;
@@ -400,6 +406,19 @@ static inline const NamedTypeMember *findClassMember(const Type *type,
 static inline const Type *findClassMemberType(const Type *type, cstring member)
 {
     const NamedTypeMember *found = findClassMember(type, member);
+    return found ? found->type : NULL;
+}
+
+static inline const NamedTypeMember *findUntaggedUnionMember(const Type *type,
+                                                             cstring member)
+{
+    return findNamedTypeMemberInContainer(type->untaggedUnion.members, member);
+}
+
+static inline const Type *findUntaggedUnionMemberType(const Type *type,
+                                                      cstring member)
+{
+    const NamedTypeMember *found = findUntaggedUnionMember(type, member);
     return found ? found->type : NULL;
 }
 

@@ -64,6 +64,7 @@ static HashCode hashType(HashCode hash, const Type *type)
         else
             hash = hashType(hash, type->alias.aliased);
         break;
+    case typUntaggedUnion:
     case typOpaque:
     case typContainer:
         hash = hashStr(hash, type->name);
@@ -168,8 +169,9 @@ static bool compareTypes(const Type *lhs, const Type *rhs)
 
     case typOptional:
         return compareTypes(left->optional.target, right->optional.target);
+    case typUntaggedUnion:
     case typOpaque:
-        return strcmp(left->name, right->name) == 0;
+        return left->name == right->name;
     case typThis:
         return typeIs(right, This) ? (left == right)
                                    : left->_this.that == right;
@@ -651,19 +653,41 @@ const Type *makeUnionType(TypeTable *table, UnionMember *members, u64 count)
     return ret.s;
 }
 
-const Type *makeCUnionType(TypeTable *table, UnionMember *members, u64 count)
+const Type *makeUntaggedUnionType(TypeTable *table,
+                                  AstNode *decl,
+                                  NamedTypeMember *members,
+                                  u64 count)
 {
-    Type type = make(Type,
-                     .tag = typUnion,
-                     .flags = flgNative,
-                     .tUnion = {.members = members, .count = count});
-
-    GetOrInset ret = getOrInsertType(table, &type);
+    GetOrInset ret = getOrInsertType(table,
+                                     &(Type){.tag = typUntaggedUnion,
+                                             .flags = decl->flags,
+                                             .name = decl->_namedNode.name,
+                                             .untaggedUnion = {.decl = decl}});
     if (!ret.f) {
-        UnionMember *dest =
-            allocFromMemPool(table->memPool, sizeof(UnionMember) * count);
-        memcpy(dest, members, sizeof(UnionMember) * count);
-        ((Type *)ret.s)->tUnion.members = dest;
+        makeTypeMembersContainer(table, members, count);
+        Type *type = (Type *)ret.s;
+        type->untaggedUnion.members =
+            makeTypeMembersContainer(table, members, count);
+    }
+
+    return ret.s;
+}
+
+const Type *makeReplaceUntaggedUnionType(TypeTable *table,
+                                         AstNode *decl,
+                                         NamedTypeMember *members,
+                                         u64 count)
+{
+    GetOrInset ret = getOrInsertType(table,
+                                     &(Type){.tag = typUntaggedUnion,
+                                             .flags = decl->flags,
+                                             .name = decl->_namedNode.name});
+
+    if (!ret.f || ret.s->untaggedUnion.members->count == 0) {
+        Type *type = (Type *)ret.s;
+        type->untaggedUnion.members =
+            makeTypeMembersContainer(table, members, count);
+        type->untaggedUnion.decl = decl;
     }
 
     return ret.s;
@@ -866,6 +890,12 @@ const Type *findStructType(TypeTable *table, cstring name, u64 flags)
 {
     return findTypeScoped(
         table, &(Type){.tag = typStruct, .name = name, .flags = flags});
+}
+
+const Type *findUntaggedUnionType(TypeTable *table, cstring name, u64 flags)
+{
+    return findTypeScoped(
+        table, &(Type){.tag = typUntaggedUnion, .name = name, .flags = flags});
 }
 
 const Type *findEnumType(TypeTable *table, cstring name, u64 flags)
