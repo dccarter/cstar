@@ -510,8 +510,8 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
             return;
         args.push_back(value);
     }
-
-    ctx.returnValue(ctx.builder.CreateCall(funcType, callee, args));
+    auto value = ctx.builder.CreateCall(funcType, callee, args);
+    ctx.returnValue(value);
 }
 
 static void visitStructExpr(AstVisitor *visitor, AstNode *node)

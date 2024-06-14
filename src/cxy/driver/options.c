@@ -17,19 +17,35 @@ typedef struct {
     u64 value;
 } EnumOptionMap;
 
-#define DUMP_OPTIONS_COUNT (sizeof(dumpModes) / sizeof(EnumOptionMap))
-
 static bool cmdParseDumpAstModes(CmdParser *P,
                                  CmdFlagValue *dst,
                                  const char *str,
                                  const char *name)
 {
+#define DUMP_OPTIONS_COUNT (sizeof(dumpModes) / sizeof(EnumOptionMap))
     static CmdEnumValueDesc dumpModes[] = {
 #define ff(NN) {#NN, dmp##NN},
         DUMP_OPTIONS(ff)
 #undef ff
     };
     return cmdParseEnumValue(P, dst, str, name, dumpModes, DUMP_OPTIONS_COUNT);
+#undef DUMP_OPTIONS_COUNT
+}
+
+static bool cmdParseDumpStatsModes(CmdParser *P,
+                                   CmdFlagValue *dst,
+                                   const char *str,
+                                   const char *name)
+{
+#define DUMP_STATS_MODES_COUNT (sizeof(dumpModes) / sizeof(EnumOptionMap))
+    static CmdEnumValueDesc dumpModes[] = {
+#define ff(NN) {#NN, dsm##NN},
+        DRIVER_STATS_MODE(ff)
+#undef ff
+    };
+    return cmdParseEnumValue(
+        P, dst, str, name, dumpModes, DUMP_STATS_MODES_COUNT);
+#undef DUMP_STATS_MODES_COUNT
 }
 
 static bool cmdParseLastStage(CmdParser *P,
@@ -376,7 +392,24 @@ bool parseCommandLineOptions(
             Def("[]")),
         Opt(Sf('g'),
             Name("debug"),
-            Help("Produce debug information for the program")));
+            Help("Produce debug information for the program")),
+        Opt(Name("debug-pass-manager"),
+            Help("Print out information about LLVM executed passes"),
+            Def("false")),
+        Str(Name("passes"),
+            Help("Describes a list of LLVM passes making up the pipeline"),
+            Def("")),
+        Use(cmdArrayArgument,
+            Name("load-pass-plugin"),
+            Help("Loads passes from the plugin library"),
+            Def("[]")),
+        Use(cmdParseDumpStatsModes,
+            Name("dump-stats"),
+            Help("Dump compilation statistics to console after compilation "
+                 "values: NONE|SUMMARY|FULL"),
+            Def("SUMMARY")),
+        Opt(Name("no-progress"),
+            Help("Do not print progress messages during compilation")));
 
     int selected = argparse(argc, &argv, parser);
 
@@ -425,6 +458,11 @@ bool parseCommandLineOptions(
     moveListOptions(&options->librarySearchPaths, &getGlobalArray(cmd, 12));
     moveListOptions(&options->libraries, &getGlobalArray(cmd, 13));
     options->debug = getGlobalBool(cmd, 14);
+    options->debugPassManager = getGlobalBool(cmd, 15);
+    options->passes = getGlobalString(cmd, 16);
+    moveListOptions(&options->loadPassPlugins, &getGlobalArray(cmd, 17));
+    options->dsmMode = getGlobalInt(cmd, 18);
+    log->progress = !getGlobalOption(cmd, 19);
 
     file_count = *argc - 1;
 

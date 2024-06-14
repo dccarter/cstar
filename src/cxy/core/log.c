@@ -4,6 +4,7 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -476,4 +477,20 @@ const FileLoc *builtinLoc(void)
     static FileLoc builtin = {
         .fileName = NULL, .begin = {0, 0, 0}, .end = {0, 0, 0}};
     return &builtin;
+}
+
+void printStatus(Log *L, const char *fmt, ...)
+{
+    if (L->progress) {
+        static int lastPrinted = 0;
+        if (lastPrinted) {
+            printf("\r%*c", lastPrinted, ' ');
+        }
+        va_list args;
+        printf("\r");
+        va_start(args, fmt);
+        lastPrinted = vprintf(fmt, args);
+        va_end(args);
+        fflush(stdout);
+    }
 }

@@ -143,7 +143,7 @@ timestamp() {
 TESTS_DIR=$(realpath $(dirname "$0"))
 CXY_DEFAULT_COMMAND=./cxy
 CXY_STDLIB=./stdlib
-CXY_DEFAULT_ARGS="dev --dump-ast CXY --no-color --clean-ast --warnings=~RedundantStmt"
+CXY_DEFAULT_ARGS="dev --dump-ast CXY --no-color --no-progress --clean-ast --warnings=~RedundantStmt"
 CXY_DEFAULT_SNAPSHOT_EXT=".cxy"
 
 POSITIONAL_ARGS=()

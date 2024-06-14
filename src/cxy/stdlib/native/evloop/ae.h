@@ -14,7 +14,8 @@ enum State {
     AE_NONE = 0,     /* No events registered. */
     AE_READABLE = 1, /* Fire when descriptor is readable. */
     AE_WRITABLE = 2, /* Fire when descriptor is writable. */
-    AE_BARRIER = 4
+    AE_TIMEOUT = 4,  /* Fire when waiting for event times out */
+    AE_BARRIER = 8,
     /*
      * With WRITABLE, never fire the event if the
      * READABLE event already fired in the same event
@@ -52,8 +53,19 @@ typedef void aeEventFinalizerProc(struct aeEventLoop *eventLoop,
 
 typedef void aeBeforeSleepProc(struct aeEventLoop *eventLoop);
 
+#define AE_TIMER_BASE(T)                                                       \
+    u_int64_t id;  /* time event identifier. */                                \
+    long when_sec; /* seconds */                                               \
+    long when_ms;  /* milliseconds */                                          \
+    T *prev;                                                                   \
+    T *next;                                                                   \
+    int fd;
+
 /* File event structure */
 typedef struct aeFileEvent {
+    struct {
+        AE_TIMER_BASE(struct aeFileEvent)
+    } timer;
     int mask; /* one of AE_(READABLE|WRITABLE|BARRIER) */
     aeFileProc *rfileProc;
     aeFileProc *wfileProc;
@@ -62,15 +74,13 @@ typedef struct aeFileEvent {
 
 /* Time event structure */
 typedef struct aeTimeEvent {
-    long long id;  /* time event identifier. */
-    long when_sec; /* seconds */
-    long when_ms;  /* milliseconds */
+    AE_TIMER_BASE(struct aeTimeEvent);
     aeTimeProc *timeProc;
     aeEventFinalizerProc *finalizerProc;
     void *clientData;
-    struct aeTimeEvent *prev;
-    struct aeTimeEvent *next;
 } aeTimeEvent;
+
+#undef AE_TIMER_BASE
 
 /* A fired event */
 typedef struct aeFiredEvent {
@@ -105,7 +115,8 @@ enum Status aeCreateFileEvent(aeEventLoop *eventLoop,
                               int fd,
                               enum State mask,
                               aeFileProc *proc,
-                              void *clientData);
+                              void *clientData,
+                              u_int64_t timeout);
 
 void aeDeleteFileEvent(aeEventLoop *eventLoop, int fd, int mask);
 

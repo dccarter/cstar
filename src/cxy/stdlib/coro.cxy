@@ -281,13 +281,14 @@ class CoroutineScheduler {
         suspend()
     }
 
-    func fdWaitWrite(fd: i32) {
+    func fdWaitWrite(fd: i32, timeout: u64) {
         var status = ae.aeCreateFileEvent(
             eventLoop,
             fd,
             ae.State.AE_WRITABLE,
             eventLoopCallback,
-            running !: &void
+            running !: &void,
+            timeout
         );
         if (status == ae.Status.AE_OK) {
             // suspend the current coroutine
@@ -297,13 +298,14 @@ class CoroutineScheduler {
         return status
     }
 
-    func fdWaitRead(fd: i32) {
+    func fdWaitRead(fd: i32, timeout: u64) {
         var status = ae.aeCreateFileEvent(
             eventLoop,
             fd,
             ae.State.AE_READABLE,
             eventLoopCallback,
-            running !: &void
+            running !: &void,
+            timeout
         );
         if (status == .AE_OK) {
             // suspend the current coroutine
@@ -357,10 +359,13 @@ macro spawn(BLOCK) __spawn!(BLOCK!, null)
 func __now() => ae.aeOsTime()
 
 @[inline, __override_builtin("evin")]
-func __evin(fd: i32, timeout: i64 = -1) => __scheduler.fdWaitRead(fd)
+func __evin(fd: i32, timeout: u64 = 0) => __scheduler.fdWaitRead(fd, timeout)
 
 @[inline, __override_builtin("evout")]
-func __evout(fd: i32, timeout: i64 = -1) => __scheduler.fdWaitWrite(fd)
+func __evout(fd: i32, timeout: u64 = 0) => __scheduler.fdWaitWrite(fd, timeout)
 
 @[inline, __override_builtin("sleep")]
 func __sleep(ms: i64) { __scheduler.sleep(ms) }
+
+@[inline, __override_builtin("istimeout")]
+func __istimeout(status: i32) => (status & ae.State.AE_TIMEOUT) == ae.State.AE_TIMEOUT

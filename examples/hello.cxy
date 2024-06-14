@@ -1,13 +1,6 @@
-struct User {
-    name: string
-}
-
-struct Account {
-    user: User
-
-    const func `str`(os: OutputStream) {
-        os << user.name
-    }
+@[pure]
+pub func __cxy_panic2(file: string, line: u64, column: u64, msg: string) {
+    write(2, "\n  @", 4)
 }
 
 pub func main() {

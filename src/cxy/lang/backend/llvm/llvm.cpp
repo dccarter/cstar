@@ -10,11 +10,13 @@
 #include <llvm/CodeGen/CommandFlags.h>
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
+#include <llvm/IR/IRPrintingPasses.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Linker/Linker.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Passes/PassBuilder.h>
+#include <llvm/Passes/PassPlugin.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/InitLLVM.h>
 #include <llvm/Support/Path.h>
@@ -29,6 +31,15 @@
 #include "lang/frontend/ttable.h"
 
 namespace {
+
+template <typename T>
+static auto for_each(DynArray &arr, std::function<void(T &)> func)
+{
+    for (int i = 0; i < arr.size; i++) {
+        func(dynArrayAt(T *, &arr, i));
+    }
+}
+
 llvm::TargetMachine *createTargetMachine(Log *L)
 {
     llvm::Triple triple{llvm::sys::getDefaultTargetTriple()};
@@ -278,32 +289,39 @@ bool LLVMBackend::linkModules()
 
 void LLVMBackend::optimizeModule(llvm::Module &module)
 {
-
-    llvm::OptimizationLevel optimizationLevel;
-    switch (driver->options.optimizationLevel) {
-    case O1:
-        optimizationLevel = llvm::OptimizationLevel::O1;
-        break;
-    case O2:
-        optimizationLevel = llvm::OptimizationLevel::O2;
-        break;
-    case O3:
-        optimizationLevel = llvm::OptimizationLevel::O3;
-        break;
-    case Os:
-        optimizationLevel = llvm::OptimizationLevel::Os;
-        break;
-    case O0:
-        optimizationLevel = llvm::OptimizationLevel::O0;
-        break;
-    }
-
     // Register analysis passes used in these transform passes.
-    llvm::PassBuilder PB(TM);
+
+    Options &options = driver->options;
+
     llvm::LoopAnalysisManager LAM;
     llvm::FunctionAnalysisManager FAM;
     llvm::CGSCCAnalysisManager CGAM;
     llvm::ModuleAnalysisManager MAM;
+
+    llvm::PassInstrumentationCallbacks PIC;
+    llvm::PrintPassOptions PrintPassOpts;
+    PrintPassOpts.Verbose = options.debugPassManager;
+    PrintPassOpts.SkipAnalyses = false;
+    llvm::StandardInstrumentations SI(
+        module.getContext(), options.debugPassManager, true, PrintPassOpts);
+    SI.registerCallbacks(PIC, &MAM);
+
+    llvm::PipelineTuningOptions PTO;
+    std::optional<llvm::PGOOptions> P{std::nullopt};
+    llvm::PassBuilder PB(TM, PTO, P, &PIC);
+    // Load requested pass plugins and let them register pass builder callbacks
+    for_each<cstring>(options.loadPassPlugins, [&](auto pluginName) {
+        auto plugin = llvm::PassPlugin::Load(pluginName);
+        if (!plugin) {
+            logWarning(driver->L,
+                       builtinLoc(),
+                       "failed not load plugin {s}",
+                       (FormatArg[]){{.s = pluginName}});
+        }
+        else {
+            plugin->registerPassBuilderCallbacks(PB);
+        }
+    });
 
     FAM.registerPass([&] { return PB.buildDefaultAAPipeline(); });
     PB.registerModuleAnalyses(MAM);
@@ -312,12 +330,43 @@ void LLVMBackend::optimizeModule(llvm::Module &module)
     PB.registerLoopAnalyses(LAM);
     PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
 
+    PB.registerPipelineStartEPCallback(
+        [](llvm::ModulePassManager &MPM, llvm::OptimizationLevel level) {});
+
     llvm::ModulePassManager MPM;
-    if (optimizationLevel == llvm::OptimizationLevel::O0) {
-        MPM = PB.buildO0DefaultPipeline(optimizationLevel);
+
+    if (options.passes) {
+        if (auto error = PB.parsePassPipeline(MPM, options.passes)) {
+            auto errMessage = toString(std::move(error));
+            logError(driver->L, builtinLoc(), errMessage.c_str(), nullptr);
+            return;
+        }
     }
     else {
-        MPM = PB.buildPerModuleDefaultPipeline(optimizationLevel);
+        llvm::StringRef defaultPass;
+        switch (driver->options.optimizationLevel) {
+        case O1:
+            defaultPass = "default<O1>";
+            break;
+        case O2:
+            defaultPass = "default<O2>";
+            break;
+        case O3:
+            defaultPass = "default<O3>";
+            break;
+        case Os:
+            defaultPass = "default<Os>";
+            break;
+        case O0:
+            defaultPass = "default<O0>";
+            break;
+        }
+
+        if (auto error = PB.parsePassPipeline(MPM, defaultPass)) {
+            auto errMessage = toString(std::move(error));
+            logError(driver->L, builtinLoc(), errMessage.c_str(), nullptr);
+            return;
+        }
     }
 
     MPM.run(module, MAM);
@@ -348,6 +397,9 @@ bool LLVMBackend::emitMachineCode(llvm::SmallString<128> outputPath,
     }
 
     llvm::legacy::PassManager passManager;
+    passManager.add(
+        llvm::createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
+
     if (TM->addPassesToEmitFile(passManager, file, nullptr, fileType)) {
         logError(driver->L,
                  nullptr,
