@@ -3,6 +3,7 @@
 
 #include <errno.h>
 #include <poll.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
@@ -670,6 +671,56 @@ static char *aeApiName(void) { return "select"; }
 
 #endif
 
+static void aeAddMillisecondsToNow(long long milliseconds, long *sec, long *ms)
+{
+    long cur_sec, cur_ms, when_sec, when_ms;
+
+    aeGetTime(&cur_sec, &cur_ms);
+    when_sec = cur_sec + milliseconds / 1000;
+    when_ms = cur_ms + milliseconds % 1000;
+    if (when_ms >= 1000) {
+        when_sec++;
+        when_ms -= 1000;
+    }
+    *sec = when_sec;
+    *ms = when_ms;
+}
+
+static void aeAddTimeEvent(aeEventLoop *eventLoop,
+                           aeTimeEvent *te,
+                           long long milliseconds)
+{
+    long long id = eventLoop->timeEventNextId++;
+    te->id = id;
+    aeAddMillisecondsToNow(milliseconds, &te->when_sec, &te->when_ms);
+    te->prev = NULL;
+    te->next = eventLoop->timeEventHead;
+    if (te->next)
+        te->next->prev = te;
+    eventLoop->timeEventHead = te;
+}
+
+static void aeRemoveTimerEvent(aeEventLoop *eventLoop, aeTimeEvent *te)
+{
+    if (te->prev)
+        te->prev->next = te->next;
+    else
+        eventLoop->timeEventHead = te->next;
+    if (te->next)
+        te->next->prev = te->prev;
+}
+
+static void aeFileEventTimeout(aeEventLoop *eventLoop, int fd, aeFileEvent *fe)
+{
+    fe->timer.when_ms = fe->timer.when_sec = 0;
+    int mask = fe->mask;
+    aeDeleteFileEvent(eventLoop, fd, fe->mask);
+    if (mask & AE_READABLE)
+        fe->rfileProc(eventLoop, fd, fe->clientData, AE_TIMEOUT);
+    else if (mask & AE_WRITABLE)
+        fe->wfileProc(eventLoop, fd, fe->clientData, AE_TIMEOUT);
+}
+
 aeEventLoop *aeCreateEventLoop(void *context, int setsize)
 {
     aeEventLoop *eventLoop;
@@ -755,7 +806,8 @@ enum Status aeCreateFileEvent(aeEventLoop *eventLoop,
                               int fd,
                               enum State mask,
                               aeFileProc *proc,
-                              void *clientData)
+                              void *clientData,
+                              uint64_t timeout)
 {
     if (fd >= eventLoop->setsize) {
         errno = ERANGE;
@@ -765,6 +817,12 @@ enum Status aeCreateFileEvent(aeEventLoop *eventLoop,
 
     if (aeApiAddEvent(eventLoop, fd, mask) == -1)
         return AE_ERR;
+
+    if (timeout > 0) {
+        fe->timer.fd = fd;
+        aeAddTimeEvent(eventLoop, (aeTimeEvent *)fe, timeout);
+    }
+
     fe->mask |= mask;
     if (mask & AE_READABLE)
         fe->rfileProc = proc;
@@ -840,44 +898,22 @@ int64_t aeOsTime()
 #endif
 }
 
-static void aeAddMillisecondsToNow(long long milliseconds, long *sec, long *ms)
-{
-    long cur_sec, cur_ms, when_sec, when_ms;
-
-    aeGetTime(&cur_sec, &cur_ms);
-    when_sec = cur_sec + milliseconds / 1000;
-    when_ms = cur_ms + milliseconds % 1000;
-    if (when_ms >= 1000) {
-        when_sec++;
-        when_ms -= 1000;
-    }
-    *sec = when_sec;
-    *ms = when_ms;
-}
-
 enum Status aeCreateTimeEvent(aeEventLoop *eventLoop,
                               long long milliseconds,
                               aeTimeProc *proc,
                               void *clientData,
                               aeEventFinalizerProc *finalizerProc)
 {
-    long long id = eventLoop->timeEventNextId++;
     aeTimeEvent *te;
 
     te = zmalloc(sizeof(*te));
     if (te == NULL)
         return AE_ERR;
-    te->id = id;
-    aeAddMillisecondsToNow(milliseconds, &te->when_sec, &te->when_ms);
     te->timeProc = proc;
     te->finalizerProc = finalizerProc;
     te->clientData = clientData;
-    te->prev = NULL;
-    te->next = eventLoop->timeEventHead;
-    if (te->next)
-        te->next->prev = te;
-    eventLoop->timeEventHead = te;
-    return id;
+    aeAddTimeEvent(eventLoop, te, milliseconds);
+    return te->id;
 }
 
 int aeDeleteTimeEvent(aeEventLoop *eventLoop, long long id)
@@ -980,14 +1016,20 @@ static int processTimeEvents(aeEventLoop *eventLoop)
             (now_sec == te->when_sec && now_ms >= te->when_ms)) {
             int retval;
 
-            id = te->id;
-            retval = te->timeProc(eventLoop, id, te->clientData);
-            processed++;
-            if (retval != AE_NO_MORE) {
-                aeAddMillisecondsToNow(retval, &te->when_sec, &te->when_ms);
+            if (te->fd < 0) {
+                id = te->id;
+                retval = te->timeProc(eventLoop, id, te->clientData);
+                processed++;
+                if (retval != AE_NO_MORE) {
+                    aeAddMillisecondsToNow(retval, &te->when_sec, &te->when_ms);
+                }
+                else {
+                    te->id = AE_DELETED_EVENT_ID;
+                }
             }
             else {
-                te->id = AE_DELETED_EVENT_ID;
+                aeRemoveTimerEvent(eventLoop, te);
+                aeFileEventTimeout(eventLoop, te->fd, (aeFileEvent *)te);
             }
         }
         te = te->next;
@@ -1096,6 +1138,10 @@ int aeProcessEvents(aeEventLoop *eventLoop, enum Flags flags, int64_t timeout)
              * in the beforeSleep() hook, like fsynching a file to disk,
              * before replying to a client. */
             int invert = fe->mask & AE_BARRIER;
+
+            aeTimeEvent *te = (aeTimeEvent *)fe;
+            if (te->when_sec > 0 || te->when_ms > 0)
+                aeRemoveTimerEvent(eventLoop, te);
 
             /* Note the "fe->mask & mask & ..." code: maybe an already
              * processed event removed an element that fired and we still

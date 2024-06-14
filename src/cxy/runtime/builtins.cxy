@@ -38,7 +38,7 @@ else {
 
 macro errno() =(*__error())
 
-@[pure, inline]
+@[pure]
 pub func __cxy_panic(file: string, line: u64, column: u64, msg: string) {
     var buf: [char, 64];
     write(2, "panic: ", 7)
@@ -340,9 +340,9 @@ pub class OutputStream {
     @inline
     func appendBool(val: bool) {
         if (val)
-            append("true" !: &const char, 4)
+            append("true" !: &const char, 4:u64)
         else
-            append("false" !: &const char, 5)
+            append("false" !: &const char, 5:u64)
     }
 
     func appendPointer[T](ptr: &const T) {

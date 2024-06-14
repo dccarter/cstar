@@ -381,13 +381,10 @@ AstNode *executeCompilerStage(CompilerDriver *driver,
         return node;
     }
 
-    if (driver->options.progress) {
-        logNote(driver->L,
-                NULL,
-                "executing '{s}' id",
-                (FormatArg[]){{.s = stageName}});
-    }
-
+    cstring name =
+        nodeIs(node, Metadata) ? node->metadata.filePath : node->loc.fileName;
+    printStatus(
+        driver->L, cBWHT "* %s %s..." cDEF, stageName, name ?: "<unknown>");
     compilerStatsSnapshot(driver);
     node = executor(driver, node);
     compilerStatsRecord(driver, stage);

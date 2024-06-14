@@ -16,7 +16,8 @@ extern "C" {
     f(timestamp)                   \
     f(evin)                        \
     f(evout)                       \
-    f(sleep)
+    f(sleep)                       \
+    f(istimeout)
 
 // clang-format on
 

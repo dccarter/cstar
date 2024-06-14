@@ -29,7 +29,7 @@ static AstNode *makeVTableVariable(TypingContext *ctx,
     AstNode *vTable = makeVarDecl(
         ctx->pool,
         &node->loc,
-        flgConst | flgTopLevelDecl,
+        flgConst | flgTopLevelDecl | (node->flags & flgPublic),
         makeStringConcat(ctx->strings, getDeclarationName(node), "_vTable"),
         NULL,
         makeStructExpr(ctx->pool,

@@ -91,7 +91,8 @@ int main(int argc, char *argv[])
         modified = MAX(modified, mtime);
 
         size += bytes;
-        size += fprintf(output, "\\n/*---------%s----------*/\\n", argv[j]) - 2;
+        // size += fprintf(output, "\\n/*---------%s----------*/\\n", argv[j]) -
+        // 2;
         for (u64 i = 0; i < bytes; i++) {
             if (data[i] == '"') {
                 fputc('\\', output);

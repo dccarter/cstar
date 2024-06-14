@@ -234,6 +234,8 @@ llvm_map_components_to_libnames(llvm_libs
         Linker
         TransformUtils
         CodeGen
+        Passes
+        Support
 )
 list(APPEND llvm_libs clangAST clangBasic clangFrontend clangLex clangParse clangSema)
 message(STATUS ${llvm_libs})

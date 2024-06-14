@@ -71,6 +71,7 @@ typedef struct Log {
         u64 num;
     } enabledWarnings;
     bool showDiagnostics;
+    bool progress;
 } Log;
 
 typedef struct DiagnosticMemoryPrintCtx {
@@ -86,6 +87,7 @@ void logWarning(Log *, const FileLoc *, const char *, const FormatArg *);
 void logWarningWithId(
     Log *, u8, const FileLoc *, const char *, const FormatArg *);
 void logNote(Log *, const FileLoc *, const char *, const FormatArg *);
+void printStatus(Log *L, const char *fmt, ...);
 
 void printDiagnosticToConsole(const Diagnostic *diag, void *ctx);
 void printDiagnosticToMemory(const Diagnostic *diag, void *ctx);

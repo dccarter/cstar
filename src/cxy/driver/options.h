@@ -26,6 +26,18 @@ typedef enum {
 #undef ff
 } DumpModes;
 
+#define DRIVER_STATS_MODE(f)    \
+    f(NONE)                     \
+    f(SUMMARY)                  \
+    f(FULL)
+
+typedef enum {
+#define ff(N) dsm##N,
+    DRIVER_STATS_MODE(ff)
+    dsmCOUNT
+#undef ff
+} DumpStatsMode;
+
 typedef enum OptimizationLevel {
     O0,
     Od = O0,
@@ -60,6 +72,10 @@ typedef struct Options {
     bool withMemoryManager;
     bool debug;
     OptimizationLevel optimizationLevel;
+    bool debugPassManager;
+    cstring passes;
+    DynArray loadPassPlugins;
+    DumpStatsMode dsmMode;
     struct {
         bool printIR;
         bool emitBitCode;
@@ -71,7 +87,6 @@ typedef struct Options {
         DumpModes dumpMode;
         u64 lastStage;
     } dev;
-    bool progress;
 } Options;
 
 /// Parse command-line options, and remove those parsed options from the

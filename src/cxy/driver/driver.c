@@ -102,6 +102,7 @@ attr(always_inline) static char *getCachedAstPath(Options *options,
 static AstNode *parseFile(CompilerDriver *driver, const char *fileName)
 {
     size_t file_size = 0;
+    printStatus(driver->L, cWHT "Parsing %s..." cDEF, fileName);
     char *fileData = readFile(fileName, &file_size);
     if (!fileData) {
         logError(driver->L,
@@ -130,6 +131,7 @@ static AstNode *parseString(CompilerDriver *driver,
 {
     Lexer lexer = newLexer(fileName ?: "builtins", code, codeSize, driver->L);
     Parser parser = makeParser(&lexer, driver);
+    printStatus(driver->L, cWHT "Parsing string @ %s" cDEF, fileName);
     AstNode *program = parseProgram(&parser);
 
     freeLexer(&lexer);
@@ -217,10 +219,17 @@ static bool compileProgram(CompilerDriver *driver,
 
 compileProgramDone:
     stopCompilerStats(driver);
-    bool dumpStats = !options->dev.cleanAst &&
-                     !hasFlag(metadata, BuiltinsModule) &&
+    bool dumpStats = !hasFlag(metadata, BuiltinsModule) &&
                      !(hasFlag(program, ImportedModule));
     if (dumpStats) {
+        if (hasErrors(driver->L))
+            printStatus(driver->L,
+                        cBRED "\xE2\x9C\x92" cBWHT
+                              " Compilation failure\n" cDEF);
+        else
+            printStatus(driver->L,
+                        cBGRN "\xE2\x9C\x93" cBWHT
+                              " Compilation success\n" cDEF);
         compilerStatsPrint(driver);
     }
     return status;

@@ -21,7 +21,7 @@ func configureSocket(fd: i32)  {
     assert!(rc == 0);
 
     opt = 1;
-    rc = socket.setsockopt(fd, SOL_SOCKET!, SO_NOSIGPIPE!, &opt, sizeof!(opt) !:u32);
+    rc = socket.setsockopt(fd, SOL_SOCKET!, SO_NOSIGPIPE!, &opt, <u32>sizeof!(opt));
     assert!(rc == 0 && errno! != EINVAL!);
 }
 
@@ -50,7 +50,7 @@ pub class TcpSocket {
     @inline
     const func address() => addr
 
-    func receive(buffer: &void, size: u64, deadline: i64 = 0): u64? {
+    func receive(buffer: &void, size: u64, timeout: u64 = 0): u64? {
         var remaining = size;
         var data = buffer !: &char;
         var total: u64 = 0;
@@ -70,7 +70,7 @@ pub class TcpSocket {
                 if (total > 0)
                     return total
 
-                var rc = evin(fd);
+                var rc = evin(fd, timeout);
                 if (rc != State.AE_READABLE) {
                     errno! = ETIMEDOUT!;
                     return null
@@ -86,7 +86,7 @@ pub class TcpSocket {
         return total
     }
 
-    func sendBuffer(buffer: &const void, size: u64, deadline: i64 = 0): u64? {
+    func sendBuffer(buffer: &const void, size: u64, timeout: u64 = 0): u64? {
         var data = buffer !: &const char;
         var remaining = size;
         var total: u64 = 0;
@@ -102,7 +102,7 @@ pub class TcpSocket {
                 if(errno! != EAGAIN! && errno! != EWOULDBLOCK!)
                     return null
 
-                var rc = evout(fd);
+                var rc = evout(fd, timeout);
                 if (rc != State.AE_WRITABLE) {
                     errno! = ETIMEDOUT!
                     return null
@@ -117,17 +117,17 @@ pub class TcpSocket {
         return total
     }
 
-    func send[T](data: T, deadline: i64 = 0) {
+    func send[T](data: T, timeout: u64 = 0) {
         #if (T.isString) {
             #if (T.isStruct) {
-                return sendBuffer(data.str !: &void, len!(data), deadline)
+                return sendBuffer(data.str !: &void, len!(data), timeout)
             }
             else {
-                return sendBuffer(data !: &void, len!(data), deadline)
+                return sendBuffer(data !: &void, len!(data), timeout)
             }
         }
         else #if (T.isSlice) {
-            return sendBuffer(data.data, data.count, deadline)
+            return sendBuffer(data.data, data.count, timeout)
         }
         else {
             error!("type {t} cannot be sent as is, consider using sendBuffer", T)
@@ -191,7 +191,7 @@ pub class TcpListener {
         return true
     }
 
-    func accept(deadline: i64 = 0): TcpSocket? {
+    func accept(timeout: u64 = 0): TcpSocket? {
         var addr: Address;
         while (this) {
             /* Try to get new connection (non-blocking). */
@@ -204,7 +204,7 @@ pub class TcpListener {
             if (errno! != EAGAIN! && errno! != EWOULDBLOCK!)
                 return null
             /* Wait till new connection is available. */
-            var rc = evin(fd);
+            var rc = evin(fd, timeout);
             if (rc != State.AE_READABLE) {
                 errno! = ETIMEDOUT!;
                 return null
