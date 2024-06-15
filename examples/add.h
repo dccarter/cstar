@@ -1,7 +1,7 @@
 //
 // Created by Carter Mbotho on 2024-04-26.
 //
-
+#include <strings.h>
 struct Create {
     int id;
     double value;
@@ -17,4 +17,4 @@ union Command {
     struct Delete del;
 };
 
-void sendCommand(union Command *command);
+void sendCommand(union Command *command) { strncasecmp() }

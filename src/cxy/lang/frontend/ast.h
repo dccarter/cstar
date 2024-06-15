@@ -378,6 +378,7 @@ struct AstNode {
 
         struct {
             const char *name;
+            struct AstNode *defaultValue;
             struct AstNode *constraints;
             u16 inferIndex;
         } genericParam;

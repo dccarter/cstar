@@ -198,9 +198,7 @@ void checkFunctionParam(AstVisitor *visitor, AstNode *node)
     if (hasFlag(type, Const) && !hasFlag(type_, Const))
         type_ = makeWrappedType(ctx->types, type_, flgConst);
 
-    if (typeIs(type_, Func) && !hasFlag(parent, Pure) &&
-        !hasFlag(parent, Extern)) //
-    {
+    if (typeIs(type_, Func) && !hasFlags(parent, flgPure | flgExtern)) {
         type->funcType.params = makeFunctionParam(
             ctx->pool,
             &type->loc,

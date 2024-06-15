@@ -58,7 +58,7 @@ struct HashMapNode[K, V] {
     }
 }
 
-pub class HashMap[K, V] {
+pub class HashMap[K, V, Hasher = Hash[K], Cmp = Equals[K]] {
     - _data: &HashMapNode[K, V]
     - _hashes: &u32
     - _size: u64 = 0;
@@ -91,8 +91,8 @@ pub class HashMap[K, V] {
             newHashes.[index] = hashCode;
         }
 
-        free(_hashes: &void)
-        free(_data: &void)
+        free(_hashes !: &void)
+        free(_data !: &void)
         _hashes = newHashes;
         _data = newData
         _capacity = newCapacity
@@ -134,18 +134,18 @@ pub class HashMap[K, V] {
                 }
             }
 
-            free(_data: &void)
-            free(_hashes: &void)
+            free(_data !: &void)
+            free(_hashes !: &void)
             _size = 0
             _capacity = 0
         }
     }
 
     func insert(key: K, value: V, replace: bool = true) {
-        var hashCode = hash[K](key) | #{OCCUPIED_MASK};
+        var hashCode = Hasher{}(key) | #{OCCUPIED_MASK};
         var index = hashModPrime(hashCode, _capacity);
         while (isBucketOccupied(index)) {
-            if (_hashes.[index] == hashCode && _data.[index] == key){
+            if (_hashes.[index] == hashCode && Cmp{}(_data.[index].key, key)){
                 if (replace)
                     _data.[index].value = value
                 return false;
@@ -165,10 +165,10 @@ pub class HashMap[K, V] {
     }
 
     func get(key: K) : V? {
-        const hashCode = hash[K](key) | #{OCCUPIED_MASK};
+        const hashCode = Hasher{}(key) | #{OCCUPIED_MASK};
         var index = hashModPrime(hashCode, _capacity);
         while (isBucketOccupied(index)) {
-            if (_hashes.[index] == hashCode && _data.[index] == key)
+            if (_hashes.[index] == hashCode && Cmp{}(_data.[index].key, key))
                 return _data.[index].value;
             index = incrementWrap(_capacity, index)
         }
@@ -176,11 +176,11 @@ pub class HashMap[K, V] {
     }
 
     func remove(key: K) : V? {
-        const hashCode = hash[K](key) | #{OCCUPIED_MASK};
+        const hashCode = Hasher{}(key) | #{OCCUPIED_MASK};
         var index = hashModPrime(hashCode, _capacity);
         var found = false;
         while (isBucketOccupied(index)) {
-            if (_hashes.[index] == hashCode && _data.[index] == key) {
+            if (_hashes.[index] == hashCode && Cmp{}(_data.[index].key, key)) {
                 return removeAt(key, index)
             }
             index = incrementWrap(_capacity, index)
@@ -199,7 +199,7 @@ pub class HashMap[K, V] {
             }
         }
 
-        memset(_hashes: &void, 0, sizeof!(#u32)*_capacity)
+        memset(_hashes !: &void, 0, sizeof!(#u32)*_capacity)
         _size = 0
     }
 
@@ -260,7 +260,7 @@ pub class HashMap[K, V] {
     @inline const func empty() => _size == 0
 }
 
-pub class HashSet[K] {
+pub class HashSet[K, Hasher = Hash[K], Cmp = Equals[K]] {
     - _data: &HashMapNode[K, void]
     - _hashes: &u32
     - _size: u64 = 0;
@@ -292,8 +292,8 @@ pub class HashSet[K] {
             newHashes.[index] = hashCode;
         }
 
-        free(_hashes: &void)
-        free(_data: &void)
+        free(_hashes !: &void)
+        free(_data !: &void)
         _hashes = newHashes;
         _data = newData
         _capacity = newCapacity
@@ -323,6 +323,12 @@ pub class HashSet[K] {
         this._capacity = _capacity
     }
 
+    @pure
+    func `init`(_compare: func(lhs: K, rhs: K) -> bool) {
+        op__init(#{DEFAULT_HASH_TABLE_CAPACITY})
+        this._compare = _compare
+    }
+
     func `deinit`() {
         if (_capacity) {
             for (const i : 0.._capacity) {
@@ -331,18 +337,18 @@ pub class HashSet[K] {
                 }
             }
 
-            free(_data: &void)
-            free(_hashes: &void)
+            free(_data !: &void)
+            free(_hashes !: &void)
             _size = 0
             _capacity = 0
         }
     }
 
     func insert(key: K) {
-        var hashCode = hash[K](key) | #{OCCUPIED_MASK};
+        var hashCode = Hasher{}(key) | #{OCCUPIED_MASK};
         var index = hashModPrime(hashCode, _capacity);
         while (isBucketOccupied(index)) {
-            if (_hashes.[index] == hashCode && _data.[index] == key) {
+            if (_hashes.[index] == hashCode && Cmp{}(_data.[index].key,  key)) {
                 return false
             }
             index = incrementWrap(_capacity, index)
@@ -358,10 +364,10 @@ pub class HashSet[K] {
     }
 
     func get(key: K) : K? {
-        const hashCode = hash[K](key) | #{OCCUPIED_MASK};
+        const hashCode = Hasher{}(key) | #{OCCUPIED_MASK};
         var index = hashModPrime(hashCode, _capacity);
         while (isBucketOccupied(index)) {
-            if (_hashes.[index] == hashCode && _data.[index] == key)
+            if (_hashes.[index] == hashCode && Cmp{}(_data.[index].key,  key))
                 return _data.[index].key
             index = incrementWrap(_capacity, index)
         }
@@ -371,11 +377,11 @@ pub class HashSet[K] {
     func contains(key: K) => !!get(key)
 
     func remove(key: K) {
-        const hashCode = hash[K](key) | #{OCCUPIED_MASK};
+        const hashCode = Hasher{}(key) | #{OCCUPIED_MASK};
         var index = hashModPrime(hashCode, _capacity);
         var found = false;
         while (isBucketOccupied(index)) {
-            if (_hashes.[index] == hashCode && _data.[index] == key) {
+            if (_hashes.[index] == hashCode && Cmp{}(_data.[index].key,  key)) {
                 removeAt(key, index)
                 return true
             }
@@ -410,7 +416,7 @@ pub class HashSet[K] {
             }
         }
 
-        memset(_hashes: &void, 0, sizeof!(#u32)*_capacity)
+        memset(_hashes !: &void, 0, sizeof!(#u32)*_capacity)
         _size = 0
     }
 

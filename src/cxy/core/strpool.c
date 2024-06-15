@@ -36,7 +36,7 @@ static bool compareStrInsert(const void *left, const void *right)
 
 const char *makeString(StrPool *str_pool, const char *str)
 {
-    return makeStringSized(str_pool, str, strlen(str));
+    return str ? makeStringSized(str_pool, str, strlen(str)) : NULL;
 }
 
 const char *makeTrimmedString(StrPool *pool, const char *str)

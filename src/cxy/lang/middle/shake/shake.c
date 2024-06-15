@@ -523,6 +523,13 @@ static void shakeGenericDecl(AstVisitor *visitor, AstNode *node)
     u16 *inferrable = mallocOrDie(sizeof(u16) * node->genericDecl.paramsCount);
     int index = -1;
     for (u16 i = 0; gparam; gparam = gparam->next, i++) {
+        if (gparam->genericParam.defaultValue != NULL) {
+            logWarning(ctx->L,
+                       &gparam->loc,
+                       "default values on function generic decl params not "
+                       "supported, ignoring",
+                       NULL);
+        }
         AstNode *fparam = decl->funcDecl.signature->params;
         for (u16 j = 0; fparam; fparam = fparam->next, j++) {
             AstNode *type = fparam->funcParam.type;
@@ -562,7 +569,7 @@ static void shakeGenericDecl(AstVisitor *visitor, AstNode *node)
 static void shakeForStmt(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
-    AstNode *variable = node->forStmt.var;
+    AstNode *variable = node->forStmt.var, *body = node->forStmt.body;
     u64 flags = variable->flags;
     AstNode *name = variable->varDecl.names;
     if (name->next) {
@@ -589,6 +596,10 @@ static void shakeForStmt(AstVisitor *visitor, AstNode *node)
         variable->varDecl.name = name->ident.value;
     }
     astVisit(visitor, node->forStmt.range);
+
+    if (!hasFlag(node, Comptime) && !nodeIs(body, BlockStmt))
+        node->forStmt.body =
+            makeBlockStmt(ctx->pool, &body->loc, body, NULL, NULL);
     astVisit(visitor, node->forStmt.body);
 }
 

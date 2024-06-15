@@ -1,7 +1,12 @@
-@[pure]
-pub func __cxy_panic2(file: string, line: u64, column: u64, msg: string) {
-    write(2, "\n  @", 4)
-}
+import { Request } from "stdlib/http.cxy"
+import { HashMap } from "stdlib/hash.cxy"
 
 pub func main() {
+    var map = HashMap[String, String, HashCase, EqualsCase]();
+    map.["Carter"] = "Mbotho"
+    map.["Megan"] = "MecNeil"
+    var carter = map.["CARTER"];
+    if (carter) {
+        println("Found")
+    }
 }

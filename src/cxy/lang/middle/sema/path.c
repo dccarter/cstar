@@ -105,6 +105,8 @@ const Type *checkMember(AstVisitor *visitor, const Type *parent, AstNode *node)
 
     if (typeIs(resolved, Generic)) {
         resolved = resolveGenericDecl(visitor, resolved->generic.decl, node);
+        decl = nodeIs(node, Identifier) ? node->ident.resolvesTo
+                                        : node->pathElement.resolvesTo;
         if (typeIs(resolved, Error))
             return resolved;
     }

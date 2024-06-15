@@ -1,0 +1,12 @@
+module integer
+
+pub struct Integer[T] {
+    v: T
+    func `init`(value: T) { this.v = value }
+    func `init`(str: CString) { this.v = parse(str) }
+
+
+    - func parse(str: CString) {
+
+    }
+}

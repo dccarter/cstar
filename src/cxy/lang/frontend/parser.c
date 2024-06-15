@@ -455,7 +455,7 @@ static AstNode *member(Parser *P, const FilePos *begin, AstNode *operand)
     else if (check(P, tokSubstitutue))
         member = substitute(P, false);
     else
-        member = parseIdentifier(P);
+        member = parsePath(P);
 
     return newAstNode(
         P,
@@ -841,12 +841,17 @@ static AstNode *parseGenericParam(Parser *P)
         } while (!isEoF(P));
     }
 
+    AstNode *defaultValue = NULL;
+    if (match(P, tokAssign))
+        defaultValue = parsePath(P);
+
     return newAstNode(
         P,
         &tok.fileLoc.begin,
         &(AstNode){.tag = astGenericParam,
                    .genericParam = {.name = getTokenString(P, &tok, false),
-                                    .constraints = constraints.first}});
+                                    .constraints = constraints.first,
+                                    .defaultValue = defaultValue}});
 }
 
 // async enclosure(a: T, ...b:T[]) -> T;
