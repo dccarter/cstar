@@ -183,20 +183,21 @@ static bool evalForStmtWithRange(AstVisitor *visitor,
         if (nodeIs(body, BlockStmt) && !preserve && body->blockStmt.stmts) {
             body->blockStmt.stmts->parentScope = node->parentScope;
         }
-        else
+        else if (body) {
             body->parentScope = node->parentScope;
 
-        const Type *type = evalType(ctx, body);
-        if (type == NULL || typeIs(type, Error)) {
-            node->tag = astError;
-            return false;
-        }
+            const Type *type = evalType(ctx, body);
+            if (type == NULL || typeIs(type, Error)) {
+                node->tag = astError;
+                return false;
+            }
 
-        if (nodeIs(body, BlockStmt) && !preserve) {
-            insertAstNode(nodes, body->blockStmt.stmts);
-        }
-        else {
-            insertAstNode(nodes, body);
+            if (nodeIs(body, BlockStmt) && !preserve) {
+                insertAstNode(nodes, body->blockStmt.stmts);
+            }
+            else {
+                insertAstNode(nodes, body);
+            }
         }
     }
 

@@ -58,10 +58,12 @@ static inline AstNode *comptimeWrapped(EvalContext *ctx,
                                        AstNode *node,
                                        u64 flags)
 {
-    return makeAstNode(
-        ctx->pool,
-        loc,
-        &(AstNode){.tag = astComptimeOnly, .next = node, .flags = flags});
+    if (node)
+        return makeAstNode(
+            ctx->pool,
+            loc,
+            &(AstNode){.tag = astComptimeOnly, .next = node, .flags = flags});
+    return NULL;
 }
 
 static inline const Type *actualType(const Type *type)

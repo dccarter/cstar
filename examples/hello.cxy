@@ -1,6 +1,13 @@
 import { Request } from "stdlib/http.cxy"
 import { HashMap } from "stdlib/hash.cxy"
 
+struct User[X] {
+    require!(X.isTuple, "X must be a tuple")
+    #for (const i: 0..X.membersCount) {
+        mk_field!(mk_ident!("_", #{i}), typeat!(X, #{i}))
+    }
+}
+
 pub func main() {
     var map = HashMap[String, String, HashCase, EqualsCase]();
     map.["Carter"] = "Mbotho"
@@ -9,4 +16,6 @@ pub func main() {
     if (carter) {
         println("Found")
     }
+
+    User[u32];
 }

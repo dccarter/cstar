@@ -988,14 +988,13 @@ static AstNode *block(Parser *P)
 
     consume0(P, tokLBrace);
     while (!check(P, tokRBrace, tokEoF)) {
-        E4C_TRY_BLOCK(
-            {
-                listAddAstNode(&stmts, statement(P, false));
-                match(P, tokSemicolon);
-            } E4C_CATCH(ParserException) {
-                synchronizeUntil(P, tokRBrace);
-                break;
-            })
+        E4C_TRY_BLOCK({
+            listAddAstNode(&stmts, statement(P, false));
+            match(P, tokSemicolon);
+        } E4C_CATCH(ParserException) {
+            synchronizeUntil(P, tokRBrace);
+            break;
+        })
     }
     consume0(P, tokRBrace);
 
@@ -2066,7 +2065,8 @@ static AstNode *parseTypeImpl(Parser *P)
         case tokIdent:
         case tokThisClass:
             type = parsePath(P);
-            type->path.isType = true;
+            if (nodeIs(type, Path))
+                type->path.isType = true;
             break;
         case tokLParen:
             type = parseTupleType(P);
@@ -2182,7 +2182,10 @@ static AstNode *parseClassOrStructMember(Parser *P)
 
     switch (current(P)->tag) {
     case tokIdent:
-        member = parseStructField(P, isPrivate);
+        if (checkPeek(P, 1, tokLNot))
+            member = parseIdentifier(P);
+        else
+            member = parseStructField(P, isPrivate);
         break;
     case tokFunc:
     case tokAsync: {
@@ -2791,19 +2794,17 @@ AstNode *parseProgram(Parser *P)
            (check(P, tokAt) &&
             checkPeek(P, 1, tokCDefine, tokCInclude, tokCSources, tokCBuild) &&
             match(P, tokAt))) {
-        E4C_TRY_BLOCK(
-            {
-                AstNode *node = parseTopLevelDecl(P);
-                if (node != NULL)
-                    listAddAstNode(&topLevel, node);
-            } E4C_CATCH(ParserException) { synchronize(E4C_EXCEPTION.ctx); })
+        E4C_TRY_BLOCK({
+            AstNode *node = parseTopLevelDecl(P);
+            if (node != NULL)
+                listAddAstNode(&topLevel, node);
+        } E4C_CATCH(ParserException) { synchronize(E4C_EXCEPTION.ctx); })
     }
 
     while (!isEoF(P)) {
-        E4C_TRY_BLOCK(
-            {
-                listAddAstNode(&decls, comptime(P, declaration));
-            } E4C_CATCH(ParserException) { synchronize(E4C_EXCEPTION.ctx); })
+        E4C_TRY_BLOCK({
+            listAddAstNode(&decls, comptime(P, declaration));
+        } E4C_CATCH(ParserException) { synchronize(E4C_EXCEPTION.ctx); })
     }
 
     return newAstNode(P,

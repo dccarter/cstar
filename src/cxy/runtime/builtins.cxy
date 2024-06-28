@@ -305,7 +305,7 @@ pub struct CString {
     @inline const func `>=`(other: This) => compare(other) >= 0
     @inline const func `hash`() => hash_fnv1a_string(#{FNV_32_PRIME}, this.s)
     @inline const func size() => _size
-    @inline const func data() => data
+    @inline const func data() => s
 
     func toi[T](base: i32 = 0) {
         require!(T.isInteger, "type '{t}' unsupported by `CString.toi`", #T)
@@ -932,10 +932,14 @@ pub struct HashCase {
 
     @inline
     const func `()`(value: const CString) =>
-        hash_fnv1a_string_n_igc(#{FNV_32_PRIME}, value.data(), value.size())
+        hash_fnv1a_string_n_igc(
+            #{FNV_32_PRIME},
+            value.data() !: &const char,
+            value.size()
+        )
 
     @inline
     const func `()`(value: const string) =>
-        hash_fnv1a_string_igc(#{FNV_32_PRIME}, value.data(), value.size())
+        hash_fnv1a_string_igc(#{FNV_32_PRIME}, value)
 }
 

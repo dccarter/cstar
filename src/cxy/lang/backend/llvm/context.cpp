@@ -82,7 +82,7 @@ llvm::Type *LLVMContext::convertToLLVMType(const Type *type)
 
 llvm::Type *LLVMContext::getLLVMType(const Type *type)
 {
-    type = unwrapType(type, nullptr);
+    type = resolveType(unwrapType(type, nullptr));
     csAssert0(type != nullptr);
 
     return static_cast<llvm::Type *>(

@@ -8,35 +8,13 @@
 #include "lang/frontend/ttable.h"
 #include "lang/middle/sema/check.h"
 
-void evalPath(AstVisitor *visitor, AstNode *node)
+void evalPathEpilogue(AstVisitor *visitor,
+                      AstNode *node,
+                      AstNode *symbol,
+                      AstNode *elem)
 {
     EvalContext *ctx = getAstVisitorContext(visitor);
-    AstNode *elem = node->path.elements;
-    AstNode *symbol = elem->pathElement.resolvesTo;
-    if (symbol == NULL) {
-        logError(ctx->L,
-                 &elem->loc,
-                 "reference to undefined compile time symbol '{s}'",
-                 (FormatArg[]){
-                     {.s = elem->pathElement.alt ?: elem->pathElement.name}});
-        node->tag = astError;
-        return;
-    }
-
-    if (elem->pathElement.args && typeIs(symbol->type, Generic)) {
-        const Type *type =
-            resolveGenericDecl(ctx->typer, elem->pathElement.resolvesTo, elem);
-        if (type == NULL || typeIs(type, Error)) {
-            node->tag = astError;
-            return;
-        }
-        symbol = getTypeDecl(type);
-    }
-    else if (nodeIs(symbol, VarDecl))
-        symbol = symbol->varDecl.init;
-
-    if (elem->next) {
-        elem = elem->next;
+    if (elem) {
         if (nodeIs(symbol, EnumDecl)) {
             cstring name = elem->pathElement.alt ?: elem->pathElement.name;
             AstNode *option = findEnumOptionByName(symbol, name);
@@ -148,4 +126,35 @@ void evalPath(AstVisitor *visitor, AstNode *node)
             node->next = symbol->next;
         node->flags &= ~flgComptime;
     }
+}
+
+void evalPath(AstVisitor *visitor, AstNode *node)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    AstNode *elem = node->path.elements;
+    AstNode *symbol = elem->pathElement.resolvesTo;
+    if (symbol == NULL) {
+        logError(ctx->L,
+                 &elem->loc,
+                 "reference to undefined compile time symbol '{s}'",
+                 (FormatArg[]){
+                     {.s = elem->pathElement.alt ?: elem->pathElement.name}});
+        node->tag = astError;
+        return;
+    }
+
+    if (elem->pathElement.args && typeIs(symbol->type, Generic)) {
+        const Type *type =
+            resolveGenericDecl(ctx->typer, elem->pathElement.resolvesTo, elem);
+        if (type == NULL || typeIs(type, Error)) {
+            node->tag = astError;
+            return;
+        }
+        symbol = getTypeDecl(type);
+    }
+    else if (nodeIs(symbol, VarDecl))
+        symbol = symbol->varDecl.init;
+
+    elem = elem->next;
+    evalPathEpilogue(visitor, node, symbol, elem);
 }

@@ -183,9 +183,12 @@ static AstNode *makeRequireNode(AstVisitor *visitor,
 
     if (!cond->boolLiteral.value) {
         staticLog(visitor, dkError, node, args);
+        args->tag = astError;
     }
-
-    args->tag = astNoop;
+    else {
+        args->tag = astNoop;
+    }
+    args->next = NULL;
     return args;
 }
 
@@ -321,6 +324,51 @@ static AstNode *makeSizeofNode(AstVisitor *visitor,
                                bfiSizeOf,
                                args,
                                getPrimitiveType(ctx->types, prtU64));
+}
+
+static AstNode *makeAstFieldStmtNode(AstVisitor *visitor,
+                                     attr(unused) const AstNode *node,
+                                     attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 2))
+        return NULL;
+    u64 count = countAstNodes(args);
+    if (count < 2 || count > 3) {
+        logError(ctx->L,
+                 &node->loc,
+                 "unsupported number of arguments given to macro, mk_field!"
+                 "expecting at least 2 and less than 3, got '{u64}'",
+                 (FormatArg[]){{.u64 = count}});
+        return false;
+    }
+    FileLoc loc = args->loc;
+    AstNode *name = args, *type = args->next, *value = type->next;
+    args->next = type->next = NULL;
+    if (!evaluate(visitor, name))
+        return NULL;
+    if (!nodeIs(name, StringLit) && !nodeIs(name, Identifier)) {
+        logError(ctx->L,
+                 &loc,
+                 "invalid argument passed to `make_field!` expecting a "
+                 "string literal or an identifier",
+                 NULL);
+        return NULL;
+    }
+
+    args->tag = astFieldDecl;
+    args->structField.name = nodeIs(name, Identifier)
+                                 ? name->ident.value
+                                 : name->stringLiteral.value;
+    args->structField.value = value;
+    args->structField.type = type;
+    args->flags |= flgVisited;
+    args->type = evalType(ctx, args);
+
+    if (typeIs(args->type, Error))
+        return NULL;
+
+    return args;
 }
 
 static AstNode *makeAstFieldExprNode(AstVisitor *visitor,
@@ -1101,6 +1149,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "line", makeLineNumberNode},
     {.name = "mk_ast_list", makeAstNodeList},
     {.name = "mk_bc", makeBackendCallNode},
+    {.name = "mk_field", makeAstFieldStmtNode},
     {.name = "mk_field_expr", makeAstFieldExprNode},
     {.name = "mk_ident", makeAstIdentifierNode},
     {.name = "mk_integer", makeAstIntegerNode},

@@ -93,6 +93,13 @@ void evalMemberExpr(AstVisitor *visitor, AstNode *node)
 
         replaceAstNode(node, value);
     }
+    else if (nodeIs(member, Path)) {
+        evalPathEpilogue(visitor,
+                         node,
+                         nodeIs(target, Ref) ? target->reference.target
+                                             : target,
+                         member->path.elements);
+    }
     else {
         logError(
             ctx->L,
