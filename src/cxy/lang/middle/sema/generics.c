@@ -23,6 +23,37 @@ static cstring pushGenericDeclNamespace(TypeTable *types, const AstNode *decl)
     return namespace;
 }
 
+static bool resolveGenericDeclDefaults(AstVisitor *visitor,
+                                       const AstNode *generic,
+                                       const Type **paramTypes,
+                                       u64 index)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    AstNode *params = generic->genericDecl.params, *param = params;
+    MemPool pool = newMemPool();
+    CloneAstConfig config = {
+        .pool = &pool, .createMapping = true, .root = generic};
+
+    initCloneAstNodeMapping(&config);
+
+    u64 i = 0;
+    bool status = true;
+    for (; param; param = param->next, i++) {
+        if (i >= index) {
+            AstNode *node =
+                cloneAstNode(&config, param->genericParam.defaultValue);
+            paramTypes[i] = checkType(visitor, node);
+            if (typeIs(paramTypes[i], Error))
+                status = false;
+        }
+        cloneAstNode(&config, param)->type = paramTypes[i];
+    }
+
+    deinitCloneAstNodeConfig(&config);
+    freeMemPool(&pool);
+    return status;
+}
+
 static bool inferGenericFunctionTypes(AstVisitor *visitor,
                                       const AstNode *generic,
                                       const Type **paramTypes,
@@ -253,21 +284,29 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
     }
 
     if (index < paramsCount) {
+        AstNode *it = getNodeAtIndex(generic->genericDecl.params, index);
+        bool isFuncDecl = nodeIs(generic->genericDecl.decl, FuncDecl);
         // maybe inferred arguments?
-        if ((index < generic->genericDecl.inferrable) ||  //
-            !nodeIs(generic->genericDecl.decl, FuncDecl)) //
-        {
-            AstNode *it = getNodeAtIndex(generic->genericDecl.params, index);
+        if (!isFuncDecl && it->genericParam.defaultValue) {
+            if (!resolveGenericDeclDefaults(
+                    visitor, generic, paramTypes, index)) {
+
+                goto resolveGenericDeclError;
+            }
+        }
+        else if (isFuncDecl && (index >= generic->genericDecl.inferrable)) {
+            if (!inferGenericFunctionTypes(
+                    visitor, generic, paramTypes, index)) {
+                // infers generic function types
+                goto resolveGenericDeclError;
+            }
+        }
+        else {
             logError(ctx->L,
                      &(args ?: node)->loc,
                      "missing argument for type parameter '{s}'",
                      (FormatArg[]){{.s = it->genericParam.name}});
             logNote(ctx->L, &it->loc, "generic parameter declared here", NULL);
-            goto resolveGenericDeclError;
-        }
-
-        if (!inferGenericFunctionTypes(visitor, generic, paramTypes, index)) {
-            // infers generic function types
             goto resolveGenericDeclError;
         }
     }

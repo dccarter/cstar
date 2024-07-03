@@ -46,6 +46,8 @@ static i64 getLiteralValue(const AstNode *node)
 {
     if (typeIs(node->type, Enum))
         return getEnumValue(node);
+    else if (isCharacterType(node->type))
+        return node->charLiteral.value;
     return integerLiteralValue(node);
 }
 

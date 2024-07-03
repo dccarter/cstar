@@ -111,8 +111,6 @@ static HashCode hashType(HashCode hash, const Type *type)
     return hash;
 }
 
-static bool compareTypes(const Type *left, const Type *right);
-
 static bool compareManyTypes(const Type **left, const Type **right, u64 count)
 {
     for (u64 i = 0; i < count; i++) {
@@ -133,7 +131,38 @@ static bool compareUnionMembers(const UnionMember *left,
     return true;
 }
 
-static bool compareTypes(const Type *lhs, const Type *rhs)
+bool compareFuncTypes(const Type *lhs, const Type *rhs, bool ignoreNames)
+{
+    u64 lhsFlags = flgNone, rhsFlags = flgNone;
+    const Type *left = unwrapType(lhs, &lhsFlags),
+               *right = unwrapType(rhs, &rhsFlags);
+
+    if (left == right)
+        return lhsFlags == rhsFlags;
+
+    if (left->tag != right->tag || (lhsFlags != rhsFlags))
+        return false;
+
+    if (!ignoreNames) {
+        if (left->name != right->name)
+            return false;
+
+        if (left->name != NULL) {
+            if (left->func.decl && right->func.decl &&
+                left->func.decl->parentScope && right->func.decl->parentScope &&
+                left->func.decl->parentScope != right->func.decl->parentScope)
+                return false;
+        }
+    }
+
+    return (left->func.paramsCount == right->func.paramsCount) &&
+           compareTypes(left->func.retType, right->func.retType) &&
+           compareManyTypes(left->func.params,
+                            right->func.params,
+                            right->func.paramsCount);
+}
+
+bool compareTypes(const Type *lhs, const Type *rhs)
 {
     u64 lhsFlags = flgNone, rhsFlags = flgNone;
     const Type *left = unwrapType(lhs, &lhsFlags),
@@ -1171,7 +1200,7 @@ AstNode *getTypeDecl(const Type *type)
 {
     if (type == NULL)
         return NULL;
-    type = unwrapType(type, NULL);
+    type = resolveType(unwrapType(type, NULL));
     switch (type->tag) {
     case typStruct:
         return type->tStruct.decl;

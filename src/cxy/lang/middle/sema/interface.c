@@ -74,7 +74,7 @@ bool checkTypeImplementsAllMembers(TypingContext *ctx, AstNode *node)
             }
 
             const Type *match =
-                matchOverloadedFunction(ctx,
+                matchOverloadedFunction(ctx->L,
                                         found->type,
                                         member->type->func.params,
                                         member->type->func.paramsCount,

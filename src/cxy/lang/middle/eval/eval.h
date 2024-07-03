@@ -53,6 +53,10 @@ void evalAssignExpr(AstVisitor *visitor, AstNode *node);
 void evalEnumDecl(AstVisitor *visitor, AstNode *node);
 void evalVarDecl(AstVisitor *visitor, AstNode *node);
 void evalMacroCall(AstVisitor *visitor, AstNode *node);
+void evalPathEpilogue(AstVisitor *visitor,
+                      AstNode *node,
+                      AstNode *symbol,
+                      AstNode *elem);
 
 void evalIfStmt(AstVisitor *visitor, AstNode *node);
 void evalForStmt(AstVisitor *visitor, AstNode *node);

@@ -81,7 +81,7 @@ bool transformOptionalNone(AstVisitor *visitor,
                            AstNode *node,
                            const Type *type);
 
-bool isExplicitConstructableFrom(TypingContext *ctx,
+bool isExplicitConstructableFrom(Log *L,
                                  const Type *type,
                                  const Type *from);
 bool evalExplicitConstruction(AstVisitor *visitor,
@@ -142,7 +142,7 @@ AstNode *inheritanceBuildVTable(TypingContext *ctx, AstNode *node);
 const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node);
 AstNode *transformClosureArgument(AstVisitor *visitor, AstNode *node);
 
-const Type *matchOverloadedFunctionPerfectMatch(TypingContext *ctx,
+const Type *matchOverloadedFunctionPerfectMatch(Log *L,
                                                 const Type *callee,
                                                 const Type **argTypes,
                                                 u64 argsCount,
@@ -150,7 +150,7 @@ const Type *matchOverloadedFunctionPerfectMatch(TypingContext *ctx,
                                                 u64 flags,
                                                 bool perfectMatch);
 
-static inline const Type *matchOverloadedFunction(TypingContext *ctx,
+static inline const Type *matchOverloadedFunction(Log *L,
                                                   const Type *callee,
                                                   const Type **argTypes,
                                                   u64 argsCount,
@@ -158,7 +158,7 @@ static inline const Type *matchOverloadedFunction(TypingContext *ctx,
                                                   u64 flags)
 {
     return matchOverloadedFunctionPerfectMatch(
-        ctx, callee, argTypes, argsCount, loc, flags, false);
+        L, callee, argTypes, argsCount, loc, flags, false);
 }
 
 AstNode *makeEnumGetName(TypingContext *ctx, AstNode *node);

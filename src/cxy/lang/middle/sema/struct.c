@@ -89,7 +89,7 @@ static void preCheckStructMembers(AstNode *node, NamedTypeMember *members)
     }
 }
 
-bool isExplicitConstructableFrom(TypingContext *ctx,
+bool isExplicitConstructableFrom(Log *L,
                                  const Type *type,
                                  const Type *from)
 {
@@ -102,7 +102,7 @@ bool isExplicitConstructableFrom(TypingContext *ctx,
         return false;
 
     constructor = matchOverloadedFunction(
-        ctx, constructor, (const Type *[]){from}, 1, NULL, flgNone);
+        L, constructor, (const Type *[]){from}, 1, NULL, flgNone);
 
     if (constructor == NULL ||
         findAttribute(constructor->func.decl, S_explicit))
@@ -115,7 +115,7 @@ bool isExplicitConstructableFrom(TypingContext *ctx,
     if (!isClassOrStructType(type))
         return isTypeAssignableFrom(param, from);
 
-    if (!isExplicitConstructableFrom(ctx, param, from))
+    if (!isExplicitConstructableFrom(L, param, from))
         return false;
 
     return true;
@@ -141,7 +141,7 @@ bool evalExplicitConstruction(AstVisitor *visitor,
         return false;
 
     const Type *constructor =
-        matchOverloadedFunction(ctx,
+        matchOverloadedFunction(ctx->L,
                                 member->type,
                                 (const Type *[]){node->type},
                                 1,

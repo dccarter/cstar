@@ -326,7 +326,7 @@ static void visitAddrOfExpr(AstVisitor *visitor, AstNode *node)
     ctx.emitDebugLocation(node);
 
     AstNode *operand = node->unaryExpr.operand;
-    if (nodeIs(operand, StructExpr)) {
+    if (!nodeIsLeftValue(operand)) {
         auto ptr = ctx.createStackVariable(operand->type);
         auto value = cxy::codegen(visitor, operand);
         ctx.builder.CreateStore(value, ptr);
@@ -503,6 +503,7 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
     csAssert0(callee);
 
     std::vector<llvm::Value *> args;
+    auto load = ctx.stack().loadVariable(true);
     AstNode *arg = node->callExpr.args;
     for (; arg; arg = arg->next) {
         auto value = cxy::codegen(visitor, arg);
@@ -510,6 +511,7 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
             return;
         args.push_back(value);
     }
+    ctx.stack().loadVariable(load);
     auto value = ctx.builder.CreateCall(funcType, callee, args);
     ctx.returnValue(value);
 }
@@ -772,7 +774,9 @@ static void visitSwitchStmt(AstVisitor *visitor, AstNode *node)
         ctx.builder.SetInsertPoint(bb);
         cxy::codegen(visitor, case_->caseStmt.body);
         // branch to the end
-        ctx.builder.CreateBr(end);
+        auto &lastBB = func->back();
+        if (lastBB.empty() || !lastBB.back().isTerminator())
+            ctx.builder.CreateBr(end);
     }
 
     ctx.builder.SetInsertPoint(current);
@@ -830,7 +834,9 @@ static void visitMatchStmt(AstVisitor *visitor, AstNode *node)
         }
         cxy::codegen(visitor, case_->caseStmt.body);
         // branch to the end
-        ctx.builder.CreateBr(end);
+        auto &lastBB = func->back();
+        if (lastBB.empty() || !lastBB.back().isTerminator())
+            ctx.builder.CreateBr(end);
     }
 
     ctx.builder.SetInsertPoint(current);
@@ -1064,6 +1070,11 @@ static void visitFuncDecl(AstVisitor *visitor, AstNode *node)
     if (!ctx.unreachable)
         ctx.builder.CreateBr(end);
     ctx.unreachable = false;
+
+    if (func->back().getTerminator() == nullptr) {
+        // terminate last block if not terminated
+        ctx.builder.CreateBr(end);
+    }
 
     // generate return statement
     func->insert(func->end(), end);

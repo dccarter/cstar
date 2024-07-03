@@ -287,6 +287,10 @@ static inline bool typeIs_(const Type *type, TTag tag)
 
 #define typeIs(T, TAG) typeIs_((T), typ##TAG)
 
+bool compareTypes(const Type *lhs, const Type *rhs);
+
+bool compareFuncTypes(const Type *lhs, const Type *rhs, bool ignoreNames);
+
 bool isTypeAssignableFrom(const Type *to, const Type *from);
 
 bool isTypeCastAssignable(const Type *to, const Type *from);

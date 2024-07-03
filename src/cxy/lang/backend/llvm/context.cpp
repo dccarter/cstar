@@ -82,7 +82,7 @@ llvm::Type *LLVMContext::convertToLLVMType(const Type *type)
 
 llvm::Type *LLVMContext::getLLVMType(const Type *type)
 {
-    type = unwrapType(type, nullptr);
+    type = resolveType(unwrapType(type, nullptr));
     csAssert0(type != nullptr);
 
     return static_cast<llvm::Type *>(
@@ -472,6 +472,13 @@ llvm::Value *LLVMContext::generateCastExpr(AstVisitor *visitor,
         if (typeIs(from, Pointer) && typeIs(from->pointer.pointed, Null)) {
             auto value = cxy::codegen(visitor, expr);
             return ctx.builder.CreatePointerCast(value, ctx.getLLVMType(to));
+        }
+    }
+    else if (typeIs(to, Func)) {
+        if (typeIs(from, Pointer) && typeIs(from->pointer.pointed, Null)) {
+            auto value = cxy::codegen(visitor, expr);
+            return ctx.builder.CreatePointerCast(
+                value, ctx.getLLVMType(to)->getPointerTo());
         }
     }
     else if (from->tag == to->tag) {

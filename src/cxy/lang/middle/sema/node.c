@@ -64,6 +64,19 @@ static AstNode *transformRValueToLValue(AstVisitor *visitor, AstNode *node)
                             tmpVar->type);
 }
 
+static AstNode *transformRValueToLValues(AstVisitor *visitor, AstNode *node)
+{
+    AstNodeList nodes = {};
+    for (AstNode *it = node; it;) {
+        AstNode *tmp = it;
+        it = it->next;
+        tmp->next = NULL;
+        insertAstNode(&nodes, transformRValueToLValue(visitor, tmp));
+    }
+
+    return nodes.first;
+}
+
 void transformToMemberCallExpr(AstVisitor *visitor,
                                AstNode *node,
                                AstNode *target,
@@ -84,7 +97,7 @@ void transformToMemberCallExpr(AstVisitor *visitor,
     node->tag = astCallExpr;
     node->type = NULL;
     node->callExpr.callee = callee;
-    node->callExpr.args = transformRValueToLValue(visitor, args);
+    node->callExpr.args = transformRValueToLValues(visitor, args);
 }
 
 const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)

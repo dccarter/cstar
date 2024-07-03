@@ -455,7 +455,7 @@ static AstNode *member(Parser *P, const FilePos *begin, AstNode *operand)
     else if (check(P, tokSubstitutue))
         member = substitute(P, false);
     else
-        member = parseIdentifier(P);
+        member = parsePath(P);
 
     return newAstNode(
         P,
@@ -841,12 +841,17 @@ static AstNode *parseGenericParam(Parser *P)
         } while (!isEoF(P));
     }
 
+    AstNode *defaultValue = NULL;
+    if (match(P, tokAssign))
+        defaultValue = parsePath(P);
+
     return newAstNode(
         P,
         &tok.fileLoc.begin,
         &(AstNode){.tag = astGenericParam,
                    .genericParam = {.name = getTokenString(P, &tok, false),
-                                    .constraints = constraints.first}});
+                                    .constraints = constraints.first,
+                                    .defaultValue = defaultValue}});
 }
 
 // async enclosure(a: T, ...b:T[]) -> T;
@@ -2052,6 +2057,8 @@ static AstNode *statement(Parser *P, bool exprOnly)
 static AstNode *parseTypeImpl(Parser *P)
 {
     AstNode *type;
+    FileLoc loc = current(P)->fileLoc;
+    bool isConst = match(P, tokConst);
     Token tok = *current(P);
     if (isPrimitiveType(tok.tag)) {
         type = primitive(P);
@@ -2061,7 +2068,8 @@ static AstNode *parseTypeImpl(Parser *P)
         case tokIdent:
         case tokThisClass:
             type = parsePath(P);
-            type->path.isType = true;
+            if (nodeIs(type, Path))
+                type->path.isType = true;
             break;
         case tokLParen:
             type = parseTupleType(P);
@@ -2078,18 +2086,18 @@ static AstNode *parseTypeImpl(Parser *P)
             break;
         case tokVoid:
             advance(P);
-            type = makeAstNode(
-                P->memPool, &tok.fileLoc, &(AstNode){.tag = astVoidType});
+            type =
+                makeAstNode(P->memPool, &loc, &(AstNode){.tag = astVoidType});
             break;
         case tokString:
             advance(P);
-            type = makeAstNode(
-                P->memPool, &tok.fileLoc, &(AstNode){.tag = astStringType});
+            type =
+                makeAstNode(P->memPool, &loc, &(AstNode){.tag = astStringType});
             break;
         case tokCChar:
             advance(P);
             type = makeAstNode(P->memPool,
-                               &tok.fileLoc,
+                               &loc,
                                &(AstNode){.tag = astPrimitiveType,
                                           .primitiveType.id = prtCChar});
             break;
@@ -2098,8 +2106,8 @@ static AstNode *parseTypeImpl(Parser *P)
             break;
         case tokAuto:
             advance(P);
-            type = makeAstNode(
-                P->memPool, &tok.fileLoc, &(AstNode){.tag = astAutoType});
+            type =
+                makeAstNode(P->memPool, &loc, &(AstNode){.tag = astAutoType});
             break;
         default:
             reportUnexpectedToken(P, "a type");
@@ -2107,14 +2115,15 @@ static AstNode *parseTypeImpl(Parser *P)
         }
     }
 
+    type->loc.begin = loc.begin;
     if (match(P, tokQuestion)) {
         type = makeAstNode(
             P->memPool,
-            &tok.fileLoc,
+            &loc,
             &(AstNode){.tag = astOptionalType, .optionalType.type = type});
     }
 
-    type->flags |= flgTypeAst;
+    type->flags |= flgTypeAst | (isConst ? flgConst : flgNone);
     return type;
 }
 
@@ -2177,7 +2186,10 @@ static AstNode *parseClassOrStructMember(Parser *P)
 
     switch (current(P)->tag) {
     case tokIdent:
-        member = parseStructField(P, isPrivate);
+        if (checkPeek(P, 1, tokLNot))
+            member = parseIdentifier(P);
+        else
+            member = parseStructField(P, isPrivate);
         break;
     case tokFunc:
     case tokAsync: {

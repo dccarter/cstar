@@ -246,11 +246,11 @@ target_compile_definitions(cxy PRIVATE
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/stdlib)
 set(CXY_STD_LIB_SOURCES
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/native
-        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/c.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/coro.cxy
-        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/io.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/json.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/hash.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/http.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/io.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/net.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/tcp.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/vector.cxy)

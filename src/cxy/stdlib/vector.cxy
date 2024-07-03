@@ -18,7 +18,7 @@ pub class Vector[T] {
     - func grow() {
         if (_size >= _capacity) {
             _capacity += (_capacity / 2)
-            _data = <&T> realloc(_data: &void, elemSize() * _capacity)
+            _data = <&T> realloc(_data !: &void, elemSize() * _capacity)
            #if (T.isDestructible) {
                memset((_data + _size), 0, elemSize() * (_capacity - _size))
            }
@@ -38,7 +38,7 @@ pub class Vector[T] {
                 _data.[i] = null
             }
         }
-        free(_data: &void)
+        free(_data !: &void)
     }
 
     func push(item: T) {
@@ -62,7 +62,7 @@ pub class Vector[T] {
     }
 
     func resize(newSize: u64) {
-        _data = <&T> realloc(_data: &void, elemSize() * newSize)
+        _data = <&T> realloc(_data !: &void, elemSize() * newSize)
         if (newSize < _size)
             _size = newSize
        _capacity = newSize;

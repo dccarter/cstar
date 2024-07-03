@@ -224,8 +224,9 @@ void bindIdentifier(AstVisitor *visitor, AstNode *node)
 void bindGenericParam(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
-    astVisitManyNodes(visitor, node->genericParam.constraints);
     defineSymbol(ctx->env, ctx->L, node->genericParam.name, node);
+    astVisitManyNodes(visitor, node->genericParam.constraints);
+    astVisit(visitor, node->genericParam.defaultValue);
 }
 
 void bindGenericDecl(AstVisitor *visitor, AstNode *node)

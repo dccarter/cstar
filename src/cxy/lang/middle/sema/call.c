@@ -94,7 +94,7 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
     }
 
     callee_ = matchOverloadedFunction(
-        ctx, func, argTypes, argsCount, &node->loc, flags);
+        ctx->L, func, argTypes, argsCount, &node->loc, flags);
     free(argTypes);
 
     if (callee_ == NULL || typeIs(callee_, Error)) {

@@ -22,6 +22,7 @@
 
 #include "core/alloc.h"
 #include "core/sb.h"
+#include "lang/middle/sema/check.h"
 
 #include <string.h>
 
@@ -183,9 +184,12 @@ static AstNode *makeRequireNode(AstVisitor *visitor,
 
     if (!cond->boolLiteral.value) {
         staticLog(visitor, dkError, node, args);
+        args->tag = astError;
     }
-
-    args->tag = astNoop;
+    else {
+        args->tag = astNoop;
+    }
+    args->next = NULL;
     return args;
 }
 
@@ -204,6 +208,67 @@ static AstNode *makeFilenameNode(AstVisitor *visitor,
                    .type = makeStringType(ctx->types),
                    .stringLiteral.value =
                        visitor->current->loc.fileName ?: "<native>"});
+}
+
+static AstNode *makeHasMemberNode(AstVisitor *visitor,
+                                  attr(unused) const AstNode *node,
+                                  attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 3))
+        return NULL;
+
+    const Type *target = args->type ?: evalType(ctx, args);
+    if (!hasFlag(args, Typeinfo)) {
+        logError(ctx->L,
+                 &args->loc,
+                 "unexpected type {t}, expecting type information",
+                 (FormatArg[]){{.t = target}});
+        return NULL;
+    }
+    target = resolveType(target);
+
+    AstNode *name = args->next, *memberType = name->next;
+    if (!evaluate(visitor, name))
+        return NULL;
+    if (!nodeIs(name, StringLit)) {
+        logError(
+            ctx->L,
+            &name->loc,
+            "unexpect argument, expecting the name of the member to lookup",
+            NULL);
+        return NULL;
+    }
+
+    const Type *type = evalType(ctx, memberType);
+    if (!hasFlag(memberType, Typeinfo)) {
+        logError(ctx->L,
+                 &memberType->loc,
+                 "unexpected type {t}, expecting type information",
+                 (FormatArg[]){{.t = type}});
+        return NULL;
+    }
+
+    type = resolveType(type);
+    args->next = NULL;
+    args->tag = astBoolLit;
+
+    const Type *member = findMemberInType(target, name->stringLiteral.value);
+    if (typeIs(member, Func) && typeIs(type, Func)) {
+        member = matchOverloadedFunctionPerfectMatch(ctx->L,
+                                                     member,
+                                                     type->func.params,
+                                                     type->func.paramsCount,
+                                                     NULL,
+                                                     type->flags & flgConst,
+                                                     true);
+        args->boolLiteral.value =
+            member && compareFuncTypes(member, type, true);
+    }
+    else {
+        args->boolLiteral.value = member && compareTypes(member, type);
+    }
+    return args;
 }
 
 static AstNode *makeLineNumberNode(AstVisitor *visitor,
@@ -321,6 +386,51 @@ static AstNode *makeSizeofNode(AstVisitor *visitor,
                                bfiSizeOf,
                                args,
                                getPrimitiveType(ctx->types, prtU64));
+}
+
+static AstNode *makeAstFieldStmtNode(AstVisitor *visitor,
+                                     attr(unused) const AstNode *node,
+                                     attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 2))
+        return NULL;
+    u64 count = countAstNodes(args);
+    if (count < 2 || count > 3) {
+        logError(ctx->L,
+                 &node->loc,
+                 "unsupported number of arguments given to macro, mk_field!"
+                 "expecting at least 2 and less than 3, got '{u64}'",
+                 (FormatArg[]){{.u64 = count}});
+        return false;
+    }
+    FileLoc loc = args->loc;
+    AstNode *name = args, *type = args->next, *value = type->next;
+    args->next = type->next = NULL;
+    if (!evaluate(visitor, name))
+        return NULL;
+    if (!nodeIs(name, StringLit) && !nodeIs(name, Identifier)) {
+        logError(ctx->L,
+                 &loc,
+                 "invalid argument passed to `make_field!` expecting a "
+                 "string literal or an identifier",
+                 NULL);
+        return NULL;
+    }
+
+    args->tag = astFieldDecl;
+    args->structField.name = nodeIs(name, Identifier)
+                                 ? name->ident.value
+                                 : name->stringLiteral.value;
+    args->structField.value = value;
+    args->structField.type = type;
+    args->flags |= flgVisited;
+    args->type = evalType(ctx, args);
+
+    if (typeIs(args->type, Error))
+        return NULL;
+
+    return args;
 }
 
 static AstNode *makeAstFieldExprNode(AstVisitor *visitor,
@@ -1095,12 +1205,14 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "destructor", makeDestructorNode},
     {.name = "error", makeAstLogErrorNode},
     {.name = "file", makeFilenameNode},
+    {.name = "has_member", makeHasMemberNode},
     {.name = "info", makeAstLogNoteNode},
     {.name = "init_defaults", makeInitializeDefaults},
     {.name = "len", makeLenNode},
     {.name = "line", makeLineNumberNode},
     {.name = "mk_ast_list", makeAstNodeList},
     {.name = "mk_bc", makeBackendCallNode},
+    {.name = "mk_field", makeAstFieldStmtNode},
     {.name = "mk_field_expr", makeAstFieldExprNode},
     {.name = "mk_ident", makeAstIdentifierNode},
     {.name = "mk_integer", makeAstIntegerNode},

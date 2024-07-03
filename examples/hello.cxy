@@ -1,7 +1,14 @@
-@[pure]
-pub func __cxy_panic2(file: string, line: u64, column: u64, msg: string) {
-    write(2, "\n  @", 4)
+import { Request } from "stdlib/http.cxy"
+import { HashMap } from "stdlib/hash.cxy"
+
+struct Calculator {
+    x: HashCode
+    func add(a: i32, b: i32) => a + b
+    func add(a: f32, b: f32) => a + b
+    // const func `hash`() => x
 }
 
 pub func main() {
+    var req = Request(null);
+    req.parse("POST /hello HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nHello");
 }

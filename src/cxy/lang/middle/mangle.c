@@ -61,7 +61,7 @@ static void mangleType(FormatState *state, const Type *type)
     default:
         append(state, "Z", 1);
         if (type->ns)
-            appendString(state, type->name);
+            appendString(state, type->ns);
         if (type->name != NULL) {
             appendString(state, type->name);
         }
