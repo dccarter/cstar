@@ -149,6 +149,20 @@ pub class TcpSocket {
     }
 }
 
+class SocketOutputStream : OutputStream {
+    - sock: TcpSocket
+    - timeout: u64
+
+    func `init`(sock: TcpSocket, timeout: u64 = 0) {
+        this.sock = sock
+        this.timeout = timeout
+    }
+
+    func append(data: &const void, size: u64) {
+        sock.sendBuffer(data, size, timeout)
+    }
+}
+
 pub class TcpListener {
     - bind: Address
     - fd: i32

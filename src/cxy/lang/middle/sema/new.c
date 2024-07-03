@@ -153,7 +153,7 @@ static const Type *checkNewInitializerExpr(AstVisitor *visitor, AstNode *node)
             if (typeIs(type, Error))
                 return NULL;
 
-            if (!isExplicitConstructableFrom(ctx, callee, type)) {
+            if (!isExplicitConstructableFrom(ctx->L, callee, type)) {
                 logError(ctx->L,
                          &init->callExpr.args->loc,
                          "type '{t}' cannot be constructed with value of "

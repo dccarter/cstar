@@ -11,7 +11,7 @@ static const Type *findCustomRange(TypingContext *ctx, AstNode *range)
 {
     const Type *rangeOp = findMemberInType(range->type, S_Range);
     if (rangeOp) {
-        rangeOp = matchOverloadedFunction(ctx,
+        rangeOp = matchOverloadedFunction(ctx->L,
                                           rangeOp,
                                           (const Type *[]){},
                                           0,

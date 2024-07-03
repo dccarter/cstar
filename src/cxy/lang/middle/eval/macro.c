@@ -22,6 +22,7 @@
 
 #include "core/alloc.h"
 #include "core/sb.h"
+#include "lang/middle/sema/check.h"
 
 #include <string.h>
 
@@ -207,6 +208,67 @@ static AstNode *makeFilenameNode(AstVisitor *visitor,
                    .type = makeStringType(ctx->types),
                    .stringLiteral.value =
                        visitor->current->loc.fileName ?: "<native>"});
+}
+
+static AstNode *makeHasMemberNode(AstVisitor *visitor,
+                                  attr(unused) const AstNode *node,
+                                  attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 3))
+        return NULL;
+
+    const Type *target = args->type ?: evalType(ctx, args);
+    if (!hasFlag(args, Typeinfo)) {
+        logError(ctx->L,
+                 &args->loc,
+                 "unexpected type {t}, expecting type information",
+                 (FormatArg[]){{.t = target}});
+        return NULL;
+    }
+    target = resolveType(target);
+
+    AstNode *name = args->next, *memberType = name->next;
+    if (!evaluate(visitor, name))
+        return NULL;
+    if (!nodeIs(name, StringLit)) {
+        logError(
+            ctx->L,
+            &name->loc,
+            "unexpect argument, expecting the name of the member to lookup",
+            NULL);
+        return NULL;
+    }
+
+    const Type *type = evalType(ctx, memberType);
+    if (!hasFlag(memberType, Typeinfo)) {
+        logError(ctx->L,
+                 &memberType->loc,
+                 "unexpected type {t}, expecting type information",
+                 (FormatArg[]){{.t = type}});
+        return NULL;
+    }
+
+    type = resolveType(type);
+    args->next = NULL;
+    args->tag = astBoolLit;
+
+    const Type *member = findMemberInType(target, name->stringLiteral.value);
+    if (typeIs(member, Func) && typeIs(type, Func)) {
+        member = matchOverloadedFunctionPerfectMatch(ctx->L,
+                                                     member,
+                                                     type->func.params,
+                                                     type->func.paramsCount,
+                                                     NULL,
+                                                     type->flags & flgConst,
+                                                     true);
+        args->boolLiteral.value =
+            member && compareFuncTypes(member, type, true);
+    }
+    else {
+        args->boolLiteral.value = member && compareTypes(member, type);
+    }
+    return args;
 }
 
 static AstNode *makeLineNumberNode(AstVisitor *visitor,
@@ -1143,6 +1205,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "destructor", makeDestructorNode},
     {.name = "error", makeAstLogErrorNode},
     {.name = "file", makeFilenameNode},
+    {.name = "has_member", makeHasMemberNode},
     {.name = "info", makeAstLogNoteNode},
     {.name = "init_defaults", makeInitializeDefaults},
     {.name = "len", makeLenNode},

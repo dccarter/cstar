@@ -23,9 +23,9 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
-
 #include <assert.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 #ifdef __SSE4_2__
 #ifdef _MSC_VER
@@ -485,6 +485,7 @@ int phr_parse_request(const char *buf_start,
     /* if last_len != 0, check if the request is complete (a fast countermeasure
        againt slowloris */
     if (last_len != 0 && is_complete(buf, buf_end, last_len, &r) == NULL) {
+        printf("Request is not complete\n");
         return r;
     }
 

@@ -279,6 +279,10 @@ pub func hash[T](val: const T, init: HashCode = #{FNV_32_PRIME}) : HashCode {
     }
     else {
         // this will fail if T does not implement hash function
+        require!(
+            has_member!(#T, "op__hash", #const func() -> HashCode),
+            "type '{t}' must implement `hash` operator", #T
+        )
         return val.op__hash()
     }
 }
@@ -307,13 +311,13 @@ pub struct CString {
     @inline const func size() => _size
     @inline const func data() => s
 
-    func toi[T](base: i32 = 0) {
+    const func toi[T](base: i32 = 0) {
         require!(T.isInteger, "type '{t}' unsupported by `CString.toi`", #T)
         var ep: &const char;
         return <T>strtoll(s !: &const char, &ep, base);
     }
 
-    func tof[T]() {
+    const func tof[T]() {
         require!(T.isFloat, "type '{t}' unsupported by `CString.tof`", #T)
         var ep: &const char;
         return <T>strtod(s !: &const char, &ep);
@@ -322,36 +326,42 @@ pub struct CString {
 
 #const CXY_STRING_BUILDER_DEFAULT_CAPACITY = 32:u64
 
+@[inline, pure]
+pub func isnull[T](cls: T) {
+    require!(T.isPointer || T.isClass, "isnull can only be used on class types")
+    return (cls !: &const void) == null
+}
+
 pub class OutputStream {
     @[pure]
-    virtual func append(str: &const char, size: u64): void
+    virtual func append(str: &const void, size: u64): void
 
     @inline
     func appendString(s: string) : void {
-        append(s !: &const char, strlen(s))
+        append(s !: &const void, strlen(s))
     }
 
     @inline
     func appendString(s: CString) : void {
-        append(s.s !: &const char, s.size())
+        append(s.s !: &const void, s.size())
     }
 
     func appendSignedInt(num: i64) {
         var buf: [char, 64];
         const len = sprintf(buf, "%lld", num);
-        append(buf, len)
+        append(buf !: &const void, len)
     }
 
     func appendUnSignedInt(num: u64) {
         var buf: [char, 32];
         const len = sprintf(buf, "%llu", num);
-        append(buf, len)
+        append(buf !: &const void, len)
     }
 
     func appendFloat(num: f64) {
         var data: [char, 32];
         const len = sprintf(data, "%g", num);
-        append(data, len)
+        append(data !: &const void, len)
     }
 
     func appendChar(ch: wchar) {
@@ -382,16 +392,16 @@ pub class OutputStream {
         else {
             // TODO raise OutOfRangeException()
         }
-        append(data, size)
+        append(data !: &const void, size)
     }
 
 
     @inline
     func appendBool(val: bool) {
         if (val)
-            append("true" !: &const char, 4:u64)
+            append("true" !: &const void, 4:u64)
         else
-            append("false" !: &const char, 5:u64)
+            append("false" !: &const void, 5:u64)
     }
 
     func appendPointer[T](ptr: &const T) {
@@ -403,7 +413,10 @@ pub class OutputStream {
     func `<<`[U](val: const U) : OutputStream {
         #if (U.isString)
             #if (U.isClass)
-                append(val._data !: &const char, val.size())
+                if (isnull(val))
+                    appendString("null")
+                else
+                    append(val._data !: &const void, val.size())
             else
                 appendString(__construct1[CString](val))
         else #if (U.isInteger)
@@ -420,7 +433,7 @@ pub class OutputStream {
              appendString(#{U.name})
              appendChar('.')
              switch(val) {
-                #for (const V: (#U).members) {
+                #for (const V: U.members) {
                     case U.#{mk_ident!(V.name)} =>
                         appendString(#{V.name})
                 }
@@ -432,8 +445,25 @@ pub class OutputStream {
             else
                 appendString("null")
         }
-        else #if (U.isStruct || U.isClass)
+        else #if (U.isClass) {
+            require!(
+                has_member!(#U, "op__str", #const func (_:OutputStream) -> void),
+                "type {t} does not implement `str` operator",
+                #U
+            )
+            if (isnull(val))
+                appendString("null")
+            else
+                val.op__str(this)
+        }
+        else #if (U.isStruct) {
+            require!(
+                has_member!(#U, "op__str", #const func (_:OutputStream) -> void),
+                "type {t} does not implement `str` operator",
+                #U
+            )
             val.op__str(this)
+        }
         else #if (U.isTuple) {
             this.appendChar('(')
             #for (const i: 0..U.membersCount) {
@@ -463,7 +493,7 @@ pub class OutputStream {
             this.appendPointer[#{U.pointedType}](val)
         }
         else {
-            error!("type {t} not supported by String::`<<` operator", #U)
+            error!("type {t} not supported by OutputStream::`<<` operator", #U)
         }
         return this
     }

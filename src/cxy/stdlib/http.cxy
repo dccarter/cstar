@@ -212,7 +212,7 @@ pub class Request {
         this.sock = sock
     }
 
-    func parseHeaders(buf: &const char, len: u64) {
+    func parseHeaders(buf: &const char, len: u64) : Status | i32 {
         var method: &const char = null;
         var methodLen : u64 = 0;
         var path: &const char = null;
@@ -231,7 +231,7 @@ pub class Request {
             &minorVersion,
             &headers !: &parser.phr_header,
             &numHeaders,
-            len);
+            0);
 
         if (parsed < 0) {
             // failed to parse request
@@ -244,8 +244,7 @@ pub class Request {
         for (var i: 0..numHeaders) {
             const header = headers.[i];
             const headerName = CString(header.name !: string, header.name_len);
-            if (headerName == CONTENT_LENGTH) {
-                //var s = CString(header.value !: string, header.value_len);
+            if (EqualsCase{}(headerName, CONTENT_LENGTH)) {
                 this.contentLength =
                     CString(header.value !: string, header.value_len).toi[u64]();
             }
@@ -254,5 +253,24 @@ pub class Request {
                     String(header.value, header.value_len)
             }
         }
+
+        return parsed
+    }
+
+    func parse(str: string) {
+        var len = len!(str);
+        var buf = str !: &const char;
+        var ret = parseHeaders(buf, len);
+        var parsed: u64 = 0;
+        match (ret) {
+            case Status as status => return status
+            case i32 as consumed => parsed = consumed
+        }
+
+        var remaining = len - parsed;
+        if (remaining == this.contentLength)
+            this.body = String(ptroff!(buf + parsed), remaining)
+
+        return Status.OK
     }
 }

@@ -988,13 +988,14 @@ static AstNode *block(Parser *P)
 
     consume0(P, tokLBrace);
     while (!check(P, tokRBrace, tokEoF)) {
-        E4C_TRY_BLOCK({
-            listAddAstNode(&stmts, statement(P, false));
-            match(P, tokSemicolon);
-        } E4C_CATCH(ParserException) {
-            synchronizeUntil(P, tokRBrace);
-            break;
-        })
+        E4C_TRY_BLOCK(
+            {
+                listAddAstNode(&stmts, statement(P, false));
+                match(P, tokSemicolon);
+            } E4C_CATCH(ParserException) {
+                synchronizeUntil(P, tokRBrace);
+                break;
+            })
     }
     consume0(P, tokRBrace);
 
@@ -2056,6 +2057,8 @@ static AstNode *statement(Parser *P, bool exprOnly)
 static AstNode *parseTypeImpl(Parser *P)
 {
     AstNode *type;
+    FileLoc loc = current(P)->fileLoc;
+    bool isConst = match(P, tokConst);
     Token tok = *current(P);
     if (isPrimitiveType(tok.tag)) {
         type = primitive(P);
@@ -2083,18 +2086,18 @@ static AstNode *parseTypeImpl(Parser *P)
             break;
         case tokVoid:
             advance(P);
-            type = makeAstNode(
-                P->memPool, &tok.fileLoc, &(AstNode){.tag = astVoidType});
+            type =
+                makeAstNode(P->memPool, &loc, &(AstNode){.tag = astVoidType});
             break;
         case tokString:
             advance(P);
-            type = makeAstNode(
-                P->memPool, &tok.fileLoc, &(AstNode){.tag = astStringType});
+            type =
+                makeAstNode(P->memPool, &loc, &(AstNode){.tag = astStringType});
             break;
         case tokCChar:
             advance(P);
             type = makeAstNode(P->memPool,
-                               &tok.fileLoc,
+                               &loc,
                                &(AstNode){.tag = astPrimitiveType,
                                           .primitiveType.id = prtCChar});
             break;
@@ -2103,8 +2106,8 @@ static AstNode *parseTypeImpl(Parser *P)
             break;
         case tokAuto:
             advance(P);
-            type = makeAstNode(
-                P->memPool, &tok.fileLoc, &(AstNode){.tag = astAutoType});
+            type =
+                makeAstNode(P->memPool, &loc, &(AstNode){.tag = astAutoType});
             break;
         default:
             reportUnexpectedToken(P, "a type");
@@ -2112,14 +2115,15 @@ static AstNode *parseTypeImpl(Parser *P)
         }
     }
 
+    type->loc.begin = loc.begin;
     if (match(P, tokQuestion)) {
         type = makeAstNode(
             P->memPool,
-            &tok.fileLoc,
+            &loc,
             &(AstNode){.tag = astOptionalType, .optionalType.type = type});
     }
 
-    type->flags |= flgTypeAst;
+    type->flags |= flgTypeAst | (isConst ? flgConst : flgNone);
     return type;
 }
 
@@ -2794,17 +2798,19 @@ AstNode *parseProgram(Parser *P)
            (check(P, tokAt) &&
             checkPeek(P, 1, tokCDefine, tokCInclude, tokCSources, tokCBuild) &&
             match(P, tokAt))) {
-        E4C_TRY_BLOCK({
-            AstNode *node = parseTopLevelDecl(P);
-            if (node != NULL)
-                listAddAstNode(&topLevel, node);
-        } E4C_CATCH(ParserException) { synchronize(E4C_EXCEPTION.ctx); })
+        E4C_TRY_BLOCK(
+            {
+                AstNode *node = parseTopLevelDecl(P);
+                if (node != NULL)
+                    listAddAstNode(&topLevel, node);
+            } E4C_CATCH(ParserException) { synchronize(E4C_EXCEPTION.ctx); })
     }
 
     while (!isEoF(P)) {
-        E4C_TRY_BLOCK({
-            listAddAstNode(&decls, comptime(P, declaration));
-        } E4C_CATCH(ParserException) { synchronize(E4C_EXCEPTION.ctx); })
+        E4C_TRY_BLOCK(
+            {
+                listAddAstNode(&decls, comptime(P, declaration));
+            } E4C_CATCH(ParserException) { synchronize(E4C_EXCEPTION.ctx); })
     }
 
     return newAstNode(P,

@@ -28,7 +28,7 @@ static inline bool isIteratorFunction(const Type *type)
     return typeIs(ret, Struct) && hasFlag(ret, Optional);
 }
 
-const Type *matchOverloadedFunctionPerfectMatch(TypingContext *ctx,
+const Type *matchOverloadedFunctionPerfectMatch(Log *L,
                                                 const Type *callee,
                                                 const Type **argTypes,
                                                 u64 argsCount,
@@ -75,7 +75,7 @@ const Type *matchOverloadedFunctionPerfectMatch(TypingContext *ctx,
                     continue;
                 }
                 compatible =
-                    isExplicitConstructableFrom(ctx, paramType, argTypes[i]);
+                    isExplicitConstructableFrom(L, paramType, argTypes[i]);
                 if (compatible) {
                     score--;
                     continue;
@@ -101,16 +101,17 @@ const Type *matchOverloadedFunctionPerfectMatch(TypingContext *ctx,
     if (found)
         return found;
 
-    if (loc) {
+    if (L && loc) {
+        Type tAuto = {.tag = typAuto};
         Type type = {.tag = typFunc,
                      .flags = flags,
                      .name = callee->func.decl->funcDecl.name,
                      .func = {.params = argTypes,
                               .paramsCount = argsCount,
-                              .retType = makeAutoType(ctx->types)}};
+                              .retType = &tAuto}};
 
         logError(
-            ctx->L,
+            L,
             loc,
             "incompatible function reference ({u64} functions declared did "
             "not match function with signature {t})",
@@ -119,12 +120,12 @@ const Type *matchOverloadedFunctionPerfectMatch(TypingContext *ctx,
         decl = decls;
         while (decl) {
             if (decl->type)
-                logError(ctx->L,
+                logError(L,
                          &decl->loc,
                          "found declaration with incompatible signature {t}",
                          (FormatArg[]){{.t = decl->type}});
             else
-                logError(ctx->L,
+                logError(L,
                          &decl->loc,
                          "found declaration with incompatible signature "
                          "`unresolved`",
@@ -284,7 +285,7 @@ const Type *checkFunctionSignature(AstVisitor *visitor, AstNode *node)
 
     if (node->list.first && node->list.first != node) {
         const Type *found =
-            matchOverloadedFunctionPerfectMatch(ctx,
+            matchOverloadedFunctionPerfectMatch(ctx->L,
                                                 node->list.first->type,
                                                 params_,
                                                 paramsCount,

@@ -405,6 +405,7 @@ void printDiagnosticToConsole(const Diagnostic *diag, void *ctx)
     FormatState state = newFormatState("", log->ignoreStyles);
     printDiagnosticToState(&state, diag, ctx);
     char *msg = formatStateToString(&state);
+    printStatus(log, "");
     if (diag->kind == dkError)
         fputs(msg, stderr);
     else
