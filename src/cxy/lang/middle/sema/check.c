@@ -285,10 +285,18 @@ static void checkSpreadExpr(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *expr = node->spreadExpr.expr;
+    bool isMove = nodeIs(expr, UnaryExpr) && expr->unaryExpr.op == opMove;
+    if (isMove)
+        expr = expr->unaryExpr.operand;
+
     if (nodeIs(expr, TupleExpr)) {
         astVisitManyNodes(visitor, expr->tupleExpr.elements);
         getLastAstNode(expr->tupleExpr.elements)->next = node->next;
         *node = *expr->tupleExpr.elements;
+        if (isMove) {
+            for (expr = node; expr; expr = expr->next)
+                expr->flags |= flgMove;
+        }
         return;
     }
 
@@ -319,7 +327,8 @@ static void checkSpreadExpr(AstVisitor *visitor, AstNode *node)
             &node->loc,
             &(AstNode){
                 .tag = astMemberExpr,
-                .flags = type->flags | type_->flags,
+                .flags =
+                    type->flags | type_->flags | (isMove ? flgMove : flgNone),
                 .type = type_,
                 .memberExpr = {
                     .target = nodeIs(variable, Path)

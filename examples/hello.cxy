@@ -1,14 +1,35 @@
 import { Request } from "stdlib/http.cxy"
 import { HashMap } from "stdlib/hash.cxy"
 
+class Object {
+    func `init`() {
+        println("initializing Object")
+    }
+}
+
+class Klass {
+    - member: (bool, Object)
+    func `init`() {
+        member = (true, Object())
+        println("Initializing Klass")
+    }
+
+    func `deinit`() {
+        println("de-initializing Klass")
+    }
+}
 struct Calculator {
-    x: HashCode
-    func add(a: i32, b: i32) => a + b
-    func add(a: f32, b: f32) => a + b
-    // const func `hash`() => x
+    - klass: Klass
+
+    func `init`() {
+        klass = Klass()
+        println("Initializing calculator")
+    }
 }
 
 pub func main() {
-    var req = Request(null);
-    req.parse("POST /hello HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nHello");
+    var calc = Calculator();
+    var calc2 = __copy(calc);
+    __destructor(calc)
+    __destructor(calc2)
 }

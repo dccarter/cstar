@@ -28,6 +28,7 @@ extern "C" {
     f(explicit)                 \
     f(pure)                     \
     f(strlen)                   \
+    f(memset)                   \
     f(char)                     \
     f(wputc)                    \
     f(cxy_range_t)              \
@@ -93,6 +94,8 @@ extern "C" {
     f(__construct1)             \
     f(__fwd)                    \
     f(__override_builtin)       \
+    f(__copy)                     \
+    f(__destroy)                  \
     f(CXY__main)                \
     f(resolve)                  \
     f(reject)                   \

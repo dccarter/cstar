@@ -32,8 +32,7 @@ void checkTupleExpr(AstVisitor *visitor, AstNode *node)
 
         type = unwrapType(type, NULL);
         if (isClassType(type)) {
-            AstNode *decl = getTypeDecl(type);
-            node->flags |= (decl->flags & flgReferenceMembers);
+            node->flags |= flgReferenceMembers;
         }
         else if (isStructType(type)) {
             AstNode *decl = getTypeDecl(type);
@@ -76,7 +75,13 @@ void checkTupleType(AstVisitor *visitor, AstNode *node)
         if (typeIs(elems_[i], Error)) {
             node->type = ERROR_TYPE(ctx);
         }
-        else if (isClassOrStructType(type) && !hasFlag(type, Closure)) {
+        else if (isClassType(type)) {
+            node->flags |= flgReferenceMembers;
+        }
+        else if (isTupleType(type)) {
+            node->flags |= (type->flags & flgReferenceMembers);
+        }
+        else if (isStructType(type) && !hasFlag(type, Closure)) {
             AstNode *decl = getTypeDecl(type);
             node->flags |= (decl->flags & flgReferenceMembers);
         }

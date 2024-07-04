@@ -233,8 +233,10 @@ void shakeVariableDecl(AstVisitor *visitor, AstNode *node)
 
     AstNode *names = node->varDecl.names, *init = node->varDecl.init,
             *type = node->varDecl.type, *name = names;
+    bool isTransient = findAttribute(node, S_transient) != NULL;
 
     if (names->next == NULL) {
+        node->flags |= isTransient ? flgTransient : flgNone;
         node->varDecl.name = names->ident.value;
         return;
     }
@@ -265,7 +267,8 @@ void shakeVariableDecl(AstVisitor *visitor, AstNode *node)
             &name_->loc,
             &(AstNode){
                 .tag = astVarDecl,
-                .flags = node->flags | flgVisited,
+                .flags = node->flags | flgVisited |
+                         (isTransient ? flgTransient : flgNone),
                 .varDecl = {.name = name_->ident.value,
                             .names = name_,
                             .type = copyAstNode(ctx->pool, type),

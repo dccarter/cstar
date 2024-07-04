@@ -183,7 +183,8 @@ static bool evalForStmtWithRange(AstVisitor *visitor,
         if (nodeIs(body, BlockStmt) && !preserve && body->blockStmt.stmts) {
             body->blockStmt.stmts->parentScope = node->parentScope;
         }
-        else if (body) {
+
+        if (body) {
             body->parentScope = node->parentScope;
 
             const Type *type = evalType(ctx, body);

@@ -59,7 +59,7 @@ static void evaluateStructMembers(AstVisitor *visitor, AstNode *node)
             if (isClassType(type)) {
                 node->flags |= flgReferenceMembers;
             }
-            else if (isStructType(type) || isStructType(type)) {
+            else if (isStructType(type) || isTupleType(type)) {
                 node->flags |= (type->flags & flgReferenceMembers);
             }
         }
@@ -89,9 +89,7 @@ static void preCheckStructMembers(AstNode *node, NamedTypeMember *members)
     }
 }
 
-bool isExplicitConstructableFrom(Log *L,
-                                 const Type *type,
-                                 const Type *from)
+bool isExplicitConstructableFrom(Log *L, const Type *type, const Type *from)
 {
     type = unwrapType(resolveAndUnThisType(type), NULL);
     if (!isClassOrStructType(type))

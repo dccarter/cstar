@@ -725,25 +725,28 @@ pub func __deinit[T](t: T) {
         #for (const member: T.members) {
             #if (member.isField) {
                 #const M = member.Tinfo;
-                #if (M.isClass)
-                    t.#{mk_ident!(member.name)} = null
+                #if (M.isClass) {
+                    #const name = mk_ident!(member.name);
+                    __smart_ptr_drop(t.#{name} !: sptr)
+                    t.#{name} = null
+                }
                 else #if (M.isStruct || M.isTuple)
                     __deinit[M](t.#{mk_ident!(member.name)})
             }
         }
     }
     else #if (T.isTuple) {
-        #const i = 0;
-        #for (const member: 0..T.membersCount) {
+        info!("deinit tuple '{t}' {u64}", T, T.membersCount)
+        #for (const member: 0 .. T.membersCount) {
             #const M = typeat!(T, member);
-            #if (M.isClass)
+            info!("deinit tuple '{t}' {b}", M, M.hasReferenceMembers)
+            #if (M.isClass) {
+                __smart_ptr_drop(t.#{member} !: sptr)
                 t.#{member} = null
-            else #if (M.isStruct || M.isTuple)
+            }
+            else #if (M.hasReferenceMembers)
                 __deinit(t.#{member})
         }
-    }
-    else {
-        warn!("builtin de-initializer is not supported type `{t}`", #T)
     }
 }
 
@@ -753,7 +756,11 @@ pub func __deinit[T](t: T) {
  */
 @[pure, linkage("External")]
 pub func __copy[T](t: T) {
-    #if (T.hasReferenceMembers) {
+    #if (T.isClass) {
+        // just get reference to the variable
+        return ref(t)
+    }
+    else #if (T.hasReferenceMembers) {
         #if (T.isStruct) {
             #const nodes = mk_ast_list!();
             #for (const member: T.members) {
@@ -832,15 +839,16 @@ func __deinit_fwd[T](ptr: sptr) {
     #if (T.has_deinit) {
         obj.op__deinit()
     }
-    else {
-        #for (const member: T.members) {
-            #if (member.isField) {
-                #const M = member.Tinfo;
-                #if (M.isClass)
-                    obj.#{mk_ident!(member.name)} = null
-                else #if (M.isStruct || M.isTuple)
-                    __deinit[M](obj.#{mk_ident!(member.name)})
+    #for (const member: T.members) {
+        #if (member.isField) {
+            #const M = member.Tinfo;
+            #if (M.isClass) {
+                #const name = mk_ident!(member.name);
+                __smart_ptr_drop(obj.#{name} !: sptr)
+                obj.#{name} = null
             }
+            else #if (M.hasReferenceMembers)
+                __deinit[M](obj.#{mk_ident!(member.name)})
         }
     }
 }
@@ -891,9 +899,11 @@ pub func __construct1[T](@transient ...args: auto) {
 }
 
 @[inline, pure]
-pub func __destructor[T](ptr: T) {
-    require!(T.isClass, "expecting type of deallocated object to be a class")
-    __smart_ptr_drop(ptr !: sptr)
+pub func __destructor[T](obj: T) {
+    #if (T.isClass)
+        __smart_ptr_drop(obj !: sptr)
+    else
+        __deinit[T](obj)
 }
 
 pub var stdout: OutputStream = __construct0[FileOutputStream](1);

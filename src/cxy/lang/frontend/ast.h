@@ -935,6 +935,9 @@ AstNode *makeExprStmt(MemPool *pool,
                       AstNode *next,
                       const Type *type);
 
+AstNode *makeDeferStmt(
+    MemPool *pool, const FileLoc *loc, u64 flags, AstNode *expr, AstNode *next);
+
 AstNode *makeStmtExpr(MemPool *pool,
                       const FileLoc *loc,
                       u64 flags,

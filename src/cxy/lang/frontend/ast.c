@@ -788,6 +788,17 @@ AstNode *makeExprStmt(MemPool *pool,
                                   .exprStmt.expr = expr});
 }
 
+AstNode *makeDeferStmt(
+    MemPool *pool, const FileLoc *loc, u64 flags, AstNode *expr, AstNode *next)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astDeferStmt,
+                                  .flags = flags,
+                                  .next = next,
+                                  .deferStmt.expr = expr});
+}
+
 AstNode *makeStmtExpr(MemPool *pool,
                       const FileLoc *loc,
                       u64 flags,

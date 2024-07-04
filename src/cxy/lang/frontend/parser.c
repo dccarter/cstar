@@ -2810,6 +2810,7 @@ AstNode *parseProgram(Parser *P)
         E4C_TRY_BLOCK(
             {
                 listAddAstNode(&decls, comptime(P, declaration));
+                decls.last->flags |= flgTopLevelDecl;
             } E4C_CATCH(ParserException) { synchronize(E4C_EXCEPTION.ctx); })
     }
 
