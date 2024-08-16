@@ -73,6 +73,18 @@ static void castLiteral(TypingContext *ctx, AstNode *node)
                 expr->intLiteral.isNegative = false;
                 expr->intLiteral.uValue = expr->boolLiteral.value ? 1 : 0;
             }
+            else if (isEnumLiteral(expr)) {
+                i64 value = getEnumLiteralValue(expr);
+                expr->tag = astIntegerLit;
+                if (value < 0) {
+                    expr->intLiteral.isNegative = true;
+                    expr->intLiteral.value = value;
+                }
+                else {
+                    expr->intLiteral.isNegative = false;
+                    expr->intLiteral.uValue = value;
+                }
+            }
             else {
                 csAssert0(nodeIs(expr, IntegerLit));
             }
@@ -144,6 +156,11 @@ void checkTypedExpr(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     const Type *expr = checkType(visitor, node->typedExpr.expr);
+    if (typeIs(expr, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
     const Type *type = checkType(visitor, node->typedExpr.type);
     if (isTypeCastAssignable(type, expr) ||
         (isPointerType(expr) && (isPointerType(type) || isIntegerType(type)))) {

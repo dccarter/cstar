@@ -207,6 +207,11 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
 
         return typeIs(from, Pointer) && isVoidPointer(from);
 
+    case typReference:
+        return typeIs(from, Reference) &&
+               isTypeAssignableFrom(to->reference.referred,
+                                    from->reference.referred);
+
     case typOpaque:
         return typeIs(from, Pointer) && typeIs(from->pointer.pointed, Null);
 
@@ -228,6 +233,9 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
     case typThis:
         if (typeIs(to->_this.that, Alias) && typeIs(from, Pointer))
             return isTypeAssignableFrom(to->_this.that, from->pointer.pointed);
+        if (typeIs(to->_this.that, Alias) && typeIs(from, Reference))
+            return isTypeAssignableFrom(to->_this.that,
+                                        from->reference.referred);
         return to->_this.that == from;
     case typTuple:
         if (!typeIs(from, Tuple) || to->tuple.count != from->tuple.count)
@@ -279,6 +287,9 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
             return to == from->_this.that;
         if (typeIs(from, Class) && from->tClass.inheritance->base)
             return to == from->tClass.inheritance->base;
+        if (typeIs(from, Class) && getTypeDecl(to) == getTypeDecl(from))
+            // TODO workaround circular types
+            return true;
 
         return typeIs(from, Pointer) && typeIs(from->pointer.pointed, Null);
     case typInfo:
@@ -324,6 +335,8 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
             to = to->optional.target;
         if (!typeIs(to, Primitive))
             return false;
+        if (to->primitive.id == unwrappedFrom->primitive.id)
+            return true;
 
         switch (to->primitive.id) {
 #define f(I, ...) case prt##I:
@@ -603,6 +616,36 @@ bool isPointerType(const Type *type)
     return typeIs(type, Pointer) || typeIs(type, Array) || typeIs(type, String);
 }
 
+bool isReferenceType(const Type *type)
+{
+    type = resolveType(type);
+
+    if (typeIs(type, Wrapped))
+        return isReferenceType(unwrapType(type, NULL));
+
+    if (typeIs(type, Info))
+        return isReferenceType(type->info.target);
+
+    return typeIs(type, Reference);
+}
+
+bool isReferable(const Type *type)
+{
+    type = unwrapType(resolveType(type), NULL);
+    if (type == NULL)
+        return false;
+    switch (type->tag) {
+    case typClass:
+    case typStruct:
+    case typTuple:
+    case typUnion:
+    case typThis:
+        return !hasFlag(type, Extern);
+    default:
+        return false;
+    }
+}
+
 bool isVoidPointer(const Type *type)
 {
     type = resolveType(type);
@@ -618,6 +661,11 @@ bool isClassType(const Type *type)
     type = unwrapType(resolveType(type), NULL);
     return typeIs(type, Class) ||
            (typeIs(type, This) && typeIs(type->_this.that, Class));
+}
+
+bool isClassReferenceType(const Type *type)
+{
+    return isReferenceType(type) && isClassType(stripReference(type));
 }
 
 bool isStructType(const Type *type)
@@ -733,8 +781,12 @@ void printType_(FormatState *state, const Type *type, bool keyword)
         printKeyword(state, "string");
         break;
     case typPointer:
-        format(state, "&", NULL);
+        format(state, "^", NULL);
         printType_(state, type->pointer.pointed, keyword);
+        break;
+    case typReference:
+        format(state, "&", NULL);
+        printType_(state, type->reference.referred, keyword);
         break;
     case typOptional:
         printType_(state, type->optional.target, keyword);
@@ -975,6 +1027,7 @@ const NamedTypeMember *findOverloadMemberUpInheritanceChain(const Type *type,
 
 const TypeInheritance *getTypeInheritance(const Type *type)
 {
+    type = unThisType(type);
     switch (type->tag) {
     case typClass:
         return type->tClass.inheritance;
@@ -1015,6 +1068,7 @@ AstNode *findMemberDeclInType(const Type *type, cstring name)
 
 const Type *getTypeBase(const Type *type)
 {
+    type = stripReference(type);
     switch (type->tag) {
     case typClass:
         return type->tClass.inheritance ? type->tClass.inheritance->base : NULL;
@@ -1099,10 +1153,12 @@ bool hasReferenceMembers(const Type *type)
 {
     if (hasFlag(type, ReferenceMembers))
         return true;
-    return (isClassType(type) &&
-            hasFlag(type->tClass.decl, ReferenceMembers)) ||
-           (isStructType(type) &&
-            hasFlag(type->tStruct.decl, ReferenceMembers));
+    if (isClassOrStructType(type)) {
+        AstNode *decl = getTypeDecl(type);
+        return hasFlag(decl, ReferenceMembers);
+    }
+
+    return isTupleType(type) && hasFlag(type, ReferenceMembers);
 }
 
 void pushThisReference(const Type *this, AstNode *node)

@@ -99,6 +99,15 @@ void initCompilerPreprocessor(struct CompilerDriver *driver)
                                 node);
         freeLexer(&lexer);
     }
+    if (options->debug) {
+        preprocessorDefineMacro(&driver->preprocessor,
+                                makeString(driver->strings, "__DEBUG"),
+                                NULL);
+        cstring S_trace_memory = makeString(driver->strings, "TRACE_MEMORY");
+        options->withMemoryTrace =
+            preprocessorHasMacro(&driver->preprocessor, S_trace_memory, NULL);
+    }
+
     // add backend call ID's
 #define f(ID)                                                                  \
     preprocessorDefineMacro(                                                   \

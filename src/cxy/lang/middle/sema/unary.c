@@ -145,7 +145,7 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
         }
         break;
     case opDeref:
-        if (isClassOrStructType(operand)) {
+        if (isClassOrStructType(stripReference(operand))) {
             FileLoc loc = node->unaryExpr.operand->loc;
             if (transformToDerefOperator(visitor, node)) {
                 operand = node->type;
@@ -192,6 +192,18 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
             operand = node->unaryExpr.operand->type;
         }
         break;
+    case opDelete:
+        if (nodeIsLeftValue(node->unaryExpr.operand)) {
+            operand = makeVoidType(ctx->types);
+        }
+        else {
+            logError(ctx->L,
+                     &node->unaryExpr.operand->loc,
+                     "operand of a delete operator must be a left value",
+                     NULL);
+            operand = ERROR_TYPE(ctx);
+        }
+        break;
     default:
         logError(ctx->L,
                  &node->unaryExpr.operand->loc,
@@ -205,7 +217,7 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
     return operand;
 }
 
-void checkAddressOfExpr(AstVisitor *visitor, AstNode *node)
+void checkPointerOfExpr(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     const Type *operand = checkType(visitor, node->unaryExpr.operand);
@@ -216,6 +228,25 @@ void checkAddressOfExpr(AstVisitor *visitor, AstNode *node)
 
     node->flags |= node->unaryExpr.operand->flags;
     node->type = makePointerType(ctx->types, operand, node->flags);
+}
+
+void checkReferenceOfExpr(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    const Type *operand = checkType(visitor, node->unaryExpr.operand);
+    if (typeIs(operand, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    node->flags |= node->unaryExpr.operand->flags;
+    if (!isReferable(operand)) {
+        replaceAstNode(node, node->unaryExpr.operand);
+    }
+    else {
+        node->flags |= node->unaryExpr.operand->flags;
+        node->type = makeReferenceType(ctx->types, operand, node->flags);
+    }
 }
 
 void checkUnaryExpr(AstVisitor *visitor, AstNode *node)

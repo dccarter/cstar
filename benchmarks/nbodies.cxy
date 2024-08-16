@@ -20,8 +20,8 @@ struct Body {
         z = -pz / #{SOLAR_MASS}
     }
 
-    const func `hash`() :Hash => 0
-    const func `str`(sb: String) {
+    const func `hash`(): HashCode => 0
+    const func `str`(os: &OutputStream) {
     }
 }
 

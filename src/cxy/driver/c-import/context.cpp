@@ -18,7 +18,7 @@ IncludeContext::IncludeContext(CompilerDriver *driver,
                                clang::CompilerInstance &ci)
     : L{driver->L}, pool{driver->pool}, strings{driver->strings},
       types{driver->types}, preprocessor{&driver->preprocessor},
-      target{ci.getTarget()}, SM{ci.getSourceManager()},
+      target{ci.getTarget()}, SM{ci.getSourceManager()}, Ci{ci},
       importer{*((cxy::CImporter *)driver->cImporter)}
 {
 }

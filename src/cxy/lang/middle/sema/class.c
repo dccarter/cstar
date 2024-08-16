@@ -29,7 +29,9 @@ static void inheritClassMembers(TypingContext *ctx,
     AstNode *member = base->classDecl.members;
     for (; member; member = member->next) {
         if (isInheritable(member)) {
-            insertAstNode(into, deepCloneAstNode(ctx->pool, member));
+            AstNode *inherited = deepCloneAstNode(ctx->pool, member);
+            inherited->flags |= flgInherited;
+            insertAstNode(into, inherited);
         }
     }
 }
@@ -114,13 +116,15 @@ static void evalClassMembers(AstVisitor *visitor, AstNode *node)
 static void preCheckClassMembers(AstNode *node, NamedTypeMember *members)
 {
     AstNode *member = node->classDecl.members;
-
+    AstNodeList constructors = {};
     for (u64 i = hasFlag(node, Virtual); member; member = member->next, i++) {
         if (nodeIs(member, FieldDecl)) {
             members[i] = (NamedTypeMember){.name = member->structField.name,
                                            .type = member->type,
                                            .decl = member};
             member->structField.index = i;
+            node->flags |=
+                (member->structField.value ? flgDefaultedFields : flgNone);
         }
         else {
             members[i] = (NamedTypeMember){.name = getDeclarationName(member),
@@ -168,28 +172,36 @@ AstNode *makeDropReferenceCall(TypingContext *ctx,
 {
     const Type *type = member->type;
     csAssert0(typeIs(type, Class));
-    AstNode *drop = findBuiltinDecl(S_dropref);
+    AstNode *drop =
+        findBuiltinDecl(ctx->traceMemory ? S_sptr_drop_trace : S_sptr_drop);
     csAssert0(drop);
-    return makeCallExpr(
+    return makeExprStmt(
         ctx->pool,
         loc,
-        makePathWithElements(
-            ctx->pool,
-            loc,
-            flgNone,
-            makeResolvedPathElement(
-                ctx->pool, loc, S_dropref, drop->flags, drop, NULL, NULL),
-            NULL),
-        makeResolvedPath(ctx->pool,
-                         loc,
-                         member->structField.name,
-                         member->flags | flgMember,
-                         member,
-                         NULL,
-                         member->type),
         flgNone,
+        makeCallExpr(ctx->pool,
+                     loc,
+                     makeResolvedPath(ctx->pool,
+                                      loc,
+                                      drop->_namedNode.name,
+                                      drop->flags,
+                                      drop,
+                                      NULL,
+                                      drop->type),
+                     makeResolvedPath(ctx->pool,
+                                      loc,
+                                      member->structField.name,
+                                      member->flags | flgMember | flgAddThis,
+                                      member,
+                                      ctx->traceMemory
+                                          ? makeSrLocNode(ctx->pool, loc)
+                                          : NULL,
+                                      makeVoidPointerType(ctx->types, flgNone)),
+                     flgNone,
+                     NULL,
+                     drop->type->func.retType),
         NULL,
-        NULL);
+        makeVoidType(ctx->types));
 }
 
 AstNode *makeGetReferenceCall(TypingContext *ctx,
@@ -198,28 +210,30 @@ AstNode *makeGetReferenceCall(TypingContext *ctx,
 {
     const Type *type = member->type;
     csAssert0(typeIs(type, Class));
-    AstNode *get = findBuiltinDecl(S_getref);
+    AstNode *get =
+        findBuiltinDecl(ctx->traceMemory ? S_sptr_get_trace : S_sptr_ref);
     csAssert0(get);
     return makeCallExpr(
         ctx->pool,
         loc,
-        makePathWithElements(
-            ctx->pool,
-            loc,
-            flgNone,
-            makeResolvedPathElement(
-                ctx->pool, loc, S_getref, get->flags, get, NULL, NULL),
-            NULL),
+        makeResolvedPathElement(ctx->pool,
+                                loc,
+                                get->_namedNode.name,
+                                get->flags,
+                                get,
+                                NULL,
+                                get->type),
         makeResolvedPath(ctx->pool,
                          loc,
                          member->structField.name,
-                         member->flags | flgMember,
+                         member->flags | flgMember | flgAddThis,
                          member,
-                         NULL,
-                         member->type),
+                         ctx->traceMemory ? makeSrLocNode(ctx->pool, loc)
+                                          : NULL,
+                         makeVoidPointerType(ctx->types, flgNone)),
         flgNone,
         NULL,
-        NULL);
+        get->type->func.retType);
 }
 
 void checkClassDecl(AstVisitor *visitor, AstNode *node)
@@ -227,7 +241,9 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     const Type **implements = NULL, *baseType = NULL;
     AstNode *base = node->classDecl.base, *vTableMember = NULL;
-
+    if (node->type)
+        return;
+    
     if (node->classDecl.base) {
         checkBaseDecl(visitor, node);
         if (typeIs(node->type, Error))

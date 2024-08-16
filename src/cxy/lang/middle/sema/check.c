@@ -3,6 +3,7 @@
 //
 
 #include "check.h"
+#include "../builtins.h"
 #include "../eval/eval.h"
 
 #include "lang/operations.h"
@@ -94,7 +95,8 @@ static void checkBlockStmt(AstVisitor *visitor, AstNode *node)
         }
 
         if (nodeIs(stmt, ReturnStmt)) {
-            if (node->type && !isTypeAssignableFrom(node->type, type)) {
+            if (node->type && !typeIs(node->type, Void) &&
+                !isTypeAssignableFrom(node->type, type)) {
                 logError(ctx->L,
                          &stmt->loc,
                          "inconsistent return types within "
@@ -195,7 +197,7 @@ static void checkReturnStmt(AstVisitor *visitor, AstNode *node)
 static void checkDeferStmt(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    const Type *type = checkType(visitor, node->deferStmt.expr);
+    const Type *type = checkType(visitor, node->deferStmt.stmt);
 
     if (typeIs(type, Error)) {
         node->type = type;
@@ -221,19 +223,8 @@ static void checkWhileStmt(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    if (!isTruthyType(cond_)) {
-        logError(ctx->L,
-                 &cond->loc,
-                 "expecting a truthy type in an `while` "
-                 "statement condition, "
-                 "got '{t}'",
-                 (FormatArg[]){{.t = cond_}});
-        node->type = ERROR_TYPE(ctx);
-        return;
-    }
-
     cond_ = unwrapType(cond_, NULL);
-    if (isClassOrStructType(cond_)) {
+    if (isClassOrStructType(stripReference(cond_))) {
         if (!transformToTruthyOperator(visitor, cond)) {
             if (!typeIs(cond->type, Error))
                 logError(ctx->L,
@@ -246,6 +237,17 @@ static void checkWhileStmt(AstVisitor *visitor, AstNode *node)
             return;
         }
         cond_ = cond->type;
+    }
+
+    if (!isTruthyType(cond_)) {
+        logError(ctx->L,
+                 &cond->loc,
+                 "expecting a truthy type in an `while` "
+                 "statement condition, "
+                 "got '{t}'",
+                 (FormatArg[]){{.t = cond_}});
+        node->type = ERROR_TYPE(ctx);
+        return;
     }
 
     const Type *body_ = checkType(visitor, body);
@@ -406,7 +408,12 @@ static void withSavedStack(Visitor func, AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     __typeof(ctx->stack) stack = ctx->stack;
 
-    func(visitor, node);
+    if (!hasFlag(node, Visited)) {
+        func(visitor, node);
+    }
+
+    // clear the visited flag
+    node->flags &= ~flgVisited;
 
     ctx->stack = stack;
 }
@@ -599,7 +606,9 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
     TypingContext context = {.L = driver->L,
                              .pool = driver->pool,
                              .strings = driver->strings,
-                             .types = driver->types};
+                             .types = driver->types,
+                             .traceMemory = driver->options.withMemoryTrace &
+                                            isBuiltinsInitialized()};
 
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context, {
@@ -616,6 +625,7 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astAutoType] = checkBuiltinType,
         [astVoidType] = checkBuiltinType,
         [astPointerType] = checkPointerType,
+        [astReferenceType] = checkReferenceType,
         [astTupleType] = checkTupleType,
         [astFuncType] = checkFunctionType,
         [astArrayType] = checkArrayType,
@@ -656,7 +666,8 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astSpreadExpr] = checkSpreadExpr,
         [astBinaryExpr] = checkBinaryExpr,
         [astUnaryExpr] = checkUnaryExpr,
-        [astAddressOf] = checkAddressOfExpr,
+        [astPointerOf] = checkPointerOfExpr,
+        [astReferenceOf] = checkReferenceOfExpr,
         [astAssignExpr] = checkAssignExpr,
         [astIndexExpr] = checkIndexExpr,
         [astStructExpr] = checkStructExpr,

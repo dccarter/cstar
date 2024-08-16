@@ -1,35 +1,36 @@
-import { Request } from "stdlib/http.cxy"
-import { HashMap } from "stdlib/hash.cxy"
+import { Server, Request, Response, Config, Cors, Method } from "stdlib/http.cxy"
 
-class Object {
-    func `init`() {
-        println("initializing Object")
+class Log {
+    func `init`() { }
+    func before(req: &const Request, resp: &Response) {
+        //stdout << "Before Log\n"
+    }
+    func after(req: &const Request, resp: &Response) {
+        //stdout << "After Log\n"
     }
 }
 
-class Klass {
-    - member: (bool, Object)
-    func `init`() {
-        member = (true, Object())
-        println("Initializing Klass")
+class Security {
+    - _id: u64 = 0;
+    func `init`() { }
+    func id() => _id++
+
+    func before(req: &const Request, resp: &Response) {
+        //stdout << "Before Security\n"
     }
 
-    func `deinit`() {
-        println("de-initializing Klass")
-    }
-}
-struct Calculator {
-    - klass: Klass
-
-    func `init`() {
-        klass = Klass()
-        println("Initializing calculator")
+    func after(req: &const Request, resp: &Response) {
+        //stdout << "After Security\n"
     }
 }
 
-pub func main() {
-    var calc = Calculator();
-    var calc2 = __copy(calc);
-    __destructor(calc)
-    __destructor(calc2)
+pub func main()  {
+    var server = Server[(Log, Cors, Security)]();
+
+    server("/hello/{name}", (req: &const Request, resp: &Response) => {
+        var name = req.param("name");
+        resp.body() << "hello " << name << " " << server.middleware[Security]().id()
+    })([Method.Head, Method.Options]) // add support for and options method
+
+    server.start()
 }

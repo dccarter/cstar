@@ -24,28 +24,10 @@ typedef struct {
                                      : (LINE_VAR(Xx) > LINE_VAR(Yy) ? 1 : 0)); \
     })
 
-static i64 getEnumValue(const AstNode *node)
-{
-    csAssert0(typeIs(node->type, Enum));
-    cstring name = NULL;
-    if (nodeIs(node, Path) && node->path.elements->next)
-        name = node->path.elements->next->pathElement.name;
-    else if (nodeIs(node, MemberExpr) &&
-             nodeIs(node->memberExpr.member, Identifier))
-        name = node->memberExpr.member->ident.value;
-    else
-        unreachable("UNSUPPORTED");
-
-    const EnumOptionDecl *option = findEnumOption(node->type, name);
-    csAssert0(option);
-
-    return option->value;
-}
-
 static i64 getLiteralValue(const AstNode *node)
 {
     if (typeIs(node->type, Enum))
-        return getEnumValue(node);
+        return getEnumLiteralValue(node);
     else if (isCharacterType(node->type))
         return node->charLiteral.value;
     return integerLiteralValue(node);
@@ -112,7 +94,7 @@ static int compareLiteralNode(const void *left, const void *right)
     default:
         csAssert0(typeIs(lhs->type, Enum) && lhs->type == rhs->type &&
                   isEnumLiteral(rhs));
-        return cxy_compare(getEnumValue(lhs), getEnumValue(rhs));
+        return cxy_compare(getEnumLiteralValue(lhs), getEnumLiteralValue(rhs));
     }
 }
 

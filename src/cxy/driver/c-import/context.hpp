@@ -30,6 +30,7 @@ struct IncludeContext {
     CompilerPreprocessor *preprocessor{nullptr};
     clang::TargetInfo &target;
     clang::SourceManager &SM;
+    clang::CompilerInstance &Ci;
     llvm::DenseMap<llvm::StringRef, AstNodeList> modules{};
     cxy::CImporter &importer;
     FileLoc loc{};

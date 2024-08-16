@@ -580,6 +580,14 @@ static void visitPointerType(ConstAstVisitor *visitor, const AstNode *node)
     nodeToYaml(visitor, "pointed", node->pointerType.pointed);
 }
 
+static void visitReferenceType(ConstAstVisitor *visitor, const AstNode *node)
+{
+    YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
+    nodeAddHeader(visitor, node);
+
+    nodeToYaml(visitor, "referred", node->referenceType.referred);
+}
+
 static void visitArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     YamlDumpContext *ctx = getConstAstVisitorContext(visitor);
@@ -1081,6 +1089,7 @@ AstNode *dumpAstToYaml(CompilerDriver *driver, AstNode *node, FILE *file)
         [astAutoType] = visitHeaderOnly,
         [astPrimitiveType] = visitPrimitiveType,
         [astPointerType] = visitPointerType,
+        [astReferenceType] = visitReferenceType,
         [astArrayExpr] = visitArrayExpr,
         [astMemberExpr] = visitMemberExpr,
         [astRangeExpr] = visitRangeExpr,
@@ -1106,7 +1115,8 @@ AstNode *dumpAstToYaml(CompilerDriver *driver, AstNode *node, FILE *file)
         [astAssignExpr] = visitBinaryExpr,
         [astBinaryExpr] = visitBinaryExpr,
         [astUnaryExpr] = visitUnaryExpr,
-        [astAddressOf] = visitUnaryExpr,
+        [astReferenceOf] = visitUnaryExpr,
+        [astPointerOf] = visitUnaryExpr,
         [astTernaryExpr] = visitTernaryExpr,
         [astIfStmt] = visitTernaryExpr,
         [astStmtExpr] = visitStmtExpr,

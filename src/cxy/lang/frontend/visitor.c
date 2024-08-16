@@ -29,6 +29,8 @@
     case astDestructorRef:                                                     \
     case astExternDecl:                                                        \
     case astList:                                                              \
+    case astBranch:                                                            \
+    case astPhi:                                                               \
         break;                                                                 \
     case astAttr:                                                              \
         MODE##VisitManyNodes(visitor, node->attr.args);                        \
@@ -81,6 +83,9 @@
         break;                                                                 \
     case astPointerType:                                                       \
         MODE##Visit(visitor, node->pointerType.pointed);                       \
+        break;                                                                 \
+    case astReferenceType:                                                     \
+        MODE##Visit(visitor, node->referenceType.referred);                    \
         break;                                                                 \
     case astStringExpr:                                                        \
         MODE##VisitManyNodes(visitor, node->stringExpr.parts);                 \
@@ -178,7 +183,8 @@
         MODE##Visit(visitor, node->binaryExpr.rhs);                            \
         break;                                                                 \
     case astUnaryExpr:                                                         \
-    case astAddressOf:                                                         \
+    case astReferenceOf:                                                       \
+    case astPointerOf:                                                         \
         MODE##Visit(visitor, node->unaryExpr.operand);                         \
         break;                                                                 \
     case astTernaryExpr:                                                       \
@@ -250,6 +256,18 @@
         MODE##Visit(visitor, node->caseStmt.match);                            \
         MODE##Visit(visitor, node->caseStmt.variable);                         \
         MODE##Visit(visitor, node->caseStmt.body);                             \
+        break;                                                                 \
+    case astBasicBlock:                                                        \
+        MODE##VisitManyNodes(visitor, node->basicBlock.stmts.first);           \
+        break;                                                                 \
+    case astBranchIf:                                                          \
+        MODE##Visit(visitor, node->branchIf.cond);                             \
+        break;                                                                 \
+    case astSwitchIr:                                                          \
+        MODE##Visit(visitor, node->switchIr.cond);                             \
+        break;                                                                 \
+    case astGep:                                                               \
+        MODE##Visit(visitor, node->gep.value);                                 \
         break;                                                                 \
     default:                                                                   \
         unreachable("UNKNOWN NODE ast%s", getAstNodeName(node));               \
@@ -392,4 +410,20 @@ void astModifierAddAsNext(AstModifier *ctx, AstNode *node)
     csAssert0(ctx->current);
     getLastAstNode(node)->next = ctx->current->next;
     ctx->current->next = node;
+}
+
+void astModifierAddHead(AstModifier *ctx, AstNode *node)
+{
+    if (node == NULL)
+        return;
+    AstNode *last = getLastAstNode(node);
+    if (nodeIs(ctx->parent, Program)) {
+        last->next = ctx->parent->program.decls;
+        ctx->parent->program.decls = node;
+    }
+    else {
+        csAssert0(nodeIs(ctx->parent, BlockStmt));
+        ctx->parent->blockStmt.stmts = node;
+        last->next = ctx->parent->blockStmt.stmts;
+    }
 }

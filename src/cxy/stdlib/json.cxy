@@ -1,6 +1,6 @@
 module json
 
-pub func toJson[T](@transient os: OutputStream, it: const T) : void {
+pub func toJson[T](os: &OutputStream, it: const T) : void {
     #if (T.isNumber || T.isBoolean || T.isChar) {
         os << it
     }

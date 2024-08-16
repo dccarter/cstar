@@ -1,0 +1,92 @@
+module trie
+
+import { HashMap } from "stdlib/hash.cxy"
+
+struct TrieNode[T] {
+    - children: HashMap[wchar, ^This] = null;
+    - tag: char;
+    - data: T?;
+
+    func `init`(c: char = '\0':char) {
+        tag = c
+        data = null
+        children = HashMap[wchar, ^This]();
+    }
+
+    func add(c: wchar) {
+        if (var child = children.[c]) {
+            return *child
+        }
+
+        var node = malloc(sizeof!(This)) !: ^This;
+        node.op__init()
+        children.[c] = node
+        return node
+    }
+
+    func `destructor`() {
+        if (!isnull(&children)) {
+            for (var node: children) {
+                delete *node.1
+                free(node.1 !: ^void)
+            }
+            delete data
+            delete children
+        }
+    }
+
+    @inline
+    func get(c: wchar) => children.[c]
+}
+
+pub class Trie[Data] {
+    - root: TrieNode[Data];
+    - x: i32
+    func `init`() {
+        x = 100
+        root = TrieNode[Data]();
+    }
+
+    @inline
+    func add(key: string, data: Data) {
+        add(key, len!(key), &&data)
+    }
+
+    func find(key: string) : Data? {
+        var size = len!(key);
+        var found = find(key, size);
+        if (found) {
+            var idx, data = *found;
+            if (idx == size)
+                return &&data
+        }
+        return null
+    }
+
+    - func add(prefix: string, len: u64, data: Data) : void {
+        var node = ptrof root;
+        for (var i: 0..len) {
+            node = node.add(prefix.[i])
+        }
+        assert!(!node.data)
+        node.data = &&data
+    }
+
+    - func find(prefix: string, len: u64) : (i64, Data)? {
+        var node = ptrof root;
+        var found: (i64, Data)? = null;
+
+        for (var i: 0..len) {
+            var child = node.get(prefix.[i]);
+            if (!child)
+                continue
+
+            node = *child;
+            if (node.data) {
+
+                found = (i+1, *node.data)
+            }
+        }
+        return found
+    }
+}

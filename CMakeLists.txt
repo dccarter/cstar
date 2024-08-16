@@ -68,6 +68,7 @@ FetchContent_Declare(
         msgpack-c
         GIT_REPOSITORY https://github.com/msgpack/msgpack-c
         GIT_TAG c-6.0.0
+        EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(msgpack-c)
 
@@ -76,6 +77,7 @@ FetchContent_Declare(
         libyaml
         GIT_REPOSITORY https://github.com/dccarter/libyaml.git
         GIT_TAG main
+        EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(libyaml)
 
@@ -131,7 +133,9 @@ set(CXY_FRONTEND_SOURCES
 
 set(CXY_MIDDLE_SOURCES
         src/cxy/lang/middle/builtins.c
+        src/cxy/lang/middle/defer.c
         src/cxy/lang/middle/mangle.c
+        src/cxy/lang/middle/n2e.c
 
         src/cxy/lang/middle/sema/array.c
         src/cxy/lang/middle/sema/assign.c
@@ -190,19 +194,28 @@ set(CXY_MIDDLE_SOURCES
         src/cxy/lang/middle/preprocess/preprocessor.c
         src/cxy/lang/middle/preprocess/evaluate.c
 
-        src/cxy/lang/middle/simplify/stage1.c
         src/cxy/lang/middle/simplify/simplify.c
 
-        src/cxy/lang/middle/mem/sweep.c)
+        src/cxy/lang/middle/lower/lower.c
 
-set(CXY_LANG_BACKEND_SOURCES
-        src/cxy/lang/backend/llvm/array.cpp
-        src/cxy/lang/backend/llvm/binary.cpp
-        src/cxy/lang/backend/llvm/context.cpp
-        src/cxy/lang/backend/llvm/debug.cpp
-        src/cxy/lang/backend/llvm/llvm.cpp
-        src/cxy/lang/backend/llvm/generate.cpp
-)
+        src/cxy/lang/middle/mem/manage.c
+        src/cxy/lang/middle/mem/mem.c
+        src/cxy/lang/middle/mem/reference.c)
+
+if (ENABLE_LLVM_BACKEND)
+    set(CXY_LANG_BACKEND_SOURCES
+            src/cxy/lang/backend/llvm/array.cpp
+            src/cxy/lang/backend/llvm/binary.cpp
+            src/cxy/lang/backend/llvm/context.cpp
+            src/cxy/lang/backend/llvm/debug.cpp
+            src/cxy/lang/backend/llvm/llvm.cpp
+            src/cxy/lang/backend/llvm/generate.cpp
+    )
+else ()
+    set(CXY_LANG_BACKEND_SOURCES
+            src/cxy/lang/backend/c/generate.c
+    )
+endif ()
 
 set(CXY_DRIVER_SOURCES
         src/cxy/driver/cc.c
@@ -225,6 +238,9 @@ add_executable(cxy
         ${CXY_LANG_BACKEND_SOURCES}
         ${CXY_DRIVER_SOURCES})
 
+if (ENABLE_LLVM_BACKEND)
+    target_compile_definitions(cxy PRIVATE "-DLLVM_BACKEND")
+endif ()
 # Find the libraries that correspond to the LLVM components
 # that we wish to use
 llvm_map_components_to_libnames(llvm_libs
@@ -247,12 +263,16 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/stdlib)
 set(CXY_STD_LIB_SOURCES
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/native
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/coro.cxy
-        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/json.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/hash.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/http.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/io.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/json.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/list.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/log.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/net.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/tcp.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/time.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/trie.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/vector.cxy)
 
 file(GLOB_RECURSE
@@ -289,4 +309,14 @@ add_executable(lex-tester
     tests/utils/lexer.cpp
     src/cxy/lang/frontend/lexer.c
     ${CXY_CORE_SOURCES}
+)
+
+# Install cxy binary
+install(TARGETS cxy
+        DESTINATION bin
+)
+
+# Install stdlib
+install(DIRECTORY src/cxy/stdlib
+        DESTINATION lib/cxy/std
 )

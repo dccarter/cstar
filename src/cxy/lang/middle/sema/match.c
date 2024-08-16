@@ -45,20 +45,21 @@ void checkMatchCaseStmt(AstVisitor *visitor, AstNode *node)
 
         if (node->caseStmt.variable) {
             AstNode *variable = node->caseStmt.variable;
-            variable->flags |= (flags & flgConst);
+            variable->flags |=
+                condition->flags | (flags & flgConst) | flgTemporary;
             AstNode *init = shallowCloneAstNode(ctx->pool, condition);
-            if (hasFlag(variable, Reference)) {
-                variable->type = makePointerType(
+            if (!isReferenceType(match_) && hasFlag(variable, Reference)) {
+                variable->type = makeReferenceType(
                     ctx->types, match_, variable->flags & flgConst);
-                init = makeAddrOffExpr(
+                init = makeReferenceOfExpr(
                     ctx->pool,
                     &init->loc,
                     condition->type->flags,
                     init,
                     NULL,
-                    makePointerType(ctx->types,
-                                    condition->type,
-                                    condition->flags & flgConst));
+                    makeReferenceType(ctx->types,
+                                      condition->type,
+                                      condition->flags & flgConst));
             }
             else {
                 variable->type = match_;

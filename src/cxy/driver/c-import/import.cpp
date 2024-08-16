@@ -10,6 +10,7 @@
 #include "driver/c.h"
 #include "lang/frontend/defines.h"
 #include "lang/frontend/flag.h"
+#include "lang/frontend/strings.h"
 #include "lang/frontend/ttable.h"
 
 #undef make
@@ -364,6 +365,9 @@ static AstNode *toCxy(IncludeContext &ctx, const clang::FieldDecl &decl)
                                 makeTypeReferenceNode(ctx.pool, type, &loc),
                                 nullptr,
                                 nullptr);
+    if (decl.isBitField())
+        node->structField.bits = decl.getBitWidthValue(ctx.Ci.getASTContext());
+
     node->type = type;
     return node;
 }
@@ -380,6 +384,13 @@ static AstNode *toCxy(IncludeContext &ctx, const clang::RecordDecl &decl)
     ctx.recordsStack.push({&decl, makeThisType(ctx.types, name, flags)});
     auto node =
         makeStructDecl(ctx.pool, &loc, flags, name, nullptr, nullptr, nullptr);
+    AstNodeList attrs = {};
+    for (auto &attr : decl.getAttrs()) {
+        if (attr->getKind() == clang::attr::Packed)
+            insertAstNode(&attrs,
+                          makeAttribute(ctx.pool, &loc, S_packed, NULL, NULL));
+    }
+    node->attrs = attrs.first;
 
     std::vector<NamedTypeMember> members;
     u64 index = 0;
@@ -567,7 +578,6 @@ AstNode *toCxy(IncludeContext &ctx, const clang::EnumDecl &decl)
 }
 
 struct CToCxyConverter : clang::ASTConsumer {
-
     explicit CToCxyConverter(IncludeContext &ctx) : ctx(ctx) {}
 
     bool HandleTopLevelDecl(clang::DeclGroupRef declGroup) final override

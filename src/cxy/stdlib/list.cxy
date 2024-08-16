@@ -1,0 +1,44 @@
+module list
+
+pub struct List[T] {
+    head: ^T = null
+    tail: ^T = null
+    count: u64 = 0;
+
+    func push(item: ^T) {
+        if (head ==  null) {
+            head = item
+        }
+        else {
+            this.tail.link = item
+        }
+        count++
+        tail = item
+    }
+
+    func pop() {
+        var item = head;
+        if (head != null) {
+            count--
+            head = head.link
+            if (head == null)
+                tail = null
+            item.link = null
+        }
+        return item
+    }
+
+    func `..`() {
+        var item = head;
+        return () : __Optional[^T] => {
+            if (item != null) {
+                var curr = item;
+                item = item.link;
+                return curr
+            }
+            else
+                return null
+        }
+    }
+
+}

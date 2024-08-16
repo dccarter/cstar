@@ -81,6 +81,7 @@ static AstNode *makeDefaultStructValue(MemPool *pool,
                                         member->flags & flgConst,
                                         shallowCloneAstNode(
                                             pool, member->structField.value),
+                                        member,
                                         NULL));
         else
             insertAstNode(
@@ -90,6 +91,7 @@ static AstNode *makeDefaultStructValue(MemPool *pool,
                               member->structField.name,
                               member->flags & flgConst,
                               makeDefaultValue(pool, member->type, loc),
+                              member,
                               NULL));
     }
 

@@ -15,8 +15,6 @@ func handleConnection(sock: TcpSocket) {
             }
         }
     }
-    // TODO remove once auto memory management is implemented
-    __destructor(sock)
 }
 
 pub func main(args: const [string]) {
@@ -33,7 +31,7 @@ pub func main(args: const [string]) {
         if (!sock)
             continue;
 
-        spawn! { handleConnection(*sock) }
+        spawn! { handleConnection( sock.move() ) }
     }
     println("done")
 }

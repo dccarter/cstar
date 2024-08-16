@@ -122,7 +122,7 @@ static void postCloneAstNode(CloneAstConfig *config,
             replaceWithCorrespondingNode(&config->mapping,
                                          &to->pathElement.resolvesTo);
         }
-        else {
+        else if (config->root) {
             // TODO proper fix for this
             to->pathElement.resolvesTo = config->root->parentScope;
         }
@@ -340,6 +340,22 @@ AstNode *makePointerAstNode(MemPool *pool,
                                   .pointerType = {.pointed = pointed}});
 }
 
+AstNode *makeReferenceTypeAstNode(MemPool *pool,
+                                  const FileLoc *loc,
+                                  u64 flags,
+                                  AstNode *referred,
+                                  AstNode *next,
+                                  const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astReferenceType,
+                                  .flags = flags,
+                                  .next = next,
+                                  .type = type,
+                                  .referenceType = {.referred = referred}});
+}
+
 AstNode *makeVoidAstNode(MemPool *pool,
                          const FileLoc *loc,
                          u64 flags,
@@ -515,15 +531,22 @@ AstNode *makeFieldExpr(MemPool *pool,
                        cstring name,
                        u64 flags,
                        AstNode *value,
+                       const AstNode *structField,
                        AstNode *next)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astFieldExpr,
-                                  .flags = flags,
-                                  .type = value->type,
-                                  .next = next,
-                                  .fieldExpr = {.name = name, .value = value}});
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astFieldExpr,
+                   .flags = flags,
+                   .type = value->type,
+                   .next = next,
+                   .fieldExpr = {.name = name,
+                                 .value = value,
+                                 .index = structField
+                                              ? structField->structField.index
+                                              : 0,
+                                 .structField = structField}});
 }
 
 AstNode *makeStructField(MemPool *pool,
@@ -631,21 +654,39 @@ AstNode *makeCastExpr(MemPool *pool,
                                   .castExpr = {.expr = expr, .to = target}});
 }
 
-AstNode *makeAddrOffExpr(MemPool *pool,
-                         const FileLoc *loc,
-                         u64 flags,
-                         AstNode *operand,
-                         AstNode *next,
-                         const Type *type)
+AstNode *makePointerOfExpr(MemPool *pool,
+                           const FileLoc *loc,
+                           u64 flags,
+                           AstNode *operand,
+                           AstNode *next,
+                           const Type *type)
 {
     return makeAstNode(pool,
                        loc,
-                       &(AstNode){.tag = astAddressOf,
+                       &(AstNode){.tag = astPointerOf,
                                   .flags = flags,
                                   .type = type,
                                   .next = next,
                                   .unaryExpr = {.operand = operand,
-                                                .op = opAddrOf,
+                                                .op = opPtrof,
+                                                .isPrefix = true}});
+}
+
+AstNode *makeReferenceOfExpr(MemPool *pool,
+                             const FileLoc *loc,
+                             u64 flags,
+                             AstNode *operand,
+                             AstNode *next,
+                             const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astReferenceOf,
+                                  .flags = flags,
+                                  .type = type,
+                                  .next = next,
+                                  .unaryExpr = {.operand = operand,
+                                                .op = opRefof,
                                                 .isPrefix = true}});
 }
 
@@ -789,14 +830,14 @@ AstNode *makeExprStmt(MemPool *pool,
 }
 
 AstNode *makeDeferStmt(
-    MemPool *pool, const FileLoc *loc, u64 flags, AstNode *expr, AstNode *next)
+    MemPool *pool, const FileLoc *loc, u64 flags, AstNode *stmt, AstNode *next)
 {
     return makeAstNode(pool,
                        loc,
                        &(AstNode){.tag = astDeferStmt,
                                   .flags = flags,
                                   .next = next,
-                                  .deferStmt.expr = expr});
+                                  .deferStmt.stmt = stmt});
 }
 
 AstNode *makeStmtExpr(MemPool *pool,
@@ -1279,6 +1320,137 @@ AstNode *makeMacroCallAstNode(MemPool *pool,
                    .macroCallExpr = {.callee = callee, .args = args}});
 }
 
+AstNode *makeBasicBlockAstNode(
+    MemPool *pool, const FileLoc *loc, u64 flags, u32 index, AstNode *func)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astBasicBlock,
+                                  .flags = flags,
+                                  .parentScope = func,
+                                  .basicBlock = {.index = index}});
+}
+
+AstNode *makeReturnAstNode(MemPool *pool,
+                           const FileLoc *loc,
+                           u64 flags,
+                           AstNode *expr,
+                           AstNode *next,
+                           const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astReturnStmt,
+                                  .flags = flags,
+                                  .next = next,
+                                  .type = type,
+                                  .returnStmt = {.expr = expr}});
+}
+
+AstNode *makeBranchIfAstNode(MemPool *pool,
+                             const FileLoc *loc,
+                             u64 flags,
+                             AstNode *cond,
+                             AstNode *trueBB,
+                             AstNode *falseBB,
+                             AstNode *next)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){
+            .tag = astBranchIf,
+            .flags = flags,
+            .next = next,
+            .branchIf = {.cond = cond, .trueBB = trueBB, .falseBB = falseBB}});
+}
+
+AstNode *makePhiAstNode(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        AstNode **incoming,
+                        u64 incomingCount,
+                        AstNode *next)
+{
+    AstNode **incomingCopy =
+        allocFromMemPool(pool, sizeof(AstNode *) * incomingCount);
+    memcpy(incomingCopy, incoming, incomingCount);
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astPhi,
+                                  .flags = flags,
+                                  .next = next,
+                                  .phi = {.incoming = incomingCopy,
+                                          .incomingCount = incomingCount}});
+}
+
+AstNode *makeSwitchIrAstNode(MemPool *pool,
+                             const FileLoc *loc,
+                             u64 flags,
+                             AstNode *cond,
+                             AstNode *defaultBB,
+                             SwitchIrCase *cases,
+                             u64 casesCount,
+                             AstNode *next)
+{
+    SwitchIrCase *casesCopy =
+        allocFromMemPool(pool, sizeof(SwitchIrCase) * casesCount);
+    memcpy(casesCopy, cases, sizeof(SwitchIrCase) * casesCount);
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astSwitchIr,
+                                  .flags = flags,
+                                  .next = next,
+                                  .switchIr = {.cond = cond,
+                                               .defaultBB = defaultBB,
+                                               .cases = casesCopy,
+                                               .casesCount = casesCount}});
+}
+
+AstNode *makeGepAstNode(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        AstNode *value,
+                        i64 index,
+                        AstNode *next)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astGep,
+                                  .flags = flags,
+                                  .next = next,
+                                  .gep = {.value = value, .index = index}});
+}
+
+AstNode *makeNodeArray(MemPool *pool,
+                       const FileLoc *loc,
+                       AstNode **nodes,
+                       u64 nodesCount)
+{
+    AstNode **nodesCopy = allocFromMemPool(pool, sizeof(nodes) * nodesCount);
+    memcpy(nodesCopy, nodes, sizeof(nodes) * nodesCount);
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astNodeArray,
+                                  .flags = flgNone,
+                                  .nodeArray = {.nodes = nodesCopy,
+                                                .nodesCount = nodesCount}});
+}
+
+AstNode *makeBranchAstNode(MemPool *pool,
+                           const FileLoc *loc,
+                           u64 flags,
+                           AstNode *target,
+                           AstNode *next)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astBranch,
+                                  .flags = flags,
+                                  .next = next,
+                                  .branch = {.target = target}});
+}
+
 AstNode *makeAstClosureCapture(MemPool *pool, AstNode *captured)
 {
     return makeAstNode(pool,
@@ -1378,6 +1550,56 @@ bool isLiteralExpr(const AstNode *node)
     }
 }
 
+bool isStaticExpr(const AstNode *node)
+{
+    if (node == NULL)
+        return false;
+    switch (node->tag) {
+    case astStringLit:
+    case astIntegerLit:
+    case astBoolLit:
+    case astFloatLit:
+    case astCharLit:
+    case astNullLit:
+        return true;
+    case astIdentifier:
+        return nodeIs(node->ident.resolvesTo, FuncDecl);
+    case astMemberExpr:
+        return isStaticExpr(node->memberExpr.target);
+    case astTupleExpr:
+        for (AstNode *elem = node->tupleExpr.elements; elem;
+             elem = elem->next) {
+            if (!isStaticExpr(elem))
+                return false;
+        }
+        return true;
+    case astStructExpr:
+        for (AstNode *elem = node->structExpr.fields; elem; elem = elem->next) {
+            if (!nodeIs(elem, FieldDecl))
+                continue;
+            if (!isStaticExpr(elem->structField.value))
+                return false;
+        }
+        return true;
+    case astArrayExpr:
+        for (AstNode *elem = node->arrayExpr.elements; elem;
+             elem = elem->next) {
+            if (!isStaticExpr(elem))
+                return false;
+        }
+        return true;
+    case astCastExpr:
+    case astTypedExpr:
+        return isStaticExpr(node->castExpr.expr);
+    case astGroupExpr:
+        return isStaticExpr(node->groupExpr.expr);
+    case astUnaryExpr:
+        return isStaticExpr(node->unaryExpr.operand);
+    default:
+        return false;
+    }
+}
+
 bool isEnumLiteral(const AstNode *node)
 {
     if (!typeIs(node->type, Enum))
@@ -1427,6 +1649,7 @@ bool isTypeExpr(const AstNode *node)
     case astTupleType:
     case astArrayType:
     case astPointerType:
+    case astReferenceType:
     case astFuncType:
     case astPrimitiveType:
     case astOptionalType:
@@ -1468,6 +1691,13 @@ bool isMemberFunction(const AstNode *node)
     return hasFlag(node, Generated) &&
            node->funcDecl.signature->params != NULL &&
            node->funcDecl.signature->params->funcParam.name == S_this;
+}
+
+bool isStaticMemberFunction(const AstNode *node)
+{
+    if (!nodeIs(node, FuncDecl))
+        return false;
+    return isClassOrStructAstNode(node->parentScope) && hasFlag(node, Static);
 }
 
 AstNode *getMemberFunctionThis(AstNode *node)
@@ -1721,6 +1951,9 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
     case astPointerType:
         CLONE_ONE(pointerType, pointed);
         break;
+    case astReferenceType:
+        CLONE_ONE(referenceType, referred);
+        break;
     case astOptionalType:
         CLONE_ONE(optionalType, type);
         break;
@@ -1742,7 +1975,12 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
                 .params =
                     cloneManyAstNodes(config, node->funcDecl.signature->params),
                 .typeParams = node->funcDecl.signature->typeParams});
-        CLONE_ONE(funcDecl, body);
+        if (!config->signatureOnly) {
+            CLONE_ONE(funcDecl, body);
+        }
+        else {
+            pushOnDynArray(config->deferred, &clone);
+        }
         CLONE_MANY(funcDecl, opaqueParams)
         if (clone->funcDecl.this_)
             clone->funcDecl.this_->next = clone->funcDecl.signature->params;
@@ -1789,7 +2027,12 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
         break;
 
     case astFieldDecl:
-        CLONE_ONE(structField, value)
+        if (!config->signatureOnly) {
+            CLONE_ONE(structField, value)
+        }
+        else {
+            pushOnDynArray(config->deferred, &clone);
+        }
         CLONE_ONE(structField, type)
         break;
 
@@ -1800,7 +2043,8 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
         CLONE_ONE(groupExpr, expr);
         break;
     case astUnaryExpr:
-    case astAddressOf:
+    case astPointerOf:
+    case astReferenceOf:
         CLONE_ONE(unaryExpr, operand);
         break;
     case astBinaryExpr:
@@ -1946,7 +2190,27 @@ AstNode *cloneGenericDeclaration(MemPool *pool, const AstNode *node)
             it = it->next = clone;
     }
 
-    decl = cloneAstNode(&config, decl);
+    config.signatureOnly = isClassOrStructAstNode(decl);
+    if (config.signatureOnly) {
+        DynArray deferred = newDynArray(sizeof(AstNode *));
+        config.deferred = &deferred;
+        decl = cloneAstNode(&config, decl);
+        for (int i = 0; i < deferred.size; i++) {
+            AstNode *member = dynArrayAt(AstNode **, &deferred, i);
+            if (nodeIs(member, FuncDecl)) {
+                member->funcDecl.body =
+                    cloneAstNode(&config, member->funcDecl.body);
+            }
+            else if (nodeIs(member, FieldDecl)) {
+                member->structField.value =
+                    cloneAstNode(&config, member->structField.value);
+            }
+        }
+        freeDynArray(&deferred);
+    }
+    else {
+        decl = cloneAstNode(&config, decl);
+    }
     setGenericDeclarationParams(decl, params);
     decl->attrs = node->attrs;
     decl->parentScope = node->parentScope;
@@ -1961,6 +2225,18 @@ AstNode *deepCloneAstNode(MemPool *pool, const AstNode *node)
     AstNode *cloned = cloneAstNode(&config, node);
     deinitCloneAstNodeConfig(&config);
     return cloned;
+}
+
+AstNode *deepCloneManyAstNode(MemPool *pool, const AstNode *node)
+{
+    CloneAstConfig config = {.pool = pool, .createMapping = true};
+    initCloneAstNodeMapping(&config);
+    AstNodeList nodes = {};
+    for (const AstNode *it = node; it; it = it->next) {
+        insertAstNode(&nodes, cloneAstNode(&config, it));
+    }
+    deinitCloneAstNodeConfig(&config);
+    return nodes.first;
 }
 
 void insertAstNodeAfter(AstNode *before, AstNode *after)
@@ -2448,10 +2724,42 @@ bool nodeIsLeftValue(const AstNode *node)
         return true;
     case astGroupExpr:
         return nodeIsLeftValue(node->groupExpr.expr);
+    case astUnaryExpr: {
+        Operator op = node->unaryExpr.op;
+        if (op == opMove || op == opPtrof || op == opRefof)
+            return nodeIsLeftValue(node->unaryExpr.operand);
+        return false;
+    }
+    case astCastExpr:
+    case astTypedExpr:
+        return nodeIsLeftValue(node->castExpr.expr);
     case astMemberExpr: {
         AstNode *member = node->memberExpr.member;
         return nodeIs(member, IntegerLit) || nodeIsLeftValue(member);
     }
+    default:
+        return false;
+    }
+}
+
+bool nodeIsCallExpr(const AstNode *node)
+{
+    if (node == NULL)
+        return false;
+    switch (node->tag) {
+    case astCallExpr:
+        return true;
+    case astGroupExpr:
+        return nodeIsCallExpr(node->groupExpr.expr);
+    case astUnaryExpr: {
+        Operator op = node->unaryExpr.op;
+        if (op == opMove || op == opRefof || op == opPtrof)
+            return nodeIsCallExpr(node->unaryExpr.operand);
+        return false;
+    }
+    case astCastExpr:
+    case astTypedExpr:
+        return nodeIsCallExpr(node->castExpr.expr);
     default:
         return false;
     }
@@ -2462,4 +2770,17 @@ bool nodeIsNoop(const AstNode *node)
     if (nodeIs(node, ExprStmt))
         return nodeIsNoop(node->exprStmt.expr);
     return nodeIs(node, Noop);
+}
+
+bool nodeIsThisParam(const AstNode *node)
+{
+    return nodeIs(node, FuncParamDecl) && node->_namedNode.name == S_this;
+}
+
+bool nodeIsThisArg(const AstNode *node)
+{
+    if (nodeIs(node, Path) && node->next == NULL)
+        node = node->path.elements;
+    return (nodeIs(node, Identifier) || nodeIs(node, PathElem)) &&
+           node->_namedNode.name == S_this;
 }

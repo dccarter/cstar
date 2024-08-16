@@ -834,7 +834,7 @@ enum Status aeCreateFileEvent(aeEventLoop *eventLoop,
     return AE_OK;
 }
 
-void aeDeleteFileEvent(aeEventLoop *eventLoop, int fd, int mask)
+void aeDeleteFileEvent(aeEventLoop *eventLoop, int fd, enum State mask)
 {
     if (fd >= eventLoop->setsize)
         return;
@@ -907,6 +907,7 @@ enum Status aeCreateTimeEvent(aeEventLoop *eventLoop,
     aeTimeEvent *te;
 
     te = zmalloc(sizeof(*te));
+    te->fd = -1;
     if (te == NULL)
         return AE_ERR;
     te->timeProc = proc;

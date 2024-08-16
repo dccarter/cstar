@@ -113,8 +113,11 @@ static void visitMacroCall(AstVisitor *visitor, AstNode *node)
         logError(
             ctx->L,
             &node->loc,
-            "insufficient number of arguments passed to macro, expecting {u64}",
-            (FormatArg[]){{.u64 = paramsCount}});
+            "insufficient number of arguments passed to macro {s}, got {u64}, "
+            "expecting {u64}",
+            (FormatArg[]){{.s = macro->macroDecl.name},
+                          {.u64 = argumentsCount},
+                          {.u64 = paramsCount}});
         logNote(ctx->L, &macro->loc, "macro declared here", NULL);
         return;
     }

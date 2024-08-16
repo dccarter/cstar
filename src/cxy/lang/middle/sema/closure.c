@@ -83,25 +83,36 @@ static void transformClosureToStructExpr(AstVisitor *visitor,
     for (u64 i = 0; i < node->closureExpr.captureCount; i++) {
         Capture *capture = &node->closureExpr.capture[i];
         cstring name = getCapturedNodeName(capture->node);
-        insertAstNode(
-            &fields,
-            // file: value
-            makeFieldExpr(ctx->pool,
-                          &capture->node->loc,
-                          name,
-                          flgPrivate | capture->node->flags,
-                          // value
-                          makeResolvedPath(
-                              ctx->pool,
-                              &node->loc,
-                              name,
-                              capture->node->flags | capture->flags |
-                                  (nodeIs(capture->node, FieldDecl) ? flgAddThis
-                                                                    : flgNone),
-                              capture->node,
-                              NULL,
-                              capture->node->type),
-                          NULL));
+        const Type *fieldType = capture->node->type;
+        AstNode *value = makeResolvedPath(
+            ctx->pool,
+            &node->loc,
+            name,
+            capture->node->flags | capture->flags |
+                (nodeIs(capture->node, FieldDecl) ? flgAddThis : flgNone),
+            capture->node,
+            NULL,
+            fieldType);
+        if (isClassOrStructType(fieldType) || isUnionType(fieldType) ||
+            isTupleType(fieldType))
+            value = makeReferenceOfExpr(
+                ctx->pool,
+                &value->loc,
+                value->flags,
+                value,
+                NULL,
+                makeReferenceType(ctx->types, fieldType, fieldType->flags));
+
+        insertAstNode(&fields,
+                      // file: value
+                      makeFieldExpr(ctx->pool,
+                                    &capture->node->loc,
+                                    name,
+                                    flgPrivate | capture->node->flags,
+                                    // value
+                                    value,
+                                    NULL,
+                                    NULL));
     }
 
     clearAstBody(node);
@@ -250,7 +261,7 @@ AstNode *transformClosureArgument(AstVisitor *visitor, AstNode *node)
             flgNone,
             typeIs(node->type, Pointer)
                 ? node
-                : makeAddrOffExpr(
+                : makePointerOfExpr(
                       ctx->pool,
                       &node->loc,
                       flgNone,
@@ -300,9 +311,15 @@ void checkClosureExpr(AstVisitor *visitor, AstNode *node)
     for (u64 i = 0; i < node->closureExpr.captureCount; i++) {
         Capture *capture = &node->closureExpr.capture[i];
         AstNode *field = capture->field;
-        field->structField.type = makeTypeReferenceNode(
-            ctx->pool, capture->node->type, &capture->node->loc);
-        field->type = capture->node->type;
+        const Type *fieldType = capture->node->type;
+        if (isClassOrStructType(fieldType) || isUnionType(fieldType) ||
+            isTupleType(fieldType))
+            fieldType = makeReferenceType(
+                ctx->types, capture->node->type, capture->node->type->flags);
+
+        field->structField.type =
+            makeTypeReferenceNode(ctx->pool, fieldType, &capture->node->loc);
+        field->type = fieldType;
     }
 
     if (typeIs(type, Error)) {

@@ -17,11 +17,11 @@ func configureSocket(fd: i32)  {
     assert!(rc != -1);
     /*  Allow re-using the same local address rapidly. */
     opt = 1;
-    rc = socket.setsockopt(fd, SOL_SOCKET!, SO_REUSEADDR!, &opt, <u32>sizeof!(opt));
+    rc = socket.setsockopt(fd, SOL_SOCKET!, SO_REUSEADDR!, ptrof opt, <u32>sizeof!(opt));
     assert!(rc == 0);
 
     opt = 1;
-    rc = socket.setsockopt(fd, SOL_SOCKET!, SO_NOSIGPIPE!, &opt, <u32>sizeof!(opt));
+    rc = socket.setsockopt(fd, SOL_SOCKET!, SO_NOSIGPIPE!, ptrof opt, <u32>sizeof!(opt));
     assert!(rc == 0 && errno! != EINVAL!);
 }
 
@@ -44,26 +44,31 @@ pub class TcpSocket {
 
     @inline
     const func `!!`() {
-        return (this !: &void) != null && fd != -1
+        return !isnull(this) && fd != -1
     }
 
     @inline
     const func address() => addr
 
-    func receive(buffer: &void, size: u64, timeout: u64 = 0): u64? {
+    func receive(buffer: ^void, size: u64, timeout: u64 = 0): u64? {
         var remaining = size;
-        var data = buffer !: &char;
+        var data = buffer !: ^char;
         var total: u64 = 0;
 
         while (fd != -1 && remaining > 0) {
-            var sz = socket.recv(fd, &data.[total], remaining, 0);
+            var sz = socket.recv(fd, ptrof data.[total], remaining, 0);
             if (sz == 0) {
+                if (total > 0)
+                    return total
+
                 close()
-                return total
+                return null
             }
 
             if (sz == -1) {
                 if (errno! != EAGAIN! && errno! != EWOULDBLOCK!) {
+                    if (errno! == ECONNRESET!)
+                        close()
                     return null
                 }
 
@@ -86,12 +91,12 @@ pub class TcpSocket {
         return total
     }
 
-    func sendBuffer(buffer: &const void, size: u64, timeout: u64 = 0): u64? {
-        var data = buffer !: &const char;
+    func sendBuffer(buffer: ^const void, size: u64, timeout: u64 = 0): u64? {
+        var data = buffer !: ^const char;
         var remaining = size;
         var total: u64 = 0;
         while (fd != -1 && remaining > 0) {
-            var sz = socket.send(fd, &data.[total], remaining, 0);
+            var sz = socket.send(fd, ptrof data.[total], remaining, 0);
             if (sz == -1) {
                 if(errno! == EPIPE!) {
                     errno! = ECONNRESET!
@@ -120,10 +125,10 @@ pub class TcpSocket {
     func send[T](data: T, timeout: u64 = 0) {
         #if (T.isString) {
             #if (T.isStruct) {
-                return sendBuffer(data.str !: &void, len!(data), timeout)
+                return sendBuffer(data.str !: ^void, len!(data), timeout)
             }
             else {
-                return sendBuffer(data !: &void, len!(data), timeout)
+                return sendBuffer(data !: ^void, len!(data), timeout)
             }
         }
         else #if (T.isSlice) {
@@ -144,8 +149,8 @@ pub class TcpSocket {
     @inline
     func `deinit`()  { close() }
 
-    const func `str`(os: OutputStream) {
-        return os << addr
+    const func `str`(os: &OutputStream) {
+        os << addr
     }
 }
 
@@ -158,7 +163,22 @@ class SocketOutputStream : OutputStream {
         this.timeout = timeout
     }
 
-    func append(data: &const void, size: u64) {
+    func append(data: ^const void, size: u64) {
+        sock.sendBuffer(data, size, timeout)
+    }
+}
+
+pub class BufferedSocketOutputStream : BufferedOutputStream {
+    - sock: TcpSocket
+    - timeout: u64
+
+    func `init`(sock: TcpSocket, timeout: u64 = 0) {
+        super()
+        this.sock = &&sock
+        this.timeout = timeout
+    }
+
+    func flush(data: ^const void, size: u64) {
         sock.sendBuffer(data, size, timeout)
     }
 }
@@ -172,7 +192,7 @@ pub class TcpListener {
         fd = -1
     }
 
-    func `!!`() => (this !: &void) != null && fd != -1
+    func `!!`() => (this !: ^void) != null && fd != -1
 
     func listen(backlog: i32 = 127) {
         fd = socket.socket(bind.family(), SOCK_STREAM!, 0)
@@ -195,7 +215,7 @@ pub class TcpListener {
 
         if (bind.port() == 0) {
             var len = <u32> sizeof!(bind);
-            rc = socket.getsockname(fd, bind.nativeAddr(), &len)
+            rc = socket.getsockname(fd, bind.nativeAddr(), ptrof len)
             if (rc == -1) {
                 close()
                 return false
@@ -210,7 +230,7 @@ pub class TcpListener {
         while (this) {
             /* Try to get new connection (non-blocking). */
             var len = <u32> sizeof!(addr);
-            var accepted = socket.accept(fd, addr.nativeAddr(), &len);
+            var accepted = socket.accept(fd, addr.nativeAddr(), ptrof len);
             if (accepted >= 0) {
                 return TcpSocket(accepted, addr)
             }
@@ -264,7 +284,7 @@ pub async func tcpConnect(addr: Address, deadline: i64 = 0): TcpSocket {
 
         var err: i32;
         var errSize = <u32>sizeof!(err);
-        rc = socket.getsockopt(fd, SOL_SOCKET!, SO_ERROR!, &err !: &void, &errSize)
+        rc = socket.getsockopt(fd, SOL_SOCKET!, SO_ERROR!, ptrof err !: ^void, ptrof errSize)
         if (rc != 0) {
             err = errno!
             unistd.close(fd)

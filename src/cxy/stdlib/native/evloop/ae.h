@@ -118,7 +118,7 @@ enum Status aeCreateFileEvent(aeEventLoop *eventLoop,
                               void *clientData,
                               u_int64_t timeout);
 
-void aeDeleteFileEvent(aeEventLoop *eventLoop, int fd, int mask);
+void aeDeleteFileEvent(aeEventLoop *eventLoop, int fd, enum State mask);
 
 int aeGetFileEvents(aeEventLoop *eventLoop, int fd);
 

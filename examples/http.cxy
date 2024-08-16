@@ -1,0 +1,9 @@
+import { Server, Request, Response } from "stdlib/http.cxy"
+
+pub func main()  {
+    var server = Server[()]();
+    server("/hello", (req: &const Request, resp: &Response) => {
+        resp.body() << "Hello, World!"
+    })
+    server.start()
+}

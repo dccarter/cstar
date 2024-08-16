@@ -22,6 +22,7 @@ typedef struct {
     StrPool *strings;
     TypeTable *types;
     AstVisitor *evaluator;
+    bool traceMemory;
     struct {
         AstNode *program;
         AstNode *previous;
@@ -81,9 +82,7 @@ bool transformOptionalNone(AstVisitor *visitor,
                            AstNode *node,
                            const Type *type);
 
-bool isExplicitConstructableFrom(Log *L,
-                                 const Type *type,
-                                 const Type *from);
+bool isExplicitConstructableFrom(Log *L, const Type *type, const Type *from);
 bool evalExplicitConstruction(AstVisitor *visitor,
                               const Type *type,
                               AstNode *node);
@@ -188,7 +187,8 @@ void checkGenericDecl(AstVisitor *visitor, AstNode *node);
 
 void checkBinaryExpr(AstVisitor *visitor, AstNode *node);
 void checkUnaryExpr(AstVisitor *visitor, AstNode *node);
-void checkAddressOfExpr(AstVisitor *visitor, AstNode *node);
+void checkPointerOfExpr(AstVisitor *visitor, AstNode *node);
+void checkReferenceOfExpr(AstVisitor *visitor, AstNode *node);
 void checkAssignExpr(AstVisitor *visitor, AstNode *node);
 void checkIndexExpr(AstVisitor *visitor, AstNode *node);
 void checkStructExpr(AstVisitor *visitor, AstNode *node);
@@ -215,6 +215,7 @@ void checkFunctionType(AstVisitor *visitor, AstNode *node);
 void checkBuiltinType(AstVisitor *visitor, AstNode *node);
 void checkOptionalType(AstVisitor *visitor, AstNode *node);
 void checkPointerType(AstVisitor *visitor, AstNode *node);
+void checkReferenceType(AstVisitor *visitor, AstNode *node);
 
 #ifdef __cplusplus
 }

@@ -390,6 +390,18 @@ static void visitPointerType(ConstAstVisitor *visitor, const AstNode *node)
     Return(ctx, jsonNode);
 }
 
+static void visitReferenceType(ConstAstVisitor *visitor, const AstNode *node)
+{
+    JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
+    cJSON *jsonNode = nodeCreateJSON(visitor, node);
+
+    cJSON_AddItemToObject(jsonNode,
+                          "referred",
+                          nodeToJson(visitor, node->referenceType.referred));
+
+    Return(ctx, jsonNode);
+}
+
 static void visitArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     JsonConverterContext *ctx = getConstAstVisitorContext(visitor);
@@ -967,6 +979,7 @@ AstNode *dumpAstJson(CompilerDriver *driver, AstNode *node, FILE *file)
         [astAutoType] = visitHeaderOnly,
         [astPrimitiveType] = visitPrimitiveType,
         [astPointerType] = visitPointerType,
+        [astReferenceType] = visitReferenceType,
         [astArrayExpr] = visitArrayExpr,
         [astMemberExpr] = visitMemberExpr,
         [astRangeExpr] = visitRangeExpr,

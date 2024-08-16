@@ -44,10 +44,10 @@ extern "C" {
     f(Comptime,             27)                 \
     f(Visited,              28)                 \
     f(ImplementsDeinit,     29)                 \
-    f(ImmediatelyReturned,  30)                 \
+    f(Temporary,            30)                 \
     f(Unsafe,               31)                 \
     f(FunctionPtr,          32)                 \
-    f(BuiltinMember,        33)                 \
+    f(Returned,             33)                 \
     f(ComptimeIterable,     34)                 \
     f(Define,               35)                 \
     f(UnsafeCast,           36)                 \
@@ -71,7 +71,10 @@ extern "C" {
     f(Move,                 54)                 \
     f(Moved,                55)                 \
     f(BlockValue,           56)                 \
-    f(DiDisable,            57)
+    f(DiDisable,            57)                 \
+    f(DefaultedFields,      58)                 \
+    f(Anonymous,            59)                 \
+    f(Constructor,          60)
 
 // clang-format on
 static const u64 flgNone = 0;

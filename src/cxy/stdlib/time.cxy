@@ -1,0 +1,39 @@
+module time
+
+import "time.h" as time
+import "sys/_types/_time_t.h" as _time_t
+
+macro HTTP_TIME_FMT "%a, %d %b %Y %T GMT";
+macro LOG_TIME_FMT  "%Y-%m-%d %H:%M:%S";
+
+pub struct Time {
+    - _t: _time_t.time_t
+    - _tm: time.tm
+
+    func `init`(t: _time_t.time_t) {
+        _t = t
+        time.gmtime_r(ptrof _t, ptrof _tm)
+    }
+
+    func `init`() {
+        _t = time.time(null)
+         time.gmtime_r(ptrof _t, ptrof _tm)
+    }
+
+    func `init`(str: string, fmt: string = HTTP_TIME_FMT!) {
+        time.strptime(str !: ^const char, fmt !: ^const char, ptrof _tm)
+        _t = time.mktime(ptrof _tm)
+    }
+
+    const func format(fmt: string, os: &OutputStream) {
+        if (fmt.[0] != '\0':char) {
+            var buf: [char, 512];
+            var sz = time.strftime(buf, 512, fmt !: ^const char, ptrof _tm);
+            os.append(buf, sz)
+        }
+    }
+
+    const func `str`(os: &OutputStream) {
+        format(HTTP_TIME_FMT!, os)
+    }
+}

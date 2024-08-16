@@ -45,6 +45,10 @@ const Type *resolveAndUnThisType(const Type *type);
 
 const Type *stripPointer(const Type *type);
 
+const Type *stripReference(const Type *type);
+
+const Type *stripPointerOrReference(const Type *type);
+
 const Type *stripAll(const Type *type);
 
 const Type *stripOnce(const Type *type, u64 *flags);
@@ -66,6 +70,10 @@ const Type *makeNullType(TypeTable *table);
 const Type *makeStringType(TypeTable *table);
 
 const Type *makePointerType(TypeTable *table, const Type *pointed, u64 flags);
+
+const Type *makeReferenceType(TypeTable *table,
+                              const Type *referred,
+                              u64 flags);
 
 const Type *makeOptionalType(TypeTable *table, const Type *target, u64 flags);
 
@@ -103,7 +111,10 @@ static inline const Type *makeOpaqueType(TypeTable *table,
     return makeOpaqueTypeWithFlags(table, name, decl, 0);
 }
 
-const Type *makeUnionType(TypeTable *table, UnionMember *members, u64 count);
+const Type *makeUnionType(TypeTable *table,
+                          UnionMember *members,
+                          u64 count,
+                          u64 flags);
 const Type *makeUntaggedUnionType(TypeTable *table,
                                   AstNode *decl,
                                   NamedTypeMember *members,

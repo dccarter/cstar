@@ -43,7 +43,7 @@ static const Type *checkNewInitializerOverload(AstVisitor *visitor,
     // var name = new S{}
     AstNode *varDecl = makeVarDecl(ctx->pool,
                                    &callee->loc,
-                                   callee->flags | flgImmediatelyReturned,
+                                   callee->flags,
                                    name,
                                    NULL,
                                    newExpr,

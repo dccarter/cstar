@@ -78,11 +78,23 @@ static void dumpStringLiteral(DumpContext *ctx, cstring value, bool quotes)
         format(ctx->state, "{$}", (FormatArg[]){{.style = resetStyle}});
 }
 
+static inline void dumpBasicBlockName(DumpContext *ctx, const AstNode *node)
+{
+    format(
+        ctx->state, "__L{u32}", (FormatArg[]){{.u32 = node->basicBlock.index}});
+}
+
 static void dumpFunctionName(DumpContext *ctx, const AstNode *node)
 {
-    if (ctx->isSimplified && isMemberFunction(node)) {
-        const Type *type = stripAll(node->funcDecl.signature->params->type);
-        format(ctx->state, "{s}_", (FormatArg[]){{.s = type->name}});
+    if (ctx->isSimplified) {
+        if (isMemberFunction(node)) {
+            const Type *type = stripAll(node->funcDecl.signature->params->type);
+            format(ctx->state, "{s}_", (FormatArg[]){{.s = type->name}});
+        }
+        else if (isStaticMemberFunction(node)) {
+            const Type *type = resolveType(node->parentScope->type);
+            format(ctx->state, "{s}_", (FormatArg[]){{.s = type->name}});
+        }
     }
     format(ctx->state, "{s}", (FormatArg[]){{.s = node->funcDecl.name}});
 }
@@ -111,6 +123,70 @@ static void dumpBackendCall(ConstAstVisitor *visitor, const AstNode *node)
                              node->backendCallExpr.args ? ", " : NULL,
                              ", ",
                              ")");
+}
+
+static void dumpBranch(ConstAstVisitor *visitor, const AstNode *node)
+{
+    DumpContext *ctx = getConstAstVisitorContext(visitor);
+    printKeyword(ctx->state, "__jmp");
+    format(ctx->state, " %", NULL);
+    dumpBasicBlockName(ctx, node->branch.target);
+}
+
+static void dumpBranchIf(ConstAstVisitor *visitor, const AstNode *node)
+{
+    DumpContext *ctx = getConstAstVisitorContext(visitor);
+    printKeyword(ctx->state, "__jmp");
+    format(ctx->state, "(", NULL);
+    astConstVisit(visitor, node->branchIf.cond);
+    format(ctx->state, ") %", NULL);
+    dumpBasicBlockName(ctx, node->branchIf.trueBB);
+    format(ctx->state, " %", NULL);
+    dumpBasicBlockName(ctx, node->branchIf.falseBB);
+}
+
+static void dumpBasicBlock(ConstAstVisitor *visitor, const AstNode *node)
+{
+    DumpContext *ctx = getConstAstVisitorContext(visitor);
+    dumpBasicBlockName(ctx, node);
+    format(ctx->state, ":\n", NULL);
+    dumpManyAstNodes(visitor, node->basicBlock.stmts.first, "\n");
+}
+
+static void dumpPhi(ConstAstVisitor *visitor, const AstNode *node)
+{
+    DumpContext *ctx = getConstAstVisitorContext(visitor);
+    printKeyword(ctx->state, "__phi");
+    for (u64 i = 0; i < node->phi.incomingCount; i++) {
+        format(ctx->state, " %", NULL);
+        dumpBasicBlockName(ctx, node->phi.incoming[i]);
+    }
+}
+
+static void dumpSwitchIr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    DumpContext *ctx = getConstAstVisitorContext(visitor);
+    printKeyword(ctx->state, "__switch");
+    format(ctx->state, "(", NULL);
+    astConstVisit(visitor, node->switchIr.cond);
+    format(ctx->state, ") %", NULL);
+    dumpBasicBlockName(ctx, node->switchIr.defaultBB);
+    for (u64 i = 0; i < node->switchIr.casesCount; i++) {
+        format(ctx->state, " (", NULL);
+        astConstVisit(visitor, node->switchIr.cases[i].match);
+        format(ctx->state, ", %", NULL);
+        dumpBasicBlockName(ctx, node->switchIr.cases[i].bb);
+        format(ctx->state, ")", NULL);
+    }
+}
+
+static void dumpGepIr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    DumpContext *ctx = getConstAstVisitorContext(visitor);
+    printKeyword(ctx->state, "__gep");
+    AddSpace();
+    astConstVisit(visitor, node->gep.value);
+    format(ctx->state, " {i64}", (FormatArg[]){{.i64 = node->gep.index}});
 }
 
 static void dumpInlineAssembly(ConstAstVisitor *visitor, const AstNode *node)
@@ -218,11 +294,9 @@ static void dumpIdentifier(ConstAstVisitor *visitor, const AstNode *node)
 static void dumpAttribute(ConstAstVisitor *visitor, const AstNode *node)
 {
     DumpContext *ctx = getConstAstVisitorContext(visitor);
-    format(ctx->state, "@[{s}", (FormatArg[]){{.s = node->attr.name}});
+    format(ctx->state, "{s}", (FormatArg[]){{.s = node->attr.name}});
     if (node->attr.args)
         dumpManyAstNodesEnclosed(visitor, node->attr.args, "(", ", ", ")");
-
-    format(ctx->state, "]\n", NULL);
 }
 
 static void dumpFuncParam(ConstAstVisitor *visitor, const AstNode *node)
@@ -419,9 +493,17 @@ static void dumpOptionalType(ConstAstVisitor *visitor, const AstNode *node)
 static void dumpPointerType(ConstAstVisitor *visitor, const AstNode *node)
 {
     DumpContext *ctx = getConstAstVisitorContext(visitor);
-    format(ctx->state, "&", NULL);
+    format(ctx->state, "^", NULL);
     AddConst();
     astConstVisit(visitor, node->optionalType.type);
+}
+
+static void dumpReferenceType(ConstAstVisitor *visitor, const AstNode *node)
+{
+    DumpContext *ctx = getConstAstVisitorContext(visitor);
+    format(ctx->state, "&", NULL);
+    AddConst();
+    astConstVisit(visitor, node->referenceType.referred);
 }
 
 static void dumpStringExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -476,6 +558,14 @@ static void dumpUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
                "{s}",
                (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)}});
     }
+}
+
+static void dumpPointerOfExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    DumpContext *ctx = getConstAstVisitorContext(visitor);
+    printKeyword(ctx->state, "ptrof");
+    AddSpace();
+    astConstVisit(visitor, node->unaryExpr.operand);
 }
 
 static void dumpTernaryExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -600,7 +690,7 @@ static void dumpFieldExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     DumpContext *ctx = getConstAstVisitorContext(visitor);
     format(ctx->state, "{s}", (FormatArg[]){{.s = node->fieldExpr.name}});
-    format(ctx->state, " = ", NULL);
+    format(ctx->state, ": ", NULL);
     astConstVisit(visitor, node->fieldExpr.value);
 }
 
@@ -717,7 +807,7 @@ static void dumpDeferStmt(ConstAstVisitor *visitor, const AstNode *node)
     DumpContext *ctx = getConstAstVisitorContext(visitor);
     printKeyword(ctx->state, "defer");
     AddSpace();
-    astConstVisit(visitor, node->deferStmt.expr);
+    astConstVisit(visitor, node->deferStmt.stmt);
 }
 
 static void dumpBreakStmt(ConstAstVisitor *visitor, const AstNode *node)
@@ -834,7 +924,10 @@ static void dumpVarDecl(ConstAstVisitor *visitor, const AstNode *node)
     else
         printKeyword(ctx->state, "var");
     AddSpace();
-    dumpManyAstNodes(visitor, node->varDecl.names, ", ");
+    if (node->varDecl.names)
+        dumpManyAstNodes(visitor, node->varDecl.names, ", ");
+    else
+        format(ctx->state, node->varDecl.name, NULL);
 
     if (node->varDecl.type) {
         format(ctx->state, ": ", NULL);
@@ -992,6 +1085,11 @@ static void dumpClassDeclWithParams(ConstAstVisitor *visitor,
     }
 
     printKeyword(ctx->state, "class");
+    AddSpace();
+    format(ctx->state, "{s}", (FormatArg[]){{.s = node->classDecl.name}});
+    if (params)
+        dumpManyAstNodesEnclosed(visitor, params, "[", ", ", "]");
+
     if (node->classDecl.base || node->classDecl.implements) {
         append(ctx->state, ": ", 2);
         if (node->classDecl.base) {
@@ -1003,11 +1101,6 @@ static void dumpClassDeclWithParams(ConstAstVisitor *visitor,
         append(ctx->state, ": ", 2);
         dumpManyAstNodes(visitor, node->classDecl.implements, ", ");
     }
-
-    AddSpace();
-    format(ctx->state, "{s}", (FormatArg[]){{.s = node->classDecl.name}});
-    if (params)
-        dumpManyAstNodesEnclosed(visitor, params, "[", ", ", "]");
 
     format(ctx->state, " {{{>}\n", NULL);
     dumpManyAstNodes(visitor, node->classDecl.members, "\n");
@@ -1074,13 +1167,29 @@ static void dispatch(ConstVisitor func,
                      ConstAstVisitor *visitor,
                      const AstNode *node)
 {
+    DumpContext *ctx = getConstAstVisitorContext(visitor);
     if (node == NULL)
         return;
-
-    if (node->attrs) {
-        // dump attributes if any
-        astConstVisitManyNodes(visitor, node->attrs);
+    if (node->attrs == NULL) {
+        func(visitor, node);
+        return;
     }
+
+    // dump attributes if any
+    AstNode *attr = node->attrs;
+    if (attr->next)
+        format(ctx->state, "@[", NULL);
+    else
+        format(ctx->state, "@", NULL);
+    for (; attr; attr = attr->next) {
+        astConstVisit(visitor, attr);
+        if (attr->next)
+            format(ctx->state, ", ", NULL);
+    }
+    if (node->attrs->next)
+        format(ctx->state, "]\n", NULL);
+    else
+        format(ctx->state, " ", NULL);
 
     func(visitor, node);
 }
@@ -1106,6 +1215,12 @@ AstNode *dumpCxySource(CompilerDriver *driver, AstNode *node, FILE *file)
         [astGenericParam] = dumpGenericParam,
         [astImportEntity] = dumpImportEntity,
         [astBackendCall] = dumpBackendCall,
+        [astBasicBlock] = dumpBasicBlock,
+        [astBranch] = dumpBranch,
+        [astBranchIf] = dumpBranchIf,
+        [astPhi] = dumpPhi,
+        [astSwitchIr] = dumpSwitchIr,
+        [astGep] = dumpGepIr,
         [astAsm] = dumpInlineAssembly,
         [astTypeRef] = dumpTypeRef,
         [astNullLit] = dumpNullLit,
@@ -1133,7 +1248,8 @@ AstNode *dumpCxySource(CompilerDriver *driver, AstNode *node, FILE *file)
         [astStructExpr] = dumpStructExpr,
         [astMacroCallExpr] = dumpMacroCallExpr,
         [astUnionValueExpr] = dumpUnionValueExpr,
-        [astAddressOf] = dumpUnaryExpr,
+        [astPointerOf] = dumpPointerOfExpr,
+        [astReferenceOf] = dumpUnaryExpr,
         [astPrimitiveType] = dumpPrimitiveType,
         [astStringType] = dumpBuiltinType,
         [astVoidType] = dumpBuiltinType,
@@ -1143,6 +1259,7 @@ AstNode *dumpCxySource(CompilerDriver *driver, AstNode *node, FILE *file)
         [astArrayType] = dumpArrayType,
         [astTupleType] = dumpTupleType,
         [astPointerType] = dumpPointerType,
+        [astReferenceType] = dumpReferenceType,
         [astUnionDecl] = dumpUnionType,
         [astBlockStmt] = dumpBlockStmt,
         [astIfStmt] = dumpIfStmt,
@@ -1166,9 +1283,10 @@ AstNode *dumpCxySource(CompilerDriver *driver, AstNode *node, FILE *file)
         [astFuncDecl] = dumpFuncDecl,
         [astExternDecl] = dumpExternDecl,
         [astGenericDecl] = dumpGenericDecl,
-        });
+        }, .dispatch = dispatch);
 
     // clang-format on
+    printStatus(driver->L, "");
     astConstVisit(&visitor,
                   nodeIs(node, Metadata) ? node->metadata.node : node);
 

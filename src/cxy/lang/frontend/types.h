@@ -68,6 +68,7 @@ typedef enum {
     typPrimitive,
     typString,
     typPointer,
+    typReference,
     typOptional,
     typArray,
     typMap,
@@ -170,6 +171,10 @@ typedef struct Type {
         } pointer;
 
         struct {
+            const Type *referred;
+        } reference;
+
+        struct {
             bool trackReferences;
             DynArray references;
             const Type *that;
@@ -201,6 +206,8 @@ typedef struct Type {
         struct {
             u64 count;
             UnionMember *members;
+            const Type *copyFunc;
+            const Type *destructorFunc;
             void *codegenTag;
         } tUnion;
 
@@ -212,6 +219,8 @@ typedef struct Type {
         struct {
             u64 count;
             const Type **members;
+            const Type *copyFunc;
+            const Type *destructorFunc;
         } tuple;
 
         struct {
@@ -321,9 +330,15 @@ bool isArrayType(const Type *type);
 
 bool isPointerType(const Type *type);
 
+bool isReferenceType(const Type *type);
+
+bool isReferable(const Type *type);
+
 bool isVoidPointer(const Type *type);
 
 bool isClassType(const Type *type);
+
+bool isClassReferenceType(const Type *type);
 
 bool isStructType(const Type *type);
 
@@ -456,7 +471,8 @@ static inline const Type *findEnumOptionType(const Type *type, cstring member)
 static inline const NamedTypeMember *findModuleMember(const Type *type,
                                                       cstring member)
 {
-    return findNamedTypeMemberInContainer(type->module.members, member);
+    return type ? findNamedTypeMemberInContainer(type->module.members, member)
+                : NULL;
 }
 
 static inline const Type *findModuleMemberType(const Type *type, cstring member)

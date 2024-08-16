@@ -38,10 +38,13 @@ static AstNode *resolveMemberUpInheritance(TypingContext *ctx,
         const TypeInheritance *inheritance = getTypeInheritance(parent);
         const Type *base = inheritance ? inheritance->base : NULL;
         if (base) {
-            return resolveMemberUpInheritance(
+            decl = resolveMemberUpInheritance(
                 ctx, base, node, flags, name, depth + 1);
+            if (decl)
+                return decl;
         }
-        else if (depth == 0) {
+
+        if (depth == 0) {
             logError(ctx->L,
                      &node->loc,
                      "type '{t}' does not have a member named '{s}'",
@@ -146,12 +149,7 @@ static const Type *checkBasePathElement(AstVisitor *visitor,
                            : enclosure->type;
         }
         else if (keyword == S_This) {
-            if (nodeIs(enclosure, StructDecl))
-                return enclosure->structDecl.thisType;
-            else
-                return makePointerType(ctx->types,
-                                       enclosure->structDecl.thisType,
-                                       flags & flgConst);
+            return enclosure->structDecl.thisType;
         }
         unreachable("unsupported keyword");
     }

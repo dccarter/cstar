@@ -58,6 +58,9 @@ struct LLVMContext {
     inline Stack &stack() { return _stack; }
     inline void setStack(Stack stack) { _stack = stack; }
 
+    llvm::TypeSize getTypeSize(const Type *type);
+    llvm::MaybeAlign getTypeAlignment(const Type *type);
+
     llvm::Type *getLLVMType(const Type *type);
     llvm::Type *classType(const Type *type);
     inline llvm::Value *createUndefined(const Type *type)

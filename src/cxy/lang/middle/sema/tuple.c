@@ -5,8 +5,50 @@
 #include "check.h"
 
 #include "lang/frontend/flag.h"
+#include "lang/frontend/strings.h"
+#include "lang/middle/builtins.h"
 
 #include <core/alloc.h>
+
+static const Type *implementTupleOverload(AstVisitor *visitor,
+                                          cstring overload,
+                                          const Type *type)
+{
+    AstNode *func = findBuiltinDecl(overload);
+    AstNode args = {.tag = astTypeRef, .type = type};
+    AstNode path = {
+        .tag = astPath,
+        .path = {.elements = &(AstNode){.tag = astPathElem,
+                                        .pathElement = {.name = overload,
+                                                        .args = &args,
+                                                        .resolvesTo = func}}}};
+
+    return checkType(visitor, &path);
+}
+
+static void implementTupleTypeCopyAndDestructor(AstVisitor *visitor,
+                                                AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    bool hasCopy = node->type->tuple.copyFunc != NULL;
+    if (!isBuiltinsInitialized() || !hasReferenceMembers(node->type) || hasCopy)
+        return;
+
+    const Type *func =
+        implementTupleOverload(visitor, S___tuple_copy, node->type);
+    if (typeIs(func, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+    ((Type *)node->type)->tuple.copyFunc = func;
+
+    func = implementTupleOverload(visitor, S___tuple_dctor, node->type);
+    if (typeIs(func, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+    ((Type *)node->type)->tuple.destructorFunc = func;
+}
 
 void checkTupleExpr(AstVisitor *visitor, AstNode *node)
 {
@@ -57,9 +99,11 @@ void checkTupleExpr(AstVisitor *visitor, AstNode *node)
         ctx->types,
         elements_,
         node->tupleExpr.len,
-        node->flags & (flgReferenceMembers | flgConst | flgTransient));
+        node->flags & (flgReferenceMembers | flgConst | flgReference));
 
     free(elements_);
+
+    implementTupleTypeCopyAndDestructor(visitor, node);
 }
 
 void checkTupleType(AstVisitor *visitor, AstNode *node)
@@ -96,7 +140,9 @@ void checkTupleType(AstVisitor *visitor, AstNode *node)
         ctx->types,
         elems_,
         count,
-        node->flags & (flgReferenceMembers | flgConst | flgTransient));
+        node->flags & (flgReferenceMembers | flgConst | flgReference));
 
     free(elems_);
+
+    implementTupleTypeCopyAndDestructor(visitor, node);
 }

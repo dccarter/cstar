@@ -137,6 +137,35 @@ void enumerateHashTable(HashTable *table,
     }
 }
 
+HashtableIt newHashTableIt(HashTable *table, size_t elemSize)
+{
+    return (HashtableIt){.table = table, .i = 0, .elemSize = elemSize};
+}
+
+void *hashTableItNext(HashtableIt *it)
+{
+    HashTable *table = it->table;
+    for (size_t n = table->capacity; it->i < n; ++it->i) {
+        HashCode hash = table->hashes[it->i];
+        if (!isOccupiedHash(hash))
+            continue;
+        return elemAt(table->elems, it->elemSize, it->i++);
+    }
+    return NULL;
+}
+
+bool hashTableItHasNext(HashtableIt *it)
+{
+    HashTable *table = it->table;
+    for (size_t n = table->capacity; it->i < n; ++it->i) {
+        HashCode hash = table->hashes[it->i];
+        if (!isOccupiedHash(hash))
+            continue;
+        return true;
+    }
+    return false;
+}
+
 static inline size_t distanceInBytes(const void *from, const void *to)
 {
     return (char *)to - (char *)from;

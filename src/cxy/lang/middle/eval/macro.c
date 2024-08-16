@@ -210,6 +210,23 @@ static AstNode *makeFilenameNode(AstVisitor *visitor,
                        visitor->current->loc.fileName ?: "<native>"});
 }
 
+static AstNode *makeFuncNode(AstVisitor *visitor,
+                             attr(unused) const AstNode *node,
+                             attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 0))
+        return NULL;
+
+    return makeAstNode(
+        ctx->pool,
+        builtinLoc(),
+        &(AstNode){.tag = astStringLit,
+                   .type = makeStringType(ctx->types),
+                   .stringLiteral.value =
+                       visitor->current->loc.fileName ?: "<native>"});
+}
+
 static AstNode *makeHasMemberNode(AstVisitor *visitor,
                                   attr(unused) const AstNode *node,
                                   attr(unused) AstNode *args)
@@ -219,7 +236,7 @@ static AstNode *makeHasMemberNode(AstVisitor *visitor,
         return NULL;
 
     const Type *target = args->type ?: evalType(ctx, args);
-    if (!hasFlag(args, Typeinfo)) {
+    if (!nodeIs(args, TypeRef) && !hasFlag(args, Typeinfo)) {
         logError(ctx->L,
                  &args->loc,
                  "unexpected type {t}, expecting type information",
@@ -285,6 +302,39 @@ static AstNode *makeLineNumberNode(AstVisitor *visitor,
         &(AstNode){.tag = astIntegerLit,
                    .type = getPrimitiveType(ctx->types, prtU64),
                    .intLiteral.uValue = visitor->current->loc.begin.row});
+}
+
+static AstNode *lShift(MemPool *P, AstNode *left, AstNode *node)
+{
+    if (nodeIs(node, BinaryExpr) && node->binaryExpr.op == opShl) {
+        AstNode *lhs = node->binaryExpr.lhs, *right = node->binaryExpr.rhs;
+        return makeBinaryExpr(P,
+                              &node->loc,
+                              flgNone,
+                              lShift(P, left, lhs),
+                              opShl,
+                              right,
+                              NULL,
+                              NULL);
+    }
+    return makeBinaryExpr(
+        P, &node->loc, flgNone, left, opShl, node, NULL, NULL);
+}
+
+static AstNode *makeLShiftNode(AstVisitor *visitor,
+                               attr(unused) const AstNode *node,
+                               attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 2))
+        return NULL;
+
+    AstNode *left = args, *right = args->next;
+    if (nodeIs(right, BinaryExpr) && right->binaryExpr.op == opShl) {
+        return lShift(ctx->pool, left, right);
+    }
+    return makeBinaryExpr(
+        ctx->pool, &node->loc, flgNone, left, opShl, right, NULL, NULL);
 }
 
 static AstNode *makeAstNodeList(AstVisitor *visitor,
@@ -656,28 +706,34 @@ static AstNode *makeInitializeDefaults(AstVisitor *visitor,
         if (nodeIs(member, FieldDecl) && member->structField.value)
             insertAstNode(
                 &init,
-                makeAssignExpr(
+                makeExprStmt(
                     ctx->pool,
                     &member->loc,
-                    member->flags,
-                    makeMemberExpr(
+                    flgNone,
+                    makeAssignExpr(
                         ctx->pool,
                         &member->loc,
-                        type->flags,
-                        deepCloneAstNode(ctx->pool, args),
-                        makeResolvedIdentifier(ctx->pool,
-                                               &member->loc,
-                                               member->structField.name,
-                                               0,
-                                               member,
-                                               NULL,
-                                               member->type),
+                        member->flags,
+                        makeMemberExpr(
+                            ctx->pool,
+                            &member->loc,
+                            type->flags,
+                            deepCloneAstNode(ctx->pool, args),
+                            makeResolvedIdentifier(ctx->pool,
+                                                   &member->loc,
+                                                   member->structField.name,
+                                                   0,
+                                                   member,
+                                                   NULL,
+                                                   member->type),
+                            NULL,
+                            member->type),
+                        opAssign,
+                        deepCloneAstNode(ctx->pool, member->structField.value),
                         NULL,
                         member->type),
-                    opAssign,
-                    deepCloneAstNode(ctx->pool, member->structField.value),
                     NULL,
-                    member->type));
+                    makeVoidType(ctx->types)));
     }
 
     clearAstBody(args);
@@ -689,6 +745,54 @@ static AstNode *makeInitializeDefaults(AstVisitor *visitor,
         args->tag = astNoop;
     }
     return args;
+}
+
+static AstNode *makeLambdaOfAstNode(AstVisitor *visitor,
+                                    attr(unused) const AstNode *node,
+                                    attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
+        return NULL;
+
+    const Type *func = resolveType(args->type ?: evalType(ctx, args));
+    if (!typeIs(func, Func)) {
+        logError(ctx->L,
+                 &args->loc,
+                 "`lambda_of!` macro expecting a function type, given '{t}'",
+                 (FormatArg[]){{.t = func}});
+        return NULL;
+    }
+    AstNode *decl = deepCloneAstNode(ctx->pool, func->func.decl);
+    AstNode *params = decl->funcType.params;
+    params = makeFunctionParam(
+        ctx->pool,
+        &args->loc,
+        makeString(ctx->strings, "_"),
+        makeTypeReferenceNode(
+            ctx->pool, makeVoidPointerType(ctx->types, flgNone), &args->loc),
+        NULL,
+        flgNone,
+        params);
+    decl->funcType.params = params;
+    decl->type = NULL;
+    func = evalType(ctx, decl);
+    csAssert0(typeIs(func, Func));
+
+    return makeTupleTypeAst(
+        ctx->pool,
+        &decl->loc,
+        flgTypeinfo | flgComptime,
+        makeTypeReferenceNode2(ctx->pool,
+                               makeVoidPointerType(ctx->types, flgNone),
+                               &decl->loc,
+                               decl),
+        NULL,
+        makeTupleType(
+            ctx->types,
+            (const Type *[]){makeVoidPointerType(ctx->types, flgNone), func},
+            2,
+            flgFuncTypeParam));
 }
 
 static AstNode *makeTypeinfoNode(AstVisitor *visitor,
@@ -1100,6 +1204,59 @@ static AstNode *makeTypeAtIdxNode(AstVisitor *visitor,
     return makeTypeReferenceNode(ctx->pool, atIndex, &node->loc);
 }
 
+static AstNode *makeIndexOfNode(AstVisitor *visitor,
+                                const AstNode *node,
+                                AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 2))
+        return NULL;
+
+    AstNode *index = args->next;
+    const FileLoc *loc = &index->loc;
+
+    const Type *type = args->type ?: evalType(ctx, args);
+    if (typeIs(type, Error))
+        return NULL;
+    csAssert0(type);
+    type = resolveType(unwrapType(type, NULL));
+
+    const Type *target = index->type ?: evalType(ctx, index);
+    if (typeIs(target, Error))
+        return NULL;
+    csAssert0(target);
+
+    i64 idx = -1;
+    switch (type->tag) {
+    case typTuple:
+        for (int i = 0; i < type->tuple.count; i++) {
+            if (compareTypes(type->tuple.members[i], target)) {
+                idx = i;
+                break;
+            }
+        }
+        break;
+    case typUnion:
+        for (int i = 0; i < type->tUnion.count; i++) {
+            if (compareTypes(type->tUnion.members[i].type, target)) {
+                idx = i;
+                break;
+            }
+        }
+        break;
+    default:
+        logError(
+            ctx->L,
+            &node->loc,
+            "invalid `indexof!` macro argument, type {t} does not have members",
+            (FormatArg[]){{.t = type}});
+        return NULL;
+    }
+
+    return makeIntegerLiteral(
+        ctx->pool, &node->loc, idx, NULL, getPrimitiveType(ctx->types, prtI64));
+}
+
 static AstNode *makeBaseOfNode(AstVisitor *visitor,
                                const AstNode *node,
                                AstNode *args)
@@ -1195,6 +1352,7 @@ static int compareBuiltinMacros(const void *lhs, const void *rhs)
  * or a trie, but with these minimal entries, it's fast enough.
  */
 static const BuiltinMacro builtinMacros[] = {
+    {.name = "__func", makeFuncNode},
     {.name = "assert", makeAssertNode},
     {.name = "ast_list_add", actionAstListAdd},
     {.name = "ast_paste", makeAstPasteNode},
@@ -1206,10 +1364,13 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "error", makeAstLogErrorNode},
     {.name = "file", makeFilenameNode},
     {.name = "has_member", makeHasMemberNode},
+    {.name = "indexof", makeIndexOfNode},
     {.name = "info", makeAstLogNoteNode},
     {.name = "init_defaults", makeInitializeDefaults},
+    {.name = "lambda_of", makeLambdaOfAstNode},
     {.name = "len", makeLenNode},
     {.name = "line", makeLineNumberNode},
+    {.name = "lshift", makeLShiftNode},
     {.name = "mk_ast_list", makeAstNodeList},
     {.name = "mk_bc", makeBackendCallNode},
     {.name = "mk_field", makeAstFieldStmtNode},

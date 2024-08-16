@@ -19,7 +19,8 @@ struct StrPool;
 #define CXY_LANG_AST_EXP_TAGS(f)            \
     f(GroupExpr)                            \
     f(UnaryExpr)                            \
-    f(AddressOf)                            \
+    f(PointerOf)                            \
+    f(ReferenceOf)                          \
     f(BinaryExpr)                           \
     f(AssignExpr)                           \
     f(TernaryExpr)                          \
@@ -75,6 +76,14 @@ struct StrPool;
     f(FuncParamDecl)                        \
     f(EnumOptionDecl)                       \
 
+#define CXY_LANG_IR_TAGS(f)               \
+    f(Branch)                             \
+    f(BranchIf)                           \
+    f(BasicBlock)                         \
+    f(Phi)                                \
+    f(SwitchIr)                           \
+    f(Gep)
+
 #define CXY_LANG_AST_TAGS(f) \
     f(Error)                 \
     f(Noop)                  \
@@ -102,6 +111,7 @@ struct StrPool;
     f(TupleType)            \
     f(ArrayType)            \
     f(PointerType)          \
+    f(ReferenceType)        \
     f(FuncType)             \
     f(PrimitiveType)        \
     f(OptionalType)         \
@@ -114,9 +124,11 @@ struct StrPool;
     f(StringLit)            \
     f(Asm)                  \
     f(AsmOperand)           \
+    f(NodeArray)            \
     CXY_LANG_AST_EXP_TAGS(f)    \
     CXY_LANG_AST_STMT_TAGS(f)   \
-    CXY_LANG_AST_DECL_TAGS(f)
+    CXY_LANG_AST_DECL_TAGS(f)   \
+    CXY_LANG_IR_TAGS(f)
 
 // clang-format on
 
@@ -152,6 +164,8 @@ typedef struct Capture Capture;
 
 typedef struct {
     bool createMapping;
+    bool signatureOnly;
+    DynArray *deferred;
     MemPool *pool;
     HashTable mapping;
     const AstNode *root;
@@ -160,7 +174,8 @@ typedef struct {
 // clang-format off
 #define BACKEND_FUNC_IDS(f)    \
     f(SizeOf)                  \
-    f(Alloca)
+    f(Alloca)                  \
+    f(Zeromem)
 
 // clang-format on
 
@@ -169,6 +184,8 @@ typedef enum {
     BACKEND_FUNC_IDS(f)
 #undef f
 } BackendFuncId;
+
+struct IrValue;
 
 #define CXY_AST_NODE_HEAD                                                      \
     AstTag tag;                                                                \
@@ -182,7 +199,8 @@ typedef enum {
         struct AstNode *link;                                                  \
     } list;                                                                    \
     struct AstNode *attrs;                                                     \
-    void *codegen;
+    void *codegen;                                                             \
+    struct IrValue *ir;
 
 typedef enum { iptModule, iptPath } ImportKind;
 typedef enum { cInclude, cDefine, cSources } CCodeKind;
@@ -200,6 +218,11 @@ typedef struct SortedNodes {
 
     struct AstNode *nodes[0];
 } SortedNodes;
+
+typedef struct {
+    AstNode *match;
+    AstNode *bb;
+} SwitchIrCase;
 
 struct AstNode {
     union {
@@ -349,6 +372,10 @@ struct AstNode {
         } pointerType;
 
         struct {
+            struct AstNode *referred;
+        } referenceType;
+
+        struct {
             u64 len;
             struct AstNode *elements;
             bool isLiteral;
@@ -381,6 +408,7 @@ struct AstNode {
             struct AstNode *defaultValue;
             struct AstNode *constraints;
             u16 inferIndex;
+            bool innerType;
         } genericParam;
 
         struct {
@@ -486,6 +514,7 @@ struct AstNode {
         struct {
             cstring name;
             u64 index;
+            u32 bits;
             struct AstNode *type;
             struct AstNode *value;
         } structField;
@@ -526,6 +555,7 @@ struct AstNode {
         } unaryExpr;
 
         struct {
+            AstNode *jmpTo;
             struct AstNode *cond;
             struct AstNode *body;
             struct AstNode *otherwise;
@@ -582,6 +612,7 @@ struct AstNode {
             const char *name;
             u64 index;
             struct AstNode *value;
+            const struct AstNode *structField;
             const Type *sliceType;
         } fieldExpr;
 
@@ -595,7 +626,7 @@ struct AstNode {
         } exprStmt, groupExpr, spreadExpr;
 
         struct {
-            struct AstNode *expr;
+            struct AstNode *stmt;
             struct AstNode *block;
         } deferStmt;
 
@@ -612,6 +643,7 @@ struct AstNode {
             struct AstNodeList epilogue;
             struct AstNode *stmts;
             struct AstNode *last;
+            DynArray dctorBlocks;
             bool returned;
             bool sealed;
         } blockStmt;
@@ -669,6 +701,43 @@ struct AstNode {
             AstNode *value;
             u32 idx;
         } unionValue;
+
+        struct {
+            AstNode **nodes;
+            u64 nodesCount;
+        } nodeArray;
+
+        struct {
+            AstNode *target;
+        } branch;
+
+        struct {
+            AstNode *cond;
+            AstNode *trueBB;
+            AstNode *falseBB;
+        } branchIf;
+
+        struct {
+            u32 index;
+            AstNodeList stmts;
+        } basicBlock;
+
+        struct {
+            AstNode **incoming;
+            u64 incomingCount;
+        } phi;
+
+        struct {
+            AstNode *cond;
+            AstNode *defaultBB;
+            SwitchIrCase *cases;
+            u64 casesCount;
+        } switchIr;
+
+        struct {
+            AstNode *value;
+            i64 index;
+        } gep;
     };
 };
 
@@ -802,6 +871,7 @@ AstNode *makeFieldExpr(MemPool *pool,
                        cstring name,
                        u64 flags,
                        AstNode *value,
+                       const AstNode *structField,
                        AstNode *next);
 
 AstNode *makeStructField(MemPool *pool,
@@ -852,12 +922,19 @@ AstNode *makeCastExpr(MemPool *pool,
                       AstNode *next,
                       const Type *type);
 
-AstNode *makeAddrOffExpr(MemPool *pool,
-                         const FileLoc *loc,
-                         u64 flags,
-                         AstNode *expr,
-                         AstNode *next,
-                         const Type *type);
+AstNode *makePointerOfExpr(MemPool *pool,
+                           const FileLoc *loc,
+                           u64 flags,
+                           AstNode *expr,
+                           AstNode *next,
+                           const Type *type);
+
+AstNode *makeReferenceOfExpr(MemPool *pool,
+                             const FileLoc *loc,
+                             u64 flags,
+                             AstNode *expr,
+                             AstNode *next,
+                             const Type *type);
 
 AstNode *makeTypedExpr(MemPool *pool,
                        const FileLoc *loc,
@@ -936,7 +1013,7 @@ AstNode *makeExprStmt(MemPool *pool,
                       const Type *type);
 
 AstNode *makeDeferStmt(
-    MemPool *pool, const FileLoc *loc, u64 flags, AstNode *expr, AstNode *next);
+    MemPool *pool, const FileLoc *loc, u64 flags, AstNode *stmt, AstNode *next);
 
 AstNode *makeStmtExpr(MemPool *pool,
                       const FileLoc *loc,
@@ -1138,6 +1215,58 @@ AstNode *makeMacroCallAstNode(MemPool *pool,
                               AstNode *args,
                               AstNode *next);
 
+AstNode *makeBasicBlockAstNode(
+    MemPool *pool, const FileLoc *loc, u64 flags, u32 index, AstNode *func);
+
+AstNode *makeReturnAstNode(MemPool *pool,
+                           const FileLoc *loc,
+                           u64 flags,
+                           AstNode *expr,
+                           AstNode *next,
+                           const Type *type);
+
+AstNode *makeBranchAstNode(MemPool *pool,
+                           const FileLoc *loc,
+                           u64 flags,
+                           AstNode *target,
+                           AstNode *next);
+
+AstNode *makeBranchIfAstNode(MemPool *pool,
+                             const FileLoc *loc,
+                             u64 flags,
+                             AstNode *cond,
+                             AstNode *trueBB,
+                             AstNode *falseBB,
+                             AstNode *next);
+
+AstNode *makePhiAstNode(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        AstNode **incoming,
+                        u64 incomingCount,
+                        AstNode *next);
+
+AstNode *makeSwitchIrAstNode(MemPool *pool,
+                             const FileLoc *loc,
+                             u64 flags,
+                             AstNode *cond,
+                             AstNode *defaultBB,
+                             SwitchIrCase *cases,
+                             u64 casesCount,
+                             AstNode *next);
+
+AstNode *makeGepAstNode(MemPool *pool,
+                        const FileLoc *loc,
+                        u64 flags,
+                        AstNode *value,
+                        i64 index,
+                        AstNode *next);
+
+AstNode *makeNodeArray(MemPool *pool,
+                       const FileLoc *loc,
+                       AstNode **nodes,
+                       u64 nodesCount);
+
 AstNode *makeAstClosureCapture(MemPool *pool, AstNode *captured);
 
 AstNode *makeAstNop(MemPool *pool, const FileLoc *loc);
@@ -1159,6 +1288,8 @@ static inline AstNode *shallowCloneAstNode(MemPool *pool, const AstNode *node)
 }
 
 AstNode *deepCloneAstNode(MemPool *pool, const AstNode *node);
+
+AstNode *deepCloneManyAstNode(MemPool *pool, const AstNode *node);
 
 AstNode *cloneGenericDeclaration(MemPool *pool, const AstNode *node);
 
@@ -1184,6 +1315,8 @@ bool isAssignableExpr(const AstNode *node);
 
 bool isLiteralExpr(const AstNode *node);
 
+bool isStaticExpr(const AstNode *node);
+
 bool isEnumLiteral(const AstNode *node);
 
 bool isIntegralLiteral(const AstNode *node);
@@ -1196,7 +1329,10 @@ bool isBuiltinTypeExpr(const AstNode *node);
 
 bool isMemberFunction(const AstNode *node);
 
+bool isStaticMemberFunction(const AstNode *node);
+
 f64 nodeGetNumericLiteral(const AstNode *node);
+i64 getEnumLiteralValue(const AstNode *node);
 
 void nodeSetNumericLiteral(AstNode *node,
                            AstNode *lhs,
@@ -1342,7 +1478,13 @@ static bool isClassDeclaration(AstNode *node)
 
 bool nodeIsLeftValue(const AstNode *node);
 
+bool nodeIsCallExpr(const AstNode *node);
+
 bool nodeIsNoop(const AstNode *node);
+
+bool nodeIsThisParam(const AstNode *node);
+
+bool nodeIsThisArg(const AstNode *node);
 
 CCodeKind getCCodeKind(TokenTag tag);
 

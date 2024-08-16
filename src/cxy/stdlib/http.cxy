@@ -1,7 +1,15 @@
 module http
 
-import { TcpSocket } from "./tcp.cxy"
+import "./log.cxy"
+
+import { Time } from "./time.cxy"
+import { Vector } from "./vector.cxy"
 import { HashMap } from "./hash.cxy"
+import { Trie } from "./trie.cxy"
+
+import { Address } from "./net.cxy"
+import { TcpSocket, TcpListener, BufferedSocketOutputStream } from "./tcp.cxy"
+
 
 import "_ctype.h" as ctype
 import "stdlib.h" as stdlib
@@ -9,7 +17,7 @@ import "strings.h" as cstrings
 
 import "native/http/parser.h" as parser
 
-pub enum Method {
+pub enum Method : u32 {
     Delete,
     Get,
     Head,
@@ -67,23 +75,34 @@ enum Status : i32 {
 @inline
 func toupper(c: wchar) => <char>(<u32>ctype.toupper(<i32>c))
 
-pub func methodFromString(method: string) {
+pub func methodFromString(method: CString) {
     var x = toupper(method.[0]);
+    var maybe = (Method.Unknown, "");
+
     switch(x) {
-        case 'D':char => return Method.Delete
-        case 'G':char => return Method.Get
-        case 'H':char => return Method.Head
+        case 'D':char => maybe = (Method.Delete, "DELETE")
+        case 'G':char => maybe = (Method.Get, "GET")
+        case 'H':char => maybe = (Method.Head, "HEAD")
         case 'P':char => {
             if (toupper(method.[1]) == 'O':char)
-                return Method.Post
+                maybe = (Method.Post, "POST")
             else
-                return Method.Put
+                maybe = (Method.Put, "PUT")
         }
-        case 'C':char => return Method.Connect
-        case 'O':char => return Method.Options
-        case 'T':char => return Method.Trace
-        default  => return Method.Unknown
+        case 'C':char => maybe = (Method.Connect, "CONNECT")
+        case 'O':char => maybe = (Method.Options, "OPTIONS")
+        case 'T':char => maybe = (Method.Trace, "TRACE")
+        default  => return (Method.Unknown, 0:u64)
     }
+
+    var str = CString(maybe.1);
+    if (method.size() < str.size())
+        return (Method.Unknown, 0:u64)
+
+    if (EqualsCase{}(&method, &str))
+        return (maybe.0, str.size())
+
+    return (Method.Unknown, 0:u64)
 }
 
 pub func statusText(status: Status) {
@@ -197,25 +216,65 @@ pub func methodName(method: Method) {
     }
 }
 
-pub var CONTENT_LENGTH = CString("Content-Length");
+type HeaderMap = HashMap[String, String, HashCase, EqualsCase];
+pub var CONTENT_LENGTH_S = String("Content-Length");
+pub var CONTENT_LENGTH_CS = CString("Content-Length");
+pub var DATE_S = String("Date");
+pub var SERVER_S = String("Server");
+pub var CONNECTION_S = String("Connection");
 
-pub class Request {
-    - sock: TcpSocket
-    - headers = HashMap[String, String, HashCase, EqualsCase]();
-    - method: Method = .Unknown;
-    - path: String
-    - body: String
-    - minorVersion: i32
-    - contentLength: u64
+pub class Response {
+    - _status: Status = .OK;
+    - _headers = HeaderMap();
+    - _body = String();
 
-    func `init`(sock: TcpSocket) {
-        this.sock = sock
+    func `init`() {
     }
 
-    func parseHeaders(buf: &const char, len: u64) : Status | i32 {
-        var method: &const char = null;
+    @[prop, inline]
+    const func headers() => &_headers
+    @[prop, inline]
+    func body() => &_body
+    @[prop, inline]
+    const func status() => _status
+    @[prop, inline]
+    const func size() => _body.size()
+
+    const func ok() => _status == .OK
+
+    func end(status: Status = .OK) {
+        _status = status
+    }
+
+    @inline
+    func header(name: String, value: String) {
+        _headers.[name] = value
+    }
+
+    @inline
+    const func header(name: String) => _headers.[name]
+}
+
+pub class Request {
+    - LOG_TAG = "HTTP_REQUEST";
+
+    - _headers = HeaderMap();
+    - _method: Method = .Unknown;
+    - _query = HashMap[String, String]();
+    - _params = HashMap[CString, CString]();
+    - _path: String = null;
+    - _body: String = null;
+    - _minorVersion: i32 = 1;
+    - _contentLength: u64 = 0;
+    - _route: ^Route
+
+    func `init`() {
+    }
+
+    - func parseHeaders(buf: ^const char, len: u64) : Status | i32 {
+        var method: ^const char = null;
         var methodLen : u64 = 0;
-        var path: &const char = null;
+        var path: ^const char = null;
         var pathLen : u64 = 0;
         var headers: [parser.phr_header, 128];
         var numHeaders: u64 = len!(headers);
@@ -224,32 +283,39 @@ pub class Request {
         var parsed = parser.phr_parse_request(
             buf,
             len,
-            &method,
-            &methodLen,
-            &path,
-            &pathLen,
-            &minorVersion,
-            &headers !: &parser.phr_header,
-            &numHeaders,
+            ptrof method,
+            ptrof methodLen,
+            ptrof path,
+            ptrof pathLen,
+            ptrof minorVersion,
+            ptrof headers !: ^parser.phr_header,
+            ptrof numHeaders,
             0);
 
         if (parsed < 0) {
             // failed to parse request
+            TRC!("parse failed: " << parsed << '/' << len)
             return Status.BAD_REQUEST
         }
 
-        this.method = methodFromString(method !: string)
-        this.minorVersion = minorVersion
-        this.path = String(path, pathLen)
+        var parsedMethod = methodFromString(CString(method !: string, methodLen));
+        if (parsedMethod.0 == .Unknown) {
+            // Invalid request method
+            TRC!("bad request: invalid request method " << CString(method !: string, methodLen))
+            return Status.BAD_REQUEST
+        }
+        _method = parsedMethod.0
+        _minorVersion = minorVersion
+        _path = String(path, pathLen)
         for (var i: 0..numHeaders) {
             const header = headers.[i];
             const headerName = CString(header.name !: string, header.name_len);
-            if (EqualsCase{}(headerName, CONTENT_LENGTH)) {
-                this.contentLength =
+            if (EqualsCase{}(&headerName, &CONTENT_LENGTH_CS)) {
+                _contentLength =
                     CString(header.value !: string, header.value_len).toi[u64]();
             }
             else {
-                this.headers.[String(header.name, header.name_len)] =
+                _headers.[String(header.name, header.name_len)] =
                     String(header.value, header.value_len)
             }
         }
@@ -257,9 +323,7 @@ pub class Request {
         return parsed
     }
 
-    func parse(str: string) {
-        var len = len!(str);
-        var buf = str !: &const char;
+    func feed(buf: ^const char, len: u64) {
         var ret = parseHeaders(buf, len);
         var parsed: u64 = 0;
         match (ret) {
@@ -268,9 +332,470 @@ pub class Request {
         }
 
         var remaining = len - parsed;
-        if (remaining == this.contentLength)
-            this.body = String(ptroff!(buf + parsed), remaining)
+        if (remaining == _contentLength)
+            _body = String(ptroff!(buf + parsed), remaining)
 
         return Status.OK
+    }
+
+    @inline
+    func param(name: CString, value: CString) {
+        _params.[name] = value
+    }
+
+    @inline
+    const func param(name: CString) => _params.[name]
+
+    @[prop, inline]
+    const func path() => &_path
+
+    @[prop, inline]
+    const func method() => _method
+
+    @[prop, inline]
+    const func header(name: String) => _headers.[name]
+
+    @[inline, prop]
+    const func route() => &(*_route)
+
+    @[inline]
+    func route(it: ^Route) {
+        _route = it
+    }
+}
+
+type HandlerFn = func(req: &const Request, res: &Response) -> void
+
+class Route {
+    - prefix: CString
+    - handler: lambda_of!(#HandlerFn)
+    - params: Vector[CString]
+    - _methods: u32
+
+    func `init`(methods: u32, prefix: CString, fn: HandlerFn, params: Vector[CString]) {
+        handler = fn
+        this.prefix = prefix
+        this.params = params
+        _methods = methods
+    }
+
+    @inline
+    func `()`(req: &const Request, res: &Response) {
+        handler(req, res)
+    }
+
+    @inline
+    func `()`(methods: [Method]) {
+        for (const m,_: methods)
+            _methods |= (1 << m)
+        return &this
+    }
+
+    @inline
+    const func `==`(other: &This) => prefix == other.prefix
+
+    @inline
+    const func `str`(os: &OutputStream) { os << "route: " << prefix }
+
+    @inline
+    const func isMethodSupported(method: Method) => (_methods & (1:u32 << (<u32>method))) != 0
+}
+
+class Router {
+    - LOG_TAG = "HTTP_ROUTER";
+    - routes: Trie[Route]
+
+    func `init`() {
+        routes = Trie[Route]();
+    }
+
+    - func add(methods: u32, path: string, idx: i64, fn: HandlerFn) {
+        assert!(path.[idx] == '/':char)
+        var i = idx;
+        while (path.[i] != '\0':char && path.[i] != '{':char) {
+            i++
+        }
+
+        if (path.[i] == '{':char)
+            i--;
+        var prefix = CString(path, i).substr(idx);
+        var params = Vector[CString]();
+        parseParams(&params, path, i)
+        var route = Route(methods, prefix, fn, &&params);
+        routes.add(path, i, route)
+        return route
+    }
+
+    func add(path: string, fn: HandlerFn) {
+        var methods = Method.Get;
+        var idx = 0:i64;
+        if (path.[0] != '/':char) {
+            var parsedMethod = methodFromString(path);
+            assert!(parsedMethod.0 != .Unknown)
+            methods = parsedMethod.0
+            idx = <i64>parsedMethod.1;
+            while (path.[idx] == ' ':char)
+                idx++
+        }
+
+        return add(1 << methods, path, idx, &&fn)
+    }
+
+    func handle(path: CString, req: &Request, resp: &Response) {
+        var found = routes.find(path.data(), path.size());
+        if (!found) {
+            TRC!("route: " << path)
+            resp.end(Status.NOT_FOUND)
+            return;
+        }
+
+        var consumed, route = *found;
+        var args = path.substr(consumed);
+        match (parseRouteArgs(req, &route.params, args)) {
+            case Status as value => {
+                resp.end(value)
+                return;
+            }
+            case u64 as value => {
+                // TODO parse route arguments
+                args = args.substr(value)
+            }
+        }
+
+        route(req, resp)
+    }
+
+    func find(req: &Request, resp: &Response): Route? {
+        var path = req.path().cstr();
+        var found = routes.find(path.data(), path.size());
+        if (!found) {
+            TRC!("not found: " << req.path())
+            resp.end(Status.NOT_FOUND)
+            return null;
+        }
+
+        var consumed, route = *found;
+        if (!route.isMethodSupported(req.method())) {
+            TRC!("not found: unsupported method '" << req.method() << "'")
+            resp.end(Status.NOT_FOUND)
+            return null;
+        }
+
+        var args = path.substr(consumed);
+        match (parseRouteArgs(req, &route.params, args)) {
+            case Status as value => {
+                resp.end(value)
+                return null;
+            }
+            case u64 as value => {
+                // TODO parse route arguments
+                args = args.substr(value)
+            }
+        }
+
+        return route
+    }
+
+    - func parseParams(params: &Vector[CString], path: string, idx: i64) : void {
+        var s = path !: ^const char;
+        while (path.[idx] == '/':char) {
+            idx++
+            assert!(path.[idx++] == '{':char)
+            var i = idx;
+            while (path.[i] != '\0':char && path.[i] != '}':char)
+                i++
+            assert!(path.[i] == '}':char)
+            var name = CString(ptroff!(s + idx) !: string, i - idx);
+            idx = i + 1
+            params.push(name)
+        }
+    }
+
+    - func parseRouteArgs(req: &Request, params: &Vector[CString], path: CString) : u64 | Status {
+        var p = path.data() !: ^const char;
+        var idx = 0:u64;
+        for (var i: 0..params.size()) {
+            if (p.[idx++] != '/':char) {
+                TRC!("bad request: route missing parameters")
+                return Status.BAD_REQUEST
+            }
+            var j = idx;
+            while (p.[j] != '\0':char && p.[j] != '/':char && p.[j] != '?':char)
+                j++;
+            var value = CString(ptroff!(p + idx) !: string, j - idx);
+            idx = j;
+            req.param(params.[<i32>i], value)
+        }
+
+        if (p.[idx] != '\0':char && p.[idx] != '?':char) {
+            TRC!("bad request: too many path params: " << path)
+            return Status.BAD_REQUEST
+        }
+
+        return idx
+    }
+}
+
+pub struct Config {
+    - address = Address("0.0.0.0", 8080);
+    - serverName = String("cxy");
+    - hstsEnable = 5000:u64;
+    - keepAliveTime = 5000:i64;
+}
+
+pub class Connection[Middlewares] {
+    @static
+    - LOG_TAG = "HTTP_CONNECTION";
+    - sock: TcpSocket
+    - mws:  ^Middlewares
+    - router: ^Router
+    - req: Request
+    - resp: Response
+    - config: ^Config
+    - _close: bool = false;
+
+    func `init`(config: ^Config, mws: ^Middlewares, router: ^Router, sock: TcpSocket) {
+        this.router = router
+        this.sock = &&sock
+        this.config = config
+        this.mws = mws
+    }
+
+    func handle() {
+        while (!_close && !!sock) {
+            handleConnection()
+        }
+    }
+
+    - func handleConnection(): void {
+        // receive request
+        TRC!("Connection " << sock.address())
+
+        req = Request()
+        resp = Response()
+        if (!receive())
+            return;
+
+        if (!resp.ok()) {
+            sendResponse()
+            return;
+        }
+
+        TRC!( (methodName(req.method())) << " " << req.path() )
+        var route = (*router).find(&req, &resp);
+
+        if (!route) {
+            resp.end(Status.NOT_FOUND)
+            sendResponse()
+            return;
+        }
+        invokeRouteHandler(*route)
+
+        sendResponse()
+    }
+
+    - func invokeRouteHandler(route: Route) : void {
+        req.route(ptrof route)
+        #for (const i: 0..Middlewares.membersCount) {
+            if (!resp.ok())
+                return;
+            // invoke middlewares
+            mws.#{i}.before(&req, &resp)
+            defer mws.#{i}.after(&req, &resp)
+        }
+        // handle route
+        route(&req, &resp)
+    }
+
+    - func receive() : bool {
+        var buf: [char, 8192];
+
+        var received = sock.receive(buf, 8192);
+
+        if (received) {
+            var len = *received;
+            if (len > 0) {
+                var status = req.feed(buf, *received);
+                if (status != .OK)
+                    resp.end(status)
+                return true
+            }
+        }
+
+        return false
+    }
+
+    - func sendResponse() : void {
+        var sos = BufferedSocketOutputStream(sock);
+        var line0 = CString(statusText(resp.status()));
+        sos << line0 << "\r\n"
+        if (resp.status() != .OK && resp.body().empty()) {
+            resp.body() << line0.substr(9)
+        }
+
+        _close = false;
+        if (var conn = resp.header(CONNECTION_S)) {
+            _close = *conn == "Close"
+        }
+
+        if (!_close && config.keepAliveTime > 0) {
+            sos << "Connection: Keep-Alive\r\n"
+            sos << "Keep-Alive: " << config.keepAliveTime << "\r\n"
+        }
+
+        if (config.hstsEnable > 0) {
+            sos << "Strict-Transport-Security: max-age"
+                << config.hstsEnable << "; includeSubdomains\r\n"
+        }
+
+        for (var header: resp.headers()) {
+            sos << header.0 << ": " << header.1 << "\r\n"
+        }
+
+
+        if (!resp.header(SERVER_S)) {
+            sos << "Server: " << config.serverName << "\r\n"
+        }
+
+        if (!resp.header(DATE_S))
+            sos << "Date: " << Time() << "\r\n"
+
+        if (!resp.header(CONTENT_LENGTH_S)) {
+            sos << "Content-Length: " << resp.size() << "\r\n"
+        }
+
+        sos << "\r\n"
+        if (resp.size() > 0)
+            sos << resp.body()
+    }
+}
+
+pub class Server[Middlewares] {
+    require!(Middlewares.isTuple, "requires a tuple of middlewares")
+    @static
+    - LOG_TAG = "HTTP_SERVER";
+    - mws: Middlewares
+    - config: Config
+    - listener: TcpListener
+    - router: Router
+
+    func `init`(config: Config = Config{}) {
+        // initialize middlewares
+        #for (const i: 0..Middlewares.membersCount) {
+            #const M = typeat!(#Middlewares, #{i});
+            require!(M.isClass, "A middleware must be a class type")
+            require!(has_member!(#M, "before", #func(_: &const Request, _: &Response) -> void),
+                     "middle {t} must implement `before` handler of type {t}",
+                     #M, #func(_: &const Request, _: &Response) -> void)
+            require!(has_member!(#M, "after", #func(_: &const Request, _: &Response) -> void),
+                                 "middle {t} must implement `after` handler of type {t}",
+                                 #M, #func(_: &const Request, _: &Response) -> void)
+
+            require!(has_member!(#M, "op__init", #func() -> void),
+                                 "middle {t} must implement a default constructor",
+                                 #M)
+            mws.#{i} = #{M}()
+        }
+        // initialize other variables
+        this.config = config
+        router = Router()
+        listener = TcpListener(config.address)
+    }
+
+    @inline
+    func middleware[M]() {
+        #const idx = indexof!(#Middlewares, #M);
+        require!(idx >= 0, "type '{t}' is not a middleware, middlewares: {t}", #M, #Middlewares)
+        return mws.#{idx}
+    }
+
+    func start() {
+        DBG!( "starting server at " << config.address )
+        if (!listener.listen(1024)) {
+            ERR!( "listening failed" )
+            return;
+        }
+
+        while (listener) {
+            var sock = listener.accept();
+            if (!sock)
+                continue;
+
+            spawn! {
+                var name: [char, 64];
+                var s = sock.move();
+                sprintf(name, "conn-%hu", s.address().port())
+                setname!(name !: string)
+                handleConnection(&&s)
+            }
+        }
+        DBG!( "server stopped" )
+    }
+
+    func stop() {
+        DBG!("stopping server")
+        listener.close()
+    }
+
+    - func handleConnection(sock: TcpSocket): void {
+        var connection = Connection[Middlewares](ptrof config, ptrof mws, ptrof router, &&sock);
+        connection.handle()
+    }
+
+    func `()`(route: string, handler: HandlerFn) {
+        return router.add(route, &&handler)
+    }
+}
+
+pub class Cors {
+    @static
+    - LOG_TAG = "HTTP_CORS";
+    - allowOrigin = String("*");
+    - allowHeaders = String("Origin, X-Requested-With, Content-Type, Accept, Authorization");
+
+    func `init`() { }
+
+    func before(req: &const Request, res: &Response) {
+        if (req.method() == .Head) {
+            /* Requesting options */
+            var requestMethod = req.header("Access-Control-Request-Method");
+            if (requestMethod) {
+                var method = *requestMethod;
+                var corsMethod = methodFromString(method.cstr());
+                if (corsMethod.0 == .Unknown) {
+                    TRC!("bad request: unknown method " << method )
+                    res.end(Status.BAD_REQUEST)
+                    return
+                }
+
+                if (req.route().isMethodSupported(corsMethod.0)) {
+                    // only if route supports requested method
+                    res.header("Access-Control-Allow-Methods", *requestMethod);
+                    res.end();
+                }
+            }
+        }
+    }
+
+    func after(req: &const Request, res: &Response) {
+        if (!allowOrigin.empty()) {
+            res.header("Access-Control-Allow-Origin", allowOrigin)
+        }
+
+        if (!allowHeaders.empty()) {
+            res.header("Access-Control-Allow-Headers", allowHeaders)
+        }
+    }
+
+    func configure[Cfg](cfg: Cfg) {
+        require!(Cfg.isStruct, "cfg must be a struct {t}", #Cfg)
+        #if (has_member!(#Cfg, "allowOrigin", #String))
+            allowOrigin = &&cfg.allowOrigin
+        #if (has_member!(#Cfg, "allowOrigin", #string))
+            allowOrigin = String(cfg.allowOrigin)
+        #if (has_member!(#Cfg, "allowHeaders", #String))
+            allowHeaders = &&cfg.allowHeaders
+        #if (has_member!(#Cfg, "allowHeaders", #string))
+            allowHeaders = String(cfg.allowHeaders)
     }
 }

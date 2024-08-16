@@ -241,7 +241,7 @@ void bindGenericDecl(AstVisitor *visitor, AstNode *node)
 void bindFuncParam(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
-    node->flags |= findAttribute(node, S_transient) ? flgTransient : flgNone;
+    node->flags |= findAttribute(node, S_transient) ? flgReference : flgNone;
     astVisit(visitor, node->funcParam.type);
     astVisit(visitor, node->funcParam.def);
     node->flags |= (node->funcParam.type->flags & flgConst);
@@ -254,7 +254,7 @@ void bindFunctionDecl(AstVisitor *visitor, AstNode *node)
     pushScope(ctx->env, node);
 
     if (findEnclosingClassOrStructOrInterface(ctx->env, NULL, S_this, NULL) &&
-        findAttribute(node, S_static) == NULL) {
+        !hasFlag(node, Static)) {
         node->funcDecl.this_ =
             makeFunctionParam(ctx->pool,
                               &node->loc,
@@ -480,7 +480,7 @@ void bindDeferStmt(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
 
-    astVisit(visitor, node->deferStmt.expr);
+    astVisit(visitor, node->deferStmt.stmt);
     node->deferStmt.block =
         findEnclosingBlock(ctx->env, "defer", ctx->L, &node->loc);
 }

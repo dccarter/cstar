@@ -25,7 +25,7 @@ LLVMContext::LLVMContext(llvm::LLVMContext &context,
     _module->setTargetTriple(TM->getTargetTriple().getTriple());
     _module->setDataLayout(TM->createDataLayout());
     /* Skip generating DI for builtins */
-    if (isBuiltinsInitialized() && driver->options.debug) {
+    if (driver->options.debug) {
         _debugCtx.reset(new DebugContext(*_module, driver, _sourceFilename));
     }
 }
@@ -50,6 +50,10 @@ llvm::Type *LLVMContext::convertToLLVMType(const Type *type)
         auto typ = getLLVMType(type->pointer.pointed);
         return typ->getPointerTo();
     }
+    case typReference:
+        if (isClassReferenceType(type))
+            return getLLVMType(stripReference(type));
+        return getLLVMType(stripReference(type))->getPointerTo();
     case typArray:
         return llvm::ArrayType::get(getLLVMType(type->array.elementType),
                                     type->array.len);
@@ -87,6 +91,22 @@ llvm::Type *LLVMContext::getLLVMType(const Type *type)
 
     return static_cast<llvm::Type *>(
         type->codegen ?: updateType(type, convertToLLVMType(type)));
+}
+
+llvm::TypeSize LLVMContext::getTypeSize(const Type *type)
+{
+    if (isClassType(type))
+        return module().getDataLayout().getTypeAllocSize(classType(type));
+    else
+        return module().getDataLayout().getTypeAllocSize(getLLVMType(type));
+}
+
+llvm::MaybeAlign LLVMContext::getTypeAlignment(const Type *type)
+{
+    if (isClassType(type))
+        return module().getDataLayout().getABITypeAlign(classType(type));
+    else
+        return module().getDataLayout().getABITypeAlign(getLLVMType(type));
 }
 
 llvm::Type *LLVMContext::classType(const Type *type)
@@ -393,11 +413,11 @@ llvm::Value *LLVMContext::generateCastExpr(AstVisitor *visitor,
     if (to == unThisType(from))
         return cxy::codegen(visitor, expr);
 
-    if (typeIs(from, Enum))
-        return cxy::codegen(visitor, expr);
-
     if (typeIs(from, Union))
         return castFromUnion(visitor, to, expr, idx);
+
+    if (typeIs(from, Enum))
+        from = from->tEnum.base;
 
     if (isFloatType(to)) {
         auto value = cxy::codegen(visitor, expr);

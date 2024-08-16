@@ -83,6 +83,9 @@ static bool cmdOptimizationLevel(CmdParser *P,
         case '3':
             dst->num = O3;
             return true;
+        case 's':
+            dst->num = O3;
+            return true;
         default:
             dst->state = cmdNoValue;
             break;
@@ -316,7 +319,7 @@ static void fixCmdDevOptions(Options *options)
         options->dev.lastStage = ccsCodegen;
     }
     else if (options->dev.dumpMode != dmpNONE) {
-        options->dev.lastStage = MIN(options->dev.lastStage, ccsMemoryMgmt);
+        options->dev.lastStage = MIN(options->dev.lastStage, ccsLower);
     }
 }
 
@@ -371,8 +374,7 @@ bool parseCommandLineOptions(
                  "-DAPP_VERSION=\\\"0.0.1\\\""),
             Def("[]")),
         Opt(Name("with-mm"),
-            Help("Compile program with builtin (RC) memory manager"),
-            Def("false")),
+            Help("Compile program with builtin (RC) memory manager")),
         Use(cmdArrayArgument,
             Name("c-define"),
             Help("Adds a compiler definition that will be parsed to the C "
@@ -445,6 +447,8 @@ bool parseCommandLineOptions(
     else if (cmd->id == CMD_build) {
         options->cmd = cmdBuild;
         UnloadCmd(cmd, options, BUILD_CMD_LAYOUT);
+        if (options->libDir == NULL)
+            options->libDir = makeString(strings, getenv("CXY_STDLIB_DIR"));
     }
 
     cstring str = getGlobalString(cmd, 5);

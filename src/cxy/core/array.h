@@ -37,7 +37,10 @@ static inline void pushStringOnDynArray(DynArray *array, const char *str)
 void resizeDynArray(DynArray *, size_t);
 void clearDynArray(DynArray *);
 void freeDynArray(DynArray *);
+void *popDynArray(DynArray *);
 #define dynArrayAt(T, arr, idx) ((T)(arr)->elems)[(idx)]
+#define dynArrayEmpty(arr) ((arr)->size == 0)
+#define dynArrayBack(T, arr) dynArrayAt(T, (arr), (arr)->size - 1)
 
 #ifdef __cplusplus
 }

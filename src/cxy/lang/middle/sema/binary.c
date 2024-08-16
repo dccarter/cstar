@@ -47,7 +47,7 @@ static bool checkClassBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     cstring name = getOpOverloadName(node->binaryExpr.op);
-    const Type *target = stripPointer(node->binaryExpr.lhs->type);
+    const Type *target = stripPointerOrReference(node->binaryExpr.lhs->type);
     const NamedTypeMember *overload =
         findOverloadMemberUpInheritanceChain(target, name);
 
@@ -59,6 +59,23 @@ static bool checkClassBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
 
     if (overload == NULL)
         return false;
+
+    const AstNode *decl = nodeIs(overload->decl, GenericDecl)
+                              ? overload->decl->genericDecl.decl
+                              : overload->decl;
+    const AstNode *param = decl->funcDecl.signature->params;
+    if (nodeIsThisParam(param))
+        param = param->next;
+
+    if (nodeIs(param->funcParam.type, ReferenceType) && !isReferenceType(rhs) &&
+        isReferable(rhs)) {
+        node->binaryExpr.rhs = makeReferenceOfExpr(ctx->pool,
+                                                   &node->binaryExpr.rhs->loc,
+                                                   flgNone,
+                                                   node->binaryExpr.rhs,
+                                                   NULL,
+                                                   NULL);
+    }
 
     transformToMemberCallExpr(
         visitor, node, node->binaryExpr.lhs, name, node->binaryExpr.rhs);
@@ -91,6 +108,43 @@ static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
         node->type = ERROR_TYPE(ctx);
         return;
     }
+    //
+    //    if (isPointerType(left) && !isPointerType(right)) {
+    //        node->binaryExpr.rhs = makePointerOfExpr(
+    //            ctx->pool,
+    //            &node->binaryExpr.rhs->loc,
+    //            node->binaryExpr.rhs->flags,
+    //            node->binaryExpr.rhs,
+    //            NULL,
+    //            makePointerType(ctx->types, right, right->flags & flgConst));
+    //    }
+    //    else if (isReferenceType(left) && !isReferenceType(right)) {
+    //        node->binaryExpr.rhs = makeReferenceOfExpr(
+    //            ctx->pool,
+    //            &node->binaryExpr.rhs->loc,
+    //            node->binaryExpr.rhs->flags,
+    //            node->binaryExpr.rhs,
+    //            NULL,
+    //            makeReferenceType(ctx->types, right, right->flags &
+    //            flgConst));
+    //    }
+
+    const AstNode *decl = nodeIs(overload->decl, GenericDecl)
+                              ? overload->decl->genericDecl.decl
+                              : overload->decl;
+    const AstNode *param = decl->funcDecl.signature->params;
+    if (nodeIsThisParam(param))
+        param = param->next;
+
+    if (nodeIs(param->funcParam.type, ReferenceType) &&
+        !isReferenceType(right) && isReferable(right)) {
+        node->binaryExpr.rhs = makeReferenceOfExpr(ctx->pool,
+                                                   &node->binaryExpr.rhs->loc,
+                                                   flgNone,
+                                                   node->binaryExpr.rhs,
+                                                   NULL,
+                                                   NULL);
+    }
 
     transformToMemberCallExpr(
         visitor, node, node->binaryExpr.lhs, name, node->binaryExpr.rhs);
@@ -122,7 +176,7 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
                              cStringDecl,
                              NULL,
                              cStringDecl->type),
-            makeFieldExpr(ctx->pool, &lhs->loc, S_s, flgNone, lhs, NULL),
+            makeFieldExpr(ctx->pool, &lhs->loc, S_s, flgNone, lhs, NULL, NULL),
             NULL,
             cStringDecl->type);
         left_ = stripAll(checkType(visitor, node->binaryExpr.lhs));

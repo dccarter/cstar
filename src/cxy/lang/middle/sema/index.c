@@ -16,7 +16,7 @@ static void checkIndexOperator(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     const Type *target = stripAll(node->indexExpr.target->type);
-    csAssert0(!isParentAssignExpr(node));
+    // csAssert0(!isParentAssignExpr(node));
 
     const Type *func = findStructMemberType(target, S_IndexOverload);
     if (func == NULL) {
@@ -59,7 +59,7 @@ void checkIndexExpr(AstVisitor *visitor, AstNode *node)
     }
 
     node->flags |= node->indexExpr.target->flags;
-    const Type *unwrapped = unwrapType(target, NULL),
+    const Type *unwrapped = stripReference(unwrapType(target, NULL)),
                *stripped = stripAll(target);
     if (typeIs(stripped, Array)) {
         if (!isIntegerType(index)) {
@@ -112,7 +112,7 @@ void checkIndexExpr(AstVisitor *visitor, AstNode *node)
             node->type = ERROR_TYPE(ctx);
         }
         else
-            node->type = getPrimitiveType(ctx->types, prtChar);
+            node->type = getPrimitiveType(ctx->types, prtCChar);
     }
     else {
         logError(ctx->L,
