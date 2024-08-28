@@ -56,18 +56,18 @@ static AstNode *makeVTableMemberInit(TypingContext *ctx,
                                      AstNode *vTable)
 {
     const Type *type_ = makePointerType(ctx->types, vTable->type, flgNone);
-    return makeAddrOffExpr(ctx->pool,
-                           &node->loc,
-                           flgConst,
-                           makeResolvedIdentifier(ctx->pool,
-                                                  &node->loc,
-                                                  vTable->_namedNode.name,
-                                                  0,
-                                                  vTable,
-                                                  NULL,
-                                                  vTable->type),
-                           NULL,
-                           type_);
+    return makePointerOfExpr(ctx->pool,
+                             &node->loc,
+                             flgConst,
+                             makeResolvedIdentifier(ctx->pool,
+                                                    &node->loc,
+                                                    vTable->_namedNode.name,
+                                                    0,
+                                                    vTable,
+                                                    NULL,
+                                                    vTable->type),
+                             NULL,
+                             type_);
 }
 
 static AstNode *makeVTableMember(TypingContext *ctx,
@@ -95,7 +95,7 @@ static AstNode *getVTableDefault(AstNode *node)
     AstNode *member = getVTableMember(node);
     csAssert0(nodeIs(member, FieldDecl));
     AstNode *value = member->structField.value;
-    csAssert0(nodeIs(value, AddressOf));
+    csAssert0(nodeIs(value, PointerOf));
     value = value->unaryExpr.operand;
     csAssert0(nodeIs(value, Identifier));
     value = value->ident.resolvesTo;
@@ -143,8 +143,18 @@ static void inheritanceChainBuildVTableType(TypingContext *ctx,
                                             AstNode *node)
 {
     AstNode *base = node->classDecl.base;
-    if (base != NULL)
-        inheritanceChainBuildVTableType(ctx, members, init, base);
+    if (base != NULL) {
+        inheritanceChainBuildVTableType(ctx, members, init, resolvePath(base));
+        AstNode *field = init->first;
+        for (; field; field = field->next) {
+            AstNode *member =
+                findMemberDeclInType(node->type, field->_namedNode.name);
+            if (nodeIs(member, FuncDecl)) {
+                field->fieldExpr.value =
+                    makeMemberFunctionRef(ctx, node, member);
+            }
+        }
+    }
 
     if (!hasFlag(node, Virtual))
         return;
@@ -167,13 +177,19 @@ static void inheritanceChainBuildVTableType(TypingContext *ctx,
                 NULL,
                 NULL));
 
-        insertAstNode(init,
-                      makeFieldExpr(ctx->pool,
-                                    &member->loc,
-                                    member->_namedNode.name,
-                                    flgConst,
-                                    makeMemberFunctionRef(ctx, node, member),
-                                    NULL));
+        insertAstNode(
+            init,
+            makeFieldExpr(
+                ctx->pool,
+                &member->loc,
+                member->_namedNode.name,
+                flgConst,
+                member->funcDecl.body
+                    ? makeMemberFunctionRef(ctx, node, member)
+                    : makeNullLiteral(
+                          ctx->pool, &member->loc, NULL, member->type),
+                member,
+                NULL));
     }
 }
 
@@ -235,18 +251,24 @@ AstNode *inheritanceBuildVTable(TypingContext *ctx, AstNode *node)
     for (; member; member = member->next) {
         AstNode *func =
             findMemberDeclInType(node->type, member->_namedNode.name);
-        if (func == NULL) {
-            insertAstNode(&value, deepCloneAstNode(ctx->pool, member));
+        if (func != NULL) {
+            // Change the function we resolve to
+            insertAstNode(
+                &value,
+                makeFieldExpr(
+                    ctx->pool,
+                    &member->loc,
+                    member->_namedNode.name,
+                    member->flags,
+                    func->funcDecl.body
+                        ? makeMemberFunctionRef(ctx, node, func)
+                        : makeNullLiteral(
+                              ctx->pool, &func->loc, NULL, func->type),
+                    member,
+                    NULL));
         }
         else {
-            // Change the function we resolve to
-            insertAstNode(&value,
-                          makeFieldExpr(ctx->pool,
-                                        &member->loc,
-                                        member->_namedNode.name,
-                                        member->flags,
-                                        makeMemberFunctionRef(ctx, node, func),
-                                        NULL));
+            insertAstNode(&value, deepCloneAstNode(ctx->pool, member));
         }
     }
 

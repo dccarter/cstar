@@ -1,0 +1,82 @@
+module logger
+
+import { Time } from "./time.cxy"
+
+enum Level {
+    TRACE,
+    DEBUG,
+    INFO,
+    WARNING,
+    ERROR
+}
+
+func levelToString(os: &OutputStream, level: Level) {
+    switch (level) {
+        case .INFO => os << "INF"
+        case .DEBUG => os << "DBG"
+        case .TRACE => os << "TRC"
+        case .WARNING => os << "WRN"
+        case .ERROR => os << "ERR"
+    }
+}
+
+struct Repeat {
+    - c: char
+    - count: u64
+    func `init`(c: char, count: u64) { this.c = c; this.count = count }
+
+    @inline
+    const func `str`(os: &OutputStream) {
+        for (const i: 0..count)
+            os << c
+    }
+}
+
+struct FixedWidth {
+    - s: CString
+    - count: u64
+    func `init`(s: CString, count: u64) {
+        this.s = s
+        this.count = count
+    }
+
+    @inline
+    const func `str`(os: &OutputStream) {
+        os << s.substr(0:u64, <i64>min(count, s.size()))
+        if (s.size() < count)
+            os << Repeat( ' ', count - s.size() )
+    }
+}
+
+class Logger {
+    - os: OutputStream;
+    - _level: Level = .DEBUG;
+
+    func `init`() {
+        os = stdout
+    }
+
+    func setOutputStream(os: OutputStream) => this.os = os
+    func level(lvl: Level) => _level = lvl
+    const func level() => _level
+
+    func log(lvl: Level, tag: string) : &OutputStream {
+        Time().format(LOG_TIME_FMT!, &os)
+        stdout << " "
+
+        levelToString(&os, lvl)
+
+        os << " " << FixedWidth(tag, 10) << " "
+
+        return &os
+    }
+}
+
+pub var __L = Logger();
+
+macro __LOG(LVL, MSG) { if (LVL! >= logger.__L.level()) lshift!(logger.__L.log(LVL!, LOG_TAG), MSG!) << '\n' }
+macro TRC(MSG) =( __LOG!(logger.Level.TRACE, MSG!) )
+macro DBG(MSG) =( __LOG!(logger.Level.DEBUG, MSG!) )
+macro INF(MSG) =( __LOG!(logger.Level.INFO, MSG!) )
+macro WRN(MSG) =( __LOG!(logger.Level.WARNING, MSG!) )
+macro ERR(MSG) =( __LOG!(logger.Level.ERROR, MSG!) )

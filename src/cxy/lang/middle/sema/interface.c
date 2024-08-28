@@ -130,7 +130,7 @@ void checkInterfaceDecl(AstVisitor *visitor, AstNode *node)
     member = node->interfaceDecl.members;
     for (u64 i = 0; member; member = member->next, i++) {
         if (member->funcDecl.this_) {
-            member->funcDecl.this_->type = makePointerType(
+            member->funcDecl.this_->type = makeReferenceType(
                 ctx->types, node->type, member->flags & flgConst);
         }
     }

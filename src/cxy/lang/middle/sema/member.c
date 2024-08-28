@@ -103,17 +103,29 @@ void checkMemberExpr(AstVisitor *visitor, AstNode *node)
             node->type = ERROR_TYPE(ctx);
         }
         if (member->ident.super) {
-            node->memberExpr.target =
-                makeCastExpr(ctx->pool,
-                             &target->loc,
-                             target->flags,
-                             target,
-                             makeTypeReferenceNode(
-                                 ctx->pool,
-                                 member->ident.resolvesTo->parentScope->type,
-                                 &target->loc),
-                             NULL,
-                             member->ident.resolvesTo->parentScope->type);
+            const Type *type = makeReferenceType(
+                ctx->types,
+                member->ident.resolvesTo->parentScope->type,
+                member->ident.resolvesTo->parentScope->type->flags);
+
+            if (isClassType(target->type)) {
+                target = makeReferenceOfExpr(
+                    ctx->pool,
+                    &target->loc,
+                    target->flags,
+                    target,
+                    NULL,
+                    makeReferenceType(ctx->types, target->type, target->flags));
+            }
+
+            node->memberExpr.target = makeCastExpr(
+                ctx->pool,
+                &target->loc,
+                target->flags,
+                target,
+                makeTypeReferenceNode(ctx->pool, type, &target->loc),
+                NULL,
+                type);
             member->ident.super--;
         }
     }

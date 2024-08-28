@@ -5,6 +5,7 @@
 #include "context.h"
 
 #include "lang/frontend/flag.h"
+#include "lang/frontend/ttable.h"
 #include "lang/frontend/visitor.h"
 
 #define CREATE_BINARY_OP(ctx, OP, lhs, rhs, ...)                               \
@@ -92,10 +93,10 @@ void generateBinaryExpr(AstVisitor *visitor, AstNode *node)
     if (left->type != right->type &&
         !(typeIs(left->type, Pointer) || typeIs(left->type, Func))) {
         // implicitly cast to the bigger type
-        const Type *leftType =
-            typeIs(left->type, Enum) ? left->type->tEnum.base : left->type;
-        const Type *rightType =
-            typeIs(right->type, Enum) ? right->type->tEnum.base : right->type;
+        const Type *leftType = unwrapType(left->type, NULL);
+        leftType = typeIs(leftType, Enum) ? leftType->tEnum.base : leftType;
+        const Type *rightType = unwrapType(right->type, NULL);
+        rightType = typeIs(rightType, Enum) ? rightType->tEnum.base : rightType;
 
         if (isPrimitiveTypeBigger(leftType, rightType)) {
             rhs = ctx.generateCastExpr(visitor, leftType, right);

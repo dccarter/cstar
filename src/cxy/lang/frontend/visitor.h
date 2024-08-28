@@ -68,6 +68,7 @@ void astModifierInit(AstModifier *ctx, AstNode *node);
 void astModifierNext(AstModifier *ctx, AstNode *node);
 void astModifierAdd(AstModifier *ctx, AstNode *node);
 void astModifierAddAsNext(AstModifier *ctx, AstNode *node);
+void astModifierAddHead(AstModifier *ctx, AstNode *node);
 void astModifierRemoveCurrent(AstModifier *ctx);
 
 #ifdef __cplusplus

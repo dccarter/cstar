@@ -216,6 +216,13 @@ static void visitPointerType(ConstAstVisitor *visitor, const AstNode *node)
     nodeToBinary(visitor, node->pointerType.pointed);
 }
 
+static void visitReferenceType(ConstAstVisitor *visitor, const AstNode *node)
+{
+    nodePackHeader(visitor, node);
+
+    nodeToBinary(visitor, node->referenceType.referred);
+}
+
 static void visitArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     nodePackHeader(visitor, node);
@@ -585,6 +592,7 @@ bool binaryEncodeAstNode(struct msgpack_sbuffer *sbuf,
         [astAutoType] = visitHeaderOnly,
         [astPrimitiveType] = visitPrimitiveType,
         [astPointerType] = visitPointerType,
+        [astReferenceType] = visitReferenceType,
         [astArrayExpr] = visitArrayExpr,
         [astMemberExpr] = visitMemberExpr,
         [astRangeExpr] = visitRangeExpr,

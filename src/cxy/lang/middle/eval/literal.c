@@ -26,6 +26,24 @@ f64 nodeGetNumericLiteral(const AstNode *node)
     }
 }
 
+i64 getEnumLiteralValue(const AstNode *node)
+{
+    csAssert0(typeIs(node->type, Enum));
+    cstring name = NULL;
+    if (nodeIs(node, Path) && node->path.elements->next)
+        name = node->path.elements->next->pathElement.name;
+    else if (nodeIs(node, MemberExpr) &&
+             nodeIs(node->memberExpr.member, Identifier))
+        name = node->memberExpr.member->ident.value;
+    else
+        unreachable("UNSUPPORTED");
+
+    const EnumOptionDecl *option = findEnumOption(node->type, name);
+    csAssert0(option);
+
+    return option->value;
+}
+
 void nodeSetNumericLiteral(AstNode *node, AstNode *lhs, AstNode *rhs, f64 value)
 {
     switch (lhs->tag) {

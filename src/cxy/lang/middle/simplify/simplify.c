@@ -2,7 +2,9 @@
 // Created by Carter Mbotho on 2024-01-10.
 //
 
-#include "simplify.h"
+#include "../defer.h"
+#include "../n2e.h"
+
 #include "driver/driver.h"
 #include "lang/frontend/ast.h"
 #include "lang/frontend/capture.h"
@@ -12,28 +14,23 @@
 #include "lang/frontend/visitor.h"
 #include "lang/middle/builtins.h"
 
-typedef struct {
-    AstNode *node;
-    AstNode *target;
-} NodeToExternDecl;
-
 typedef struct SimplifyContext {
     Log *L;
     TypeTable *types;
     StrPool *strings;
     MemPool *pool;
     AstModifier root;
-    HashTable n2e;
+    AstModifier block;
+    N2eContext n2e;
     AstNodeList init;
     AstNodeList *startup;
+    bool traceMemory;
     union {
         struct {
             AstNode *currentFunction;
-            AstModifier block;
         };
         struct {
             AstNode *currentFunction;
-            AstModifier block;
         } stack;
     };
 } SimplifyContext;
@@ -49,10 +46,10 @@ static bool compareNodeToExternDecl(const void *lhs, const void *rhs)
 
 static bool isVirtualDispatch(const AstNode *target, const AstNode *member)
 {
-    if (!isClassOrStructType(target->type))
+    const Type *type = stripReference(target->type);
+    if (!isClassOrStructType(type))
         return false;
-    AstNode *decl = getTypeDecl(target->type),
-            *func = getTypeDecl(member->type);
+    AstNode *decl = getTypeDecl(type), *func = getTypeDecl(member->type);
 
     return hasFlag(decl, Virtual) && hasFlag(func, Virtual);
 }
@@ -66,13 +63,21 @@ static AstNode *virtualDispatch(SimplifyContext *ctx,
             *vTable = decl->classDecl.members,
             *vTableFunc = findMemberDeclInType(vTable->type->pointer.pointed,
                                                member->ident.value);
+    AstNode *base = NULL;
+    if (nodeIs(target, ReferenceOf)) {
+        base = deepCloneAstNode(ctx->pool, target->unaryExpr.operand);
+    }
+    else {
+        base = deepCloneAstNode(ctx->pool, target);
+    }
+
     return makeMemberExpr(ctx->pool,
                           &target->loc,
                           flgConst,
                           makeMemberExpr(ctx->pool,
                                          &target->loc,
                                          flgConst,
-                                         deepCloneAstNode(ctx->pool, target),
+                                         base,
                                          makeResolvedIdentifier(ctx->pool,
                                                                 &target->loc,
                                                                 S_vtable,
@@ -91,47 +96,6 @@ static AstNode *virtualDispatch(SimplifyContext *ctx,
                                                  vTableFunc->type),
                           NULL,
                           vTableFunc->type);
-}
-
-static void addNodeToExternDecl(SimplifyContext *ctx,
-                                AstNode *node,
-                                AstNode *target)
-{
-    if (nodeIs(node, FuncDecl) ||
-        (hasFlag(node, TopLevelDecl) && nodeIs(node, VarDecl))) //
-    {
-        insertInHashTable(
-            &ctx->n2e,
-            &(NodeToExternDecl){.node = node, .target = target ?: node},
-            hashPtr(hashInit(), node),
-            sizeof(NodeToExternDecl),
-            compareNodeToExternDecl);
-    }
-}
-
-static NodeToExternDecl *getNodeToExternDecl(SimplifyContext *ctx,
-                                             AstNode *decl)
-{
-    return findInHashTable(&ctx->n2e,
-                           &(NodeToExternDecl){.node = decl, .target = decl},
-                           hashPtr(hashInit(), decl),
-                           sizeof(NodeToExternDecl),
-                           compareNodeToExternDecl);
-}
-
-static AstNode *makeExternReferenceToBuiltin(SimplifyContext *ctx,
-                                             cstring builtin)
-{
-    AstNode *target = findBuiltinDecl(builtin);
-    csAssert0(target);
-    AstNode *decl = makeAstNode(ctx->pool,
-                                &target->loc,
-                                &(AstNode){.tag = astExternDecl,
-                                           .type = target->type,
-                                           .flags = target->flags,
-                                           .externDecl.func = target});
-    addNodeToExternDecl(ctx, target, decl);
-    return decl;
 }
 
 static void simplifyForRangeStmt(AstVisitor *visitor, AstNode *node)
@@ -208,7 +172,7 @@ static void simplifyForArrayStmt(AstVisitor *visitor, AstNode *node)
     AstNode *range = node->forStmt.range, *var = node->forStmt.var,
             *body = node->forStmt.body;
     const Type *elem = typeIs(range->type, String)
-                           ? getPrimitiveType(ctx->types, prtChar)
+                           ? getPrimitiveType(ctx->types, prtCChar)
                            : range->type->array.elementType;
 
     AstNode *index =
@@ -361,8 +325,14 @@ static void simplifyCastExpression(SimplifyContext *ctx,
                                    const Type *type)
 {
     const Type *from = unwrapType(node->type, NULL);
-    if (type == from || typeIs(type, Func))
+
+#if defined(LLVM_BACKEND)
+    if ((type == from) || typeIs(type, Func))
         return;
+#else
+    if ((type == from) && !typeIs(type, Func))
+        return;
+#endif
 
     if (!typeIs(from, Union)) {
         AstNode *expr = deepCloneAstNode(ctx->pool, node);
@@ -463,7 +433,7 @@ static bool isRedundantExpression(AstNode *node)
     case astUnaryExpr: {
         Operator op = node->unaryExpr.op;
         return op != opPreInc && op != opPreDec && op != opPostInc &&
-               op != opPostDec &&
+               op != opPostDec && op != opDelete &&
                isRedundantExpression(node->unaryExpr.operand);
     }
 
@@ -508,9 +478,18 @@ static void visitProgram(AstVisitor *visitor, AstNode *node)
 
     if (isBuiltinsInitialized()) {
         insertAstNode(&externals,
-                      makeExternReferenceToBuiltin(ctx, S_sptr_ref));
+                      n2eMakeExternReferenceToBuiltin(&ctx->n2e, S_sptr_ref));
         insertAstNode(&externals,
-                      makeExternReferenceToBuiltin(ctx, S_sptr_drop));
+                      n2eMakeExternReferenceToBuiltin(&ctx->n2e, S_sptr_drop));
+
+        if (ctx->traceMemory) {
+            insertAstNode(
+                &externals,
+                n2eMakeExternReferenceToBuiltin(&ctx->n2e, S_sptr_get_trace));
+            insertAstNode(
+                &externals,
+                n2eMakeExternReferenceToBuiltin(&ctx->n2e, S_sptr_drop_trace));
+        }
     }
 
     for (; decl; decl = decl->next) {
@@ -566,11 +545,17 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
 
     call->type = callee->type;
 
-    if (!typeIs(target->type, Pointer) && !isClassType(target->type)) {
-        target = makeAddrOffExpr(
+    if (isReferenceType(this->type) && isClassType(target->type)) {
+        target = makeReferenceOfExpr(
             ctx->pool, &target->loc, this->flags, target, NULL, this->type);
     }
-    target->flags |= flgTransient;
+    else if (isPointerType(this->type) && !(typeIs(target->type, Pointer) ||
+                                            typeIs(target->type, Reference))) {
+        target = makePointerOfExpr(
+            ctx->pool, &target->loc, this->flags, target, NULL, this->type);
+    }
+
+    target->flags |= flgReference;
     if (isVirtualDispatch(target, call)) {
         node->callExpr.callee = virtualDispatch(ctx, target, call);
         target->next = args;
@@ -587,21 +572,24 @@ static void visitIdentifier(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
     AstNode *target = node->ident.resolvesTo;
-    if (nodeIs(target, FuncDecl) ||
+    if (nodeIs(target, FuncDecl) || nodeIs(target, ExternDecl) ||
         (nodeIs(target, VarDecl) && hasFlag(target, TopLevelDecl))) //
     {
-        NodeToExternDecl *f2e = getNodeToExternDecl(ctx, target);
+        NodeToExternDecl *f2e = n2eGetNodeToExternDecl(&ctx->n2e, target);
         if (f2e == NULL) {
             // new function declaration added, add extern
-            AstNode *decl = makeAstNode(ctx->pool,
-                                        &target->loc,
-                                        &(AstNode){.tag = astExternDecl,
-                                                   .type = target->type,
-                                                   .flags = target->flags,
-                                                   .externDecl.func = target});
+            AstNode *decl =
+                nodeIs(target, ExternDecl)
+                    ? deepCloneAstNode(ctx->pool, target)
+                    : makeAstNode(ctx->pool,
+                                  &target->loc,
+                                  &(AstNode){.tag = astExternDecl,
+                                             .type = target->type,
+                                             .flags = target->flags,
+                                             .externDecl.func = target});
 
-            addNodeToExternDecl(ctx, target, decl);
-            astModifierAdd(&ctx->root, decl);
+            n2eAddNodeToExternDecl(&ctx->n2e, target, decl);
+            astModifierAddHead(&ctx->root, decl);
             node->ident.resolvesTo = decl;
         }
         else {
@@ -691,6 +679,101 @@ static void visitStmtExpr(AstVisitor *visitor, AstNode *node)
     }
 }
 
+static void visitIndexExpr(AstVisitor *visitor, AstNode *node)
+{
+    SimplifyContext *ctx = getAstVisitorContext(visitor);
+    astVisitFallbackVisitAll(visitor, node);
+    AstNode *index = node->indexExpr.index;
+    if (!nodeIsLeftValue(index) && !isLiteralExpr(index)) {
+        AstNode *var = makeVarDecl(ctx->pool,
+                                   &index->loc,
+                                   flgMoved,
+                                   makeAnonymousVariable(ctx->strings, "_i"),
+                                   NULL,
+                                   index,
+                                   NULL,
+                                   index->type);
+        node->indexExpr.index = makeResolvedIdentifier(ctx->pool,
+                                                       &index->loc,
+                                                       var->_namedNode.name,
+                                                       0,
+                                                       var,
+                                                       NULL,
+                                                       index->type);
+        astModifierAdd(&ctx->block, var);
+    }
+}
+
+static void visitMemberExpr(AstVisitor *visitor, AstNode *node)
+{
+    SimplifyContext *ctx = getAstVisitorContext(visitor);
+    astVisitFallbackVisitAll(visitor, node);
+    if (!nodeIs(node, MemberExpr))
+        return;
+
+    AstNode *target = node->memberExpr.target;
+    if (!nodeIsLeftValue(target) && !nodeIs(target, TypeRef)) {
+        AstNode *var = makeVarDecl(ctx->pool,
+                                   &target->loc,
+                                   flgMoved,
+                                   makeAnonymousVariable(ctx->strings, "_i"),
+                                   NULL,
+                                   target,
+                                   NULL,
+                                   target->type);
+        node->memberExpr.target = makeResolvedIdentifier(ctx->pool,
+                                                         &target->loc,
+                                                         var->_namedNode.name,
+                                                         0,
+                                                         var,
+                                                         NULL,
+                                                         target->type);
+        astModifierAdd(&ctx->block, var);
+    }
+}
+
+static void visitReferenceOfExpr(AstVisitor *visitor, AstNode *node)
+{
+    SimplifyContext *ctx = getAstVisitorContext(visitor);
+    astVisitFallbackVisitAll(visitor, node);
+    AstNode *operand = node->unaryExpr.operand;
+    if (!nodeIsLeftValue(operand)) {
+        AstNode *var = makeVarDecl(ctx->pool,
+                                   &operand->loc,
+                                   flgMoved,
+                                   makeAnonymousVariable(ctx->strings, "_i"),
+                                   NULL,
+                                   operand,
+                                   NULL,
+                                   operand->type);
+        node->unaryExpr.operand = makeResolvedIdentifier(ctx->pool,
+                                                         &operand->loc,
+                                                         var->_namedNode.name,
+                                                         0,
+                                                         var,
+                                                         NULL,
+                                                         operand->type);
+        astModifierAdd(&ctx->block, var);
+    }
+}
+
+static void visitStructExpr(AstVisitor *visitor, AstNode *node)
+{
+    SimplifyContext *ctx = getAstVisitorContext(visitor);
+    AstNode *field = node->structExpr.fields;
+    for (; field; field = field->next) {
+        AstNode *target =
+            findMemberDeclInType(node->type, field->fieldExpr.name);
+        csAssert0(target);
+        field->fieldExpr.index = target->structField.index;
+        const Type *left = unwrapType(target->type, NULL),
+                   *right = unwrapType(field->fieldExpr.value->type, NULL);
+        if (left != right || typeIs(left, Func))
+            simplifyCastExpression(ctx, field->fieldExpr.value, left);
+        astVisit(visitor, field->fieldExpr.value);
+    }
+}
+
 static void visitStructDecl(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
@@ -703,7 +786,7 @@ static void visitStructDecl(AstVisitor *visitor, AstNode *node)
         next = next->next;
         member->next = NULL;
         if (nodeIs(member, FieldDecl)) {
-            member->fieldExpr.index = i++;
+            member->structField.index = i++;
             insertAstNode(&fields, member);
             continue;
         }
@@ -730,6 +813,7 @@ static void visitForStmt(AstVisitor *visitor, AstNode *node)
 static void visitBlockStmt(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
+    AstModifier block = ctx->block;
     astModifierInit(&ctx->block, node);
     AstNode *stmt = node->blockStmt.stmts, *last = node->blockStmt.last;
 
@@ -748,8 +832,8 @@ static void visitBlockStmt(AstVisitor *visitor, AstNode *node)
                     &stmt->loc,
                     "removing this statement because it is redundant",
                     NULL);
-                astModifierRemoveCurrent(&ctx->block);
-                continue;
+                //                astModifierRemoveCurrent(&ctx->block);
+                //                continue;
             }
         }
         last = stmt;
@@ -759,6 +843,7 @@ static void visitBlockStmt(AstVisitor *visitor, AstNode *node)
         last->flags |= flgBlockValue;
 
     node->blockStmt.last = last;
+    ctx->block = block;
 }
 
 void visitIfStmt(AstVisitor *visitor, AstNode *node)
@@ -787,11 +872,21 @@ static void visitFuncDecl(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
     ctx->currentFunction = node;
-    addNodeToExternDecl(ctx, node, node);
+    n2eAddNodeToExternDecl(&ctx->n2e, node, node);
     if (node->funcDecl.this_) {
         node->funcDecl.signature->params = node->funcDecl.this_;
     }
-
+    AstNode *body = node->funcDecl.body;
+    if (nodeIs(body, ExprStmt)) {
+        AstNode *ret = makeReturnAstNode(ctx->pool,
+                                         &body->loc,
+                                         flgNone,
+                                         body->exprStmt.expr,
+                                         NULL,
+                                         body->type);
+        body->tag = astBlockStmt;
+        body->blockStmt.stmts = ret;
+    }
     astVisitFallbackVisitAll(visitor, node);
     ctx->currentFunction = NULL;
 }
@@ -799,13 +894,42 @@ static void visitFuncDecl(AstVisitor *visitor, AstNode *node)
 static void visitVarDecl(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
-    addNodeToExternDecl(ctx, node, node);
+    n2eAddNodeToExternDecl(&ctx->n2e, node, node);
     astVisitFallbackVisitAll(visitor, node);
     AstNode *init = node->varDecl.init;
-    if (!hasFlag(node, TopLevelDecl) || init == NULL) {
+    if (!hasFlag(node, TopLevelDecl)) {
+        if (init == NULL) {
+            AstNode *zeroInit = makeBackendCallExpr(
+                ctx->pool,
+                &node->loc,
+                flgNone,
+                bfiZeromem,
+                makePointerOfExpr(
+                    ctx->pool,
+                    &node->loc,
+                    flgNone,
+                    makeResolvedIdentifier(ctx->pool,
+                                           &node->loc,
+                                           node->varDecl.name,
+                                           0,
+                                           node,
+                                           NULL,
+                                           node->type),
+                    NULL,
+                    makePointerType(ctx->types, node->type, flgNone)),
+                makeVoidType(ctx->types));
+            astModifierAddAsNext(&ctx->block,
+                                 makeExprStmt(ctx->pool,
+                                              &node->loc,
+                                              flgNone,
+                                              zeroInit,
+                                              NULL,
+                                              makeVoidType(ctx->types)));
+        }
         return;
     }
-    else if (nodeIs(init, CallExpr)) {
+
+    if (!isStaticExpr(init)) {
         if (typeIs(init->type, Class)) {
             node->varDecl.init =
                 makeNullLiteral(ctx->pool, &init->loc, NULL, init->type);
@@ -815,26 +939,38 @@ static void visitVarDecl(AstVisitor *visitor, AstNode *node)
         }
         // just a list of assignment expressions
         insertAstNode(&ctx->init,
-                      makeAssignExpr(ctx->pool,
-                                     &node->loc,
-                                     node->flags,
-                                     makeResolvedIdentifier(ctx->pool,
-                                                            &node->loc,
-                                                            node->varDecl.name,
-                                                            0,
-                                                            node,
-                                                            NULL,
-                                                            node->type),
-                                     opAssign,
-                                     init,
-                                     NULL,
-                                     init->type));
+                      makeExprStmt(ctx->pool,
+                                   &node->loc,
+                                   flgNone,
+                                   makeAssignExpr(ctx->pool,
+                                                  &node->loc,
+                                                  node->flags,
+                                                  makeResolvedIdentifier(
+                                                      ctx->pool,
+                                                      &node->loc,
+                                                      node->varDecl.name,
+                                                      0,
+                                                      node,
+                                                      NULL,
+                                                      node->type),
+                                                  opAssign,
+                                                  init,
+                                                  NULL,
+                                                  init->type),
+                                   NULL,
+                                   makeVoidType(ctx->types)));
     }
 }
 
 static void createModuleInit(SimplifyContext *ctx, AstNode *program)
 {
-    cstring name = makeString(ctx->strings, S___init);
+    cstring name =
+        program->program.module
+            ? makeStringConcat(ctx->strings,
+                               S___init,
+                               "_",
+                               program->program.module->moduleDecl.name)
+            : S___init;
     AstNode *func = makeFunctionDecl(
         ctx->pool,
         builtinLoc(),
@@ -843,7 +979,7 @@ static void createModuleInit(SimplifyContext *ctx, AstNode *program)
         makeVoidAstNode(
             ctx->pool, builtinLoc(), flgNone, NULL, makeVoidType(ctx->types)),
         makeBlockStmt(ctx->pool, builtinLoc(), ctx->init.first, NULL, NULL),
-        flgTopLevelDecl | flgPublic,
+        flgTopLevelDecl | flgPublic | flgConstructor,
         NULL,
         NULL);
 
@@ -866,6 +1002,7 @@ static void createModuleInit(SimplifyContext *ctx, AstNode *program)
     getLastAstNode(ext)->next = func;
 }
 
+#ifdef LLVM_BACKEND
 static void simplifyMainModule(SimplifyContext *ctx, AstNode *program)
 {
     const Type *moduleCtorType = makeTupleType(
@@ -889,7 +1026,7 @@ static void simplifyMainModule(SimplifyContext *ctx, AstNode *program)
         AstNode *members = makeIntegerLiteral(
             ctx->pool,
             &init->loc,
-            i,
+            65535 - i,
             makeResolvedIdentifier(
                 ctx->pool,
                 &init->loc,
@@ -946,6 +1083,7 @@ static void simplifyMainModule(SimplifyContext *ctx, AstNode *program)
                       NULL));
     getLastAstNode(program->program.decls)->next = ctors;
 }
+#endif
 
 static void withSavedStack(Visitor func, AstVisitor *visitor, AstNode *node)
 {
@@ -964,7 +1102,9 @@ static AstNode *simplifyCode(CompilerDriver *driver, AstNode *node)
                                .strings = driver->strings,
                                .pool = driver->pool,
                                .startup = &driver->startup,
-                               .n2e = newHashTable(sizeof(NodeToExternDecl))};
+                               .traceMemory = driver->options.withMemoryTrace &&
+                                              isBuiltinsInitialized()};
+    n2eInit(&context.n2e, driver->pool);
 
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context, {
@@ -974,6 +1114,11 @@ static AstNode *simplifyCode(CompilerDriver *driver, AstNode *node)
         [astIdentifier] = visitIdentifier,
         [astCallExpr] = visitCallExpr,
         [astStmtExpr] = visitStmtExpr,
+        [astIndexExpr] = visitIndexExpr,
+        [astStructExpr] = visitStructExpr,
+        [astMemberExpr] = visitMemberExpr,
+        [astReferenceOf] = visitReferenceOfExpr,
+        [astPointerOf] = visitReferenceOfExpr,
         [astForStmt] = visitForStmt,
         [astBlockStmt] = visitBlockStmt,
         [astWhileStmt] = visitWhileStmt,
@@ -988,15 +1133,17 @@ static AstNode *simplifyCode(CompilerDriver *driver, AstNode *node)
     // clang-format on
 
     astVisit(&visitor, node);
-    freeHashTable(&context.n2e);
+    n2eDeinit(&context.n2e);
     if (context.init.first != NULL) {
         // only create initializer when there is data to initialize
         createModuleInit(&context, node);
     }
 
+#ifdef LLVM_BACKEND
     if (hasFlag(node, Main) && driver->startup.first) {
         simplifyMainModule(&context, node);
     }
+#endif
     return node;
 }
 

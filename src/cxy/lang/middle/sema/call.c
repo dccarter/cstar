@@ -20,6 +20,14 @@ static inline u64 getCalleeContextFlags(const AstNode *node)
     return flgNone;
 }
 
+static inline bool isSuperPath(const AstNode *node)
+{
+    if (!nodeIs(node, Path) || node->path.elements->next != NULL)
+        return false;
+    node = node->path.elements;
+    return node->pathElement.isKeyword && node->pathElement.name == S_super;
+}
+
 static void reAssignCalleeType(AstNode *node, const Type *type)
 {
     if (nodeIs(node, Path)) {
@@ -137,7 +145,7 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
 
         if (node->callExpr.args == NULL) {
             node->callExpr.args =
-                shallowCloneAstNode(ctx->pool, param->funcParam.def);
+                deepCloneAstNode(ctx->pool, param->funcParam.def);
             arg = node->callExpr.args;
             param = param->next;
         }
@@ -146,7 +154,7 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
         }
 
         for (; param; param = param->next) {
-            arg->next = copyAstNode(ctx->pool, param->funcParam.def);
+            arg->next = deepCloneAstNode(ctx->pool, param->funcParam.def);
             arg = arg->next;
         }
     }
@@ -172,7 +180,9 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
 
     callee_ = flattenWrappedType(callee_, &flags);
     if (isClassOrStructType(callee_)) {
-        AstNode *symbol = nodeIs(callee, Path) ? resolveAstNode(callee) : NULL;
+        AstNode *symbol = nodeIs(callee, Path)      ? resolveAstNode(callee)
+                          : nodeIs(callee, TypeRef) ? getTypeDecl(callee_)
+                                                    : NULL;
 
         if (isClassOrStructAstNode(symbol)) {
             if (hasFlag(symbol, Abstract)) {
@@ -188,8 +198,15 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
             return;
         }
 
-        flags &= ~flgConst;
-        const Type *overload = findStructMemberType(callee_, S_CallOverload);
+        const Type *overload = NULL;
+        if (isSuperPath(callee)) {
+            overload = findStructMemberType(callee_, S_InitOverload);
+        }
+        else {
+            flags &= ~flgConst;
+            overload = findStructMemberType(callee_, S_CallOverload);
+        }
+
         if (overload) {
             callee_ = overload;
             callee = makeMemberExpr(
@@ -198,7 +215,7 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
                 callee->flags,
                 callee,
                 makeIdentifier(
-                    ctx->pool, &callee->loc, S_CallOverload, 0, NULL, overload),
+                    ctx->pool, &callee->loc, overload->name, 0, NULL, overload),
                 NULL,
                 overload);
             node->callExpr.callee = callee;

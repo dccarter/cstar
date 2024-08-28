@@ -66,6 +66,15 @@ void copyDynArray(DynArray *dst, const DynArray *src)
     }
 }
 
+void *popDynArray(DynArray *arr)
+{
+    if (arr->size > 0) {
+        arr->size--;
+        return (void *)dynArrayElement(arr, arr->size);
+    }
+    return NULL;
+}
+
 void resizeDynArrayExplicit(DynArray *array, size_t size)
 {
     if (size > array->capacity)

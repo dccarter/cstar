@@ -11,6 +11,7 @@
 #include "lang/frontend/strings.h"
 
 #include "core/alloc.h"
+#include "lang/middle/shake/shake.h"
 
 static void evaluateStructMembers(AstVisitor *visitor, AstNode *node)
 {
@@ -30,10 +31,8 @@ static void evaluateStructMembers(AstVisitor *visitor, AstNode *node)
                 else {
                     prev->next = member->next;
                 }
-                member = member->next;
-                if (member == NULL)
-                    break;
-                member->parentScope = node;
+
+                continue;
             }
         }
         prev = member;
@@ -59,7 +58,7 @@ static void evaluateStructMembers(AstVisitor *visitor, AstNode *node)
             if (isClassType(type)) {
                 node->flags |= flgReferenceMembers;
             }
-            else if (isStructType(type) || isStructType(type)) {
+            else if (isStructType(type) || isTupleType(type)) {
                 node->flags |= (type->flags & flgReferenceMembers);
             }
         }
@@ -89,9 +88,75 @@ static void preCheckStructMembers(AstNode *node, NamedTypeMember *members)
     }
 }
 
-bool isExplicitConstructableFrom(Log *L,
-                                 const Type *type,
-                                 const Type *from)
+static bool checkAnonymousStructExpr(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    AstNode *field = node->structExpr.fields;
+    AstNodeList members = {};
+    for (; field; field = field->next) {
+        AstNode *value = field->fieldExpr.value;
+        value->parentScope = field;
+        const Type *type = checkType(visitor, value);
+        if (typeIs(type, Error)) {
+            node->type = type;
+            continue;
+        }
+        insertAstNode(
+            &members,
+            makeStructField(ctx->pool,
+                            &field->loc,
+                            field->fieldExpr.name,
+                            flgNone,
+                            makeTypeReferenceNode(ctx->pool, type, &field->loc),
+                            NULL,
+                            NULL));
+    }
+
+    if (typeIs(node->type, Error))
+        return false;
+    AstNode *decl =
+        makeStructDecl(ctx->pool,
+                       &node->loc,
+                       flgAnonymous,
+                       makeAnonymousVariable(ctx->strings, "__AnonStruct"),
+                       members.first,
+                       NULL,
+                       NULL);
+    AstNode *builtins = createClassOrStructBuiltins(ctx->pool, decl),
+            *builtin = builtins;
+    for (; builtin; builtin = builtin->next) {
+        builtin->funcDecl.this_ =
+            makeFunctionParam(ctx->pool,
+                              &builtin->loc,
+                              S_this,
+                              NULL,
+                              NULL,
+                              node->flags & flgConst,
+                              builtin->funcDecl.signature->params);
+        builtin->parentScope = decl;
+    }
+    insertAstNode(&members, builtins);
+    decl->structDecl.members = members.first;
+    decl->parentScope = ctx->root.program;
+
+    const Type *type = checkType(visitor, decl);
+    if (typeIs(type, Error)) {
+        node->type = type;
+        return false;
+    }
+
+    addTopLevelDeclaration(ctx, decl);
+    node->structExpr.left = makeResolvedPath(ctx->pool,
+                                             &node->loc,
+                                             decl->structDecl.name,
+                                             flgNone,
+                                             decl,
+                                             NULL,
+                                             type);
+    return true;
+}
+
+bool isExplicitConstructableFrom(Log *L, const Type *type, const Type *from)
 {
     type = unwrapType(resolveAndUnThisType(type), NULL);
     if (!isClassOrStructType(type))
@@ -174,6 +239,10 @@ bool evalExplicitConstruction(AstVisitor *visitor,
 void checkStructExpr(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
+    AstNode *left = node->structExpr.left;
+    if (left == NULL && !checkAnonymousStructExpr(visitor, node))
+        return;
+
     const Type *target = checkType(visitor, node->structExpr.left);
     if (typeIs(target, Error)) {
         node->type = ERROR_TYPE(ctx);
@@ -222,6 +291,7 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
         AstNode *value = field->fieldExpr.value;
         value->parentScope = field;
         field->type = member->type;
+        field->fieldExpr.structField = member->decl;
         const Type *type = checkType(visitor, value);
         if (!isTypeAssignableFrom(member->type, type)) {
             logError(ctx->L,
@@ -294,11 +364,13 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
         AstNode *temp = makeAstNode(
             ctx->pool,
             &(prev ?: node)->loc,
-            &(AstNode){.tag = astFieldExpr,
-                       .type = targetField->type,
-                       .flags = targetField->flags,
-                       .fieldExpr = {.name = targetField->structField.name,
-                                     .value = targetField->structField.value}});
+            &(AstNode){
+                .tag = astFieldExpr,
+                .type = targetField->type,
+                .flags = targetField->flags,
+                .fieldExpr = {.name = targetField->structField.name,
+                              .value = deepCloneAstNode(
+                                  ctx->pool, targetField->structField.value)}});
         if (prev)
             prev = prev->next = temp;
         else
@@ -342,7 +414,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
                        members,
                        membersCount,
                        node,
-                       node->flags & flgTypeApplicable | flgReferenceMembers);
+                       node->flags & (flgTypeApplicable | flgReferenceMembers));
     node->type = this;
 
     implementClassOrStructBuiltins(visitor, node);

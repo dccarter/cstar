@@ -15,7 +15,7 @@ static void mangleType(FormatState *state, const Type *type)
     if (flags & flgConst) {
         append(state, "c", 1);
     }
-    type = resolveAndUnThisType(type);
+    type = resolveType(type);
 
     switch (type->tag) {
     case typPrimitive:
@@ -57,6 +57,10 @@ static void mangleType(FormatState *state, const Type *type)
     case typPointer:
         append(state, "P", 1);
         mangleType(state, type->pointer.pointed);
+        break;
+    case typReference:
+        append(state, "R", 1);
+        mangleType(state, type->reference.referred);
         break;
     default:
         append(state, "Z", 1);

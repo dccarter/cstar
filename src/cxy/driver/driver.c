@@ -180,7 +180,8 @@ static inline bool hasDumpEnable(const Options *opts, const AstNode *node)
 
 static bool compileProgram(CompilerDriver *driver,
                            AstNode *program,
-                           const char *fileName)
+                           const char *fileName,
+                           bool mainFile)
 {
     const Options *options = &driver->options;
     bool status = true;
@@ -193,9 +194,9 @@ static bool compileProgram(CompilerDriver *driver,
                    .metadata = {.filePath = fileName, .node = program}});
 
     CompilerStage stage = ccsParse + 1,
-                  maxStage =
-                      (options->cmd == cmdDev ? options->dev.lastStage + 1
-                                              : ccsCOUNT);
+                  maxStage = (options->cmd == cmdDev && mainFile
+                                  ? options->dev.lastStage + 1
+                                  : ccsCOUNT);
     if (hasFlag(program, BuiltinsModule))
         maxStage = MAX(ccsTypeCheck + 1, maxStage);
 
@@ -245,7 +246,7 @@ static bool compileBuiltin(CompilerDriver *driver,
         return false;
 
     program->flags |= flgBuiltinsModule;
-    if (compileProgram(driver, program, fileName)) {
+    if (compileProgram(driver, program, fileName, false)) {
         insertAstNode(&driver->startup,
                       copyAstNode(driver->pool, program->program.decls));
         initializeBuiltins(driver->L, &program->loc, program->type);
@@ -412,7 +413,7 @@ const Type *compileModule(CompilerDriver *driver,
             }
 
             program->flags |= flgImportedModule;
-            if (!compileProgram(driver, program, path))
+            if (!compileProgram(driver, program, path, false))
                 return NULL;
             AstNode *decls = program->program.decls;
             if (nodeIs(decls, ExternDecl) && hasFlag(decls, ModuleInit)) {
@@ -485,7 +486,7 @@ bool compileFile(const char *fileName, CompilerDriver *driver)
     AstNode *program = parseFile(driver, fileName);
     program->flags |= flgMain;
 
-    return compileProgram(driver, program, fileName);
+    return compileProgram(driver, program, fileName, true);
 }
 
 bool compileString(CompilerDriver *driver,
@@ -494,5 +495,5 @@ bool compileString(CompilerDriver *driver,
                    cstring filename)
 {
     AstNode *program = parseString(driver, source, size, filename);
-    return compileProgram(driver, program, filename);
+    return compileProgram(driver, program, filename, true);
 }

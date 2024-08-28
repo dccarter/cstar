@@ -26,6 +26,7 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node);
 AstNode *collectAst(CompilerDriver *driver, AstNode *node);
 AstNode *backendDumpIR(CompilerDriver *driver, AstNode *node);
 AstNode *simplifyAst(CompilerDriver *driver, AstNode *node);
+AstNode *lowerAstNode(CompilerDriver *driver, AstNode *node);
 
 #ifdef __cplusplus
 }

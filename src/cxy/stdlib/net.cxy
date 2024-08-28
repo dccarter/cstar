@@ -97,9 +97,9 @@ func ntohll(x: u64) : u64 {
 // C macros defined with casts cannot be imported
 macro INADDR_ANY 0x00000000:u32
 
-var cxy_DNS_conf: &dns.dns_resolv_conf = null;
-var cxy_DNS_hosts: &dns.dns_hosts = null;
-var cxy_DNS_hints: &dns.dns_hints = null;
+var cxy_DNS_conf: ^dns.dns_resolv_conf = null;
+var cxy_DNS_hosts: ^dns.dns_hosts = null;
+var cxy_DNS_hints: ^dns.dns_hints = null;
 
 pub enum IPVersion {
     Any,
@@ -111,20 +111,20 @@ pub struct Address {
     addr: [i8, 32]
 
     func `init`() {
-        (addr !: &socket.sockaddr).sa_family = <u8>AF_UNSPEC!
+        (addr !: ^socket.sockaddr).sa_family = <u8>AF_UNSPEC!
     }
 
     func `init`(port: u16, mode: IPVersion) {
         if (mode == IPVersion.Any || mode == IPVersion.V4) {
-            var ipv4 = addr !: &inet.sockaddr_in;
+            var ipv4 = addr !: ^inet.sockaddr_in;
             ipv4.sin_family = <u8> AF_INET!
             ipv4.sin_addr.s_addr = htonl(INADDR_ANY!)
             ipv4.sin_port = htons(port)
         }
         else {
-            var ipv6 = addr !: &inet6.sockaddr_in6;
+            var ipv6 = addr !: ^inet6.sockaddr_in6;
             ipv6.sin6_family = <u8>AF_INET6!
-            memcpy(&ipv6.sin6_addr, &inet6.in6addr_any, sizeof!(inet6.in6addr_any))
+            memcpy(ptrof ipv6.sin6_addr, ptrof inet6.in6addr_any, sizeof!(inet6.in6addr_any))
             ipv6.sin6_port = htons(port)
         }
     }
@@ -145,8 +145,8 @@ pub struct Address {
     }
 
     - func parseIpv4(ip: string, port: u16) : bool {
-        var ipv4 = addr !: &inet.sockaddr_in;
-        var rc = arpa.inet_pton(AF_INET!, ip !: &const char, &ipv4.sin_addr);
+        var ipv4 = addr !: ^inet.sockaddr_in;
+        var rc = arpa.inet_pton(AF_INET!, ip !: ^const char, ptrof ipv4.sin_addr);
         if (rc == 1) {
             ipv4.sin_family = <u8>AF_INET!
             ipv4.sin_port = htons(port)
@@ -159,8 +159,8 @@ pub struct Address {
     }
 
     - func parseIpv6(ip: string, port: u16) : bool {
-        var ipv6 = addr !: &inet6.sockaddr_in6;
-        var rc = arpa.inet_pton(AF_INET6!, ip !: &const char, &ipv6.sin6_addr);
+        var ipv6 = addr !: ^inet6.sockaddr_in6;
+        var rc = arpa.inet_pton(AF_INET6!, ip !: ^const char, ptrof ipv6.sin6_addr);
         if (rc == 1) {
             ipv6.sin6_family = <u8> AF_INET6!
             ipv6.sin6_port = htons(port)
@@ -173,7 +173,7 @@ pub struct Address {
     }
 
     @inline
-    const func family() => (addr !: &socket.sockaddr).sa_family
+    const func family() => (addr !: ^socket.sockaddr).sa_family
 
     @inline
     const func len() => family() == AF_INET!? sizeof!(#inet.sockaddr_in) : sizeof!(#inet6.sockaddr_in6)
@@ -181,13 +181,13 @@ pub struct Address {
     @inline
     const func port() {
         if (family() == AF_INET!)
-            return ntohs((addr !: &inet.sockaddr_in).sin_port)
+            return ntohs((addr !: ^inet.sockaddr_in).sin_port)
         else
-            return ntohs((addr !: &inet6.sockaddr_in6).sin6_port)
+            return ntohs((addr !: ^inet6.sockaddr_in6).sin6_port)
     }
 
-    func nativeAddr() => addr !: &socket.sockaddr
-    const func nativeAddr() => addr !: &const socket.sockaddr
+    func nativeAddr() => addr !: ^socket.sockaddr
+    const func nativeAddr() => addr !: ^const socket.sockaddr
 
     @inline
     const func `hash`() => 0
@@ -195,23 +195,24 @@ pub struct Address {
     @inline
     const func `!!`() => family() != AF_UNSPEC!
 
-    const func `str`(os: OutputStream) {
+    const func `str`(os: &OutputStream) {
         var buffer: [char, 46];
         var rc = false;
         if (family() == AF_INET!) {
-            var ipv4 = addr !: &inet.sockaddr_in;
+            var ipv4 = addr !: ^inet.sockaddr_in;
             rc = arpa.inet_ntop(AF_INET!,
-                          &ipv4.sin_addr,
+                          ptrof ipv4.sin_addr,
                           buffer,
                           INET_ADDRSTRLEN!) != null;
         }
         else {
-            var ipv6 = addr !: &inet6.sockaddr_in6;
+            var ipv6 = addr !: ^inet6.sockaddr_in6;
             rc = arpa.inet_ntop(AF_INET6!,
-                          &ipv6.sin6_addr,
+                          ptrof ipv6.sin6_addr,
                           buffer,
                           INET6_ADDRSTRLEN!) != null;
         }
+
         if (rc) {
             os.appendString(buffer !: string)
             os.appendChar(':')
@@ -223,22 +224,22 @@ pub struct Address {
 }
 
 pub func getLocalAddress(name: string, port: u16, mode: IPVersion = IPVersion.Any) {
-    if (name.[0] == '\0')
+    if (name.[0] == '\0':char)
         return Address(port, mode);
 
     var addr = Address(name, port, mode);
     if (addr)
        return addr;
     /* address is not a literal. It must be an interface name then. */
-    var ifaces: &ifaddrs.ifaddrs = null;
-    var rc = ifaddrs.getifaddrs(&ifaces);
+    var ifaces: ^ifaddrs.ifaddrs = null;
+    var rc = ifaddrs.getifaddrs(ptrof ifaces);
     assert!(rc == 0);
     assert!(ifaces != null);
     /*  Find first IPv4 and first IPv6 address. */
-    var ipv4 : &ifaddrs.ifaddrs = null;
-    var ipv6 : &ifaddrs.ifaddrs = null;
+    var ipv4 : ^ifaddrs.ifaddrs = null;
+    var ipv6 : ^ifaddrs.ifaddrs = null;
 
-    var it: &ifaddrs.ifaddrs = ifaces;
+    var it: ^ifaddrs.ifaddrs = ifaces;
     while (it != null) {
         if (it.ifa_addr == null) {
             it = it.ifa_next
@@ -250,7 +251,7 @@ pub func getLocalAddress(name: string, port: u16, mode: IPVersion = IPVersion.An
             continue
         }
 
-        var addr = (it.ifa_addr !: &socket.sockaddr);
+        var addr = (it.ifa_addr !: ^socket.sockaddr);
         if (addr.sa_family == AF_INET!) {
             assert!(ipv4 == null)
             ipv4 = it
@@ -274,15 +275,15 @@ pub func getLocalAddress(name: string, port: u16, mode: IPVersion = IPVersion.An
     }
 
     if (ipv4 != null) {
-       var inaddr = addr.addr !: &inet.sockaddr_in;
+       var inaddr = addr.addr !: ^inet.sockaddr_in;
         memcpy(inaddr, ipv4.ifa_addr, sizeof!(#inet.sockaddr_in));
         inaddr.sin_port = htons(port);
     }
     else if (ipv6 != null) {
-        var inaddr = addr.addr !: &inet6.sockaddr_in6;
+        var inaddr = addr.addr !: ^inet6.sockaddr_in6;
         memcpy(inaddr, ipv6.ifa_addr, sizeof!(#inet6.sockaddr_in6))
         inaddr.sin6_port = htons(port)
-        printf("size is %d\n", sizeof!(#inet6.sockaddr_in6))
+        printf("size is %lu\n", sizeof!(#inet6.sockaddr_in6))
     }
 
     ifaddrs.freeifaddrs(ifaces);
@@ -298,11 +299,11 @@ pub async func getRemoteAddress(name: string, port: u16, mode: IPVersion = IPVer
     /* Load DNS config files, unless they are already chached. */
     if (cxy_DNS_conf == null) {
         /* TODO: Maybe re-read the configuration once in a while? */
-        cxy_DNS_conf = dns.dns_resconf_local(&rc)
+        cxy_DNS_conf = dns.dns_resconf_local(ptrof rc)
         assert!(cxy_DNS_conf != null)
-        cxy_DNS_hosts = dns.dns_hosts_local(&rc)
+        cxy_DNS_hosts = dns.dns_hosts_local(ptrof rc)
         assert!(cxy_DNS_hosts != null)
-        cxy_DNS_hints = dns.dns_hints_local(cxy_DNS_conf, &rc)
+        cxy_DNS_hints = dns.dns_hints_local(cxy_DNS_conf, ptrof rc)
         assert!(cxy_DNS_hints != null)
     }
 
@@ -313,32 +314,32 @@ pub async func getRemoteAddress(name: string, port: u16, mode: IPVersion = IPVer
         cxy_DNS_hints,
         null,
         null,
-        &rc);
+        ptrof rc);
     assert!(resolver != null)
     var ports: [char, 8];
-    sprintf(ports !: &char, "%d", port)
+    sprintf(ports !: ^char, "%d", port)
 
     var hints: netdb.addrinfo;
-    memset(&hints, 0, sizeof!(hints))
+    memset(ptrof hints, 0, sizeof!(hints))
     hints.ai_family = PF_UNSPEC!;
 
     var ai = dns.dns_ai_open(
-        name !: &const char,
-        ports !: &const char,
+        name !: ^const char,
+        ports !: ^const char,
         dns.dns_type.DNS_T_A,
-        &hints,
+        ptrof hints,
         resolver,
-        &rc
+        ptrof rc
     );
 
     assert!(ai != null)
     dns.dns_res_close(resolver)
 
-    var ipv4 : &netdb.addrinfo = null;
-    var ipv6 : &netdb.addrinfo = null;
-    var it : &netdb.addrinfo = null;
+    var ipv4 : ^netdb.addrinfo = null;
+    var ipv6 : ^netdb.addrinfo = null;
+    var it : ^netdb.addrinfo = null;
     while (true) {
-        rc = dns.dns_ai_nextent(&it, ai)
+        rc = dns.dns_ai_nextent(ptrof it, ai)
         if (rc == EAGAIN!) {
             var fd = dns.dns_ai_pollfd(ai);
             assert!(fd >= 0)
@@ -386,19 +387,19 @@ pub async func getRemoteAddress(name: string, port: u16, mode: IPVersion = IPVer
     }
 
     if (ipv4 != null) {
-        var inaddr = addr.addr !: &inet.sockaddr_in;
+        var inaddr = addr.addr !: ^inet.sockaddr_in;
         memcpy(inaddr, ipv4.ai_addr, sizeof!(#inet.sockaddr_in));
         inaddr.sin_port = htons(port);
         free(ipv4);
     }
     else if (ipv6) {
-        var inaddr = addr.addr !: &inet6.sockaddr_in6;
+        var inaddr = addr.addr !: ^inet6.sockaddr_in6;
         memcpy(inaddr, ipv6.ai_addr, sizeof!(#inet6.sockaddr_in6))
         inaddr.sin6_port = htons(port)
         free(ipv6);
     }
     else {
-        (addr.addr !: &socket.sockaddr).sa_family = <u8>AF_UNSPEC!;
+        (addr.addr !: ^socket.sockaddr).sa_family = <u8>AF_UNSPEC!;
     }
 
     dns.dns_ai_close(ai)

@@ -157,8 +157,20 @@ static bool inferGenericFunctionTypes(AstVisitor *visitor,
                 flgFuncTypeParam);
             free(funcTypeParams);
         }
-        else
-            paramTypes[index] = argTypes[param->genericParam.inferIndex - 1];
+        else {
+            const Type *inferred = argTypes[param->genericParam.inferIndex - 1];
+            if (param->genericParam.innerType) {
+                if (typeIs(inferred, Reference))
+                    paramTypes[index] = inferred->reference.referred;
+                else if (typeIs(inferred, Pointer))
+                    paramTypes[index] = inferred->pointer.pointed;
+                else
+                    paramTypes[index] = inferred;
+            }
+            else {
+                paramTypes[index] = inferred;
+            }
+        }
     }
 
     free(argTypes);
@@ -263,7 +275,7 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
         const AstNode *decl = generic->genericDecl.decl;
         // transform function call params
         if (!transformVariadicFunctionCallArgs(
-                visitor, decl, generic->flags & flgTransient)) //
+                visitor, decl, generic->flags & flgReference)) //
         {
             return node->type = ERROR_TYPE(ctx);
         }
@@ -334,7 +346,7 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
         }
         return node->type;
     }
-
+    
     AstNode *substitute = cloneGenericDeclaration(ctx->pool, generic),
             *param = getGenericDeclarationParams(substitute);
     substitute->flags |= flgGenerated;
@@ -375,7 +387,9 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
             csAssert0(parent && parent->type);
             substitute->funcDecl.this_->type =
                 nodeIs(parent, ClassDecl)
-                    ? parent->type
+                    ? makeReferenceType(ctx->types,
+                                        parent->type,
+                                        substitute->flags & flgConst)
                     : makePointerType(ctx->types,
                                       parent->type,
                                       substitute->flags & flgConst);

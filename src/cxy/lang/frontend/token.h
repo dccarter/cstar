@@ -98,7 +98,9 @@ extern "C" {
     f(Pub, "pub")                   \
     f(Opaque, "opaque")             \
     f(Async,  "async")              \
+    f(Ptrof,   "ptrof")             \
     f(Await,  "await")              \
+    f(Delete, "delete")             \
     f(Switch, "switch")             \
     f(Case, "case")                 \
     f(Default, "default")           \

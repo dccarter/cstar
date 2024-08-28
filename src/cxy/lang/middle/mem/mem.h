@@ -6,6 +6,7 @@
 
 #include <core/strpool.h>
 #include <lang/frontend/visitor.h>
+#include <lang/middle/n2e.h>
 #include <lang/middle/scope.h>
 
 #ifdef __cplusplus
@@ -24,20 +25,33 @@ typedef struct MemoryManagementContext {
     TypeTable *types;
     AstNode *program;
     BlockScopeContainer bsc;
-    HashTable allVariables;
+    N2eContext n2e;
+    bool traceMemory;
+    bool localVarsInReturn;
+    AstModifier root;
     union {
         struct {
             AstModifier block;
             AstNode *current;
+            AstNode *func;
             bool inConditionalBlock;
         };
         struct {
             AstModifier block;
             AstNode *current;
+            AstNode *func;
             bool inConditionalBlock;
         } stack;
     };
 } MMContext;
+
+void checkReferenceVariables(MMContext *context, AstNode *node);
+void manageMemory(MMContext *context, AstNode *node);
+void withSavedStack(Visitor func, AstVisitor *visitor, AstNode *node);
+
+const AstNode *resolveCallExpr(const AstNode *node);
+const AstNode *getCallExprCalleeFunc(const AstNode *node);
+bool isTransientCallExpr(const AstNode *node);
 
 #ifdef __cplusplus
 }

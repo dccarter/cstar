@@ -15,14 +15,13 @@ typedef struct {
     Log *L;
     MemPool *pool;
     struct StrPool *strings;
-
+    AstModifier block;
+    AstModifier root;
     union {
         struct {
-            AstModifier block;
             bool inClassOrStruct;
         };
         struct {
-            AstModifier block;
             bool inClassOrStruct;
         } stack;
     };

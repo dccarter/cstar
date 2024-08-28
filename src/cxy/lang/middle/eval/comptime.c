@@ -470,6 +470,36 @@ static AstNode *isPointer(EvalContext *ctx,
                                   .boolLiteral.value = typeIs(type, Pointer)});
 }
 
+static AstNode *isReference(EvalContext *ctx,
+                            const FileLoc *loc,
+                            AstNode *node,
+                            attr(unused) AstNode *args)
+{
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = resolveType(type);
+
+    return makeAstNode(
+        ctx->pool,
+        loc,
+        &(AstNode){.tag = astBoolLit,
+                   .boolLiteral.value = typeIs(type, Reference)});
+}
+
+static AstNode *isUnresolved(EvalContext *ctx,
+                             const FileLoc *loc,
+                             AstNode *node,
+                             attr(unused) AstNode *args)
+{
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = stripPointerOrReference(resolveType(type));
+
+    return makeAstNode(
+        ctx->pool,
+        loc,
+        &(AstNode){.tag = astBoolLit,
+                   .boolLiteral.value = unThisType(type) == NULL});
+}
+
 static AstNode *isStruct(EvalContext *ctx,
                          const FileLoc *loc,
                          AstNode *node,
@@ -660,6 +690,8 @@ static void initDefaultMembers(EvalContext *ctx)
     ADD_MEMBER("isOptional", isOptional);
     ADD_MEMBER("isNumber", isNumeric);
     ADD_MEMBER("isPointer", isPointer);
+    ADD_MEMBER("isReference", isReference);
+    ADD_MEMBER("isUnresolved", isUnresolved);
     ADD_MEMBER("isStruct", isStruct);
     ADD_MEMBER("isClass", isClass);
     ADD_MEMBER("isTuple", evalIsTupleType);

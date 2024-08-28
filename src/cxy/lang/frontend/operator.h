@@ -55,17 +55,19 @@ extern "C" {
     AST_SHIFT_EXPR_LIST(f)
 
 #define AST_PREFIX_EXPR_LIST(f)                     \
-    f(PreDec, MinusMinus, "--", "pre_dec")          \
-    f(PreInc, PlusPlus, "++", "pre_inc")            \
-    f(Minus,  Minus, "-", "pre_minus")              \
-    f(Plus,   Plus, "+",  "pre_plus")               \
+    f(PreDec, MinusMinus, "--", "pre-dec")          \
+    f(PreInc, PlusPlus, "++", "pre-inc")            \
+    f(Minus,  Minus, "-", "pre-minus")              \
+    f(Plus,   Plus, "+",  "pre-plus")               \
     f(Deref,  Mult, "*",  "deref")                  \
     f(Not,    LNot, "!",  "lnot")                   \
     f(Compl,  BNot, "~",  "bnot")                   \
-    f(AddrOf, BAnd, "&",  "addrof")                 \
+    f(Refof,  BAnd, "&",  "refof")                  \
     f(Move,   LAnd, "&&", "move")                   \
     f(Spread, Elipsis, "...", "spread")             \
     f(Await,  Await, "await", "await")              \
+    f(Delete, Delete, "delete", "delete")           \
+    f(Ptrof,  Ptrof,  "ptrof",  "ptrof")            \
 
 #define AST_POSTFIX_EXPR_LIST(f)                \
     f(PostDec, MinusMinus, "--", "dec")         \
@@ -83,6 +85,7 @@ extern "C" {
     f(InitOverload,             "init", "init")                \
     f(DeinitOverload,           "deinit", "deinit")            \
     f(CopyOverload,             "copy",  "copy")               \
+    f(ConstructorOverload,      "constructor", "constructor")  \
     f(DestructorOverload,       "destructor", "destructor")    \
     f(HashOverload,             "hash",       "hash")          \
     f(DestructorFwd,            "destructor_fwd",  "destructor__fwd") \

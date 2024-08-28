@@ -3,14 +3,14 @@ module vector
 #const DEFAULT_VECTOR_CAPACITY = <u64>16
 
 pub class Vector[T] {
-    - _data: &T
+    - _data: ^T
     - _size: u64
     - _capacity: u64
 
     @inline
     - func elemSize() {
         #if (T.isClass)
-            return sizeof!(#&void)
+            return sizeof!(#^void)
         else
             return sizeof!(#T)
     }
@@ -18,9 +18,9 @@ pub class Vector[T] {
     - func grow() {
         if (_size >= _capacity) {
             _capacity += (_capacity / 2)
-            _data = <&T> realloc(_data !: &void, elemSize() * _capacity)
+            _data = <^T> realloc(_data !: ^void, elemSize() * _capacity)
            #if (T.isDestructible) {
-               memset((_data + _size), 0, elemSize() * (_capacity - _size))
+               memset(ptroff!(_data + _size), 0, elemSize() * (_capacity - _size))
            }
         }
     }
@@ -28,17 +28,17 @@ pub class Vector[T] {
     func `init`(initialSize: u64 = #{DEFAULT_VECTOR_CAPACITY}) {
         _size = 0
         _capacity = initialSize
-        _data = <&T>__calloc(elemSize() * _capacity)
+        _data = <^T>__calloc(elemSize() * _capacity)
     }
 
     @inline
     func `deinit`() {
         #if (T.isDestructible) {
             for (const i: 0.._size) {
-                _data.[i] = null
+                delete _data.[i]
             }
         }
-        free(_data !: &void)
+        free(_data !: ^void)
     }
 
     func push(item: T) {
@@ -49,7 +49,7 @@ pub class Vector[T] {
     func pop() {
         assert!(_size > 0)
         _size--
-        return _data.[_size]
+        return &&_data.[_size]
     }
 
     func shift() {
@@ -62,7 +62,7 @@ pub class Vector[T] {
     }
 
     func resize(newSize: u64) {
-        _data = <&T> realloc(_data !: &void, elemSize() * newSize)
+        _data = <^T> realloc(_data !: ^void, elemSize() * newSize)
         if (newSize < _size)
             _size = newSize
        _capacity = newSize;
@@ -139,17 +139,19 @@ pub class Vector[T] {
         return null
     }
 
-    const func `str`(sb: OutputStream) {
-        sb << '['
-        for (var i: 0.._size) {
-            if (i != 0)
-                sb << ", "
-            sb << _data.[i]
+    #if (!(T.isStruct || T.isClass) || has_member!(#T, "op__str", #const func(_: &OutputStream) -> void)) {
+        const func `str`(sb: &OutputStream) {
+            sb << '['
+            for (var i: 0.._size) {
+                if (i != 0)
+                    sb << ", "
+                sb << _data.[i]
+            }
+            sb << ']'
         }
-        sb << ']'
     }
 
-    @inline const func capacity() => _size
+    @inline const func capacity() => _capacity
     @inline const func size() => _size
     @inline const func empty() => _size == 0
 }

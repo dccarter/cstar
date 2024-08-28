@@ -27,6 +27,12 @@ typedef struct {
     void *elems;
 } HashTable;
 
+typedef struct HashtableIt {
+    HashTable *table;
+    u64 i;
+    u64 elemSize;
+} HashtableIt;
+
 HashTable newHashTable(size_t elemSize);
 HashTable newHashTableWithCapacity(size_t elemSize, size_t capacity);
 void freeHashTable(HashTable *);
@@ -52,6 +58,10 @@ void enumerateHashTable(HashTable *,
                         void *ctx,
                         bool (*with)(void *ctx, const void *elem),
                         size_t elemSize);
+
+HashtableIt newHashTableIt(HashTable *table, size_t elemSize);
+void *hashTableItNext(HashtableIt *it);
+bool hashTableItHasNext(HashtableIt *it);
 
 #ifdef __cplusplus
 }

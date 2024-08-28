@@ -7,6 +7,8 @@
 #include "../eval/eval.h"
 
 #include "lang/frontend/flag.h"
+#include "lang/frontend/strings.h"
+#include "lang/middle/builtins.h"
 
 #include "core/alloc.h"
 
@@ -28,26 +30,70 @@ static u64 addUnionDecl(UnionMember *members, const Type *member, u64 count)
     return count;
 }
 
+static const Type *implementUnionOverload(AstVisitor *visitor,
+                                          cstring overload,
+                                          const Type *type)
+{
+    AstNode *func = findBuiltinDecl(overload);
+    AstNode args = {.tag = astTypeRef, .type = type};
+    AstNode path = {
+        .tag = astPath,
+        .path = {.elements = &(AstNode){.tag = astPathElem,
+                                        .pathElement = {.name = overload,
+                                                        .args = &args,
+                                                        .resolvesTo = func}}}};
+
+    return checkType(visitor, &path);
+}
+
+static void implementUnionTypeCopyAndDestructor(AstVisitor *visitor,
+                                                AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    bool hasCopy = node->type->tuple.copyFunc != NULL;
+    if (!isBuiltinsInitialized() || !hasReferenceMembers(node->type) || hasCopy)
+        return;
+
+    const Type *func =
+        implementUnionOverload(visitor, S___union_copy, node->type);
+    if (typeIs(func, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+    ((Type *)node->type)->tuple.copyFunc = func;
+
+    func = implementUnionOverload(visitor, S___union_dctor, node->type);
+    if (typeIs(func, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+    ((Type *)node->type)->tUnion.destructorFunc = func;
+}
+
 const Type *checkTypeShallow(AstVisitor *visitor, AstNode *node, bool shallow)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     if (node == NULL)
         return NULL;
-
+    bool wasShallow = ctx->shallow;
     ctx->shallow = shallow;
     if (hasFlag(node, Comptime)) {
         node->flags &= ~flgComptime;
         bool status = evaluate(ctx->evaluator, node);
-
         if (!status) {
+            ctx->shallow = wasShallow;
             return node->type = ERROR_TYPE(ctx);
         }
     }
 
-    if (node->type)
+    if (node->type) {
+        ctx->shallow = wasShallow;
         return node->type;
+    }
 
     astVisit(visitor, node);
+    ctx->shallow = wasShallow;
+
     const Type *type = resolveType(node->type),
                *unwrapped = unwrapType(type, NULL);
     if (typeIs(unwrapped, This) && unwrapped->_this.trackReferences) {
@@ -130,12 +176,16 @@ void checkUnionDecl(AstVisitor *visitor, AstNode *node)
     UnionMember *members_ = mallocOrDie(sizeof(UnionMember) * count);
     u64 i = 0;
     member = node->unionDecl.members;
+    u64 flags = flgNone;
     for (; member; member = member->next) {
         i = addUnionDecl(members_, member->type, i);
+        if (isClassType(member->type) || hasReferenceMembers(member->type))
+            flags |= flgReferenceMembers;
     }
 
-    node->type = makeUnionType(ctx->types, members_, i);
+    node->type = makeUnionType(ctx->types, members_, i, flags);
     free(members_);
+    implementUnionTypeCopyAndDestructor(visitor, node);
 }
 
 void checkOptionalType(AstVisitor *visitor, AstNode *node)
@@ -160,4 +210,27 @@ void checkPointerType(AstVisitor *visitor, AstNode *node)
     }
 
     node->type = makePointerType(ctx->types, pointed, node->flags & flgConst);
+}
+
+void checkReferenceType(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    const Type *referred = checkType(visitor, node->referenceType.referred);
+    if (referred == NULL || typeIs(referred, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    if (isReferenceType(referred)) {
+        if (hasFlag(node, Const) && !hasFlag(referred, Const))
+            referred = makeWrappedType(ctx->types, referred, flgConst);
+        node->type = referred;
+        return;
+    }
+    else if (isReferable(referred)) {
+        node->type =
+            makeReferenceType(ctx->types, referred, node->flags & flgConst);
+    }
+    else
+        node->type = referred;
 }

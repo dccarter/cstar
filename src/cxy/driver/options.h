@@ -39,12 +39,12 @@ typedef enum {
 } DumpStatsMode;
 
 typedef enum OptimizationLevel {
-    O0,
-    Od = O0,
-    O1,
-    O2,
-    O3,
-    Os
+    O0 = '0',
+    Od = '0',
+    O1 = '1',
+    O2 = '2',
+    O3 = '3',
+    Os = 's'
 } OptimizationLevel;
 
 typedef struct CompilerDefine {
@@ -70,6 +70,7 @@ typedef struct Options {
     bool withoutBuiltins;
     bool noPIE;
     bool withMemoryManager;
+    bool withMemoryTrace;
     bool debug;
     OptimizationLevel optimizationLevel;
     bool debugPassManager;

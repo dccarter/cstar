@@ -16,7 +16,7 @@ func main(args: [string]) {
   y.1.2.1 = 'B'
   y.1.0 = 6.000000e-03
   var z: (i32, string) = swap(("Hello", 10))
-  var f: &(i32, string) = z&
+  var f: &(i32, string) = &z
   var k: (string, i32) = (f.1, f.0)
   var num, str = swap(("Hello", 10))
 }

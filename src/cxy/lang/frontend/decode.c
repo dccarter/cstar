@@ -156,6 +156,9 @@ static void unpackNodeBody(AstNodeUnpackContext *ctx, AstNode *node)
     case astPointerType:
         node->pointerType.pointed = unpackNode(ctx);
         break;
+    case astReferenceType:
+        node->referenceType.referred = unpackNode(ctx);
+        break;
     case astArrayExpr:
         node->arrayExpr.elements = unpackManyNodes(ctx, &len);
         node->arrayExpr.len = len;

@@ -28,6 +28,7 @@ extern "C" {
     f(explicit)                 \
     f(pure)                     \
     f(strlen)                   \
+    f(memset)                   \
     f(char)                     \
     f(wputc)                    \
     f(cxy_range_t)              \
@@ -93,6 +94,14 @@ extern "C" {
     f(__construct1)             \
     f(__fwd)                    \
     f(__override_builtin)       \
+    f(__copy)                   \
+    f(__destroy)                \
+    f(__destructor_fwd)         \
+    f(__tuple_dctor)            \
+    f(__tuple_copy)             \
+    f(__union_dctor)            \
+    f(__union_copy)             \
+    f(__SrcLoc)                 \
     f(CXY__main)                \
     f(resolve)                  \
     f(reject)                   \
@@ -101,6 +110,10 @@ extern "C" {
     ff(ctor_section,        ".ctor")             \
     ff(sptr_ref,            "__smart_ptr_get")   \
     ff(sptr_drop,           "__smart_ptr_drop")  \
+    ff(sptr_alloc,          "__smart_ptr_alloc") \
+    ff(sptr_alloc_trace,    "__smart_ptr_alloc_trace") \
+    ff(sptr_drop_trace,     "__smart_ptr_drop_trace")  \
+    ff(sptr_get_trace,      "__smart_ptr_get_trace")   \
     ff(copy,                "__copy")            \
     ff(AsmInputPrefix,      "\"r\"")             \
     ff(AsmOutputPrefix,     "\"=r\"")

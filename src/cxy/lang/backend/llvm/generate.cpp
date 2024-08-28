@@ -240,22 +240,30 @@ static void visitMemberExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     auto target = node->memberExpr.target;
-    auto type = target->type;
+    auto type = node->type;
     ctx.emitDebugLocation(node);
 
-    auto load =
-        ctx.stack().loadVariable(typeIs(type, Pointer) || isClassType(type));
-    auto value = cxy::codegen(visitor, target);
-    ctx.stack().loadVariable(load);
+    llvm::Value *value = NULL;
+    if (!typeIs(type, Func) || !isStaticMemberFunction(type->func.decl)) {
+        type = target->type;
+        auto load = ctx.stack().loadVariable(typeIs(type, Pointer) ||
+                                             typeIs(type, Reference) ||
+                                             isClassType(type));
+
+        value = cxy::codegen(visitor, target);
+        ctx.stack().loadVariable(load);
+    }
 
     auto member = node->memberExpr.member;
     if (nodeIs(member, Identifier)) {
         auto resolvesTo = member->ident.resolvesTo;
 
         if (nodeIs(resolvesTo, FieldDecl)) {
-            llvm::Type *llvmType = isClassType(type)
-                                       ? ctx.classType(type)
-                                       : ctx.getLLVMType(stripPointer(type));
+            const Type *stripped = stripReference(type);
+            llvm::Type *llvmType =
+                isClassType(stripped)
+                    ? ctx.classType(stripped)
+                    : ctx.getLLVMType(stripPointerOrReference(type));
 
             value = ctx.builder.CreateStructGEP(llvmType,
                                                 value,
@@ -285,22 +293,25 @@ static void visitMemberExpr(AstVisitor *visitor, AstNode *node)
                 value = ctx.createUndefined(
                     ctx.getLLVMType(resolvesTo->type)->getPointerTo());
             }
-            else {
+            else if (nodeIs(func, FuncDecl)) {
                 value = llvm::cast<llvm::Function>(
                             static_cast<llvm::Value *>(resolvesTo->codegen))
                             ?: generateFunctionProto(visitor, func);
             }
+            else {
+                value = static_cast<llvm::Value *>(resolvesTo->codegen);
+                value = ctx.createLoad(node->type, value);
+            }
             ctx.returnValue(value);
             return;
         }
-        else {
-            printf("What the func\n");
-        }
+        else
+            csAssert0(typeIs(resolvesTo->type, Enum));
     }
     else {
         csAssert0(nodeIs(member, IntegerLit));
         value = ctx.builder.CreateStructGEP(
-            ctx.getLLVMType(stripPointer(target->type)),
+            ctx.getLLVMType(stripPointerOrReference(type)),
             value,
             member->intLiteral.value);
     }
@@ -320,7 +331,7 @@ static void visitCastExpr(AstVisitor *visitor, AstNode *node)
     ctx.returnValue(value);
 }
 
-static void visitAddrOfExpr(AstVisitor *visitor, AstNode *node)
+static void visitPointerOfExpr(AstVisitor *visitor, AstNode *node)
 {
     auto &ctx = cxy::LLVMContext::from(visitor);
     ctx.emitDebugLocation(node);
@@ -334,6 +345,26 @@ static void visitAddrOfExpr(AstVisitor *visitor, AstNode *node)
     }
     else {
         auto load = ctx.stack().loadVariable(false);
+        auto value = cxy::codegen(visitor, operand);
+        ctx.returnValue(value);
+        ctx.stack().loadVariable(load);
+    }
+}
+
+static void visitReferenceOfExpr(AstVisitor *visitor, AstNode *node)
+{
+    auto &ctx = cxy::LLVMContext::from(visitor);
+    ctx.emitDebugLocation(node);
+    AstNode *operand = node->unaryExpr.operand;
+
+    if (!nodeIsLeftValue(operand) && !isClassType(operand->type)) {
+        auto ptr = ctx.createStackVariable(operand->type);
+        auto value = cxy::codegen(visitor, operand);
+        ctx.builder.CreateStore(value, ptr);
+        ctx.returnValue(ptr);
+    }
+    else {
+        auto load = ctx.stack().loadVariable(isClassType(operand->type));
         auto value = cxy::codegen(visitor, operand);
         ctx.returnValue(value);
         ctx.stack().loadVariable(load);
@@ -421,7 +452,7 @@ static void visitAssignExpr(AstVisitor *visitor, AstNode *node)
             makeBinaryExpr(ctx.pool,
                            &node->loc,
                            node->flags,
-                           shallowCloneAstNode(ctx.pool, node->assignExpr.lhs),
+                           deepCloneAstNode(ctx.pool, node->assignExpr.lhs),
                            node->binaryExpr.op,
                            node->binaryExpr.rhs,
                            nullptr,
@@ -429,14 +460,7 @@ static void visitAssignExpr(AstVisitor *visitor, AstNode *node)
         node->binaryExpr.op = opAssign;
     }
 
-    ctx.stack().loadVariable(false);
-    auto variable = cxy::codegen(visitor, node->binaryExpr.lhs);
     ctx.stack().loadVariable(true);
-    node->codegen = variable;
-
-    if (variable == nullptr)
-        return;
-
     llvm::Value *value = NULL;
     auto lhs = node->binaryExpr.lhs->type;
     if (lhs != node->binaryExpr.rhs->type) {
@@ -448,6 +472,14 @@ static void visitAssignExpr(AstVisitor *visitor, AstNode *node)
 
     if (value == nullptr)
         return;
+
+    ctx.stack().loadVariable(false);
+    auto variable = cxy::codegen(visitor, node->binaryExpr.lhs);
+    node->codegen = variable;
+
+    if (variable == nullptr)
+        return;
+
     ctx.builder.CreateStore(value, variable);
     ctx.returnValue(variable);
 }
@@ -526,7 +558,8 @@ static void visitStructExpr(AstVisitor *visitor, AstNode *node)
         auto field = node->structExpr.fields;
         for (u64 i = 0; field; field = field->next, i++) {
             auto value = cxy::codegen(visitor, field->fieldExpr.value);
-            obj = ctx.builder.CreateInsertValue(obj, value, i);
+            obj = ctx.builder.CreateInsertValue(
+                obj, value, field->fieldExpr.index);
         }
         ctx.returnValue(obj);
     }
@@ -1178,22 +1211,30 @@ static void generateBackendCall(AstVisitor *visitor, AstNode *node)
         const Type *type = node->backendCallExpr.args->type;
         csAssert0(typeIs(type, Info));
         type = resolveType(type);
-        if (isClassType(type))
-            value = llvm::ConstantInt::get(
-                ctx.getLLVMType(node->type),
-                ctx.module().getDataLayout().getTypeAllocSize(
-                    ctx.classType(type)));
-        else
-            value = llvm::ConstantInt::get(
-                ctx.getLLVMType(node->type),
-                ctx.module().getDataLayout().getTypeAllocSize(
-                    ctx.getLLVMType(type)));
+        value = llvm::ConstantInt::get(ctx.getLLVMType(node->type),
+                                       ctx.getTypeSize(type));
         break;
     }
     case bfiAlloca: {
         const Type *type = node->backendCallExpr.args->type;
         value = ctx.builder.CreateAlloca(ctx.getLLVMType(type));
         break;
+    }
+    case bfiZeromem: {
+        auto args = node->backendCallExpr.args;
+        auto type = args->type;
+        csAssert0(isPointerType(type));
+        type =
+            isClassType(type->pointer.pointed) ? type : type->pointer.pointed;
+        value = cxy::codegen(visitor, args);
+
+        value = ctx.builder.CreateMemSetInline(
+            value,
+            ctx.getTypeAlignment(type),
+            llvm::ConstantInt::get(llvm::IntegerType::getInt8Ty(ctx.context),
+                                   0),
+            llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(ctx.context),
+                                   ctx.getTypeSize(type)));
     }
     }
 
@@ -1252,7 +1293,8 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
         [astCallExpr] = visitCallExpr,
         [astCastExpr] = visitCastExpr,
         [astMemberExpr] = visitMemberExpr,
-        [astAddressOf] = visitAddrOfExpr,
+        [astPointerOf] = visitPointerOfExpr,
+        [astReferenceOf] = visitReferenceOfExpr,
         [astIndexExpr] = visitIndexExpr,
         [astStructExpr] = visitStructExpr,
         [astTupleExpr] = visitTupleExpr,

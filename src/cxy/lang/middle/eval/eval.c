@@ -68,6 +68,9 @@ bool comptimeCompareTypes(const AstNode *lhs, const AstNode *rhs)
     case astPointerType:
         return comptimeCompareTypes(lhs->pointerType.pointed,
                                     rhs->pointerType.pointed);
+    case astReferenceType:
+        return comptimeCompareTypes(lhs->referenceType.referred,
+                                    rhs->referenceType.referred);
     case astOptionalType:
         return comptimeCompareTypes(lhs->optionalType.type,
                                     rhs->optionalType.type);

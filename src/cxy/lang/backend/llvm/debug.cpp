@@ -74,6 +74,10 @@ llvm::DIType *DebugContext::convertToDIType(const Type *type)
         return createEnumType(type);
     case typPointer:
         return pointerToDIType(type);
+    case typReference:
+        if (isClassReferenceType(type))
+            return getDIType(stripReference(type));
+        return pointerToDIType(type);
     case typArray:
         return arrayToDIType(type);
     case typThis:

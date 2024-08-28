@@ -107,9 +107,7 @@
 #pragma clang diagnostic ignored "-Wunused-parameter"
 #pragma clang diagnostic ignored "-Wmissing-field-initializers"
 #pragma clang diagnostic ignored "-Wexpansion-to-defined"
-#if __clang_major__ > 17
 #pragma clang diagnostic ignored "-Wdeprecated-non-prototype"
-#endif
 #elif DNS_GNUC_PREREQ(4, 6)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"

@@ -104,6 +104,7 @@ void evalPathEpilogue(AstVisitor *visitor,
         }
         case typPointer:
         case typArray:
+        case typReference:
             *node = *symbol;
             break;
         case typInfo:
@@ -111,6 +112,7 @@ void evalPathEpilogue(AstVisitor *visitor,
             goto retry;
         case typTuple:
         case typUnion:
+        case typThis:
             node->tag = astTypeRef;
             node->flags = type->flags;
             node->type = type;

@@ -195,6 +195,24 @@ static AstNode *executeSimplify(CompilerDriver *driver, AstNode *node)
     return node;
 }
 
+static AstNode *executeLower(CompilerDriver *driver, AstNode *node)
+{
+    csAssert0(nodeIs(node, Metadata));
+    if (!(node->metadata.stages & BIT(ccsSimplify))) {
+        logError(
+            driver->L, builtinLoc(), "cannot lower an un-simplified ast", NULL);
+        return NULL;
+    }
+
+    node->metadata.node = lowerAstNode(driver, node->metadata.node);
+
+    if (hasErrors(driver->L))
+        return NULL;
+
+    node->metadata.stages |= BIT(ccsLower);
+    return node;
+}
+
 static AstNode *executeMemoryManagement(CompilerDriver *driver, AstNode *node)
 {
     csAssert0(nodeIs(node, Metadata));
@@ -360,6 +378,7 @@ static CompilerStageExecutor compilerStageExecutors[ccsCOUNT] = {
     [ccsBind] = executeBindAst,
     [ccsTypeCheck] = executeTypeCheckAst,
     [ccsSimplify] = executeSimplify,
+    // [ccsLower] = executeLower,
     [ccsMemoryMgmt] = executeMemoryManagement,
     [ccsCodegen] = executeGenerateCode,
     // TODO causing issues

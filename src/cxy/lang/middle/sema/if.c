@@ -17,7 +17,7 @@ void checkIfStmt(AstVisitor *visitor, AstNode *node)
     }
 
     cond_ = unwrapType(cond_, NULL);
-    if (isClassOrStructType(cond_)) {
+    if (isClassOrStructType(stripReference(cond_))) {
         if (!transformToTruthyOperator(visitor, cond)) {
             if (!typeIs(cond->type, Error))
                 logError(ctx->L,

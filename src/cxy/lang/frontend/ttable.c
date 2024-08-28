@@ -50,6 +50,9 @@ static HashCode hashType(HashCode hash, const Type *type)
     case typPointer:
         hash = hashType(hash, type->pointer.pointed);
         break;
+    case typReference:
+        hash = hashType(hash, type->reference.referred);
+        break;
     case typArray:
         hash = hashType(hash, type->array.elementType);
         hash = hashUint64(hash, type->array.len);
@@ -157,9 +160,8 @@ bool compareFuncTypes(const Type *lhs, const Type *rhs, bool ignoreNames)
 
     return (left->func.paramsCount == right->func.paramsCount) &&
            compareTypes(left->func.retType, right->func.retType) &&
-           compareManyTypes(left->func.params,
-                            right->func.params,
-                            right->func.paramsCount);
+           compareManyTypes(
+               left->func.params, right->func.params, right->func.paramsCount);
 }
 
 bool compareTypes(const Type *lhs, const Type *rhs)
@@ -184,6 +186,9 @@ bool compareTypes(const Type *lhs, const Type *rhs)
         return left->primitive.id == right->primitive.id;
     case typPointer:
         return compareTypes(left->pointer.pointed, right->pointer.pointed);
+    case typReference:
+        return compareTypes(left->reference.referred,
+                            right->reference.referred);
     case typArray:
         return (left->array.len == right->array.len) &&
                compareTypes(left->array.elementType, right->array.elementType);
@@ -488,12 +493,43 @@ const Type *stripPointer(const Type *type)
     }
 }
 
+const Type *stripReference(const Type *type)
+{
+    while (true) {
+        switch (resolveType(type)->tag) {
+        case typReference:
+            type = stripReference(type->reference.referred);
+            break;
+        default:
+            return type;
+        }
+    }
+}
+
+const Type *stripPointerOrReference(const Type *type)
+{
+    while (true) {
+        switch (resolveType(type)->tag) {
+        case typPointer:
+            type = stripPointerOrReference(type->pointer.pointed);
+            break;
+        case typReference:
+            type = stripPointerOrReference(type->reference.referred);
+        default:
+            return type;
+        }
+    }
+}
+
 const Type *stripAll(const Type *type)
 {
     while (type) {
         switch (resolveType(type)->tag) {
         case typPointer:
             type = stripAll(type->pointer.pointed);
+            break;
+        case typReference:
+            type = stripAll(type->reference.referred);
             break;
         case typWrapped:
             type = stripAll(type->wrapped.target);
@@ -618,6 +654,17 @@ const Type *makePointerType(TypeTable *table, const Type *pointed, u64 flags)
     return getOrInsertType(table, &type).s;
 }
 
+const Type *makeReferenceType(TypeTable *table, const Type *referred, u64 flags)
+{
+    referred = flattenWrappedType(referred, &flags);
+    Type type = make(Type,
+                     .tag = typReference,
+                     .flags = flags,
+                     .reference = {.referred = referred});
+
+    return getOrInsertType(table, &type).s;
+}
+
 const Type *makeOptionalType(TypeTable *table, const Type *target, u64 flags)
 {
     target = flattenWrappedType(target, &flags);
@@ -666,10 +713,15 @@ const Type *makeOpaqueTypeWithFlags(TypeTable *table,
     return getOrInsertType(table, &type).s;
 }
 
-const Type *makeUnionType(TypeTable *table, UnionMember *members, u64 count)
+const Type *makeUnionType(TypeTable *table,
+                          UnionMember *members,
+                          u64 count,
+                          u64 flags)
 {
-    Type type = make(
-        Type, .tag = typUnion, .tUnion = {.members = members, .count = count});
+    Type type = make(Type,
+                     .tag = typUnion,
+                     .flags = flags,
+                     .tUnion = {.members = members, .count = count});
 
     GetOrInset ret = getOrInsertType(table, &type);
     if (!ret.f) {
@@ -1073,7 +1125,8 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right)
         return left;
 
     if ((typeIs(_left, String) || typeIs(_left, Pointer) ||
-         typeIs(_left, Opaque) || typeIs(_left, Func)) &&
+         typeIs(_left, Opaque) || typeIs(_left, Func) ||
+         typeIs(_left, Reference)) &&
         typeIs(stripPointer(_right), Null))
         return left;
 
@@ -1216,6 +1269,8 @@ AstNode *getTypeDecl(const Type *type)
         return type->generic.decl;
     case typInterface:
         return type->tInterface.decl;
+    case typReference:
+        return getTypeDecl(type->reference.referred);
     default:
         return NULL;
     }

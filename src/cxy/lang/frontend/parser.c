@@ -528,7 +528,9 @@ static AstNode *functionParam(Parser *P);
 
 static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 {
-    bool isBand = check(P, tokBAnd);
+    Token start = *current(P);
+    bool isRefof = check(P, tokBAnd);
+    bool isPtrof = check(P, tokPtrof);
     if (check(P, tokMinus) && peek(P, 1)->tag == tokIntLiteral) {
         consume0(P, tokMinus);
         AstNode *lit = parseInteger(P);
@@ -575,22 +577,29 @@ static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
     const Token tok = *advance(P);
     AstNode *operand = prefix(P, parsePrimary);
 
-    if (!isBand) {
+    if (isPtrof) {
         return newAstNode(
             P,
             &tok.fileLoc.begin,
-            &(AstNode){.tag = astUnaryExpr,
-                       .unaryExpr = {.operand = operand,
-                                     .op = tokenToUnaryOperator(tok.tag),
-                                     .isPrefix = true}});
+            &(AstNode){.tag = astPointerOf,
+                       .unaryExpr = {.operand = operand, .op = opPtrof}});
     }
-    else {
-        return newAstNode(
-            P,
-            &tok.fileLoc.begin,
-            &(AstNode){.tag = astAddressOf,
-                       .unaryExpr = {.operand = operand, .op = opAddrOf}});
+    else if (isRefof) {
+        return newAstNode(P,
+                          &tok.fileLoc.begin,
+                          &(AstNode){.tag = astReferenceOf,
+                                     .unaryExpr = {.operand = operand,
+                                                   .op = opRefof,
+                                                   .isPrefix = true}});
     }
+
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astUnaryExpr,
+                   .unaryExpr = {.operand = operand,
+                                 .op = tokenToUnaryOperator(tok.tag),
+                                 .isPrefix = true}});
 }
 
 static AstNode *assign(Parser *P, AstNode *(parsePrimary)(Parser *, bool));
@@ -691,10 +700,23 @@ static AstNode *stringExpr(Parser *P)
 
 static inline bool maybeClosure(Parser *P)
 {
-    return (peek(P, 1)->tag == tokElipsis)     // (...a: Type)
-           || (peek(P, 2)->tag == tokColon)    // (a: Type), () : Type
-           || (peek(P, 2)->tag == tokFatArrow) // () =>
+    return (checkPeek(P, 1, tokAt) &&
+            checkPeek(P, 2, tokIdent)) // (@param: Type)
+           || (checkPeek(P, 1, tokElipsis) && checkPeek(P, 2, tokIdent) &&
+               checkPeek(P, 2, tokColon)) // (...a: Type)
+           ||
+           (checkPeek(P, 1, tokIdent) && checkPeek(P, 2, tokColon)) // (a: Type)
+           || (checkPeek(P, 1, tokRParen) &&
+               (checkPeek(P, 2, tokColon)         // () : Type
+                || checkPeek(P, 2, tokFatArrow))) // () =>
         ;
+}
+
+static inline bool maybeAnonymousStruct(Parser *P)
+{
+    // {} or { x: }
+    return (checkPeek(P, 1, tokIdent) && checkPeek(P, 2, tokColon)) ||
+           checkPeek(P, 1, tokLBrace);
 }
 
 static AstNode *functionParam(Parser *P)
@@ -905,7 +927,7 @@ static AstNode *createTupleOrGroupExpression(Parser *P,
 
 static AstNode *parsePointerType(Parser *P)
 {
-    Token tok = *consume0(P, tokBAnd);
+    Token tok = *consume0(P, tokBXor);
     u64 flags = match(P, tokConst) ? flgConst : flgNone;
     AstNode *pointed = parseType(P);
 
@@ -914,6 +936,19 @@ static AstNode *parsePointerType(Parser *P)
                       &(AstNode){.tag = astPointerType,
                                  .flags = flags,
                                  .pointerType = {.pointed = pointed}});
+}
+
+static AstNode *parseReferenceType(Parser *P)
+{
+    Token tok = *consume0(P, tokBAnd);
+    u64 flags = match(P, tokConst) ? flgConst : flgNone;
+    AstNode *referred = parseType(P);
+
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astReferenceType,
+                                 .flags = flags,
+                                 .referenceType = {.referred = referred}});
 }
 
 static AstNode *parenExpr(Parser *P, bool strict)
@@ -1273,6 +1308,8 @@ static AstNode *primary(Parser *P, bool allowStructs)
     case tokLParen:
         return parenExpr(P, true);
     case tokLBrace:
+        if (maybeAnonymousStruct(P))
+            return structExpr(P, NULL, fieldExpr);
         return block(P);
     case tokLBracket:
         return array(P);
@@ -1282,6 +1319,7 @@ static AstNode *primary(Parser *P, bool allowStructs)
         return substitute(P, allowStructs);
     case tokIdent:
     case tokThis:
+    case tokThisClass:
     case tokSuper: {
         AstNode *path = parsePath(P);
         if (allowStructs && check(P, tokLBrace))
@@ -1311,7 +1349,7 @@ static AstNode *expression(Parser *P, bool allowStructs)
     expr->attrs = attrs;
     Token *tok = NULL;
     if (!P->inCase && (tok = match(P, tokBangColon))) {
-        u64 flags = flgUnsafeCast;
+        u64 flags = flgNone;
         AstNode *type = parseType(P);
         return newAstNode(
             P,
@@ -1587,6 +1625,7 @@ static OperatorOverload operatorOverload(Parser *P)
     else if (match(P, tokIdent)) {
         Token ident = *previous(P);
         cstring name = getTokenString(P, &ident, false);
+        bool builtins = !isBuiltinsInitialized();
         if (name == S_StringOverload_) {
             op = (OperatorOverload){.f = opStringOverload,
                                     .s = S_StringOverload};
@@ -1602,11 +1641,17 @@ static OperatorOverload operatorOverload(Parser *P)
             op = (OperatorOverload){.f = opDestructorOverload,
                                     .s = S_DestructorOverload};
         }
+        else if (builtins && name == S_DestructorFwd_) {
+            op = (OperatorOverload){.f = opDestructorFwd, .s = S_DestructorFwd};
+        }
         else if (name == S_HashOverload_) {
             op = (OperatorOverload){.f = opHashOverload, .s = S_HashOverload};
         }
         else if (name == S_Deref_) {
             op = (OperatorOverload){.f = opDeref, .s = S_Deref};
+        }
+        else if (name == S_CopyOverload_) {
+            op = (OperatorOverload){.f = opCopyOverload, .s = S_CopyOverload};
         }
 
         if (op.f == opInvalid) {
@@ -1629,7 +1674,6 @@ static OperatorOverload operatorOverload(Parser *P)
         case tokAwait:
             op = (OperatorOverload){.f = opAwait, .s = S_Await};
             break;
-
 #define f(O, PP, T, S, N)                                                      \
     case tok##T:                                                               \
         op = (OperatorOverload){.f = op##O, .s = S_##O};                       \
@@ -1881,7 +1925,7 @@ static AstNode *matchCaseStatement(Parser *P)
         P->inCase = false;
         if (!isMulti && !check(P, tokComma) && match(P, tokAs)) {
             tok = *current(P);
-            bool isPointer = match(P, tokBAnd);
+            bool isReference = match(P, tokBAnd);
             variable = parseIdentifier(P);
             variable =
                 newAstNode(P,
@@ -1889,7 +1933,7 @@ static AstNode *matchCaseStatement(Parser *P)
                            &(AstNode){.tag = astVarDecl,
                                       .varDecl = {.name = variable->ident.value,
                                                   .names = variable}});
-            variable->flags |= (isPointer ? flgReference : flgNone);
+            variable->flags |= (isReference ? flgReference : flgNone);
         }
     }
     else {
@@ -1949,14 +1993,25 @@ static AstNode *deferStatement(Parser *P)
     return newAstNode(
         P,
         &tok.fileLoc.begin,
-        &(AstNode){.tag = astDeferStmt, .deferStmt = {.expr = expr}});
+        &(AstNode){.tag = astDeferStmt, .deferStmt = {.stmt = expr}});
 }
 
 static AstNode *returnStatement(Parser *P)
 {
     AstNode *expr = NULL;
     Token tok = *consume0(P, tokReturn);
-    if (!check(P, tokSemicolon)) {
+    if (!check(P,
+               tokSemicolon,
+               tokLBrace,
+               tokRBrace,
+               tokFor,
+               tokWhile,
+               tokMatch,
+               tokSwitch,
+               tokCase,
+               tokVar,
+               tokFunc,
+               tokDelete)) {
         expr = expression(P, true);
     }
     match(P, tokSemicolon);
@@ -2081,8 +2136,11 @@ static AstNode *parseTypeImpl(Parser *P)
         case tokFunc:
             type = parseFuncType(P);
             break;
-        case tokBAnd:
+        case tokBXor:
             type = parsePointerType(P);
+            break;
+        case tokBAnd:
+            type = parseReferenceType(P);
             break;
         case tokVoid:
             advance(P);
@@ -2152,6 +2210,19 @@ static AstNode *parseStructField(Parser *P, bool isPrivate)
     AstNode *type = NULL, *value = NULL;
     Token tok = *consume0(P, tokIdent);
     cstring name = getTokenString(P, &tok, false);
+    u32 bits = 0;
+    if (check(P, tokColon) && checkPeek(P, 1, tokIntLiteral)) {
+        consume0(P, tokColon);
+        bits = consume0(P, tokIntLiteral)->uVal;
+        if (bits == 0 || bits > 64) {
+            logError(
+                P->L,
+                &previous(P)->fileLoc,
+                "struct bit size of {u32} out of range, valid range is 1-64 ",
+                (FormatArg[]){{.u32 = bits}});
+        }
+    }
+
     if (match(P, tokColon)) {
         type = parseType(P);
     }
@@ -2163,13 +2234,14 @@ static AstNode *parseStructField(Parser *P, bool isPrivate)
     // consume optional semicolon
     match(P, tokSemicolon);
 
-    return newAstNode(
-        P,
-        &tok.fileLoc.begin,
-        &(AstNode){
-            .tag = astFieldDecl,
-            .flags = isPrivate ? flgPrivate : flgNone,
-            .structField = {.name = name, .type = type, .value = value}});
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astFieldDecl,
+                                 .flags = isPrivate ? flgPrivate : flgNone,
+                                 .structField = {.name = name,
+                                                 .bits = bits,
+                                                 .type = type,
+                                                 .value = value}});
 }
 
 static AstNode *parseClassOrStructMember(Parser *P)
@@ -2810,6 +2882,7 @@ AstNode *parseProgram(Parser *P)
         E4C_TRY_BLOCK(
             {
                 listAddAstNode(&decls, comptime(P, declaration));
+                decls.last->flags |= flgTopLevelDecl;
             } E4C_CATCH(ParserException) { synchronize(E4C_EXCEPTION.ctx); })
     }
 

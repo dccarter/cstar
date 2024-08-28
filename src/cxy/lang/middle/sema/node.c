@@ -32,6 +32,7 @@ static AstNode *makeStructInitializerForDefaults(TypingContext *ctx,
                                     member->structField.name,
                                     value->flags,
                                     value,
+                                    member,
                                     NULL));
     }
     return init.first;
@@ -46,7 +47,7 @@ static AstNode *transformRValueToLValue(AstVisitor *visitor, AstNode *node)
     cstring tmpSymbol = makeAnonymousVariable(ctx->strings, "_rv");
     AstNode *tmpVar = makeVarDecl(ctx->pool,
                                   &node->loc,
-                                  node->flags & flgConst,
+                                  (node->flags & flgConst) | (flgMoved),
                                   tmpSymbol,
                                   NULL,
                                   node,
@@ -77,6 +78,165 @@ static AstNode *transformRValueToLValues(AstVisitor *visitor, AstNode *node)
     return nodes.first;
 }
 
+static AstNode *createSmartPointerAllocClass(TypingContext *ctx,
+                                             const Type *type,
+                                             const FileLoc *loc)
+{
+    AstNode *sptrAlloc =
+        findBuiltinDecl(ctx->traceMemory ? S_sptr_alloc_trace : S_sptr_alloc);
+    csAssert0(sptrAlloc);
+    AstNode *args = makeBackendCallExpr(
+        ctx->pool,
+        loc,
+        flgNone,
+        bfiSizeOf,
+        makeTypeReferenceNode(ctx->pool, makeTypeInfo(ctx->types, type), loc),
+        getPrimitiveType(ctx->types, prtU64));
+    AstNode *dctorFwd = findMemberDeclInType(type, S_DestructorFwd);
+    if (dctorFwd) {
+        args->next = makeMemberExpr(ctx->pool,
+                                    loc,
+                                    flgNone,
+                                    makeTypeReferenceNode(ctx->pool, type, loc),
+                                    makeResolvedIdentifier(ctx->pool,
+                                                           loc,
+                                                           S_DestructorFwd,
+                                                           0,
+                                                           dctorFwd,
+                                                           NULL,
+                                                           dctorFwd->type),
+                                    NULL,
+                                    dctorFwd->type);
+    }
+    else {
+        args->next =
+            makeNullLiteral(ctx->pool, loc, NULL, makeNullType(ctx->types));
+    }
+
+    if (ctx->traceMemory)
+        args->next->next = makeSrLocNode(ctx->pool, loc);
+
+    return makeVarDecl(
+        ctx->pool,
+        loc,
+        flgTemporary,
+        makeAnonymousVariable(ctx->strings, "__obj"),
+        NULL,
+        makeTypedExpr(ctx->pool,
+                      loc,
+                      flgNone,
+                      makeCallExpr(ctx->pool,
+                                   loc,
+                                   makeResolvedPath(ctx->pool,
+                                                    loc,
+                                                    sptrAlloc->_namedNode.name,
+                                                    flgNone,
+                                                    sptrAlloc,
+                                                    NULL,
+                                                    sptrAlloc->type),
+                                   args,
+                                   flgNone,
+                                   NULL,
+                                   sptrAlloc->type->func.retType),
+                      makeTypeReferenceNode(ctx->pool, type, loc),
+                      NULL,
+                      type),
+        NULL,
+        type);
+}
+
+static AstNode *createStructInitialize(TypingContext *ctx,
+                                       const Type *type,
+                                       const FileLoc *loc)
+{
+
+    return makeVarDecl(ctx->pool,
+                       loc,
+                       flgReference,
+                       makeAnonymousVariable(ctx->strings, "__obj"),
+                       makeTypeReferenceNode(ctx->pool, type, loc),
+                       NULL,
+                       NULL,
+                       type);
+}
+
+static AstNode *createObjectDefaultInitializer(TypingContext *ctx, AstNode *obj)
+{
+    const Type *type = obj->type;
+    AstNode *decl = getTypeDecl(type);
+    AstNodeList init = {};
+    for (AstNode *member = decl->structDecl.members; member;
+         member = member->next) {
+        if (nodeIs(member, FieldDecl) && member->structField.value)
+            insertAstNode(
+                &init,
+                makeExprStmt(
+                    ctx->pool,
+                    &member->loc,
+                    flgNone,
+                    makeAssignExpr(
+                        ctx->pool,
+                        &member->loc,
+                        member->flags,
+                        makePathWithElements(ctx->pool,
+                                             &obj->loc,
+                                             flgNone,
+                                             makeResolvedPathElement(
+                                                 ctx->pool,
+                                                 &obj->loc,
+                                                 obj->varDecl.name,
+                                                 flgNone,
+                                                 obj,
+                                                 makeResolvedPathElement(
+                                                     ctx->pool,
+                                                     &member->loc,
+                                                     member->structField.name,
+                                                     member->flags,
+                                                     member,
+                                                     NULL,
+                                                     member->type),
+                                                 obj->type),
+                                             NULL),
+                        opAssign,
+                        deepCloneAstNode(ctx->pool, member->structField.value),
+                        NULL,
+                        member->type),
+                    NULL,
+                    NULL));
+    }
+    return init.first;
+}
+
+AstNode *createCallObjectInit(TypingContext *ctx,
+                              AstNode *obj,
+                              AstNode *args,
+                              const FileLoc *loc)
+{
+    AstNode *init = findMemberDeclInType(obj->type, S_InitOverload);
+    csAssert0(init);
+    return makeCallExpr(
+        ctx->pool,
+        loc,
+        makePathWithElements(
+            ctx->pool,
+            loc,
+            flgNone,
+            makeResolvedPathElement(
+                ctx->pool,
+                loc,
+                obj->_namedNode.name,
+                flgNone,
+                obj,
+                makeResolvedPathElement(
+                    ctx->pool, loc, S_InitOverload, flgNone, init, NULL, NULL),
+                obj->type),
+            NULL),
+        args,
+        flgNone,
+        NULL,
+        NULL);
+}
+
 void transformToMemberCallExpr(AstVisitor *visitor,
                                AstNode *node,
                                AstNode *target,
@@ -103,23 +263,43 @@ void transformToMemberCallExpr(AstVisitor *visitor,
 const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    AstNode *callee = node->callExpr.callee;
-    u64 flags = (callee->flags & ~flgTopLevelDecl);
+    AstNode *callee = node->callExpr.callee, *args = node->callExpr.args;
     const Type *target = resolveAndUnThisType(callee->type);
-    // find constructor
-    AstNode *ctor = isClassType(target) ? findBuiltinDecl(S___construct0)
-                                        : findBuiltinDecl(S___construct1);
-    csAssert0(ctor);
-    // __construct[T]
-    node->callExpr.callee = makeResolvedPathWithArgs(
-        ctx->pool,
-        &callee->loc,
-        getDeclarationName(ctor),
-        flags,
-        ctor,
-        makeTypeReferenceNode(ctx->pool, target, &callee->loc),
-        NULL);
+
+    AstNodeList stmts = {};
+    AstNode *var = insertAstNode(
+        &stmts,
+        isClassType(target)
+            ? createSmartPointerAllocClass(ctx, target, &node->loc)
+            : createStructInitialize(ctx, target, &node->loc));
+    insertAstNode(&stmts, createObjectDefaultInitializer(ctx, var));
+    insertAstNode(&stmts,
+                  makeExprStmt(ctx->pool,
+                               &var->loc,
+                               flgNone,
+                               createCallObjectInit(ctx, var, args, &node->loc),
+                               NULL,
+                               NULL));
+    insertAstNode(&stmts,
+                  makeExprStmt(ctx->pool,
+                               &node->loc,
+                               flgNone,
+                               makeResolvedPath(ctx->pool,
+                                                &node->loc,
+                                                var->_namedNode.name,
+                                                flgMoved,
+                                                var,
+                                                NULL,
+                                                NULL),
+                               NULL,
+                               NULL));
+
+    node->tag = astStmtExpr;
     node->type = NULL;
+    clearAstBody(node);
+    node->stmtExpr.stmt =
+        makeBlockStmt(ctx->pool, &node->loc, stmts.first, NULL, NULL);
+    node->stmtExpr.stmt->flags |= flgBlockReturns;
 
     return checkType(visitor, node);
 }
@@ -128,7 +308,7 @@ bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     const Type *type = node->type ?: checkType(visitor, node);
-    type = unwrapType(type, NULL);
+    type = stripReference(unwrapType(type, NULL));
     if (!isClassOrStructType(type))
         return false;
 
@@ -239,8 +419,8 @@ bool transformOptionalType(AstVisitor *visitor, AstNode *node, const Type *type)
 bool transformToDerefOperator(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    const Type *type =
-        node->type ?: checkType(visitor, node->unaryExpr.operand);
+    const Type *type = stripReference(
+        node->type ?: checkType(visitor, node->unaryExpr.operand));
     if (!isClassOrStructType(type))
         return false;
 
@@ -260,8 +440,10 @@ AstNode *transformToUnionValue(TypingContext *ctx,
                                const Type *lhs,
                                const Type *rhs)
 {
-    const Type *stripped = stripOnce(lhs, NULL);
-    if (rhs != lhs && typeIs(stripped, Union) && stripped != rhs) {
+    const Type *stripped = stripOnce(lhs, NULL),
+               *strippedRhs = stripOnce(lhs, NULL);
+    if (strippedRhs != lhs && typeIs(stripped, Union) &&
+        stripped != strippedRhs) {
         u32 idx = findUnionTypeIndex(stripped, rhs);
         csAssert0(idx != UINT32_MAX);
         return makeUnionValueExpr(
