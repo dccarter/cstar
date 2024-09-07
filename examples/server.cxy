@@ -17,7 +17,7 @@ func handleConnection(sock: TcpSocket) {
     }
 }
 
-pub func main(args: const [string]) {
+pub func main(args: [string]) {
     var addr = Address("0.0.0.0", 8080);
     var listener = TcpListener(addr);
     println("listening at ", addr)

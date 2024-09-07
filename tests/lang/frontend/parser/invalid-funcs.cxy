@@ -1,7 +1,7 @@
 // @TEST: FileCheck
 
 /* Extern functions cannot be async */
-// CHECK: error: an async function cannot be marked as extern
+// CHECK: error: declaration cannot be marked as extern
 extern async func hello() : void {}
 
 /* Extern functions need a return type */

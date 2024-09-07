@@ -203,18 +203,20 @@ static const Type *toCxy(IncludeContext &ctx, const clang::RecordDecl *record)
         // the type needs to be this
         return ctx.recordsStack.top().type;
     }
-
+    auto flags = flgExtern | flgPublic;
     auto name = getCDeclName(ctx, *record);
     auto type =
-        record->isUnion()
-            ? findUntaggedUnionType(ctx.types, name, flgExtern | flgPublic)
-            : findStructType(ctx.types, name, flgExtern | flgPublic);
+        (record->isUnion() ? findUntaggedUnionType(ctx.types, name, flags)
+                           : findStructType(ctx.types, name, flags))
+            ?: findAliasType(ctx.types, name, flags);
     if (type != nullptr)
         return type;
 
-    bool isInnerStruct =
-        record->getLexicalParent()->getDeclKind() == clang::Decl::Record;
-    if (isInnerStruct) {
+    auto kind = record->getLexicalParent()->getDeclKind();
+    bool isInnerStruct = kind == clang::Decl::Record;
+    bool isTypeDef = kind == clang::Decl::TranslationUnit &&
+                     !record->fields().empty() && ctx.recordsStack.empty();
+    if (isInnerStruct || isTypeDef) {
         // inner struct
         auto decl = toCxy(ctx, *record);
         ctx.addDeclaration(decl);
@@ -294,11 +296,13 @@ static const Type *toCxy(IncludeContext &ctx, const clang::QualType qualtype)
         return toCxy(ctx, desugared);
     }
     case clang::Type::Elaborated:
-        return toCxy(ctx,
-                     llvm::cast<clang::ElaboratedType>(type).getNamedType());
+        return withFlags(
+            ctx,
+            toCxy(ctx, llvm::cast<clang::ElaboratedType>(type).getNamedType()),
+            flags);
     case clang::Type::Record: {
         auto record = llvm::cast<clang::RecordType>(type).getDecl();
-        return toCxy(ctx, record);
+        return withFlags(ctx, toCxy(ctx, record), flags);
     }
     case clang::Type::Paren:
         return toCxy(ctx, llvm::cast<clang::ParenType>(type).getInnerType());
@@ -436,14 +440,16 @@ static AstNode *toCxy(IncludeContext &ctx, const clang::RecordDecl &decl)
 static AstNode *toCxy(IncludeContext &ctx, const clang::TypedefDecl &decl)
 {
     auto loc = toCxy(ctx, decl.getSourceRange());
+    cstring name = getCDeclName(ctx, decl);
     auto type = toCxy(ctx, decl.getUnderlyingType());
-    return makeTypeDeclAstNode(ctx.pool,
-                               &loc,
-                               flgExtern | flgPublic,
-                               getCDeclName(ctx, decl),
-                               makeTypeReferenceNode(ctx.pool, type, &loc),
-                               NULL,
-                               type);
+    return makeTypeDeclAstNode(
+        ctx.pool,
+        &loc,
+        flgExtern | flgPublic,
+        name,
+        makeTypeReferenceNode(ctx.pool, type, &loc),
+        NULL,
+        makeAliasType(ctx.types, type, name, flgExtern | flgPublic));
 }
 
 static AstNode *toCxy(IncludeContext &ctx, const clang::VarDecl &decl)
@@ -466,6 +472,7 @@ AstNode *toCxy(IncludeContext &ctx, const clang::FunctionDecl &decl)
     std::vector<const Type *> paramTypes{};
     AstNodeList params = {};
     u64 flags = decl.isVariadic() ? flgVariadic : flgNone;
+    cstring name = getCDeclName(ctx, decl);
 
     for (int i = 0; i < decl.getNumParams(); i++) {
         auto &param = *decl.getParamDecl(i);
@@ -496,7 +503,7 @@ AstNode *toCxy(IncludeContext &ctx, const clang::FunctionDecl &decl)
     }
 
     Type func = {.tag = typFunc,
-                 .name = getCDeclName(ctx, decl),
+                 .name = name,
                  .flags = flags | flgExtern | flgPublic,
                  .func = {
                      .paramsCount = (u16)paramTypes.size(),
@@ -523,12 +530,40 @@ AstNode *toCxy(IncludeContext &ctx, const clang::FunctionDecl &decl)
     return node;
 }
 
+void unnamedEnumToCxy(IncludeContext &ctx,
+                      const Type *type,
+                      const clang::EnumDecl &decl)
+{
+    for (clang::EnumConstantDecl *option : decl.enumerators()) {
+        auto memberName = makeStringSized(
+            ctx.strings, option->getName().data(), option->getName().size());
+        auto value = option->getInitVal();
+        auto optionLoc = toCxy(ctx, option->getSourceRange());
+        auto expr = makeIntegerLiteral(
+            ctx.pool, &optionLoc, value.getExtValue(), nullptr, type);
+        auto macro = makeMacroDeclAstNode(ctx.pool,
+                                          &optionLoc,
+                                          flgPublic | flgExtern,
+                                          memberName,
+                                          NULL,
+                                          expr,
+                                          NULL);
+        preprocessorOverrideDefinedMacro(
+            ctx.preprocessor, memberName, macro, NULL);
+    }
+}
+
 AstNode *toCxy(IncludeContext &ctx, const clang::EnumDecl &decl)
 {
     auto name = getCDeclName(ctx, decl);
     auto type = toCxy(ctx,
                       name[0] ? decl.getIntegerType()
                               : clang::QualType(decl.getTypeForDecl(), 0));
+    if (name[0] == '\0') {
+        unnamedEnumToCxy(ctx, type, decl);
+        return nullptr;
+    }
+
     auto loc = toCxy(ctx, decl.getSourceRange());
     AstNodeList options = {};
     std::vector<EnumOptionDecl> members;
@@ -547,7 +582,6 @@ AstNode *toCxy(IncludeContext &ctx, const clang::EnumDecl &decl)
                                         expr,
                                         nullptr,
                                         nullptr));
-
         members.emplace_back((EnumOptionDecl){
             .name = memberName,
             .value = value.getExtValue(),
@@ -644,6 +678,11 @@ struct MacroImporter : clang::PPCallbacks {
                                 token,
                                 toCxy(ctx, name.getLocation()));
             break;
+        case clang::tok::string_literal:
+            importMacroStringLit(name.getIdentifierInfo()->getName(),
+                                 token,
+                                 toCxy(ctx, name.getLocation()));
+            break;
         case clang::tok::identifier:
             importMacroCall(name.getIdentifierInfo()->getName(),
                             token,
@@ -716,6 +755,34 @@ private:
                 NULL,
                 makeFloatLiteral(
                     ctx.pool, &valueLoc, value.convertToDouble(), NULL, type),
+                NULL);
+            defineMacro(macro);
+        }
+    }
+
+    void importMacroStringLit(llvm::StringRef name,
+                              const clang::Token &token,
+                              FilePos start)
+    {
+        auto result = compilerInstance.getSema().ActOnStringLiteral(token);
+        if (!result.isUsable())
+            return;
+        clang::Expr *parsed = result.get();
+        auto valueLoc = toCxy(ctx, token);
+        auto loc = valueLoc;
+        loc.begin = start;
+        if (auto *stringLit = llvm::dyn_cast<clang::StringLiteral>(parsed)) {
+            auto type = makeStringType(ctx.types);
+            auto value = makeStringSized(ctx.strings,
+                                         stringLit->getString().data(),
+                                         stringLit->getString().size());
+            auto macro = makeMacroDeclAstNode(
+                ctx.pool,
+                &loc,
+                flgPublic | flgExtern,
+                makeStringSized(ctx.strings, name.data(), name.size()),
+                NULL,
+                makeStringLiteral(ctx.pool, &valueLoc, value, NULL, type),
                 NULL);
             defineMacro(macro);
         }
@@ -836,7 +903,7 @@ AstNode *importCHeader(CompilerDriver *driver,
     });
 
     for_each<cstring>(options.cDefines, [&ci](auto define) {
-        ci.getPreprocessorOpts().addMacroDef(define);
+        ci.getPreprocessorOpts().addMacroDef(&define[2]);
     });
     // prevent a warning that comes when importing C headers
     ci.getPreprocessorOpts().addMacroDef("__GNUC__=4");

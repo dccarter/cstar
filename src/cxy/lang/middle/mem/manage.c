@@ -69,6 +69,11 @@ static bool needsMemoryManagement(const AstNode *node)
            (isClassType(node->type) || hasReferenceMembers(node->type));
 }
 
+static inline bool needsMemoryCopy(const AstNode *node)
+{
+    return !hasFlag(node, Move) && needsMemoryManagement(node);
+}
+
 static AstNode *makeZeromemNode(MMContext *ctx,
                                 AstNode *node,
                                 const Type *type,
@@ -679,7 +684,7 @@ static void visitVarDecl(AstVisitor *visitor, AstNode *node)
 {
     MMContext *ctx = getAstVisitorContext(visitor);
     if (needsMemoryManagement(node)) {
-        if (!hasFlag(node, Returned)) {
+        if (!hasFlags(node, flgReturned | flgMoved)) {
             addDeferredDestruct(ctx, node);
             astVisit(visitor, node->varDecl.init);
             if (isLeftValueExpr(node->varDecl.init)) {
@@ -761,7 +766,8 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
 
     for (; arg; arg = arg->next, param = param->next) {
         astVisit(visitor, arg);
-        if (needsMemoryManagement(param) && isLeftValueExpr(arg)) {
+        if (needsMemoryManagement(param) && isLeftValueExpr(arg) &&
+            !hasFlag(arg, Move)) {
             transformToCopy(ctx, arg);
         }
     }

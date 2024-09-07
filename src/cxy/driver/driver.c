@@ -99,7 +99,9 @@ attr(always_inline) static char *getCachedAstPath(Options *options,
     return path;
 }
 
-static AstNode *parseFile(CompilerDriver *driver, const char *fileName)
+static AstNode *parseFile(CompilerDriver *driver,
+                          const char *fileName,
+                          bool testMode)
 {
     size_t file_size = 0;
     printStatus(driver->L, cWHT "Parsing %s..." cDEF, fileName);
@@ -114,7 +116,7 @@ static AstNode *parseFile(CompilerDriver *driver, const char *fileName)
 
     compilerStatsSnapshot(driver);
     Lexer lexer = newLexer(fileName, fileData, file_size, driver->L);
-    Parser parser = makeParser(&lexer, driver);
+    Parser parser = makeParser(&lexer, driver, testMode);
     AstNode *program = parseProgram(&parser);
     compilerStatsRecord(driver, ccsParse);
 
@@ -127,10 +129,11 @@ static AstNode *parseFile(CompilerDriver *driver, const char *fileName)
 static AstNode *parseString(CompilerDriver *driver,
                             cstring code,
                             u64 codeSize,
-                            const char *fileName)
+                            const char *fileName,
+                            bool testMode)
 {
     Lexer lexer = newLexer(fileName ?: "builtins", code, codeSize, driver->L);
-    Parser parser = makeParser(&lexer, driver);
+    Parser parser = makeParser(&lexer, driver, testMode);
     printStatus(driver->L, cWHT "Parsing string @ %s" cDEF, fileName);
     AstNode *program = parseProgram(&parser);
 
@@ -233,6 +236,10 @@ compileProgramDone:
                               " Compilation success\n" cDEF);
         compilerStatsPrint(driver);
     }
+    if (status && options->cmd == cmdTest) {
+        printStatus(driver->L, cBWHT "Running test cases\n" cDEF);
+        status = compilerBackendExecuteTestCase(driver);
+    }
     return status;
 }
 
@@ -241,7 +248,7 @@ static bool compileBuiltin(CompilerDriver *driver,
                            u64 size,
                            const char *fileName)
 {
-    AstNode *program = parseString(driver, code, size, fileName);
+    AstNode *program = parseString(driver, code, size, fileName, false);
     if (program == NULL)
         return false;
 
@@ -400,7 +407,7 @@ const Type *compileModule(CompilerDriver *driver,
                 return NULL;
             }
 
-            program = parseFile(driver, path);
+            program = parseFile(driver, path, false);
             if (program == NULL)
                 return NULL;
 
@@ -483,7 +490,8 @@ bool compileFile(const char *fileName, CompilerDriver *driver)
     if (!configureDriverSourceDir(driver, &fileName))
         return false;
     startCompilerStats(driver);
-    AstNode *program = parseFile(driver, fileName);
+    AstNode *program =
+        parseFile(driver, fileName, driver->options.cmd == cmdTest);
     program->flags |= flgMain;
 
     return compileProgram(driver, program, fileName, true);
@@ -494,6 +502,7 @@ bool compileString(CompilerDriver *driver,
                    u64 size,
                    cstring filename)
 {
-    AstNode *program = parseString(driver, source, size, filename);
+    AstNode *program = parseString(
+        driver, source, size, filename, driver->options.cmd == cmdTest);
     return compileProgram(driver, program, filename, true);
 }

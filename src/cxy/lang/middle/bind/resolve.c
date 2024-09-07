@@ -82,20 +82,30 @@ static AstNode *resolvePathBaseUpChain(AstVisitor *visitor, AstNode *path)
     BindContext *ctx = getAstVisitorContext(visitor);
     AstNode *root = path->path.elements;
     AstNode *parent = findEnclosingClassOrStruct(ctx->env, NULL, NULL, NULL);
-    if (!nodeIs(parent, ClassDecl) || parent->classDecl.base == NULL ||
-        !nodeIs(parent->classDecl.base, Path)) //
-    {
-        return findSymbol(ctx->env,
-                          ctx->L,
-                          root->pathElement.alt ?: root->pathElement.name,
-                          &root->loc);
+    bool hasResolvableBase = !nodeIs(parent, ClassDecl) ||
+                             parent->classDecl.base == NULL ||
+                             !nodeIs(parent->classDecl.base, Path);
+    AstNode *resolved = NULL;
+    if (hasResolvableBase) {
+        resolved = findSymbol(ctx->env,
+                              ctx->L,
+                              root->pathElement.alt ?: root->pathElement.name,
+                              &root->loc);
+        if (resolved == NULL)
+            return NULL;
+    }
+    else {
+        resolved = findSymbol(ctx->env,
+                              NULL,
+                              root->pathElement.alt ?: root->pathElement.name,
+                              NULL);
     }
 
-    AstNode *resolved = findSymbol(
-        ctx->env, NULL, root->pathElement.alt ?: root->pathElement.name, NULL);
-
-    if (resolved)
+    if (resolved) {
+        if (nodeIs(resolved, FieldDecl) && ctx->isConstFunc)
+            root->flags |= flgConst;
         return resolved;
+    }
 
     AstNode *base = resolvePath(parent->classDecl.base);
 
@@ -148,6 +158,21 @@ void bindPath(AstVisitor *visitor, AstNode *node)
                      "comptime variable cannot be assigned outside comptime "
                      "context, did you mean `#{{{s}}`",
                      (FormatArg[]){{.s = base->pathElement.name}});
+            logNote(ctx->L,
+                    &resolved->loc,
+                    "comptime variable declared here",
+                    NULL);
+            return;
+        }
+
+        if (hasFlag(resolved, TestContext) && !ctx->inTestCase) {
+            logError(ctx->L,
+                     &base->loc,
+                     "{s} declared within {$}test{$} context, can only be used "
+                     "within a test context",
+                     (FormatArg[]){{.s = base->pathElement.name},
+                                   {.style = keywordStyle},
+                                   {.style = resetStyle}});
             logNote(ctx->L,
                     &resolved->loc,
                     "comptime variable declared here",
@@ -217,8 +242,21 @@ void bindPath(AstVisitor *visitor, AstNode *node)
 void bindIdentifier(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
-    node->ident.resolvesTo = findSymbol(
+    AstNode *resolved = findSymbol(
         ctx->env, ctx->L, node->ident.alias ?: node->ident.value, &node->loc);
+    if (hasFlag(resolved, TestContext) && !ctx->inTestCase) {
+        logError(ctx->L,
+                 &node->loc,
+                 "{s} marked declared within a {$}test{$} context can only be "
+                 "used within a test context",
+                 (FormatArg[]){{.s = node->ident.value},
+                               {.style = keywordStyle},
+                               {.style = resetStyle}});
+        logNote(
+            ctx->L, &resolved->loc, "comptime variable declared here", NULL);
+        return;
+    }
+    node->ident.resolvesTo = resolved;
 }
 
 void bindGenericParam(AstVisitor *visitor, AstNode *node)
@@ -266,6 +304,7 @@ void bindFunctionDecl(AstVisitor *visitor, AstNode *node)
         defineSymbol(ctx->env, ctx->L, node->funcParam.name, node);
     }
 
+    ctx->isConstFunc |= hasFlag(node, Const);
     astVisit(visitor, node->funcDecl.signature->ret);
     astVisitManyNodes(visitor, node->funcDecl.signature->params);
     astVisit(visitor, node->funcDecl.body);
@@ -622,6 +661,9 @@ void withParentScope(Visitor func, AstVisitor *visitor, AstNode *node)
 
     if (!ctx->isComptimeContext && isComptime)
         ctx->isComptimeContext = isComptime;
+
+    ctx->inTestCase = hasFlag(node, TestContext) || ctx->inTestCase;
+
     func(visitor, node);
     ctx->stack = stack;
 }

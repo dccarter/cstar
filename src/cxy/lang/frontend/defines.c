@@ -79,6 +79,12 @@ void initCompilerPreprocessor(struct CompilerDriver *driver)
                                 NULL);
     }
 
+    if (options->cmd == cmdTest) {
+        preprocessorDefineMacro(&driver->preprocessor,
+                                makeString(driver->strings, "__CXY_TEST__"),
+                                NULL);
+    }
+
     for (int i = 0; i < options->defines.size; i++) {
         CompilerDefine *define =
             &dynArrayAt(CompilerDefine *, &options->defines, i);
@@ -92,7 +98,7 @@ void initCompilerPreprocessor(struct CompilerDriver *driver)
 
         Lexer lexer = newLexer(
             "defines", define->value, strlen(define->value), driver->L);
-        Parser parser = makeParser(&lexer, driver);
+        Parser parser = makeParser(&lexer, driver, false);
         AstNode *node = parseExpression(&parser);
         preprocessorDefineMacro(&driver->preprocessor,
                                 makeString(driver->strings, define->name),

@@ -3,10 +3,20 @@ module tcp
 import { Address } from "./net.cxy"
 import { State } from "./coro.cxy"
 
-import "sys/fcntl.h" as fcntl
 import "sys/socket.h" as socket
 import "sys/errno.h" as errno
 import "unistd.h" as unistd
+##if (defined MACOS) {
+    import "sys/fcntl.h" as fcntl
+}
+else {
+    import "fcntl.h" as fcntl
+    import "bits/socket_type.h" as _st
+}
+
+#if (!defined MACOS) {
+    macro SOCK_STREAM _st.__socket_type.SOCK_STREAM
+}
 
 func configureSocket(fd: i32)  {
     /* Make the socket non-blocking. */
@@ -20,9 +30,11 @@ func configureSocket(fd: i32)  {
     rc = socket.setsockopt(fd, SOL_SOCKET!, SO_REUSEADDR!, ptrof opt, <u32>sizeof!(opt));
     assert!(rc == 0);
 
+#if (defined MACOS) {
     opt = 1;
     rc = socket.setsockopt(fd, SOL_SOCKET!, SO_NOSIGPIPE!, ptrof opt, <u32>sizeof!(opt));
     assert!(rc == 0 && errno! != EINVAL!);
+}
 }
 
 pub class TcpSocket {
@@ -195,7 +207,7 @@ pub class TcpListener {
     func `!!`() => (this !: ^void) != null && fd != -1
 
     func listen(backlog: i32 = 127) {
-        fd = socket.socket(bind.family(), SOCK_STREAM!, 0)
+        fd = socket.socket(bind.family(), <i32>SOCK_STREAM!, 0)
         if (fd == -1) {
             return false
         }
@@ -250,9 +262,9 @@ pub class TcpListener {
     @inline
     func close() : void { shutdown() }
 
-    func shutdown(how: i32 = SHUT_RDWR!): void {
+    func shutdown(how: i32 = <i32>SHUT_RDWR!): void {
         if (fd != -1) {
-            socket.shutdown(fd, SHUT_RD!)
+            socket.shutdown(fd, <i32>SHUT_RD!)
             unistd.close(fd)
             fd = -1
         }
@@ -263,7 +275,7 @@ pub class TcpListener {
 
 pub async func tcpConnect(addr: Address, deadline: i64 = 0): TcpSocket {
     /* Open a socket. */
-    var fd = socket.socket(addr.family(), SOCK_STREAM!, 0);
+    var fd = socket.socket(addr.family(), <i32>SOCK_STREAM!, 0);
     if (fd == -1)
         return null
 

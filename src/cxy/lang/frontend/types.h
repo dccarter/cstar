@@ -396,6 +396,11 @@ static inline const Type *unThisType(const Type *_this)
     return typeIs(_this, This) ? _this->_this.that : _this;
 }
 
+static inline const Type *maybeUnThisType(const Type *_this)
+{
+    return typeIs(_this, This) ? _this->_this.that ?: _this : _this;
+}
+
 const NamedTypeMember *findOverloadMemberUpInheritanceChain(const Type *type,
                                                             cstring member);
 

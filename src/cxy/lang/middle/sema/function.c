@@ -85,7 +85,7 @@ const Type *matchOverloadedFunctionPerfectMatch(Log *L,
         if (type == NULL)
             continue;
 
-        if ((decl->flags & flags) != flags)
+        if (isMemberFunction(decl) && ((decl->flags & flags) != flags))
             continue;
 
         bool isVariadic = hasFlag(decl, Variadic);

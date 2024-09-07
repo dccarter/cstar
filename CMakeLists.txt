@@ -5,6 +5,10 @@ project(cxy
         DESCRIPTION "Cxy is a transpiler for a high level programming language that tries to simplify C"
         LANGUAGES C CXX)
 
+find_package(Clang REQUIRED)
+set(CMAKE_C_COMPILER ${CLANG_EXECUTABLE})
+set(CMAKE_CXX_COMPILER ${CLANG_EXECUTABLE})
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -15,7 +19,7 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)
 endif ()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-c99-designator -Werror -fno-rtti")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-c99-designator -Wno-reorder -fno-rtti")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g")
@@ -46,42 +50,14 @@ include(CxyUtils)
 include(FetchContent)
 
 find_package(LLVM REQUIRED CONFIG)
-find_package(Clang REQUIRED)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 include_directories(${LLVM_INCLUDE_DIRS})
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
 add_definitions(${LLVM_DEFINITIONS_LIST})
 
-set(CMAKE_WARN_DEPRECATED OFF)
-# Fetch message-pack library
-set(MSGPACK_BUILD_TESTS OFF)
-set(MSGPACK_BUILD_EXAMPLES OFF)
-set(MSGPACK_ENABLE_STATIC ON)
-set(MSGPACK_ENABLE_SHARED OFF)
-set(MSGPACK_GEN_COVERAGE OFF)
-
-cmake_policy(PUSH)
-set(CMAKE_POLICY_DEFAULT_CMP0048 "NEW")
-set(CMAKE_POLICY_DEFAULT_CMP0077 "NEW")
-FetchContent_Declare(
-        msgpack-c
-        GIT_REPOSITORY https://github.com/msgpack/msgpack-c
-        GIT_TAG c-6.0.0
-        EXCLUDE_FROM_ALL
-)
-FetchContent_MakeAvailable(msgpack-c)
-
-set(BUILD_TESTING OFF)
-FetchContent_Declare(
-        libyaml
-        GIT_REPOSITORY https://github.com/dccarter/libyaml.git
-        GIT_TAG main
-        EXCLUDE_FROM_ALL
-)
-FetchContent_MakeAvailable(libyaml)
-
-cmake_policy(POP)
+add_subdirectory(src/3rdParty/msgpack)
+add_subdirectory(src/3rdParty/libyaml)
 
 include_directories(
         src/cxy
@@ -238,28 +214,29 @@ add_executable(cxy
         ${CXY_LANG_BACKEND_SOURCES}
         ${CXY_DRIVER_SOURCES})
 
+set(CLANG_LIBS clangAST clangBasic clangFrontend clangLex clangParse clangSema)
 if (ENABLE_LLVM_BACKEND)
     target_compile_definitions(cxy PRIVATE "-DLLVM_BACKEND")
+    # Find the libraries that correspond to the LLVM components
+    # that we wish to use
+    llvm_map_components_to_libnames(llvm_libs
+            ${LLVM_TARGETS_TO_BUILD}
+            Analysis
+            Core
+            Linker
+            TransformUtils
+            CodeGen
+            Passes
+            Support
+    )
+    target_link_libraries(cxy msgpack-c yaml ${llvm_libs} ${CLANG_LIBS})
+else ()
+    target_link_libraries(cxy msgpack-c yaml ${CLANG_LIBS})
 endif ()
-# Find the libraries that correspond to the LLVM components
-# that we wish to use
-llvm_map_components_to_libnames(llvm_libs
-        ${LLVM_TARGETS_TO_BUILD}
-        Analysis
-        Core
-        Linker
-        TransformUtils
-        CodeGen
-        Passes
-        Support
-)
-list(APPEND llvm_libs clangAST clangBasic clangFrontend clangLex clangParse clangSema)
-message(STATUS ${llvm_libs})
-target_link_libraries(cxy msgpack-c yaml ${llvm_libs})
+
 target_compile_definitions(cxy PRIVATE
         -DCXY_VERSION="${CXY_VERSION}")
 
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/stdlib)
 set(CXY_STD_LIB_SOURCES
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/native
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/coro.cxy
@@ -274,22 +251,6 @@ set(CXY_STD_LIB_SOURCES
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/time.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/trie.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/vector.cxy)
-
-file(GLOB_RECURSE
-    CXY_STD_LIB_SOURCES_DEPS
-    "${CMAKE_SOURCE_DIR}/src/cxy/stdlib/*.cxy"
-    "${CMAKE_SOURCE_DIR}/src/cxy/stdlib/*.h"
-    "${CMAKE_SOURCE_DIR}/src/cxy/stdlib/*.c"
-)
-
-message("${CXY_STD_LIB_SOURCES}")
-add_custom_target(
-        cxy-stdlib ALL
-        COMMAND cp -rf ${CXY_STD_LIB_SOURCES} ${CMAKE_CURRENT_BINARY_DIR}/stdlib/
-        DEPENDS ${CXY_STD_LIB_SOURCES_DEPS}
-)
-
-add_dependencies(cxy cxy-stdlib)
 
 if(NOT TARGET FileCheck)
     # Download the LLVM FileCheck utility for tests.
@@ -320,3 +281,18 @@ install(TARGETS cxy
 install(DIRECTORY src/cxy/stdlib
         DESTINATION lib/cxy/std
 )
+
+include(CTest)
+enable_testing()
+
+# Add stdlib test cases
+foreach (CXY_SRC ${CXY_STD_LIB_SOURCES})
+    if (IS_DIRECTORY "${CXY_SRC}")
+        continue()
+    endif ()
+
+    get_filename_component(_FILE ${CXY_SRC} NAME)
+    message(STATUS "Adding stdlib test case ${CXY_SRC}")
+    add_test(NAME "stdlib/${_FILE}"
+             COMMAND cxy test --no-progress --stdlib ${CMAKE_SOURCE_DIR}/src/cxy --with-mm ${CXY_SRC})
+endforeach ()

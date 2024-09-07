@@ -35,6 +35,7 @@ typedef struct CompilerDriver {
     CompilerPreprocessor preprocessor;
     void *backend;
     void *cImporter;
+    bool hasTestCases;
 } CompilerDriver;
 
 typedef struct {
@@ -77,6 +78,7 @@ const Type *compileModule(CompilerDriver *driver,
 void *initCompilerBackend(CompilerDriver *driver, int argc, char **argv);
 void deinitCompilerBackend(CompilerDriver *driver);
 bool compilerBackendMakeExecutable(CompilerDriver *driver);
+bool compilerBackendExecuteTestCase(CompilerDriver *driver);
 void initCompilerPreprocessor(struct CompilerDriver *driver);
 void deinitCompilerPreprocessor(struct CompilerDriver *driver);
 void initCImporter(struct CompilerDriver *driver);

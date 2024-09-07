@@ -212,9 +212,14 @@ Command(build,
             Sf('o'),
             Help("output file for the compiled binary (default: app)"),
             Def("app")),
-        Str(Name("stdlib"),
-            Help("root directory where cxy standard library is installed"),
-            Def("")),
+        Str(Name("build-dir"),
+            Help("the build directory, used as the working directory for the "
+                 "compiler"),
+            Def("")));
+
+Command(test,
+        "Runs unit tests declared on the given source files",
+        Positionals(),
         Str(Name("build-dir"),
             Help("the build directory, used as the working directory for the "
                  "compiler"),
@@ -224,7 +229,8 @@ Command(build,
 #define BUILD_COMMANDS(f)                                                      \
     PARSER_BUILTIN_COMMANDS(f)                                                 \
     f(dev)                                                                     \
-    f(build)
+    f(build)                                                                   \
+    f(test)
 
 #define DEV_CMD_LAYOUT(f, ...)                                                 \
     f(dev.lastStage, Local, Int, 0, ##__VA_ARGS__)                             \
@@ -240,8 +246,10 @@ Command(build,
 
 #define BUILD_CMD_LAYOUT(f, ...)                                               \
     f(output, Local, String, 0, ##__VA_ARGS__)                                 \
-    f(libDir, Local, String, 1, ##__VA_ARGS__)                                 \
-    f(buildDir, Local, String, 2, ##__VA_ARGS__)
+    f(buildDir, Local, String, 1, ##__VA_ARGS__)
+
+#define TEST_CMD_LAYOUT(f, ...)                                                \
+    f(buildDir, Local, String, 0, ##__VA_ARGS__)
 
 // clang-format on
 
@@ -298,6 +306,29 @@ static void initializeOptions(StrPool *strings, Options *options)
                              makeString(strings, sdkIncludeDir));
         free(sdkIncludeDir);
     }
+#else
+    FormatState state = newFormatState(NULL, true);
+    exec("clang -E -v -x c++ /dev/null 2>&1 | grep -e \"^ /\" | xargs realpath",
+         &state);
+    char *includeDirs = formatStateToString(&state);
+    const char *p = includeDirs;
+    while (p && p[0] != '\0') {
+        const char *end = strchr(p, '\n');
+        if (end) {
+            pushStringOnDynArray(&options->importSearchPaths,
+                                 makeStringSized(strings, p, end - p));
+            p = end + 1;
+        }
+        else {
+            pushStringOnDynArray(&options->importSearchPaths,
+                                 makeString(strings, p));
+            p = NULL;
+        }
+    }
+    free(includeDirs);
+    freeFormatState(&state);
+    pushStringOnDynArray(&options->cDefines, "-D_XOPEN_SOURCE=1");
+    pushStringOnDynArray(&options->cDefines, "-D_DEFAULT_SOURCE");
 #endif
 }
 
@@ -411,7 +442,10 @@ bool parseCommandLineOptions(
                  "values: NONE|SUMMARY|FULL"),
             Def("SUMMARY")),
         Opt(Name("no-progress"),
-            Help("Do not print progress messages during compilation")));
+            Help("Do not print progress messages during compilation")),
+        Str(Name("stdlib"),
+            Help("root directory where cxy standard library is installed"),
+            Def("")));
 
     int selected = argparse(argc, &argv, parser);
 
@@ -447,8 +481,10 @@ bool parseCommandLineOptions(
     else if (cmd->id == CMD_build) {
         options->cmd = cmdBuild;
         UnloadCmd(cmd, options, BUILD_CMD_LAYOUT);
-        if (options->libDir == NULL)
-            options->libDir = makeString(strings, getenv("CXY_STDLIB_DIR"));
+    }
+    else if (cmd->id == CMD_test) {
+        options->cmd = cmdTest;
+        UnloadCmd(cmd, options, TEST_CMD_LAYOUT);
     }
 
     cstring str = getGlobalString(cmd, 5);
@@ -467,6 +503,10 @@ bool parseCommandLineOptions(
     moveListOptions(&options->loadPassPlugins, &getGlobalArray(cmd, 17));
     options->dsmMode = getGlobalInt(cmd, 18);
     log->progress = !getGlobalOption(cmd, 19);
+    options->libDir = getGlobalString(cmd, 20);
+
+    if (options->libDir == NULL)
+        options->libDir = makeString(strings, getenv("CXY_STDLIB_DIR"));
 
     file_count = *argc - 1;
 

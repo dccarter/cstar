@@ -506,7 +506,7 @@ static AstNode *isStruct(EvalContext *ctx,
                          attr(unused) AstNode *args)
 {
     const Type *type = node->type ?: evalType(ctx, node);
-    type = unwrapType(resolveType(type), NULL);
+    type = unwrapType(resolveAndUnThisType(type), NULL);
 
     return makeAstNode(ctx->pool,
                        loc,

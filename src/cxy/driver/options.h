@@ -11,7 +11,7 @@ extern "C" {
 typedef struct Log Log;
 struct StrPool;
 
-typedef enum { cmdDev, cmdBuild, cmdRun } Command;
+typedef enum { cmdDev, cmdBuild, cmdTest, cmdRun } Command;
 // clang-format off
 #define DUMP_OPTIONS(ff)    \
     ff(NONE)                \
@@ -77,17 +77,19 @@ typedef struct Options {
     cstring passes;
     DynArray loadPassPlugins;
     DumpStatsMode dsmMode;
-    struct {
-        bool printIR;
-        bool emitBitCode;
-        bool emitAssembly;
-        bool cleanAst;
-        bool withLocation;
-        bool withoutAttrs;
-        bool withNamedEnums;
-        DumpModes dumpMode;
-        u64 lastStage;
-    } dev;
+    union {
+        struct {
+            bool printIR;
+            bool emitBitCode;
+            bool emitAssembly;
+            bool cleanAst;
+            bool withLocation;
+            bool withoutAttrs;
+            bool withNamedEnums;
+            DumpModes dumpMode;
+            u64 lastStage;
+        } dev;
+    };
 } Options;
 
 /// Parse command-line options, and remove those parsed options from the

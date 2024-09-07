@@ -33,10 +33,12 @@ typedef struct {
     MemPool *memPool;
     StrPool *strPool;
     bool inCase : 1;
+    bool inTest : 1;
+    bool testMode : 1;
     Token ahead[TOKEN_BUFFER];
 } Parser;
 
-Parser makeParser(Lexer *, CompilerDriver *);
+Parser makeParser(Lexer *, CompilerDriver *, bool testMode);
 AstNode *parseProgram(Parser *);
 AstNode *parseExpression(Parser *P);
 

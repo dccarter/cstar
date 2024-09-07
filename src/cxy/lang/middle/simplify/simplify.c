@@ -171,9 +171,10 @@ static void simplifyForArrayStmt(AstVisitor *visitor, AstNode *node)
     SimplifyContext *ctx = getAstVisitorContext(visitor);
     AstNode *range = node->forStmt.range, *var = node->forStmt.var,
             *body = node->forStmt.body;
-    const Type *elem = typeIs(range->type, String)
+    const Type *rangeType = unwrapType(range->type, NULL);
+    const Type *elem = typeIs(rangeType, String)
                            ? getPrimitiveType(ctx->types, prtCChar)
-                           : range->type->array.elementType;
+                           : rangeType->array.elementType;
 
     AstNode *index =
         var->next
@@ -205,11 +206,13 @@ static void simplifyForArrayStmt(AstVisitor *visitor, AstNode *node)
     range = makeVarDecl(ctx->pool,
                         &range->loc,
                         range->flags,
-                        "",
+                        makeAnonymousVariable(ctx->strings, "_for"),
                         NULL,
                         range,
                         NULL,
-                        range->type);
+                        typeIs(rangeType, String)
+                            ? range->type
+                            : makePointerType(ctx->types, elem, flgNone));
     index->next = range;
 
     AstNode *condition = makeBinaryExpr(
@@ -226,7 +229,7 @@ static void simplifyForArrayStmt(AstVisitor *visitor, AstNode *node)
         opLt,
         makeUnsignedIntegerLiteral(ctx->pool,
                                    &range->loc,
-                                   range->type->array.len,
+                                   rangeType->array.len,
                                    NULL,
                                    getPrimitiveType(ctx->types, prtU64)),
         NULL,
@@ -465,6 +468,49 @@ bool isRedundantStatement(AstNode *node)
     return isRedundantExpression(expr);
 }
 
+static void createModuleInit(AstVisitor *visitor, AstNode *program)
+{
+    SimplifyContext *ctx = getAstVisitorContext(visitor);
+    cstring name =
+        program->program.module
+            ? makeStringConcat(ctx->strings,
+                               S___init,
+                               "_",
+                               program->program.module->moduleDecl.name)
+            : S___init;
+    AstNode *func = makeFunctionDecl(
+        ctx->pool,
+        builtinLoc(),
+        name,
+        NULL,
+        makeVoidAstNode(
+            ctx->pool, builtinLoc(), flgNone, NULL, makeVoidType(ctx->types)),
+        makeBlockStmt(ctx->pool, builtinLoc(), ctx->init.first, NULL, NULL),
+        flgTopLevelDecl | flgPublic | flgConstructor,
+        NULL,
+        NULL);
+
+    astVisit(visitor, func->funcDecl.body);
+
+    func->type = makeFuncType(
+        ctx->types,
+        &(Type){.tag = typFunc,
+                .name = name,
+                .func = {.retType = makeVoidType(ctx->types), .decl = func}});
+    func->parentScope = program;
+
+    AstNode *ext =
+        makeAstNode(ctx->pool,
+                    &func->loc,
+                    &(AstNode){.tag = astExternDecl,
+                               .type = func->type,
+                               .flags = func->flags | flgPublic | flgModuleInit,
+                               .next = program->program.decls,
+                               .externDecl.func = func});
+    program->program.decls = ext;
+    getLastAstNode(ext)->next = func;
+}
+
 static void visitProgram(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
@@ -502,6 +548,11 @@ static void visitProgram(AstVisitor *visitor, AstNode *node)
         astVisit(visitor, decl);
     }
 
+    if (ctx->init.first != NULL) {
+        // only create initializer when there is data to initialize
+        createModuleInit(visitor, node);
+    }
+
     if (isBuiltinsInitialized()) {
         externals.last->next = node->program.decls;
         node->program.decls = externals.first;
@@ -524,6 +575,24 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
             break;
         if (typeIs(func->type->func.params[i], Auto))
             continue;
+
+        if (!nodeIsLeftValue(arg) && !isLiteralExpr(arg)) {
+            astVisit(visitor, arg);
+            AstNode *var =
+                makeVarDecl(ctx->pool,
+                            &arg->loc,
+                            flgMoved | (arg->flags & flgConst),
+                            makeAnonymousVariable(ctx->strings, "_a"),
+                            NULL,
+                            shallowCloneAstNode(ctx->pool, arg),
+                            NULL,
+                            arg->type);
+            arg->tag = astIdentifier;
+            arg->ident.value = var->_namedNode.name;
+            arg->ident.resolvesTo = var;
+            arg->flags |= flgMove;
+            astModifierAdd(&ctx->block, var);
+        }
 
         const Type *left = unwrapType(func->type->func.params[i], NULL),
                    *right = unwrapType(arg->type, NULL);
@@ -617,7 +686,7 @@ static void visitPathExpr(AstVisitor *visitor, AstNode *node)
         AstNode *this = getMemberFunctionThis(ctx->currentFunction);
         csAssert0(this);
         node->path.elements = makeResolvedPathElement(
-            ctx->pool, &node->loc, S_this, flgNone, this, base, this->type);
+            ctx->pool, &node->loc, S_this, this->flags, this, base, this->type);
 
         if (base->pathElement.resolvesTo == NULL) {
             // it already resolves to correct member
@@ -716,7 +785,7 @@ static void visitMemberExpr(AstVisitor *visitor, AstNode *node)
         AstNode *var = makeVarDecl(ctx->pool,
                                    &target->loc,
                                    flgMoved,
-                                   makeAnonymousVariable(ctx->strings, "_i"),
+                                   makeAnonymousVariable(ctx->strings, "_m"),
                                    NULL,
                                    target,
                                    NULL,
@@ -741,7 +810,7 @@ static void visitReferenceOfExpr(AstVisitor *visitor, AstNode *node)
         AstNode *var = makeVarDecl(ctx->pool,
                                    &operand->loc,
                                    flgMoved,
-                                   makeAnonymousVariable(ctx->strings, "_i"),
+                                   makeAnonymousVariable(ctx->strings, "_r"),
                                    NULL,
                                    operand,
                                    NULL,
@@ -895,9 +964,9 @@ static void visitVarDecl(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
     n2eAddNodeToExternDecl(&ctx->n2e, node, node);
-    astVisitFallbackVisitAll(visitor, node);
     AstNode *init = node->varDecl.init;
     if (!hasFlag(node, TopLevelDecl)) {
+        astVisit(visitor, init);
         if (init == NULL) {
             AstNode *zeroInit = makeBackendCallExpr(
                 ctx->pool,
@@ -960,46 +1029,9 @@ static void visitVarDecl(AstVisitor *visitor, AstNode *node)
                                    NULL,
                                    makeVoidType(ctx->types)));
     }
-}
-
-static void createModuleInit(SimplifyContext *ctx, AstNode *program)
-{
-    cstring name =
-        program->program.module
-            ? makeStringConcat(ctx->strings,
-                               S___init,
-                               "_",
-                               program->program.module->moduleDecl.name)
-            : S___init;
-    AstNode *func = makeFunctionDecl(
-        ctx->pool,
-        builtinLoc(),
-        name,
-        NULL,
-        makeVoidAstNode(
-            ctx->pool, builtinLoc(), flgNone, NULL, makeVoidType(ctx->types)),
-        makeBlockStmt(ctx->pool, builtinLoc(), ctx->init.first, NULL, NULL),
-        flgTopLevelDecl | flgPublic | flgConstructor,
-        NULL,
-        NULL);
-
-    func->type = makeFuncType(
-        ctx->types,
-        &(Type){.tag = typFunc,
-                .name = name,
-                .func = {.retType = makeVoidType(ctx->types), .decl = func}});
-    func->parentScope = program;
-
-    AstNode *ext =
-        makeAstNode(ctx->pool,
-                    &func->loc,
-                    &(AstNode){.tag = astExternDecl,
-                               .type = func->type,
-                               .flags = func->flags | flgPublic | flgModuleInit,
-                               .next = program->program.decls,
-                               .externDecl.func = func});
-    program->program.decls = ext;
-    getLastAstNode(ext)->next = func;
+    else {
+        astVisit(visitor, init);
+    }
 }
 
 #ifdef LLVM_BACKEND
@@ -1114,7 +1146,7 @@ static AstNode *simplifyCode(CompilerDriver *driver, AstNode *node)
         [astIdentifier] = visitIdentifier,
         [astCallExpr] = visitCallExpr,
         [astStmtExpr] = visitStmtExpr,
-        [astIndexExpr] = visitIndexExpr,
+        //[astIndexExpr] = visitIndexExpr,
         [astStructExpr] = visitStructExpr,
         [astMemberExpr] = visitMemberExpr,
         [astReferenceOf] = visitReferenceOfExpr,
@@ -1134,10 +1166,6 @@ static AstNode *simplifyCode(CompilerDriver *driver, AstNode *node)
 
     astVisit(&visitor, node);
     n2eDeinit(&context.n2e);
-    if (context.init.first != NULL) {
-        // only create initializer when there is data to initialize
-        createModuleInit(&context, node);
-    }
 
 #ifdef LLVM_BACKEND
     if (hasFlag(node, Main) && driver->startup.first) {

@@ -177,6 +177,9 @@
     case astInterfaceDecl:                                                     \
         MODE##VisitManyNodes(visitor, node->interfaceDecl.members);            \
         break;                                                                 \
+    case astTestDecl:                                                          \
+        MODE##Visit(visitor, node->testDecl.body);                             \
+        break;                                                                 \
     case astBinaryExpr:                                                        \
     case astAssignExpr:                                                        \
         MODE##Visit(visitor, node->binaryExpr.lhs);                            \

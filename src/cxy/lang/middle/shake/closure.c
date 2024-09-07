@@ -128,7 +128,7 @@ static void createStructForClosure(AstVisitor *visitor, AstNode *node)
         S_this,
         makePointerAstNode(ctx->pool,
                            &members->loc,
-                           flgNone,
+                           members->flags & flgConst,
                            makeResolvedIdentifier(ctx->pool,
                                                   &node->loc,
                                                   closure->structDecl.name,

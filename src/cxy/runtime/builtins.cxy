@@ -17,7 +17,6 @@ pub extern func write(fd: i32, buf: ^const void, len: u64) : i64
 pub extern func strtoll(str: ^const char, endptr: ^ ^const char, base: i32): i64;
 pub extern func strtod(str: ^const char, endptr: ^ ^const char): f64;
 pub extern func toupper(c: i32): i32
-pub extern func __error(): ^i32
 
 macro alloca(T) { mk_bc!(bfiAlloca!, #^void, T!) }
 macro zero(V) { mk_bc!(bfiZeromem!, #void, V!) }
@@ -45,7 +44,14 @@ else {
     macro assert(cond) ()
 }
 
-macro errno() =(*__error())
+#if (defined MACOS) {
+    pub extern func __error(): ^i32
+    macro errno() =(*__error())
+}
+else {
+    pub extern func __errno_location(): ^i32
+    macro errno() =(*__errno_location())
+}
 
 @[pure]
 pub func __cxy_panic(file: string, line: u64, column: u64, msg: string) {
@@ -62,10 +68,10 @@ pub func __cxy_panic(file: string, line: u64, column: u64, msg: string) {
 macro panic(msg) { __cxy_panic(file!, line!, column!, msg!) }
 
 @inline
-pub func __bswap_16(x: u16) => <u16>(((x >> 8) & 0xff) | ((x & 0xff) << 8))
+pub func __bswap16(x: u16) => <u16>(((x >> 8) & 0xff) | ((x & 0xff) << 8))
 
 @inline
-pub func __bswap_32(x: u32) => (
+pub func __bswap32(x: u32) => (
       ((x & 0xff000000:u32) >> 24)
     | ((x & 0x00ff0000:u32) >> 8)
     | ((x & 0x0000ff00:u32) << 8)
@@ -73,7 +79,7 @@ pub func __bswap_32(x: u32) => (
 )
 
 @inline
-pub func __bswap_64(x: u64) => (
+pub func __bswap64(x: u64) => (
       ((x & 0xff00000000000000:u64) >> 56)
     | ((x & 0x00ff000000000000:u64) >> 40)
     | ((x & 0x0000ff0000000000:u64) >> 24)
@@ -245,7 +251,7 @@ pub func Some[T](value: T) => __Optional[T]{ ok: true, val: &&value }
 pub func None[T]() => __Optional[T]()
 
 pub type HashCode = u32
-#const FNV_32_PRIME = 0x01000193
+#const FNV_32_PRIME = 0x01000193:u32
 
 @inline
 pub func hash_fnv1a_uint8(h: HashCode, x: u8) : HashCode
@@ -599,6 +605,9 @@ pub class OutputStream {
         else #if (U.isPointer) {
             this.appendPointer[#{U.pointedType}](val)
         }
+        else #if (U.isFunction) {
+            this.appendString("TODO//function")
+        }
         else {
             error!("type {t} not supported by OutputStream::`<<` operator", #U)
         }
@@ -644,16 +653,22 @@ pub class String : OutputStream {
     }
 
     @inline
-    func `deinit`() => {
-        if (_data != null) {
-            free(this._data)
-            this._data = null
-        }
+    func `deinit`() {
+        clear()
     }
 
     @static
     func `destructor_fwd`(ptr: ^void) {
         (ptr !: This).op__deinit()
+    }
+
+    func clear() : void {
+        if (_data != null) {
+            free(this._data)
+            this._data = null
+            this._capacity = 0
+            this._size = 0
+        }
     }
 
     func append(str: ^const char, size: u64) : void {
@@ -762,6 +777,7 @@ pub class String : OutputStream {
     @inline const func data() => _data
     @inline const func empty() => _size == 0
     @inline const func cstr() => CString(_data !: string, _size)
+    @inline const func substr(start: u64, count: i64 = -1) => cstr().substr(start, count)
 }
 
 pub class BufferedOutputStream: OutputStream {
@@ -852,14 +868,6 @@ pub struct Slice[T] {
                 return Some((data.[i], i++))
             return None[(T, i32)]()
         }
-    }
-
-    const func `hash`() {
-        var code: u32 = #{FNV_32_PRIME};
-        for (const i: 0..len) {
-            code = hash(data.[i], code)
-        }
-        return code
     }
 
     const func `str`(sb: OutputStream) {
@@ -1042,6 +1050,13 @@ pub func __construct1[T](@transient ...args: auto) {
     return obj
 }
 
+macro stackAlloc(T, ...ARGS) =({
+    var obj = mk_bc!(bfiAlloca!, #&T!, T!);
+    init_defaults!(obj)
+    obj.op__init(ARGS!);
+    obj
+})
+
 pub var stdout: OutputStream = __construct0[FileOutputStream](1);
 pub var stderr: OutputStream = __construct0[FileOutputStream](2);
 
@@ -1127,4 +1142,49 @@ pub func update[Lhs, Rhs](lhs: &Lhs, rhs: Rhs) {
                  "target does not have a member named '{s}' of type {t}", M.name, #T)
         lhs.#{mk_ident!(M.name)} = rhs.#{mk_ident!(M.name)}
     }
+}
+
+#if (defined __CXY_TEST__) {
+// Add macro for testing
+macro ok(cond) {
+    if (!(cond!))
+        return (file!, offset!, line!)
+}
+
+#if (!defined TESTS_RUNNER) {
+    func runTests(args: Slice[string],
+                  testFile: string,
+                  tests: Slice[( string, func() -> __Optional[(string, u64, u64)] )] ) {
+        var failed = 0;
+        if (len!(tests) == 0) {
+            stdout << "0 tests defined in " << testFile << "\n";
+            return 0
+        }
+
+        stdout << "Running " << testFile << " tests...\n"
+        for (const testCase, _ : tests) {
+            const name, exec = testCase;
+            stdout << "  Running test case " << name << ""
+
+            const r = exec();
+            stdout << "\r                                                               ";
+            if (r) {
+                const res = *r;
+                stdout << "\r  \x1B[1;31m\xE2\x9C\x92 \x1B[1;37m" << name
+                       << " - " << res.0 << ":" << res.1 << "\x1B[0m\n"
+                failed++
+            }
+            else {
+                stdout << "\r  \x1B[1;32m\xE2\x9C\x93 \x1B[1;37m" << name << "\x1B[0m\n"
+            }
+        }
+
+        if (failed != 0) {
+            stdout << "\x1B[1;31m\xE2\x9C\x92 FAILED " << failed << "/" << len!(tests) << " tests failed!\x1B[0m\n"
+            return -1
+        }
+        return 0
+    }
+}
+
 }

@@ -10,7 +10,7 @@ struct File {
         this.fd = fd
     }
 
-    func read(data: &void, size: u64) : u64? {
+    func read(data: ^void, size: u64) : u64? {
         if (fd == -1)
             return null
 
@@ -21,7 +21,7 @@ struct File {
         return <u64>bytes;
     }
 
-    func read(data: &void, size: u64, off: i64) : u64? {
+    func read(data: ^void, size: u64, off: i64) : u64? {
         if (fd == -1)
             return null
 
@@ -39,5 +39,120 @@ struct File {
     func `!!`() => fd != -1
 
     @inline
-    func seek(off: u64, whence: i32 = SEEK_SET!) => stdio.lseek(fd, off:i64, whence)
+    func seek(off: u64, whence: i32 = SEEK_SET!) => stdio.lseek(fd, <i64>off, whence)
+}
+
+pub class MemoryOutputStream : OutputStream {
+    - _buffer: ^void
+    - _capacity: u64
+    - _size: u64 = 0
+
+    func `init`(buffer: ^void, capacity: u64) {
+        this._buffer = buffer
+        this._capacity = capacity
+    }
+
+    func append(str: ^const char, size: u64) : void {
+        if (size) {
+            assert!(size < (_capacity - _size))
+            var p = (this._buffer !: ^char) + this._size;
+            memmove(p, str, size)
+            this._size += size
+            p.[size] = <char>'\0'
+        }
+    }
+
+    @inline
+    const func `str`(os: &OutputStream) {
+        // assert!(!ptreq!(this, os))
+        os.append(_buffer, _size)
+    }
+}
+
+struct Style {
+    color = 0:i8;
+    - _bg = 0:i8;
+    - _bold = false;
+    - _italics = false;
+    - _underline = false;
+    - _blink = false;
+    - _faded = false
+
+    const func `str`(os: &OutputStream) {
+        var tmp: [i8, 64];
+        var mos = stackAlloc!(#MemoryOutputStream, tmp, 64);
+        mos << "\x1B["
+        if (color != 0) {
+            if (_bold)
+                mos << "1;"
+            if (_faded)
+                mos << "2;"
+            if (_italics)
+                mos << "3;"
+            if (_underline)
+                mos << "4;"
+            if (_blink)
+                mos << "5;"
+            if (_bg)
+                mos << _bg << ";"
+        }
+        mos << color << 'm';
+        os << mos
+    }
+
+    const func `()`(cfg: string, bg: This) {
+        var x = *this;
+        const p = cfg !: ^const char;
+        var i = 0:i32;
+        while (p.[i] != '\0':char) {
+            var on = true;
+            if (p.[i] == '~':char) {
+                i++
+                on = false
+            }
+
+            switch(p.[i++]) {
+                case 'b':char => x._bold = on
+                case 'i':char => x._italics = on
+                case 'u':char => x._underline = on
+                case 'f':char => x._faded = on
+                case 'p':char => x._blink = on
+                default => assert!(false)
+            }
+            assert!(p.[i] == '\0':char || p.[i++] == '|':char)
+        }
+        if (bg.color >= 0)
+            x._bg = bg.color
+        return x
+    }
+
+    @inline
+    const func `()`(cfg: string) => this.op__call(cfg, This{color: -1})
+}
+
+pub const DEF = Style{color: 0 };
+pub const RED = Style{color: 31 };
+pub const GRN = Style{color: 32 };
+pub const YLW = Style{color: 33 };
+pub const BLU = Style{color: 34 };
+pub const MGN = Style{color: 35 };
+pub const cxy = Style{color: 36 };
+pub const WHT = Style{color: 37 };
+
+test "Terminal style" {
+    var x = YLW("b|i|u|f|p", WHT);
+    ok!(x._bold)
+    ok!(x._italics)
+    ok!(x._underline)
+    ok!(x._faded)
+    ok!(x._blink)
+
+    var s = String();
+    s << x
+    ok!(s == "\x1B[1;2;3;4;5;37;33m")
+
+    x = x("~b|i|~u|~f")
+    s.clear()
+    s << x
+    ok!(s == "\x1B[3;5;37;33m")
 }

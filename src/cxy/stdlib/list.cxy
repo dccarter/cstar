@@ -1,44 +1,131 @@
 module list
 
 pub struct List[T] {
-    head: ^T = null
-    tail: ^T = null
+    _head: ^T = null
+    _tail: ^T = null
     count: u64 = 0;
 
     func push(item: ^T) {
-        if (head ==  null) {
-            head = item
+        assert!(item.link == null)
+        if (_head ==  null) {
+            _head = item
         }
         else {
-            this.tail.link = item
+            this._tail.link = item
         }
         count++
-        tail = item
+        _tail = item
     }
 
     func pop() {
-        var item = head;
-        if (head != null) {
+        var item = _head;
+        if (_head != null) {
             count--
-            head = head.link
-            if (head == null)
-                tail = null
+            _head = _head.link
+            if (_head == null)
+                _tail = null
             item.link = null
         }
         return item
     }
 
     func `..`() {
-        var item = head;
+        var item = _head;
         return () : __Optional[^T] => {
             if (item != null) {
                 var curr = item;
                 item = item.link;
-                return curr
+                return Some[^T](curr)
             }
             else
-                return null
+                return None[^T]()
         }
     }
 
+    @inline
+    func front() : ^T {
+        if (_head == null)
+            return null
+        else
+            return _head
+    }
+
+    @inline
+    func back() : ^T {
+        if (_tail == null)
+            return null
+        else
+            return _tail
+    }
+
+    @inline
+    const func size() => count
+
+    @inline
+    const func empty() => _head == null
+}
+
+test {
+    struct Item {
+        link: ^This = null;
+        num: i32
+    }
+}
+
+test "List[T].push" {
+    var i1 = Item{num: 1};
+    var i2 = Item{num: 2};
+
+    var list = List[Item]{};
+    ok!(list.size() == 0)
+
+    list.push(ptrof i1)
+    ok!(list.size() == 1)
+    list.push(ptrof i2)
+    ok!(list.size() == 2)
+}
+
+test "List[T].pop" {
+    var i1 = Item{num: 1};
+    var i2 = Item{num: 2};
+
+    var list = List[Item]{};
+    list.push(ptrof i1)
+    list.push(ptrof i2)
+    ok!(list.size() == 2)
+
+    var x = list.pop();
+    ok!(x != null)
+    ok!(x.num == i1.num)
+    ok!(list.size() == 1)
+
+    x = list.pop();
+    ok!(x != null)
+    ok!(x.num == i2.num)
+    ok!(list.size() == 0)
+
+    x = list.pop();
+    ok!(x == null)
+    ok!(list.size() == 0)
+}
+
+test "List[T].front/back" {
+    var i1 = Item{num: 1};
+    var i2 = Item{num: 2};
+    var i3 = Item{num: 3};
+
+    var list = List[Item]{};
+    list.push(ptrof i1)
+    list.push(ptrof i2)
+    list.push(ptrof i3)
+
+    var x = list.front();
+    ok!(x != null)
+    ok!(x.num == i1.num)
+    ok!(list.size() == 3)
+
+    x = list.back();
+    ok!(x != null)
+    ok!(x.num == i3.num)
+    ok!(list.size() == 3)
 }

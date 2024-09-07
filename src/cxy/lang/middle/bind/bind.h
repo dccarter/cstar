@@ -21,10 +21,14 @@ typedef struct {
     union {
         struct {
             bool isComptimeContext;
+            bool inTestCase;
+            bool isConstFunc;
             AstNode *currentClosure;
         };
         struct {
             bool isComptimeContext;
+            bool inTestCase;
+            bool isConstFunc;
             AstNode *currentClosure;
         } stack;
     };

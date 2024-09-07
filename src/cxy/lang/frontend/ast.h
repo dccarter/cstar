@@ -75,6 +75,7 @@ struct StrPool;
     f(GenericDecl)                          \
     f(FuncParamDecl)                        \
     f(EnumOptionDecl)                       \
+    f(TestDecl)                             \
 
 #define CXY_LANG_IR_TAGS(f)               \
     f(Branch)                             \
@@ -248,10 +249,12 @@ struct AstNode {
         } capture;
 
         struct {
+            cstring path;
             struct AstNode *module;
             struct AstNode *top;
             struct AstNode *decls;
-            cstring path;
+            struct AstNode **tests;
+            u64 testsCount;
         } program;
 
         struct {
@@ -708,6 +711,11 @@ struct AstNode {
         } nodeArray;
 
         struct {
+            cstring name;
+            AstNode *body;
+        } testDecl;
+
+        struct {
             AstNode *target;
         } branch;
 
@@ -964,6 +972,33 @@ AstNode *makeTupleTypeAst(MemPool *pool,
                           AstNode *members,
                           AstNode *next,
                           const Type *type);
+
+AstNode *makeUnionDeclAst(MemPool *pool,
+                          const FileLoc *loc,
+                          u64 flags,
+                          AstNode *members,
+                          AstNode *next,
+                          const Type *type);
+
+AstNode *makeOptionalTypeAst(MemPool *pool,
+                             const FileLoc *loc,
+                             u64 flags,
+                             AstNode *target,
+                             AstNode *next,
+                             const Type *type);
+
+AstNode *makePrimitiveTypeAst(MemPool *pool,
+                              const FileLoc *loc,
+                              u64 flags,
+                              PrtId id,
+                              AstNode *next,
+                              const Type *type);
+
+AstNode *makeStringTypeAst(MemPool *pool,
+                           const FileLoc *loc,
+                           u64 flags,
+                           AstNode *next,
+                           const Type *type);
 
 attr(always_inline) static AstNode *makePathElement(MemPool *pool,
                                                     const FileLoc *loc,

@@ -1,6 +1,7 @@
 
 #include "ae.h"
 
+#include <assert.h>
 #include <errno.h>
 #include <poll.h>
 #include <stdio.h>
@@ -36,11 +37,6 @@ __thread static mach_timebase_info_data_t mill_mtid = {0};
 #ifdef _DTRACE_VERSION
 #define HAVE_EVPORT 1
 #endif
-#endif
-
-#if defined(__linux__)
-#define _GNU_SOURCE
-#define _DEFAULT_SOURCE
 #endif
 
 #if defined(_AIX)
@@ -888,7 +884,7 @@ int64_t aeOsTime()
 #elif defined CLOCK_MONOTONIC
     struct timespec ts;
     int rc = clock_gettime(CLOCK_MONOTONIC, &ts);
-    mill_assert(rc == 0);
+    assert(rc == 0);
     return ((int64_t)ts.tv_sec) * 1000 + (((int64_t)ts.tv_nsec) / 1000000);
 #else
     struct timeval tv;

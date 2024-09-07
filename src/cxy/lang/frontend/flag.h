@@ -74,7 +74,8 @@ extern "C" {
     f(DiDisable,            57)                 \
     f(DefaultedFields,      58)                 \
     f(Anonymous,            59)                 \
-    f(Constructor,          60)
+    f(Constructor,          60)                 \
+    f(TestContext,          61)
 
 // clang-format on
 static const u64 flgNone = 0;

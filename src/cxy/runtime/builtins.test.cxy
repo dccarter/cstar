@@ -1,0 +1,5 @@
+test "__bswap" {
+    ok!(__bswap64(0xff00000000000000:u64) == 0x00000000000000ff:u64)
+    ok!(__bswap32(0xff000000:u32) == 0x000000ff:u32)
+    ok!(__bswap16(0xff00:u16) == 0x00ff:u16)
+}

@@ -304,6 +304,22 @@ static AstNode *makeLineNumberNode(AstVisitor *visitor,
                    .intLiteral.uValue = visitor->current->loc.begin.row});
 }
 
+static AstNode *makeOffsetNumberNode(AstVisitor *visitor,
+                                     attr(unused) const AstNode *node,
+                                     attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 0))
+        return NULL;
+
+    return makeAstNode(
+        ctx->pool,
+        &node->loc,
+        &(AstNode){.tag = astIntegerLit,
+                   .type = getPrimitiveType(ctx->types, prtU64),
+                   .intLiteral.uValue = visitor->current->loc.begin.row});
+}
+
 static AstNode *lShift(MemPool *P, AstNode *left, AstNode *node)
 {
     if (nodeIs(node, BinaryExpr) && node->binaryExpr.op == opShl) {
@@ -1380,6 +1396,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "mk_str", makeAstStringNode},
     {.name = "mk_struct_expr", makeAstStructExprNode},
     {.name = "mk_tuple_expr", makeAstTupleExprNode},
+    {.name = "offset", makeOffsetNumberNode},
     {.name = "ptroff", makePointerOfNode},
     {.name = "require", makeRequireNode},
     {.name = "sizeof", makeSizeofNode},
