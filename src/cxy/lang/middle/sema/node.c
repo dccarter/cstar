@@ -47,7 +47,7 @@ static AstNode *transformRValueToLValue(AstVisitor *visitor, AstNode *node)
     cstring tmpSymbol = makeAnonymousVariable(ctx->strings, "_rv");
     AstNode *tmpVar = makeVarDecl(ctx->pool,
                                   &node->loc,
-                                  (node->flags & flgConst) | (flgMoved),
+                                  (node->flags & flgConst) | flgMoved,
                                   tmpSymbol,
                                   NULL,
                                   node,
@@ -59,7 +59,7 @@ static AstNode *transformRValueToLValue(AstVisitor *visitor, AstNode *node)
     return makeResolvedPath(ctx->pool,
                             &node->loc,
                             tmpSymbol,
-                            tmpVar->flags,
+                            tmpVar->flags | flgMove,
                             tmpVar,
                             NULL,
                             tmpVar->type);

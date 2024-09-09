@@ -19,6 +19,7 @@
 typedef struct CBackend {
     cstring filename;
     FILE *output;
+    bool testMode;
 } CBackend;
 
 typedef struct CodegenContext {
@@ -27,6 +28,8 @@ typedef struct CodegenContext {
     FormatState types;
     FormatState state;
     cstring loopUpdate;
+    bool loopUpdateUsed;
+    bool hasTestCases;
     struct {
         bool enabled;
         FilePos pos;
@@ -145,7 +148,7 @@ static void generateTupleType(CodegenContext *ctx, const Type *type)
     }
     format(typeState(ctx), "{<}\n} ", NULL);
     generateCustomTypeName(ctx, typeState(ctx), type, "Tuple");
-    format(typeState(ctx), ";\n", NULL);
+    format(typeState(ctx), ";\n\n", NULL);
 }
 
 static void generateEnumType(CodegenContext *ctx, const Type *type)
@@ -169,18 +172,25 @@ static void generateEnumType(CodegenContext *ctx, const Type *type)
         else
             format(typeState(ctx), "_{s},", (FormatArg[]){{.s = option->name}});
     }
-    format(typeState(ctx), "{<}\n};\n", NULL);
+    format(typeState(ctx), "{<}\n};\n\n", NULL);
 }
 
 static void generateClassType(CodegenContext *ctx, const Type *type)
 {
+    format(typeState(ctx), "typedef struct ", NULL);
+    generateCustomTypeName(ctx, typeState(ctx), type, "Class");
+    format(typeState(ctx), " ", NULL);
+    generateCustomTypeName(ctx, typeState(ctx), type, "Class");
+    format(typeState(ctx), ";\n", NULL);
+
     for (u64 i = 0; i < type->tClass.members->count; i++) {
         const NamedTypeMember *member = &type->tClass.members->members[i];
         if (nodeIs(member->decl, FieldDecl) && !member->type->codegen)
             generateType(ctx, member->type);
     }
 
-    format(typeState(ctx), "typedef struct ", NULL);
+    format(typeState(ctx), "struct ", NULL);
+    generateStructAttributes(ctx, type);
     generateCustomTypeName(ctx, typeState(ctx), type, "Class");
     format(typeState(ctx), " {{{>}", NULL);
     for (u64 i = 0; i < type->tClass.members->count; i++) {
@@ -192,21 +202,25 @@ static void generateClassType(CodegenContext *ctx, const Type *type)
         format(typeState(ctx), " {s};", (FormatArg[]){{.s = member->name}});
     }
 
-    format(typeState(ctx), "{<}\n}", NULL);
-    generateStructAttributes(ctx, type);
-    generateCustomTypeName(ctx, typeState(ctx), type, "Class");
-    format(typeState(ctx), ";\n", NULL);
+    format(typeState(ctx), "{<}\n};\n\n", NULL);
 }
 
 static void generateStructType(CodegenContext *ctx, const Type *type)
 {
+    format(typeState(ctx), "typedef struct ", NULL);
+    generateCustomTypeName(ctx, typeState(ctx), type, "Struct");
+    format(typeState(ctx), " ", NULL);
+    generateCustomTypeName(ctx, typeState(ctx), type, "Struct");
+    format(typeState(ctx), ";\n", NULL);
+
     for (u64 i = 0; i < type->tStruct.members->count; i++) {
         const NamedTypeMember *member = &type->tStruct.members->members[i];
         if (nodeIs(member->decl, FieldDecl) && !member->type->codegen)
             generateType(ctx, member->type);
     }
 
-    format(typeState(ctx), "typedef struct ", NULL);
+    format(typeState(ctx), "struct ", NULL);
+    generateStructAttributes(ctx, type);
     generateCustomTypeName(ctx, typeState(ctx), type, "Struct");
     format(typeState(ctx), " {{{>}", NULL);
     for (u64 i = 0; i < type->tStruct.members->count; i++) {
@@ -223,21 +237,25 @@ static void generateStructType(CodegenContext *ctx, const Type *type)
         else
             format(typeState(ctx), " {s};", (FormatArg[]){{.s = member->name}});
     }
-    format(typeState(ctx), "{<}\n}", NULL);
-    generateStructAttributes(ctx, type);
-    generateCustomTypeName(ctx, typeState(ctx), type, "Struct");
-    format(typeState(ctx), ";\n", NULL);
+    format(typeState(ctx), "{<}\n};\n\n", NULL);
 }
 
 static void generateUnionType(CodegenContext *ctx, const Type *type)
 {
+    format(typeState(ctx), "typedef struct ", NULL);
+    generateCustomTypeName(ctx, typeState(ctx), type, "Union");
+    format(typeState(ctx), " ", NULL);
+    generateCustomTypeName(ctx, typeState(ctx), type, "Union");
+    format(typeState(ctx), ";\n", NULL);
+
     for (u64 i = 0; i < type->tUnion.count; i++) {
         const Type *member = type->tUnion.members[i].type;
         if (!member->codegen)
             generateType(ctx, member);
     }
 
-    format(typeState(ctx), "typedef struct ", NULL);
+    format(typeState(ctx), "struct ", NULL);
+    generateStructAttributes(ctx, type);
     generateCustomTypeName(ctx, typeState(ctx), type, "Union");
     format(typeState(ctx), "{{{>}\n", NULL);
     format(typeState(ctx), "uint32_t tag;\n", NULL);
@@ -249,20 +267,25 @@ static void generateUnionType(CodegenContext *ctx, const Type *type)
         format(typeState(ctx), " _{u64};", (FormatArg[]){{.u64 = i}});
     }
     format(typeState(ctx), "{<}\n};\n", NULL);
-    format(typeState(ctx), "{<}\n} ", NULL);
-    generateCustomTypeName(ctx, typeState(ctx), type, "Union");
-    format(typeState(ctx), ";\n", NULL);
+    format(typeState(ctx), "{<}\n};\n\n", NULL);
 }
 
 static void generateUntaggedUnionType(CodegenContext *ctx, const Type *type)
 {
+    format(typeState(ctx), "typedef union ", NULL);
+    generateCustomTypeName(ctx, typeState(ctx), type, "Union");
+    format(typeState(ctx), " ", NULL);
+    generateCustomTypeName(ctx, typeState(ctx), type, "Union");
+    format(typeState(ctx), ";\n", NULL);
+
     for (u64 i = 0; i < type->untaggedUnion.members->count; i++) {
         const Type *member = type->untaggedUnion.members->members[i].type;
         if (!member->codegen)
             generateType(ctx, member);
     }
 
-    format(typeState(ctx), "typedef union ", NULL);
+    format(typeState(ctx), "union ", NULL);
+    generateStructAttributes(ctx, type);
     generateCustomTypeName(ctx, typeState(ctx), type, "Union");
     format(typeState(ctx), " {{{>}", NULL);
     for (u64 i = 0; i < type->untaggedUnion.members->count; i++) {
@@ -272,10 +295,7 @@ static void generateUntaggedUnionType(CodegenContext *ctx, const Type *type)
         generateTypeName(ctx, typeState(ctx), member->type);
         format(typeState(ctx), " {s};", (FormatArg[]){{.s = member->name}});
     }
-    format(typeState(ctx), "{<}\n}", NULL);
-    generateStructAttributes(ctx, type);
-    generateCustomTypeName(ctx, typeState(ctx), type, "Union");
-    format(typeState(ctx), ";\n", NULL);
+    format(typeState(ctx), "{<}\n};\n\n", NULL);
 }
 
 static void generateFunctionType(CodegenContext *ctx, const Type *type)
@@ -355,6 +375,7 @@ static void generateType(CodegenContext *ctx, const Type *type)
     case typReference:
         generateType(ctx, type->reference.referred);
         break;
+
     default:
         break;
     }
@@ -708,7 +729,10 @@ static void visitIdentifier(ConstAstVisitor *visitor, const AstNode *node)
 
 static void visitArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
-    generateMany(visitor, node->arrayExpr.elements, "{{", ", ", " }");
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    format(getState(ctx), "(", NULL);
+    generateTypeName(ctx, getState(ctx), node->type);
+    generateMany(visitor, node->arrayExpr.elements, "){{", ", ", "}");
 }
 
 static void visitBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -973,6 +997,10 @@ static void visitBackendCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     }
 }
 
+#define EosNl(ctx, node)                                                       \
+    if (node->next)                                                            \
+        format(getState(ctx), "\n", NULL);
+
 static void visitInlineAssembly(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -1055,7 +1083,8 @@ static void visitReturnStmt(ConstAstVisitor *visitor, const AstNode *node)
         format(getState(ctx), " ", NULL);
         astConstVisit(visitor, node->returnStmt.expr);
     }
-    format(getState(ctx), ";\n", NULL);
+    format(getState(ctx), ";", NULL);
+    EosNl(ctx, node);
 }
 
 static void visitBlockStmt(ConstAstVisitor *visitor, const AstNode *node)
@@ -1063,7 +1092,8 @@ static void visitBlockStmt(ConstAstVisitor *visitor, const AstNode *node)
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     format(getState(ctx), "{{{>}\n", NULL);
     generateMany(visitor, node->blockStmt.stmts, NULL, NULL, NULL);
-    format(getState(ctx), "// end-of-block{<}\n}\n", NULL);
+    format(getState(ctx), "{<}\n}", NULL);
+    EosNl(ctx, node);
 }
 
 static void visitExprStmt(ConstAstVisitor *visitor, const AstNode *node)
@@ -1071,7 +1101,8 @@ static void visitExprStmt(ConstAstVisitor *visitor, const AstNode *node)
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     addDebugInfo(ctx, node);
     astConstVisit(visitor, node->exprStmt.expr);
-    format(getState(ctx), ";\n", NULL);
+    format(getState(ctx), ";", NULL);
+    EosNl(ctx, node);
 }
 
 static void visitIfStmt(ConstAstVisitor *visitor, const AstNode *node)
@@ -1083,16 +1114,18 @@ static void visitIfStmt(ConstAstVisitor *visitor, const AstNode *node)
     format(getState(ctx), ") ", NULL);
     astConstVisit(visitor, node->ifStmt.body);
     if (node->ifStmt.otherwise) {
-        format(getState(ctx), "else ", NULL);
+        format(getState(ctx), " else ", NULL);
         astConstVisit(visitor, node->ifStmt.otherwise);
     }
-    format(getState(ctx), "\n", NULL);
+    EosNl(ctx, node);
 }
 
 static void visitWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     cstring previousUpdate = ctx->loopUpdate;
+    bool previousUpdateUsed = ctx->loopUpdateUsed;
+    ctx->loopUpdateUsed = false;
     if (node->whileStmt.update)
         ctx->loopUpdate = makeAnonymousVariable(ctx->strings, "__update");
     else
@@ -1102,12 +1135,18 @@ static void visitWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
     astConstVisit(visitor, node->whileStmt.cond);
     format(getState(ctx), ") {{{>}\n", NULL);
     astConstVisit(visitor, node->whileStmt.body);
-    if (node->whileStmt.update) {
-        format(getState(ctx), "{s}:\n", (FormatArg[]){{.s = ctx->loopUpdate}});
-        astConstVisit(visitor, node->whileStmt.update);
+    if (node->whileStmt.update && ctx->loopUpdateUsed) {
+        format(
+            getState(ctx), "\n{s}:\n", (FormatArg[]){{.s = ctx->loopUpdate}});
     }
-    format(getState(ctx), "{<}\n}\n", NULL);
+    else {
+        format(getState(ctx), "\n", NULL);
+    }
+    astConstVisit(visitor, node->whileStmt.update);
+    format(getState(ctx), "{<}\n}", NULL);
+    EosNl(ctx, node);
     ctx->loopUpdate = previousUpdate;
+    ctx->loopUpdateUsed = previousUpdateUsed;
 }
 
 static void visitSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
@@ -1127,7 +1166,8 @@ static void visitMatchStmt(ConstAstVisitor *visitor, const AstNode *node)
     astConstVisit(visitor, node->matchStmt.expr);
     format(getState(ctx), ".tag", NULL);
     format(getState(ctx), ") ", NULL);
-    generateMany(visitor, node->switchStmt.cases, "{{\n", "\n", "}\n");
+    generateMany(visitor, node->switchStmt.cases, "{{\n", "\n", "}");
+    EosNl(ctx, node);
 }
 
 static void visitCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
@@ -1160,19 +1200,22 @@ static void visitContinueStmt(ConstAstVisitor *visitor, const AstNode *node)
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     addDebugInfo(ctx, node);
     const AstNode *loop = node->continueExpr.loop;
-    if (ctx->loopUpdate)
-        format(getState(ctx),
-               "goto {s};\n",
-               (FormatArg[]){{.s = ctx->loopUpdate}});
+    if (ctx->loopUpdate) {
+        format(
+            getState(ctx), "goto {s};", (FormatArg[]){{.s = ctx->loopUpdate}});
+        ctx->loopUpdateUsed = true;
+    }
     else
-        format(getState(ctx), "continue;\n", NULL);
+        format(getState(ctx), "continue;", NULL);
+    EosNl(ctx, node);
 }
 
 static void visitBreakStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     addDebugInfo(ctx, node);
-    format(getState(ctx), "break;\n", NULL);
+    format(getState(ctx), "break;", NULL);
+    EosNl(ctx, node);
 }
 
 static void visitVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
@@ -1192,7 +1235,8 @@ static void visitVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
         format(getState(ctx), " = ", NULL);
         astConstVisit(visitor, node->varDecl.init);
     }
-    format(getState(ctx), ";\n", NULL);
+    format(getState(ctx), ";", NULL);
+    EosNl(ctx, node);
 }
 
 static void visitFuncParamDecl(ConstAstVisitor *visitor, const AstNode *node)
@@ -1247,9 +1291,10 @@ static void visitFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
     if (hasFlag(node, Constructor))
         format(getState(ctx), "__attribute__((constructor))\n", NULL);
     if (findAttribute(node, S_inline))
-        format(getState(ctx), "__attribute__((always_inline))\n", NULL);
-
-    if (hasFlag(node, Extern))
+        format(getState(ctx),
+               "__attribute__((always_inline)) inline\nstatic ",
+               NULL);
+    else if (hasFlag(node, Extern))
         format(getState(ctx), "extern ", NULL);
     generateTypeName(ctx, getState(ctx), node->type->func.retType);
     format(getState(ctx), " ", NULL);
@@ -1261,11 +1306,42 @@ static void visitFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
     else {
         format(getState(ctx), " ", NULL);
         astConstVisit(visitor, node->funcDecl.body);
+        EosNl(ctx, node);
     }
     format(getState(ctx), "\n", NULL);
 
-    if (hasFlag(node, Main))
+    if (!ctx->backend->testMode && hasFlag(node, Main))
         generateMainFunction(ctx, node->type);
+}
+
+static void generateTestMainFunction(CodegenContext *ctx, cstring testFile)
+{
+    csAssert0(ctx->backend->testMode);
+    if (ctx->hasTestCases) {
+        format(
+            getState(ctx),
+            "typedef struct {{ __typeof(allTestCases[0]) *data; uint64_t len; }"
+            " __TestCases;\n",
+            NULL);
+    }
+    format(getState(ctx),
+           "int main(int argc, char *argv[]) {{{>}\n"
+           "return builtins_runTests((SliceI_sE){{.data = argv, .len = argc}, "
+           "\"{s}\", (SliceI_TsFZ__OptionalI_Tsu64u64_E___E){{",
+           (FormatArg[]){{.s = testFile}});
+    if (ctx->hasTestCases) {
+        format(getState(ctx),
+               ".data = allTestCases, .len = "
+               "sizeof(allTestCases)/sizeof(allTestCases[0])});\n"
+               "{<}\n}\n",
+               NULL);
+    }
+    else {
+        format(getState(ctx),
+               ".data = nullptr, .len = 0});\n"
+               "{<}\n}\n",
+               NULL);
+    }
 }
 
 static void visitProgram(ConstAstVisitor *visitor, const AstNode *node)
@@ -1276,6 +1352,10 @@ static void visitProgram(ConstAstVisitor *visitor, const AstNode *node)
            (FormatArg[]){{.s = node->loc.fileName ?: "builtins.cxy"}});
 
     generateMany(visitor, node->program.decls, NULL, NULL, NULL);
+
+    if (ctx->backend->testMode && isBuiltinsInitialized() &&
+        !hasFlag(node, ImportedModule))
+        generateTestMainFunction(ctx, node->loc.fileName);
 }
 
 AstNode *generateCode(CompilerDriver *driver, AstNode *node)
@@ -1287,6 +1367,7 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
         .strings = driver->strings,
         .state = newFormatState("  ", true),
         .types = newFormatState("  ", true),
+        .hasTestCases = driver->hasTestCases,
         .debug = {.enabled = driver->options.debug, .pos = {}}};
     // clang-format off
     ConstAstVisitor visitor = makeConstAstVisitor(&context, {
@@ -1359,20 +1440,17 @@ static void generatedCodePrologue(FILE *f)
 {
     appendCode(
         f,
-        "#if defined(__GNUC__)\n"
-        "#pragma GCC diagnostic push\n"
-        "#pragma GCC diagnostic ignored \"-Wvisibility\"\n"
-        "#pragma GCC diagnostic ignored \"-Wmain-return-type\"\n"
-        "#pragma GCC diagnostic ignored \"-Wincompatible-pointer-types\"\n"
-        "#pragma GCC diagnostic ignored "
-        "\"-Wincompatible-library-redeclaration\"\n"
-        "#elif defined(__clang__)\n"
+        "#if defined(__clang__)\n"
         "#pragma clang diagnostic push\n"
         "#pragma clang diagnostic ignored \"-Wvisibility\"\n"
         "#pragma clang diagnostic ignored \"-Wmain-return-type\"\n"
         "#pragma clang diagnostic ignored \"-Wincompatible-pointer-types\"\n"
         "#pragma clang diagnostic ignored "
         "\"-Wincompatible-library-redeclaration\"\n"
+        "#elif defined(__GNUC__)\n"
+        "#pragma GCC diagnostic push\n"
+        "#pragma GCC diagnostic ignored \"-Wbuiltin-declaration-mismatch\"\n"
+        "#pragma GCC diagnostic ignored \"-Wincompatible-pointer-types\"\n"
         "#else\n"
         "#error \"Unsupported compiler\"\n"
         "#endif\n");
@@ -1418,6 +1496,8 @@ void *initCompilerBackend(CompilerDriver *driver, int argc, char **argv)
     driver->backend = backend;
     backend->output = f;
     backend->filename = filename;
+    backend->testMode = options->cmd == cmdTest;
+
     appendCode(f, "#define nullptr ((void *)0)\n");
     appendCode(f, "#define true  1\n");
     appendCode(f, "#define false  0\n");
@@ -1462,7 +1542,7 @@ bool compilerBackendMakeExecutable(CompilerDriver *driver)
     // compile the source file
     Options *opts = &driver->options;
     FormatState cmd = newFormatState("\t", true);
-    appendString(&cmd, "cc");
+    appendString(&cmd, "clang");
     if (opts->debug)
         appendString(&cmd, " -g");
     if (opts->optimizationLevel != O0)
@@ -1533,7 +1613,34 @@ bool compilerBackendMakeExecutable(CompilerDriver *driver)
 
     cstring command = formatStateToString(&cmd);
     freeFormatState(&cmd);
-    return system(command) == 0;
+    int rc = system(command);
+    if (rc != 0) {
+        logError(driver->L,
+                 builtinLoc(),
+                 "compile command failed: {s}",
+                 (FormatArg[]){{.s = command}});
+        free((void *)command);
+        return false;
+    }
+
+    free((void *)command);
+    return true;
+}
+
+bool compilerBackendExecuteTestCase(CompilerDriver *driver)
+{
+    FormatState cmd = newFormatState("\t", true);
+    Options *opts = &driver->options;
+    format(&cmd,
+           "{s}/{s}",
+           (FormatArg[]){{.s = opts->buildDir ?: "."},
+                         {.s = opts->output ?: "app"}});
+
+    char *command = formatStateToString(&cmd);
+    freeFormatState(&cmd);
+    int rc = system(command);
+    free(command);
+    return rc == 0;
 }
 
 AstNode *backendDumpIR(CompilerDriver *driver, AstNode *node)

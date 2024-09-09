@@ -108,7 +108,7 @@ func stackAlign(size: u64, align: u64) =>
     macro CORO_STACK_SIZE() 256:u64 * 1024:u64
 }
 
-var stackSize = stackAlign(CORO_STACK_SIZE!, unistd.sysconf(_SC_PAGE_SIZE!));
+var stackSize = stackAlign(CORO_STACK_SIZE!, unistd.sysconf(<i32> _SC_PAGE_SIZE!));
 
 struct CachedStack {
     link: ^This

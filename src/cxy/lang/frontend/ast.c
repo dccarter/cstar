@@ -1,12 +1,11 @@
 
 #include "ast.h"
-#include "builtins.h"
 #include "capture.h"
 #include "flag.h"
 #include "strings.h"
 #include "ttable.h"
 
-#include <memory.h>
+#include "lang/middle/builtins.h"
 
 typedef struct {
     const AstNode *from;
@@ -759,6 +758,67 @@ AstNode *makeTupleTypeAst(MemPool *pool,
             .type = type,
             .next = next,
             .tupleType = {.elements = members, .len = countAstNodes(members)}});
+}
+
+AstNode *makeUnionDeclAst(MemPool *pool,
+                          const FileLoc *loc,
+                          u64 flags,
+                          AstNode *members,
+                          AstNode *next,
+                          const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astUnionDecl,
+                                  .flags = flags,
+                                  .type = type,
+                                  .next = next,
+                                  .unionDecl = {.members = members}});
+}
+
+AstNode *makeOptionalTypeAst(MemPool *pool,
+                             const FileLoc *loc,
+                             u64 flags,
+                             AstNode *target,
+                             AstNode *next,
+                             const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astOptionalType,
+                                  .flags = flags,
+                                  .type = type,
+                                  .next = next,
+                                  .optionalType = {.type = target}});
+}
+
+AstNode *makePrimitiveTypeAst(MemPool *pool,
+                              const FileLoc *loc,
+                              u64 flags,
+                              PrtId id,
+                              AstNode *next,
+                              const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astPrimitiveType,
+                                  .flags = flags,
+                                  .type = type,
+                                  .next = next,
+                                  .primitiveType = {.id = id}});
+}
+
+AstNode *makeStringTypeAst(MemPool *pool,
+                           const FileLoc *loc,
+                           u64 flags,
+                           AstNode *next,
+                           const Type *type)
+{
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){
+            .tag = astStringType, .flags = flags, .type = type, .next = next});
 }
 
 AstNode *makeCallExpr(MemPool *pool,

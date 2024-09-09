@@ -35,6 +35,7 @@ struct IncludeContext {
     cxy::CImporter &importer;
     FileLoc loc{};
     std::stack<CurrentRecord> recordsStack{};
+    cstring typeDeclName{nullptr};
 
 private:
     AstNode *buildModule(llvm::StringRef path, AstNodeList &nodes);

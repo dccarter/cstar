@@ -1,7 +1,10 @@
 module json
 
 pub func toJson[T](os: &OutputStream, it: const T) : void {
-    #if (T.isNumber || T.isBoolean || T.isChar) {
+    #if (T.isChar) {
+        os << <i64>it
+    }
+    else #if (T.isNumber || T.isBoolean) {
         os << it
     }
     else #if (T.isString) {
@@ -11,6 +14,9 @@ pub func toJson[T](os: &OutputStream, it: const T) : void {
         if (it) {
             const value = *it;
             toJson[#{typeof!(value)}](os, value)
+        }
+        else {
+            os << "null"
         }
     }
     else #if (T.isStruct) {
@@ -42,7 +48,7 @@ pub func toJson[T](os: &OutputStream, it: const T) : void {
         }
         os << "]"
     }
-    else #if (T.isSlice) {
+    else #if (T.isSlice || T.isArray) {
         os << '[';
         var first = true;
         for (const member, _: it) {
@@ -58,4 +64,32 @@ pub func toJson[T](os: &OutputStream, it: const T) : void {
         // give up here
         error!("type `{t}` is not a JSON-able type", T)
     }
+}
+
+test "Json encode" {
+    var s = String();
+    toJson(&s, 10:i32)
+    ok!(s == "10")
+
+    s.clear()
+    toJson(&s, {a: 10, b: true, c: "world", d: 'c'})
+    ok!(s == "{\"a\": 10, \"b\": true, \"c\": \"world\", \"d\": 99}")
+
+    s.clear()
+    toJson(&s, (10:u32, true, "World"))
+    ok!(s == "[10, true, \"World\"]")
+
+    s.clear()
+    toJson(&s, [10:u32, 20, 30])
+    ok!(s == "[10, 20, 30]")
+
+    var x:i32? = 100;
+    s.clear()
+    toJson(&s, x)
+    ok!(s == "100")
+
+    x = null
+    s.clear()
+    toJson(&s, x)
+    ok!(s == "null")
 }

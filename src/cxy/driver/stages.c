@@ -296,7 +296,7 @@ static AstNode *executeCollect(CompilerDriver *driver, AstNode *node)
         return NULL;
     }
 
-    node->metadata.node = collectAst(driver, node->metadata.node);
+    // node->metadata.node = collectAst(driver, node->metadata.node);
 
     if (hasErrors(driver->L))
         return NULL;

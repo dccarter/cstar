@@ -1,38 +1,53 @@
 module time
 
-import "time.h" as time
-import "sys/_types/_time_t.h" as _time_t
+import "time.h" as ctime
+
+##if (defined MACOS) {
+    import "sys/_types/_time_t.h" as _time_t
+}
+else {
+    import "bits/types/time_t.h" as _time_t
+    import "bits/types/struct_tm.h" as struct_tm
+}
 
 macro HTTP_TIME_FMT "%a, %d %b %Y %T GMT";
 macro LOG_TIME_FMT  "%Y-%m-%d %H:%M:%S";
 
+#if (defined MACOS) {
+type tm = ctime.tm
+}
+else {
+type tm = struct_tm.tm
+}
+
 pub struct Time {
     - _t: _time_t.time_t
-    - _tm: time.tm
+    - _tm: tm
 
     func `init`(t: _time_t.time_t) {
         _t = t
-        time.gmtime_r(ptrof _t, ptrof _tm)
+        ctime.gmtime_r(ptrof _t, ptrof _tm)
     }
 
     func `init`() {
-        _t = time.time(null)
-         time.gmtime_r(ptrof _t, ptrof _tm)
+        _t = ctime.time(null)
+         ctime.gmtime_r(ptrof _t, ptrof _tm)
     }
 
     func `init`(str: string, fmt: string = HTTP_TIME_FMT!) {
-        time.strptime(str !: ^const char, fmt !: ^const char, ptrof _tm)
-        _t = time.mktime(ptrof _tm)
+        ctime.strptime(str !: ^const char, fmt !: ^const char, ptrof _tm)
+        _t = ctime.mktime(ptrof _tm)
     }
 
     const func format(fmt: string, os: &OutputStream) {
         if (fmt.[0] != '\0':char) {
             var buf: [char, 512];
-            var sz = time.strftime(buf, 512, fmt !: ^const char, ptrof _tm);
+            var sz = ctime.strftime(buf, 512, fmt !: ^const char, ptrof _tm);
             os.append(buf, sz)
         }
     }
 
+    @inline
     const func `str`(os: &OutputStream) {
         format(HTTP_TIME_FMT!, os)
     }

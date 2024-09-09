@@ -16,6 +16,8 @@
 #include "core/e4c.h"
 #include "core/mempool.h"
 
+#include "../operations.h"
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -70,13 +72,15 @@ static AstNode *block(Parser *P);
 
 static AstNode *comptime(Parser *P, AstNode *(*parser)(Parser *));
 
+static AstNode *comptimeDeclaration(Parser *P);
+
 static void listAddAstNode(AstNodeList *list, AstNode *node)
 {
     if (!list->last)
         list->first = node;
     else
         list->last->next = node;
-    list->last = node;
+    list->last = getLastAstNode(node);
 }
 
 static inline const char *getTokenString(Parser *P, const Token *tok, bool trim)
@@ -283,7 +287,9 @@ static inline AstNode *parseManyNoSeparator(Parser *P,
 {
     AstNodeList list = {NULL};
     while (!check(P, stop) && !isEoF(P)) {
-        listAddAstNode(&list, with(P));
+        AstNode *node = with(P);
+        if (node)
+            listAddAstNode(&list, node);
     }
 
     return list.first;
@@ -304,6 +310,35 @@ static AstNode *parseAtLeastOne(Parser *P,
     }
 
     return nodes;
+}
+
+static u64 skipEnclosedCode(Parser *P, TokenTag open, TokenTag close)
+{
+
+    if (!match(P, open))
+        return 0;
+
+    u64 count = 1;
+    while (!check(P, tokEoF) && count > 0) {
+        TokenTag tok = current(P)->tag;
+        if (tok == open)
+            count++;
+        else if (tok == close)
+            count--;
+        advance(P);
+    }
+
+    return count;
+}
+
+static bool skipUntil(Parser *P, TokenTag tok)
+{
+
+    while (!check(P, tok, tokEoF)) {
+        advance(P);
+    }
+
+    return check(P, tok);
 }
 
 static inline AstNode *parseNull(Parser *P)
@@ -420,6 +455,20 @@ static inline AstNode *parseIdentifierWithAlias(Parser *P)
                       &tok.fileLoc.begin,
                       &(AstNode){.tag = astIdentifier,
                                  .ident = {.value = name, .alias = alias}});
+}
+
+static inline AstNode *parseMacroParam(Parser *P)
+{
+    bool isVariadic = match(P, tokElipsis);
+    const Token tok = *consume0(P, tokIdent);
+    AstNode *ident =
+        newAstNode(P,
+                   &tok.fileLoc.begin,
+                   &(AstNode){.tag = astIdentifier,
+                              .flags = isVariadic ? flgVariadic : flgNone,
+                              .ident.value = getTokenString(P, &tok, false)});
+
+    return ident;
 }
 
 static inline AstNode *primitive(Parser *P)
@@ -1575,9 +1624,26 @@ static AstNode *macroDecl(Parser *P, bool isPublic)
     Token tok = *current(P);
     consume0(P, tokMacro);
     cstring name = getTokenString(P, consume0(P, tokIdent), false);
+    u64 flags = isPublic ? flgPublic : flgNone;
 
     if (match(P, tokLParen)) {
-        params = parseMany(P, tokRParen, tokComma, parseIdentifier);
+        AstNodeList nodes = {};
+        while (!check(P, tokEoF, tokRParen)) {
+            AstNode *param = insertAstNode(&nodes, parseMacroParam(P));
+            if (!match(P, tokComma) && !check(P, tokRParen)) {
+                parserError(
+                    P,
+                    &current(P)->fileLoc,
+                    "unexpected token '{s}', expecting ',' or ')'",
+                    (FormatArg[]){{.s = token_tag_to_str(current(P)->tag)}});
+            }
+
+            if (hasFlag(param, Variadic)) {
+                flags |= flgVariadic;
+                break;
+            }
+        }
+        params = nodes.first;
         consume0(P, tokRParen);
     }
 
@@ -1598,8 +1664,67 @@ static AstNode *macroDecl(Parser *P, bool isPublic)
         &tok.fileLoc.begin,
         &(AstNode){
             .tag = astMacroDecl,
-            .flags = isPublic ? flgPublic : flgNone,
+            .flags = flags,
             .macroDecl = {.name = name, .params = params, .body = body}});
+}
+
+static AstNode *testContextDeclaration(Parser *P)
+{
+    AstNode *node = comptimeDeclaration(P);
+    node->flags |= flgTestContext;
+    return node;
+}
+
+static void skipTestDecl(Parser *P)
+{
+    match(P, tokStringLiteral);
+    Token tok = *previous(P);
+    consume0(P, tokLBrace);
+    i64 count = 1;
+    while (!check(P, tokEoF) && count > 0) {
+        TokenTag tag = current(P)->tag;
+        if (tag == tokLBrace)
+            count++;
+        else if (tag == tokRBrace)
+            count--;
+
+        advance(P);
+    }
+
+    if (count != 0)
+        parserError(P, &tok.fileLoc, "test case not properly terminated", NULL);
+}
+
+static AstNode *testDecl(Parser *P)
+{
+    AstNode *params = NULL, *body = NULL;
+    consume0(P, tokTest);
+    Token tok = *current(P);
+    if (!P->testMode) {
+        skipTestDecl(P);
+        return NULL;
+    }
+
+    if (match(P, tokLBrace)) {
+        AstNode *decls =
+            parseManyNoSeparator(P, tokRBrace, testContextDeclaration);
+        consume0(P, tokRBrace);
+        return decls;
+    }
+    else {
+        Token name = *consume0(P, tokStringLiteral);
+
+        body = block(P);
+        if (body->blockStmt.stmts == NULL)
+            parserError(P, &body->loc, "empty test block not allowed", NULL);
+
+        return newAstNode(
+            P,
+            &tok.fileLoc.begin,
+            &(AstNode){.tag = astTestDecl,
+                       .testDecl = {.name = getStringLiteral(P, &name),
+                                    .body = body}});
+    }
 }
 
 typedef CxyPair(Operator, cstring) OperatorOverload;
@@ -1699,7 +1824,6 @@ static AstNode *funcDecl(Parser *P, u64 flags)
     bool Member = (flags & flgMember) == flgMember;
     flags &= ~flgMember; // Clear member flags, a function might be static
     flags |= match(P, tokAsync) ? flgAsync : flgNone;
-
     consume0(P, tokFunc);
     cstring name = NULL;
     Operator op = opInvalid;
@@ -2641,9 +2765,26 @@ static AstNode *declaration(Parser *P)
             isExtern = true;
             break;
         case tokAsync:
+        case tokMacro:
+        case tokClass:
+        case tokTest:
             parserError(P,
                         &current(P)->fileLoc,
-                        "an async function cannot be marked as extern",
+                        "declaration cannot be marked as extern",
+                        NULL);
+        default:
+            break;
+        }
+    }
+
+    if (isPublic) {
+        // is pub valid in this context
+        switch (peek(P, 1)->tag) {
+        case tokMacro:
+        case tokTest:
+            parserError(P,
+                        &current(P)->fileLoc,
+                        "declaration cannot be marked as public",
                         NULL);
         default:
             break;
@@ -2685,6 +2826,9 @@ static AstNode *declaration(Parser *P)
                         NULL);
         decl = macroDecl(P, isPublic);
         break;
+    case tokTest:
+        decl = testDecl(P);
+        break;
     case tokExtern:
         parserError(P,
                     &current(P)->fileLoc,
@@ -2697,10 +2841,16 @@ static AstNode *declaration(Parser *P)
     }
 
 #undef isExtern
-
-    decl->flags |= flgTopLevelDecl;
-    decl->attrs = attrs;
+    if (decl) {
+        decl->flags |= flgTopLevelDecl;
+        decl->attrs = attrs;
+    }
     return decl;
+}
+
+static AstNode *comptimeDeclaration(Parser *P)
+{
+    return comptime(P, declaration);
 }
 
 static void synchronize(Parser *P)
@@ -2766,9 +2916,32 @@ static AstNode *parseModuleDecl(Parser *P)
                    .moduleDecl = {.name = getTokenString(P, &name, false)}});
 }
 
+static void skipImportTestDecl(Parser *P)
+{
+    bool hasEntities = false;
+    if (match(P, tokLBrace)) {
+        hasEntities = true;
+        while (!check(P, tokEoF, tokRBrace))
+            advance(P);
+        consume0(P, tokFrom);
+    }
+    else if (match(P, tokIdent)) {
+        hasEntities = true;
+        consume0(P, tokFrom);
+    }
+    consume0(P, tokStringLiteral);
+    if (hasEntities && match(P, tokAs))
+        consume0(P, tokIdent);
+}
+
 static AstNode *parseImportDecl(Parser *P)
 {
     Token tok = *consume0(P, tokImport);
+    if (match(P, tokTest) && !P->testMode) {
+        skipImportTestDecl(P);
+        return NULL;
+    }
+
     AstNode *module;
     AstNode *entities = NULL, *alias = NULL;
     const Type *exports;
@@ -2791,12 +2964,10 @@ static AstNode *parseImportDecl(Parser *P)
 
     exports = compileModule(P->cc, module, entities, alias);
     if (exports == NULL) {
-        logWarning(P->L,
-                   &tok.fileLoc,
-                   "importing module {s} failed",
-                   (FormatArg[]){{.s = module->stringLiteral.value}});
-        return makeAstNode(
-            P->memPool, &tok.fileLoc, &(AstNode){.tag = astError});
+        parserError(P,
+                    &tok.fileLoc,
+                    "importing module {s} failed",
+                    (FormatArg[]){{.s = module->stringLiteral.value}});
     }
 
     return makeAstNode(P->memPool,
@@ -2811,13 +2982,14 @@ static AstNode *parseImportDecl(Parser *P)
 
 static AstNode *parseImportsDecl(Parser *P)
 {
-    AstNode *imports = parseImportDecl(P), *next = imports;
+    AstNodeList imports = {};
     while (check(P, tokImport)) {
-        next->next = parseImportDecl(P);
-        next = next->next;
+        AstNode *import = parseImportDecl(P);
+        if (import)
+            insertAstNode(&imports, import);
     }
 
-    return imports;
+    return imports.first;
 }
 
 static AstNode *parseTopLevelDecl(Parser *P)
@@ -2835,19 +3007,72 @@ static AstNode *parseTopLevelDecl(Parser *P)
     return NULL;
 }
 
+static AstNode *conditionalTopLevelDecl(Parser *P)
+{
+    Token tok = *current(P);
+    if (match(P, tokDefine)) {
+        consume0(P, tokIf);
+        consume0(P, tokLParen);
+        AstNode *cond = expression(P, false);
+        consume0(P, tokRParen);
+        cond = preprocessAst(P->cc, cond);
+        if (!nodeIs(cond, BoolLit)) {
+            parserError(P,
+                        &tok.fileLoc,
+                        "invalid condition, condition must evaluate to a "
+                        "boolean literal",
+                        NULL);
+        }
+
+        if (!cond->boolLiteral.value) {
+            // skip compilation block
+            consume0(P, tokLBrace);
+            skipUntil(P, tokRBrace);
+            consume0(P, tokRBrace);
+            if (match(P, tokElse))
+                return conditionalTopLevelDecl(P);
+            else
+                return NULL;
+        }
+        else {
+            consume0(P, tokLBrace);
+            AstNode *nodes =
+                parseManyNoSeparator(P, tokRBrace, parseTopLevelDecl);
+            consume0(P, tokRBrace);
+            while (match(P, tokElse)) {
+                if (match(P, tokDefine))
+                    skipUntil(P, tokLBrace);
+                consume0(P, tokLBrace);
+                skipUntil(P, tokRBrace);
+                consume0(P, tokRBrace);
+            }
+            return nodes;
+        }
+    }
+    else if (match(P, tokLBrace)) {
+        AstNode *nodes = parseManyNoSeparator(P, tokRBrace, parseTopLevelDecl);
+        consume0(P, tokRBrace);
+        return nodes;
+    }
+    else {
+        return parseTopLevelDecl(P);
+    }
+}
+
 static void synchronizeUntil(Parser *P, TokenTag tag)
 {
     while (!check(P, tag, tokEoF))
         advance(P);
 }
 
-Parser makeParser(Lexer *lexer, CompilerDriver *cc)
+Parser makeParser(Lexer *lexer, CompilerDriver *cc, bool testMode)
 {
     Parser parser = {.cc = cc,
                      .lexer = lexer,
                      .L = lexer->log,
                      .memPool = cc->pool,
-                     .strPool = cc->strings};
+                     .strPool = cc->strings,
+                     .testMode = testMode};
     parser.ahead[0] = (Token){.tag = tokEoF};
     for (u32 i = 1; i < TOKEN_BUFFER; i++)
         parser.ahead[i] = advanceLexer(lexer);
@@ -2866,13 +3091,14 @@ AstNode *parseProgram(Parser *P)
     if (check(P, tokModule))
         module = parseModuleDecl(P);
 
-    while (check(P, tokImport) ||
+    while (check(P, tokImport) || check(P, tokDefine) ||
            (check(P, tokAt) &&
             checkPeek(P, 1, tokCDefine, tokCInclude, tokCSources, tokCBuild) &&
             match(P, tokAt))) {
         E4C_TRY_BLOCK(
             {
-                AstNode *node = parseTopLevelDecl(P);
+                AstNode *node = NULL;
+                node = conditionalTopLevelDecl(P);
                 if (node != NULL)
                     listAddAstNode(&topLevel, node);
             } E4C_CATCH(ParserException) { synchronize(E4C_EXCEPTION.ctx); })
@@ -2881,8 +3107,9 @@ AstNode *parseProgram(Parser *P)
     while (!isEoF(P)) {
         E4C_TRY_BLOCK(
             {
-                listAddAstNode(&decls, comptime(P, declaration));
-                decls.last->flags |= flgTopLevelDecl;
+                AstNode *decl = comptime(P, comptimeDeclaration);
+                if (decl)
+                    listAddAstNode(&decls, decl);
             } E4C_CATCH(ParserException) { synchronize(E4C_EXCEPTION.ctx); })
     }
 

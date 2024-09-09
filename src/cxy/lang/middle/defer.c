@@ -119,7 +119,8 @@ static void visitBreakContinue(AstVisitor *visitor, AstNode *node)
             blockScopeSealIntoList(ctx, &expressions, scope);
         scope = scope->next;
     }
-    blockScopeSealIntoList(ctx, &expressions, scope);
+    if (scope)
+        blockScopeSealIntoList(ctx, &expressions, scope);
 
     ctx->bsc.scope->flags |= bscSealed;
     astModifierAdd(&ctx->block, expressions.first);

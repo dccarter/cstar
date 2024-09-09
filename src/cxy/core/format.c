@@ -392,6 +392,9 @@ void printUtf8(FormatState *state, uint32_t chr, bool escaped)
         case '\b':
             writeStr(state, "\\b");
             return;
+        case '\"':
+            writeStr(state, "\\\"");
+            return;
         default:
             break;
         }

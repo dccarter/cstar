@@ -169,6 +169,17 @@ pub class HashMap[K, V, Hasher = Hash[K], Cmp = Equals[K]] {
         return null
     }
 
+    const func get(key: K) : V? {
+        const hashCode = Hasher{}(&key) | #{OCCUPIED_MASK};
+        var index = hashModPrime(hashCode, _capacity);
+        while (isBucketOccupied(index)) {
+            if (_hashes.[index] == hashCode && Cmp{}(&_data.[index].key, &key))
+                return _data.[index].value;
+            index = incrementWrap(_capacity, index)
+        }
+        return null
+    }
+
     func remove(key: K) : V? {
         const hashCode = Hasher{}(&key) | #{OCCUPIED_MASK};
         var index = hashModPrime(hashCode, _capacity);
@@ -199,6 +210,9 @@ pub class HashMap[K, V, Hasher = Hash[K], Cmp = Equals[K]] {
 
     @inline
     func `[]`(key: K) => get(&&key)
+    @inline
+    const func `[]`(key: K) => get(&&key)
+
 
     @inline
     func `[]=`(key: K, value: V) => insert(&&key, &&value)

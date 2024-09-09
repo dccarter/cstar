@@ -207,8 +207,10 @@ bool compareTypes(const Type *lhs, const Type *rhs)
     case typOpaque:
         return left->name == right->name;
     case typThis:
-        return typeIs(right, This) ? (left == right)
-                                   : left->_this.that == right;
+        if (left->_this.that == NULL)
+            return false;
+        return typeIs(right, This) ? left->_this.that == right->_this.that
+                                   : compareTypes(left->_this.that, right);
     case typTuple:
         return (left->tuple.count == right->tuple.count) &&
                compareManyTypes(left->tuple.members,
@@ -246,12 +248,13 @@ bool compareTypes(const Type *lhs, const Type *rhs)
 
     case typModule:
         return typeIs(right, Module) && left->module.path == right->module.path;
-
-    case typEnum:
     case typStruct:
+    case typClass:
+        if (typeIs(right, This))
+            return compareTypes(left, right->_this.that);
+    case typEnum:
     case typGeneric:
     case typInterface:
-    case typClass:
         return (left->name == right->name) && (left->ns == right->ns);
     case typInfo:
         return compareTypes(left->info.target, right->info.target);
@@ -971,6 +974,12 @@ const Type *findStructType(TypeTable *table, cstring name, u64 flags)
 {
     return findTypeScoped(
         table, &(Type){.tag = typStruct, .name = name, .flags = flags});
+}
+
+const Type *findAliasType(TypeTable *table, cstring name, u64 flags)
+{
+    return findTypeScoped(
+        table, &(Type){.tag = typAlias, .name = name, .flags = flags});
 }
 
 const Type *findUntaggedUnionType(TypeTable *table, cstring name, u64 flags)

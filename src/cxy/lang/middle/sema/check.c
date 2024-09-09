@@ -586,7 +586,7 @@ void addBlockLevelDeclaration(TypingContext *ctx, AstNode *node)
     if (ctx->block.previous)
         ctx->block.previous->next = node;
     else
-        ctx->block.self->program.decls = node;
+        ctx->block.self->blockStmt.stmts = node;
 
     ctx->block.previous = last;
 }

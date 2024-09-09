@@ -109,7 +109,7 @@ static void visitMacroCall(AstVisitor *visitor, AstNode *node)
     u64 paramsCount = countAstNodes(macro->macroDecl.params);
     u64 argumentsCount = countAstNodes(args);
     u64 requiredArguments = paramsCount - hasFlag(macro, Variadic);
-    if (argumentsCount > requiredArguments) {
+    if (argumentsCount < requiredArguments) {
         logError(
             ctx->L,
             &node->loc,
@@ -137,10 +137,11 @@ static void visitMacroCall(AstVisitor *visitor, AstNode *node)
     for (; arg && param; param = param->next) {
         AstNode *tmp = arg;
         arg = arg->next;
-        if (!hasFlag(tmp, Variadic))
+        if (!hasFlag(param, Variadic))
             tmp->next = NULL;
-        else
-            tmp = makeTupleExpr(ctx->pool, &tmp->loc, flgNone, tmp, NULL, NULL);
+        //        else
+        //            tmp = makeTupleExpr(
+        //                ctx->pool, &tmp->loc, flgVariadic, tmp, NULL, NULL);
 
         tmp->flags |= flgMacroArgument;
         astVisit(visitor, tmp);
@@ -227,6 +228,12 @@ static void visitMacroDecl(AstVisitor *visitor, AstNode *node)
     }
 }
 
+// static void visitProgram(AstVisitor *visitor, AstNode *node)
+//{
+//     PreprocessorContext *ctx = getAstVisitorContext(visitor);
+//     astVisitFallbackVisitAll(node->program.top);
+// }
+
 static void dispatch(Visitor func, AstVisitor *visitor, AstNode *node)
 {
     PreprocessorContext *ctx = getAstVisitorContext(visitor);
@@ -247,6 +254,7 @@ AstNode *preprocessAst(CompilerDriver *driver, AstNode *node)
 
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context, {
+        //[astProgram] = visitProgram,
         [astMacroCallExpr] = visitMacroCall,
         [astExprStmt] = visitExprStmt,
         [astBlockStmt] = visitBlockStmt,

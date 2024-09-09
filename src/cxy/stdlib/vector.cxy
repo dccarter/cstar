@@ -1,6 +1,6 @@
 module vector
 
-#const DEFAULT_VECTOR_CAPACITY = <u64>16
+macro DEFAULT_VECTOR_CAPACITY <u64>16
 
 pub class Vector[T] {
     - _data: ^T
@@ -25,7 +25,7 @@ pub class Vector[T] {
         }
     }
 
-    func `init`(initialSize: u64 = #{DEFAULT_VECTOR_CAPACITY}) {
+    func `init`(initialSize: u64 = DEFAULT_VECTOR_CAPACITY!) {
         _size = 0
         _capacity = initialSize
         _data = <^T>__calloc(elemSize() * _capacity)
@@ -62,9 +62,13 @@ pub class Vector[T] {
     }
 
     func resize(newSize: u64) {
-        _data = <^T> realloc(_data !: ^void, elemSize() * newSize)
-        if (newSize < _size)
+        if (newSize < _size) {
+            for (const i: newSize.._size) {
+                delete _data.[i]
+            }
             _size = newSize
+        }
+        _data = <^T> realloc(_data !: ^void, elemSize() * newSize)
        _capacity = newSize;
     }
 
@@ -154,4 +158,51 @@ pub class Vector[T] {
     @inline const func capacity() => _capacity
     @inline const func size() => _size
     @inline const func empty() => _size == 0
+}
+
+test "Vector[T]::push" {
+    var vec = Vector[i32]();
+    vec.push(100)
+    ok!(vec._size == 1)
+    ok!(vec._data.[0] == 100)
+
+    vec.push(200)
+    ok!(vec._size == 2)
+    ok!(vec._data.[1] == 200)
+}
+
+test "Vector[T]::pop" {
+    var vec = Vector[i32]();
+    vec.push(100)
+    vec.push(200)
+
+    ok!(vec.pop() == 200)
+    ok!(vec.pop() == 100)
+}
+
+test "Vector[T]::shift" {
+    var vec = Vector[i32]();
+    vec.push(100)
+    vec.push(200)
+
+    ok!(vec.shift() == 100)
+    ok!(vec.shift() == 200)
+}
+
+test "Vector[T]::resize" {
+    var vec = Vector[i32]();
+    vec.push(100)
+    vec.push(200)
+    vec.push(300)
+
+    ok!(vec._capacity == DEFAULT_VECTOR_CAPACITY!)
+    ok!(vec._size == 3)
+
+    vec.resize(5)
+    ok!(vec._capacity == 5)
+    ok!(vec._size == 3)
+
+    vec.resize(3)
+    ok!(vec._capacity == 3)
+    ok!(vec._size == 3)
 }

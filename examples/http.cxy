@@ -5,5 +5,9 @@ pub func main()  {
     server("/hello", (req: &const Request, resp: &Response) => {
         resp.body() << "Hello, World!"
     })
+
+    server("/quite", (req: &const Request, resp: &Response) => {
+        server.stop()
+    })
     server.start()
 }

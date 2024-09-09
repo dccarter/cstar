@@ -13,6 +13,8 @@
 
 #include "core/alloc.h"
 
+#include <inttypes.h>
+
 static AstNode *makeTupleMemberExpr(ShakeAstContext *ctx, AstNode *tuple, u64 i)
 {
     if (tuple == NULL)
@@ -540,7 +542,7 @@ static void shakeGenericDecl(AstVisitor *visitor, AstNode *node)
         bool innerType;
     } InferenceInfo;
     InferenceInfo *inferrable =
-        mallocOrDie(sizeof(InferenceInfo) * node->genericDecl.paramsCount);
+        callocOrDie(sizeof(InferenceInfo), node->genericDecl.paramsCount);
     int index = -1;
     for (u16 i = 0; gparam; gparam = gparam->next, i++) {
         if (gparam->genericParam.defaultValue != NULL) {
@@ -587,6 +589,84 @@ static void shakeGenericDecl(AstVisitor *visitor, AstNode *node)
     node->genericDecl.inferrable = (i16)index;
     decl->parentScope = node;
     astVisit(visitor, decl);
+}
+
+static void shakeTestDecl(AstVisitor *visitor, AstNode *node)
+{
+    ShakeAstContext *ctx = getAstVisitorContext(visitor);
+    u64 idx = node->loc.begin.row;
+    if (idx <= ctx->lastTestId)
+        idx = ++ctx->lastTestId;
+    else
+        ctx->lastTestId = idx;
+
+    char buf[64];
+    snprintf(buf, 64, "%" PRIu64, idx);
+    cstring name = makeStringConcat(ctx->strings, "test", buf);
+    cstring testName = node->testDecl.name ?: name;
+    AstNode *body = node->testDecl.body;
+    astVisit(visitor, body);
+    csAssert0(nodeIs(body, BlockStmt));
+    AstNode *last = getLastAstNode(body->blockStmt.stmts);
+    last->next =
+        makeReturnAstNode(ctx->pool,
+                          &body->loc,
+                          flgNone,
+                          makeNullLiteral(ctx->pool, &node->loc, NULL, NULL),
+                          NULL,
+                          NULL);
+
+    node->tag = astFuncDecl;
+    node->flags |= flgTestContext;
+    node->funcDecl.body = body;
+    node->funcDecl.name = name;
+    node->funcDecl.signature = makeFunctionSignature(
+        ctx->pool,
+        &(FunctionSignature){
+            // (string, u64, u64)?
+            .ret = makeOptionalTypeAst(
+                ctx->pool,
+                &node->loc,
+                flgNone,
+                makeTupleTypeAst(
+                    ctx->pool,
+                    &node->loc,
+                    flgNone,
+                    makeStringTypeAst(
+                        ctx->pool,
+                        &node->loc,
+                        flgNone,
+                        makePrimitiveTypeAst(ctx->pool,
+                                             &node->loc,
+                                             flgNone,
+                                             prtU64,
+                                             makePrimitiveTypeAst(ctx->pool,
+                                                                  &node->loc,
+                                                                  flgNone,
+                                                                  prtU64,
+                                                                  NULL,
+                                                                  NULL),
+                                             NULL),
+                        NULL),
+                    NULL,
+                    NULL),
+                NULL,
+                NULL)});
+
+    insertAstNode(
+        &ctx->testCases,
+        makeTupleExpr(ctx->pool,
+                      &node->loc,
+                      flgNone,
+                      makeStringLiteral(
+                          ctx->pool,
+                          &node->loc,
+                          testName,
+                          makeResolvedIdentifier(
+                              ctx->pool, &node->loc, name, 0, node, NULL, NULL),
+                          NULL),
+                      NULL,
+                      NULL));
 }
 
 static void shakeForStmt(AstVisitor *visitor, AstNode *node)
@@ -737,6 +817,26 @@ static void withSavedStack(Visitor func, AstVisitor *visitor, AstNode *node)
     ctx->stack = stack;
 }
 
+static bool buildTestsVariable(ShakeAstContext *ctx, AstNode *program)
+{
+    if (!ctx->testCases.first) {
+        // there are no test cases to run
+        return false;
+    }
+
+    getLastAstNode(program->program.decls)->next = makeVarDecl(
+        ctx->pool,
+        builtinLoc(),
+        flgTestContext,
+        S_allTestCases,
+        NULL,
+        makeArrayExpr(
+            ctx->pool, builtinLoc(), flgNone, ctx->testCases.first, NULL, NULL),
+        NULL,
+        NULL);
+    return true;
+}
+
 AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
 {
     ShakeAstContext context = {
@@ -751,6 +851,7 @@ AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
         [astForStmt] = shakeForStmt,
         [astFuncDecl] = shakeFuncDecl,
         [astGenericDecl] = shakeGenericDecl,
+        [astTestDecl] = shakeTestDecl,
         [astBlockStmt] = shakeBlockStmt,
         [astStringExpr] = shakeStringExpr,
         [astClosureExpr] = shakeClosureExpr,
@@ -765,6 +866,7 @@ AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
     // clang-format on
 
     astVisit(&visitor, node);
-
+    if (!hasFlag(node, ImportedModule))
+        driver->hasTestCases = buildTestsVariable(&context, node);
     return node;
 }

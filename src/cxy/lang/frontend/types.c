@@ -4,10 +4,11 @@
 
 #include "types.h"
 #include "ast.h"
-#include "builtins.h"
 #include "flag.h"
 #include "strings.h"
 #include "ttable.h"
+
+#include "lang/middle/builtins.h"
 
 #include <string.h>
 

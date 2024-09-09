@@ -183,11 +183,19 @@ typedef u32 wchar;
         LINE_VAR(k);                                                           \
     })
 
+#ifndef __cplusplus
 #define __stack_str_t(N)                                                       \
     _Static_assert(((N) <= 32), "Stack string's must be small");               \
     typedef struct Stack_str_##N##_t {                                         \
         char str[(N) + 1];                                                     \
     } Stack_str_##N
+#else
+#define __stack_str_t(N)                                                       \
+    static_assert(((N) <= 32), "Stack string's must be small");                \
+    typedef struct Stack_str_##N##_t {                                         \
+        char str[(N) + 1];                                                     \
+    } Stack_str_##N
+#endif
 
 __stack_str_t(4);
 __stack_str_t(8);

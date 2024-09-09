@@ -10,8 +10,13 @@ import { Trie } from "./trie.cxy"
 import { Address } from "./net.cxy"
 import { TcpSocket, TcpListener, BufferedSocketOutputStream } from "./tcp.cxy"
 
+##if (defined MACOS) {
+    import "_ctype.h" as ctype
+}
+else {
+    import "ctype.h" as ctype
+}
 
-import "_ctype.h" as ctype
 import "stdlib.h" as stdlib
 import "strings.h" as cstrings
 

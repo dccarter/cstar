@@ -170,6 +170,7 @@ static bool inferGenericFunctionTypes(AstVisitor *visitor,
             else {
                 paramTypes[index] = inferred;
             }
+            paramTypes[index] = maybeUnThisType(paramTypes[index]);
         }
     }
 
@@ -292,7 +293,7 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
 
     paramTypes = mallocOrDie(sizeof(Type *) * paramsCount);
     for (; arg; index++, arg = arg->next) {
-        paramTypes[index] = checkType(visitor, arg);
+        paramTypes[index] = maybeUnThisType(checkType(visitor, arg));
     }
 
     if (index < paramsCount) {
@@ -346,7 +347,7 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
         }
         return node->type;
     }
-    
+
     AstNode *substitute = cloneGenericDeclaration(ctx->pool, generic),
             *param = getGenericDeclarationParams(substitute);
     substitute->flags |= flgGenerated;

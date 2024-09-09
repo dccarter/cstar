@@ -151,6 +151,7 @@ const Type *makeReplaceStructType(TypeTable *table,
                                   u64 flags);
 
 const Type *findStructType(TypeTable *table, cstring name, u64 flags);
+const Type *findAliasType(TypeTable *table, cstring name, u64 flags);
 const Type *findUntaggedUnionType(TypeTable *table, cstring name, u64 flags);
 const Type *findEnumType(TypeTable *table, cstring name, u64 flags);
 

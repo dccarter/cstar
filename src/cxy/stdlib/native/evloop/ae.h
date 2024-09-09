@@ -1,8 +1,9 @@
 #ifndef __AE_H__
 #define __AE_H__
 
+#include "unistd.h"
+#include <stdint.h>
 #include <time.h>
-
 enum Status {
     AE_OK = 0,
     AE_ERR = -1,
@@ -54,7 +55,7 @@ typedef void aeEventFinalizerProc(struct aeEventLoop *eventLoop,
 typedef void aeBeforeSleepProc(struct aeEventLoop *eventLoop);
 
 #define AE_TIMER_BASE(T)                                                       \
-    u_int64_t id;  /* time event identifier. */                                \
+    uint64_t id;   /* time event identifier. */                                \
     long when_sec; /* seconds */                                               \
     long when_ms;  /* milliseconds */                                          \
     T *prev;                                                                   \
@@ -116,7 +117,7 @@ enum Status aeCreateFileEvent(aeEventLoop *eventLoop,
                               enum State mask,
                               aeFileProc *proc,
                               void *clientData,
-                              u_int64_t timeout);
+                              uint64_t timeout);
 
 void aeDeleteFileEvent(aeEventLoop *eventLoop, int fd, enum State mask);
 

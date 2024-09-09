@@ -4,9 +4,14 @@ import "ifaddrs.h" as ifaddrs
 import "netdb.h" as netdb
 import "arpa/inet.h" as arpa
 import "netinet/in.h" as inet
-import "netinet6/in6.h" as inet6
 import "sys/socket.h" as socket
 import "errno.h" as errno
+##if (defined MACOS) {
+    import "netinet6/in6.h" as inet6
+}
+else {
+    import "bits/socket.h" as _socket
+}
 
 import "native/dns/dns.h" as dns
 
@@ -15,12 +20,23 @@ import "./native/index.cxy"
 // bring in coroutine stuff
 import "./coro.cxy"
 
+#if (defined MACOS) {
+type sockaddr = socket.sockaddr
+type sockaddr_in6 = inet6.sockaddr_in6
+macro INET6_ADDR_ANY inet6.in6addr_any
+}
+else {
+type sockaddr = _socket.sockaddr
+type sockaddr_in6 = inet.sockaddr_in6
+macro INET6_ADDR_ANY inet.in6addr_any
+}
+
 func htons(x: u16) : u16 {
     #if (BYTE_ORDER! == BIG_ENDIAN!) {
         return x
     }
     else #if (BYTE_ORDER! == LITTLE_ENDIAN!) {
-        return __bswap_16(x)
+        return __bswap16(x)
     }
     else {
         error!("Unknown byte order")
@@ -33,7 +49,7 @@ func htonl(x: u32) : u32 {
         return x
     }
     else #if (BYTE_ORDER! == LITTLE_ENDIAN!) {
-        return __bswap_32(x)
+        return __bswap32(x)
     }
     else {
         error!("Unknown byte order")
@@ -46,7 +62,7 @@ func htonll(x: u64) : u64 {
         return x
     }
     else #if (BYTE_ORDER! == LITTLE_ENDIAN!) {
-        return __bswap_64(x)
+        return __bswap64(x)
     }
     else {
         error!("Unknown byte order")
@@ -59,7 +75,7 @@ func ntohs(x: u16) : u16 {
         return x
     }
     else #if (BYTE_ORDER! == LITTLE_ENDIAN!) {
-        return __bswap_16(x)
+        return __bswap16(x)
     }
     else {
         error!("Unknown byte order")
@@ -72,7 +88,7 @@ func ntohl(x: u32) : u32 {
         return x
     }
     else #if (BYTE_ORDER! == LITTLE_ENDIAN!) {
-        return __bswap_32(x)
+        return __bswap32(x)
     }
     else {
         error!("Unknown byte order")
@@ -85,7 +101,7 @@ func ntohll(x: u64) : u64 {
         return x
     }
     else #if (BYTE_ORDER! == LITTLE_ENDIAN!) {
-        return __bswap_64(x)
+        return __bswap64(x)
     }
     else {
         error!("Unknown byte order")
@@ -111,7 +127,7 @@ pub struct Address {
     addr: [i8, 32]
 
     func `init`() {
-        (addr !: ^socket.sockaddr).sa_family = <u8>AF_UNSPEC!
+        (addr !: ^sockaddr).sa_family = <u8>AF_UNSPEC!
     }
 
     func `init`(port: u16, mode: IPVersion) {
@@ -122,9 +138,9 @@ pub struct Address {
             ipv4.sin_port = htons(port)
         }
         else {
-            var ipv6 = addr !: ^inet6.sockaddr_in6;
+            var ipv6 = addr !: ^sockaddr_in6;
             ipv6.sin6_family = <u8>AF_INET6!
-            memcpy(ptrof ipv6.sin6_addr, ptrof inet6.in6addr_any, sizeof!(inet6.in6addr_any))
+            memcpy(ptrof ipv6.sin6_addr, ptrof INET6_ADDR_ANY!, sizeof!(INET6_ADDR_ANY!))
             ipv6.sin6_port = htons(port)
         }
     }
@@ -159,7 +175,7 @@ pub struct Address {
     }
 
     - func parseIpv6(ip: string, port: u16) : bool {
-        var ipv6 = addr !: ^inet6.sockaddr_in6;
+        var ipv6 = addr !: ^sockaddr_in6;
         var rc = arpa.inet_pton(AF_INET6!, ip !: ^const char, ptrof ipv6.sin6_addr);
         if (rc == 1) {
             ipv6.sin6_family = <u8> AF_INET6!
@@ -173,21 +189,21 @@ pub struct Address {
     }
 
     @inline
-    const func family() => (addr !: ^socket.sockaddr).sa_family
+    const func family() => (addr !: ^sockaddr).sa_family
 
     @inline
-    const func len() => family() == AF_INET!? sizeof!(#inet.sockaddr_in) : sizeof!(#inet6.sockaddr_in6)
+    const func len() => family() == AF_INET!? sizeof!(#inet.sockaddr_in) : sizeof!(#sockaddr_in6)
 
     @inline
     const func port() {
         if (family() == AF_INET!)
             return ntohs((addr !: ^inet.sockaddr_in).sin_port)
         else
-            return ntohs((addr !: ^inet6.sockaddr_in6).sin6_port)
+            return ntohs((addr !: ^sockaddr_in6).sin6_port)
     }
 
-    func nativeAddr() => addr !: ^socket.sockaddr
-    const func nativeAddr() => addr !: ^const socket.sockaddr
+    func nativeAddr() => addr !: ^sockaddr
+    const func nativeAddr() => addr !: ^const sockaddr
 
     @inline
     const func `hash`() => 0
@@ -206,7 +222,7 @@ pub struct Address {
                           INET_ADDRSTRLEN!) != null;
         }
         else {
-            var ipv6 = addr !: ^inet6.sockaddr_in6;
+            var ipv6 = addr !: ^sockaddr_in6;
             rc = arpa.inet_ntop(AF_INET6!,
                           ptrof ipv6.sin6_addr,
                           buffer,
@@ -251,7 +267,7 @@ pub func getLocalAddress(name: string, port: u16, mode: IPVersion = IPVersion.An
             continue
         }
 
-        var addr = (it.ifa_addr !: ^socket.sockaddr);
+        var addr = (it.ifa_addr !: ^sockaddr);
         if (addr.sa_family == AF_INET!) {
             assert!(ipv4 == null)
             ipv4 = it
@@ -280,10 +296,10 @@ pub func getLocalAddress(name: string, port: u16, mode: IPVersion = IPVersion.An
         inaddr.sin_port = htons(port);
     }
     else if (ipv6 != null) {
-        var inaddr = addr.addr !: ^inet6.sockaddr_in6;
-        memcpy(inaddr, ipv6.ifa_addr, sizeof!(#inet6.sockaddr_in6))
+        var inaddr = addr.addr !: ^sockaddr_in6;
+        memcpy(inaddr, ipv6.ifa_addr, sizeof!(#sockaddr_in6))
         inaddr.sin6_port = htons(port)
-        printf("size is %lu\n", sizeof!(#inet6.sockaddr_in6))
+        printf("size is %lu\n", sizeof!(#sockaddr_in6))
     }
 
     ifaddrs.freeifaddrs(ifaces);
@@ -393,13 +409,13 @@ pub async func getRemoteAddress(name: string, port: u16, mode: IPVersion = IPVer
         free(ipv4);
     }
     else if (ipv6) {
-        var inaddr = addr.addr !: ^inet6.sockaddr_in6;
-        memcpy(inaddr, ipv6.ai_addr, sizeof!(#inet6.sockaddr_in6))
+        var inaddr = addr.addr !: ^sockaddr_in6;
+        memcpy(inaddr, ipv6.ai_addr, sizeof!(#sockaddr_in6))
         inaddr.sin6_port = htons(port)
         free(ipv6);
     }
     else {
-        (addr.addr !: ^socket.sockaddr).sa_family = <u8>AF_UNSPEC!;
+        (addr.addr !: ^sockaddr).sa_family = <u8>AF_UNSPEC!;
     }
 
     dns.dns_ai_close(ai)

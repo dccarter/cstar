@@ -15,8 +15,10 @@ typedef struct {
     Log *L;
     MemPool *pool;
     struct StrPool *strings;
+    AstNodeList testCases;
     AstModifier block;
     AstModifier root;
+    u64 lastTestId;
     union {
         struct {
             bool inClassOrStruct;

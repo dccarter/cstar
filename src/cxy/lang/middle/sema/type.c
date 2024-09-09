@@ -88,7 +88,7 @@ const Type *checkTypeShallow(AstVisitor *visitor, AstNode *node, bool shallow)
 
     if (node->type) {
         ctx->shallow = wasShallow;
-        return node->type;
+        return resolveType(node->type);
     }
 
     astVisit(visitor, node);

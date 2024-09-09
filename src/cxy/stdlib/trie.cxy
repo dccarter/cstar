@@ -43,7 +43,6 @@ pub class Trie[Data] {
     - root: TrieNode[Data];
     - x: i32
     func `init`() {
-        x = 100
         root = TrieNode[Data]();
     }
 

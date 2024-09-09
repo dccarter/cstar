@@ -80,6 +80,7 @@ extern "C" {
     f(Coroutine)                \
     f(asyncLaunch)              \
     f(asyncLaunchMember)        \
+    f(allTestCases)             \
     f(sync)                     \
     f(self)                     \
     f(External)                 \

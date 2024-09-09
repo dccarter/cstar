@@ -113,6 +113,7 @@ void evalPathEpilogue(AstVisitor *visitor,
         case typTuple:
         case typUnion:
         case typThis:
+        case typFunc:
             node->tag = astTypeRef;
             node->flags = type->flags;
             node->type = type;
