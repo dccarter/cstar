@@ -14,13 +14,14 @@
 
 static u64 addUnionDecl(UnionMember *members, const Type *member, u64 count)
 {
-    if (typeIs(member, Union)) {
-        for (u64 i = 0; i < member->tUnion.count; i++) {
-            count =
-                addUnionDecl(members, member->tUnion.members[i].type, count);
-        }
-        return count;
-    }
+    //    if (typeIs(member, Union)) {
+    //        for (u64 i = 0; i < member->tUnion.count; i++) {
+    //            count =
+    //                addUnionDecl(members, member->tUnion.members[i].type,
+    //                count);
+    //        }
+    //        return count;
+    //    }
 
     for (u64 i = 0; i < count; i++) {
         if (members[i].type == member)
@@ -164,10 +165,10 @@ void checkUnionDecl(AstVisitor *visitor, AstNode *node)
             node->type = ERROR_TYPE(ctx);
             continue;
         }
-        if (typeIs(type, Union))
-            count += type->tUnion.count;
-        else
-            count++;
+        //        if (typeIs(type, Union))
+        //            count += type->tUnion.count;
+        //        else
+        count++;
     }
 
     if (typeIs(node->type, Error))
@@ -178,7 +179,7 @@ void checkUnionDecl(AstVisitor *visitor, AstNode *node)
     member = node->unionDecl.members;
     u64 flags = flgNone;
     for (; member; member = member->next) {
-        i = addUnionDecl(members_, member->type, i);
+        i = addUnionDecl(members_, resolveType(member->type), i);
         if (isClassType(member->type) || hasReferenceMembers(member->type))
             flags |= flgReferenceMembers;
     }

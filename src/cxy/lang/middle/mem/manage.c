@@ -383,67 +383,64 @@ static void transformToClassDropRef(MMContext *ctx,
                      drop->type->func.retType);
 }
 
-static void transformToCopyTuple(MMContext *ctx, AstNode *node)
+static void transformToCopyTuple(MMContext *ctx, AstNode *node, AstNode *expr)
 {
     const Type *type = node->type;
     const Type *copy = type->tuple.copyFunc;
     csAssert0(copy);
     AstNode *decl = addExternalDecl(ctx, copy->func.decl);
 
-    AstNode *args = copyAstNode(ctx->pool, node);
     node->tag = astCallExpr;
     clearAstBody(node);
     node->callExpr.callee = makeResolvedIdentifier(
         ctx->pool, &node->loc, copy->name, 0, decl, NULL, copy);
     node->callExpr.args =
         makeReferenceOfExpr(ctx->pool,
-                            &args->loc,
+                            &expr->loc,
                             flgNone,
-                            args,
+                            expr,
                             NULL,
-                            makeReferenceType(ctx->types, args->type, flgNone));
+                            makeReferenceType(ctx->types, expr->type, flgNone));
 }
 
-static void transformToCopyUnion(MMContext *ctx, AstNode *node)
+static void transformToCopyUnion(MMContext *ctx, AstNode *node, AstNode *expr)
 {
     const Type *type = node->type;
     const Type *copy = type->tUnion.copyFunc;
     csAssert0(copy);
     AstNode *decl = addExternalDecl(ctx, copy->func.decl);
 
-    AstNode *args = copyAstNode(ctx->pool, node);
     node->tag = astCallExpr;
     clearAstBody(node);
     node->callExpr.callee = makeResolvedIdentifier(
         ctx->pool, &node->loc, copy->name, 0, decl, NULL, copy);
     node->callExpr.args =
         makeReferenceOfExpr(ctx->pool,
-                            &args->loc,
+                            &expr->loc,
                             flgNone,
-                            args,
+                            expr,
                             NULL,
-                            makeReferenceType(ctx->types, args->type, flgNone));
+                            makeReferenceType(ctx->types, expr->type, flgNone));
 }
 
-static void transformToClassRefGet(MMContext *ctx, AstNode *node)
+static void transformToClassRefGet(MMContext *ctx, AstNode *node, AstNode *expr)
 {
     AstNode *get =
         findBuiltinDecl(ctx->traceMemory ? S_sptr_get_trace : S_sptr_ref);
     csAssert0(get);
 
-    AstNode *args = copyAstNode(ctx->pool, node);
-    args->type = makeVoidPointerType(ctx->types, flgNone);
+    expr->type = makeVoidPointerType(ctx->types, flgNone);
     if (ctx->traceMemory)
-        args->next = makeSrLocNode(ctx->pool, &node->loc);
+        expr->next = makeSrLocNode(ctx->pool, &node->loc);
 
     node->tag = astCallExpr;
     clearAstBody(node);
     node->callExpr.callee = makeResolvedIdentifier(
         ctx->pool, &node->loc, get->_namedNode.name, 0, get, NULL, get->type);
-    node->callExpr.args = args;
+    node->callExpr.args = expr;
 }
 
-static void transformToCopyStruct(MMContext *ctx, AstNode *node)
+static void transformToCopyStruct(MMContext *ctx, AstNode *node, AstNode *expr)
 {
     const Type *type = node->type;
     const Type *copy = findMemberInType(type, S_CopyOverload);
@@ -454,7 +451,7 @@ static void transformToCopyStruct(MMContext *ctx, AstNode *node)
         makePointerOfExpr(ctx->pool,
                           &node->loc,
                           flgNone,
-                          copyAstNode(ctx->pool, node),
+                          expr,
                           NULL,
                           makePointerType(ctx->types, node->type, flgNone));
     node->tag = astCallExpr;
@@ -530,19 +527,33 @@ static void addMoveSemantics(MMContext *ctx, AstNode *node)
         transformToMove(ctx, node, copyAstNode(ctx->pool, node));
 }
 
+static void transformToCopyWithExpr(MMContext *ctx,
+                                    AstNode *node,
+                                    AstNode *expr)
+{
+    if (isTupleType(node->type))
+        transformToCopyTuple(ctx, node, expr);
+    else if (isStructType(node->type))
+        transformToCopyStruct(ctx, node, expr);
+    else if (isUnionType(node->type))
+        transformToCopyUnion(ctx, node, expr);
+    else
+        transformToClassRefGet(ctx, node, expr);
+}
+
 static void transformToCopy(MMContext *ctx, AstNode *node)
 {
     if (!isLeftValueExpr(node))
         return; // nothing to move
 
     if (isTupleType(node->type))
-        transformToCopyTuple(ctx, node);
+        transformToCopyTuple(ctx, node, copyAstNode(ctx->pool, node));
     else if (isStructType(node->type))
-        transformToCopyStruct(ctx, node);
+        transformToCopyStruct(ctx, node, copyAstNode(ctx->pool, node));
     else if (isUnionType(node->type))
-        transformToCopyUnion(ctx, node);
+        transformToCopyUnion(ctx, node, copyAstNode(ctx->pool, node));
     else
-        transformToClassRefGet(ctx, node);
+        transformToClassRefGet(ctx, node, copyAstNode(ctx->pool, node));
 }
 
 static inline AstNode *createDestruct(MMContext *ctx, AstNode *node)
@@ -695,6 +706,9 @@ static void visitVarDecl(AstVisitor *visitor, AstNode *node)
             astVisit(visitor, node->varDecl.init);
         }
     }
+    else {
+        astVisit(visitor, node->varDecl.init);
+    }
 }
 
 static void visitFuncDecl(AstVisitor *visitor, AstNode *node)
@@ -729,6 +743,20 @@ static void visitExternDecl(AstVisitor *visitor, AstNode *node)
     AstNode *func = node->externDecl.func;
     if (!hasFlag(func, Extern))
         n2eAddNodeToExternDecl(&ctx->n2e, func, node);
+}
+
+static void visitCastExpr(AstVisitor *visitor, AstNode *node)
+{
+    MMContext *ctx = getAstVisitorContext(visitor);
+    AstNode *to = node->castExpr.to, *expr = node->castExpr.expr;
+    astVisit(visitor, expr);
+
+    if (!isReferenceType(expr->type) || isReferenceType(to->type))
+        return;
+
+    const Type *type = to->type;
+    if (isClassType(type) || hasReferenceMembers(type))
+        transformToCopyWithExpr(ctx, node, expr);
 }
 
 static void visitAssignExpr(AstVisitor *visitor, AstNode *node)
@@ -872,6 +900,7 @@ void manageMemory(MMContext *context, AstNode *node)
         [astVarDecl] = visitVarDecl,
         [astFuncDecl] = visitFuncDecl,
         [astExternDecl] = visitExternDecl,
+        [astCastExpr] = visitCastExpr,
         [astAssignExpr] = visitAssignExpr,
         [astCallExpr] = visitCallExpr,
         [astUnionValueExpr] = visitUnionValueExpr,

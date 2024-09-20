@@ -1,6 +1,6 @@
 #include "add.h"
 #include "errno.h"
-#include "sys/time.h"
+#include "time.h"
 #include <stdio.h>
 
 void sendCommand(union Command *command)

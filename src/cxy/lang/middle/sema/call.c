@@ -179,9 +179,10 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
     }
 
     callee_ = flattenWrappedType(callee_, &flags);
-    if (isClassOrStructType(callee_)) {
+    const Type *rawType = stripPointerOrReferenceOnce(callee_, NULL);
+    if (isClassOrStructType(rawType)) {
         AstNode *symbol = nodeIs(callee, Path)      ? resolveAstNode(callee)
-                          : nodeIs(callee, TypeRef) ? getTypeDecl(callee_)
+                          : nodeIs(callee, TypeRef) ? getTypeDecl(rawType)
                                                     : NULL;
 
         if (isClassOrStructAstNode(symbol)) {
@@ -190,7 +191,7 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
                          &callee->loc,
                          "cannot create an instance of '{t}' because it is an "
                          "abstract type",
-                         (FormatArg[]){{.t = callee_}});
+                         (FormatArg[]){{.t = rawType}});
                 node->type = ERROR_TYPE(ctx);
                 return;
             }
@@ -200,11 +201,11 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
 
         const Type *overload = NULL;
         if (isSuperPath(callee)) {
-            overload = findStructMemberType(callee_, S_InitOverload);
+            overload = findStructMemberType(rawType, S_InitOverload);
         }
         else {
             flags &= ~flgConst;
-            overload = findStructMemberType(callee_, S_CallOverload);
+            overload = findStructMemberType(rawType, S_CallOverload);
         }
 
         if (overload) {

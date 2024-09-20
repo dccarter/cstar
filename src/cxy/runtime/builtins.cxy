@@ -18,7 +18,7 @@ pub extern func strtoll(str: ^const char, endptr: ^ ^const char, base: i32): i64
 pub extern func strtod(str: ^const char, endptr: ^ ^const char): f64;
 pub extern func toupper(c: i32): i32
 
-macro alloca(T) { mk_bc!(bfiAlloca!, #^void, T!) }
+macro alloca(T) =( mk_bc!(bfiAlloca!, #^void, T!) )
 macro zero(V) { mk_bc!(bfiZeromem!, #void, V!) }
 
 func __cxy_assert_abort(file: string, line: u64, column: u64) {
@@ -62,6 +62,10 @@ pub func __cxy_panic(file: string, line: u64, column: u64, msg: string) {
     write(2, file, strlen(file))
     var len = sprintf(buf, ":%u:%u\n", line, column);
     write(2, buf, len)
+    #if (defined __DEBUG && defined TRACE_MEMORY) {
+        var loc: __SrcLoc;
+        (TRACE_MEMORY!)("flush", null, &loc)
+    }
     abort()
 }
 
@@ -100,7 +104,7 @@ struct __mem {
 
 #const MEMORY_MAGIC = 0xAEAEAEAE:u32
 
-@[pure, linkage("External")]
+@[pure, linkage("External"), noinline, optimize(0)]
 func __smart_ptr_alloc(size: u64, dctor: func(ptr: sptr) -> void = null) {
     var ptr = malloc(size + sizeof!(__mem));
     if (ptr == null) {
@@ -114,7 +118,7 @@ func __smart_ptr_alloc(size: u64, dctor: func(ptr: sptr) -> void = null) {
     return ((ptr !: ^u8) + sizeof!(__mem)) !: sptr
 }
 
-@[pure, inline, linkage("External")]
+@[pure, linkage("External"), noinline, optimize(0)]
 func __smart_ptr_get(ptr: sptr) : sptr {
     if (ptr == null)
         return null
@@ -127,7 +131,7 @@ func __smart_ptr_get(ptr: sptr) : sptr {
     return ptr
 }
 
-@[pure, linkage("External")]
+@[pure, linkage("External"), noinline, optimize(0)]
 func __smart_ptr_drop(ptr: sptr) {
     if (ptr == null)
         return false
@@ -237,7 +241,7 @@ pub struct __Optional[T] {
 
     @inline func `!!`() => ok
     @inline func `deref`() { return val }
-    @inline func move() { ok = false; return &&val }
+    @optimize(0) func move() { ok = false; return &&val }
     @inline const func `!!`() => ok
     @inline const func `deref`() { return val }
 }
@@ -870,14 +874,16 @@ pub struct Slice[T] {
         }
     }
 
-    const func `str`(sb: OutputStream) {
-        sb.appendChar('[')
-        for (const i: 0..len) {
-            if (i != 0)
-                sb.appendString(", ")
-            sb << data.[i]
+    #if (!T.isUnresolved) {
+        const func `str`(sb: OutputStream) {
+            sb.appendChar('[')
+            for (const i: 0..len) {
+                if (i != 0)
+                    sb.appendString(", ")
+                sb << data.[i]
+            }
+            sb.appendChar(']')
         }
-        sb.appendChar(']')
     }
 }
 
@@ -1136,11 +1142,13 @@ pub func update[Lhs, Rhs](lhs: &Lhs, rhs: Rhs) {
     require!(Lhs.isClass || Lhs.isStruct, "lhs must be a class/struct type")
     require!(Rhs.isStruct, "rhs must be a struct type")
     #for (const M: Rhs.members) {
-        #const T = M.Tinfo;
-        require!(M.isField, "member {s} must be a field", M.name)
-        require!(has_member!(#Lhs, M.name, #T),
-                 "target does not have a member named '{s}' of type {t}", M.name, #T)
-        lhs.#{mk_ident!(M.name)} = rhs.#{mk_ident!(M.name)}
+        #if (M.isField) {
+            #const T = M.Tinfo;
+            require!(M.isField, "member {s} must be a field", M.name)
+            require!(has_member!(#Lhs, M.name, #T),
+                     "target does not have a member named '{s}' of type {t}", M.name, #T)
+            lhs.#{mk_ident!(M.name)} = rhs.#{mk_ident!(M.name)}
+        }
     }
 }
 

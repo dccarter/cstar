@@ -158,23 +158,23 @@ pub class HashMap[K, V, Hasher = Hash[K], Cmp = Equals[K]] {
         return true;
     }
 
-    func get(key: K) : V? {
+    func get(key: K) : __Optional[&V] {
         const hashCode = Hasher{}(&key) | #{OCCUPIED_MASK};
         var index = hashModPrime(hashCode, _capacity);
         while (isBucketOccupied(index)) {
             if (_hashes.[index] == hashCode && Cmp{}(&_data.[index].key, &key))
-                return _data.[index].value;
+                return &_data.[index].value;
             index = incrementWrap(_capacity, index)
         }
         return null
     }
 
-    const func get(key: K) : V? {
+    const func get(key: K) : __Optional[&V] {
         const hashCode = Hasher{}(&key) | #{OCCUPIED_MASK};
         var index = hashModPrime(hashCode, _capacity);
         while (isBucketOccupied(index)) {
             if (_hashes.[index] == hashCode && Cmp{}(&_data.[index].key, &key))
-                return _data.[index].value;
+                return &_data.[index].value;
             index = incrementWrap(_capacity, index)
         }
         return null

@@ -51,7 +51,9 @@ const Type *stripPointerOrReference(const Type *type);
 
 const Type *stripAll(const Type *type);
 
-const Type *stripOnce(const Type *type, u64 *flags);
+const Type *stripPointerOnce(const Type *type, u64 *flags);
+
+const Type *stripPointerOrReferenceOnce(const Type *type, u64 *flags);
 
 const Type *arrayToPointer(TypeTable *table, const Type *type);
 
@@ -151,6 +153,10 @@ const Type *makeReplaceStructType(TypeTable *table,
                                   u64 flags);
 
 const Type *findStructType(TypeTable *table, cstring name, u64 flags);
+const Type *findAnonymousStructType(TypeTable *table,
+                                    NamedTypeMember **members,
+                                    u64 count,
+                                    u64 flags);
 const Type *findAliasType(TypeTable *table, cstring name, u64 flags);
 const Type *findUntaggedUnionType(TypeTable *table, cstring name, u64 flags);
 const Type *findEnumType(TypeTable *table, cstring name, u64 flags);

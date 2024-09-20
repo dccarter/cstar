@@ -32,7 +32,8 @@ void checkMatchCaseStmt(AstVisitor *visitor, AstNode *node)
         }
 
         u64 flags = flgNone;
-        const Type *sumType = stripOnce(condition->type, &flags);
+        const Type *sumType =
+            stripPointerOrReferenceOnce(condition->type, &flags);
         node->caseStmt.idx = findUnionTypeIndex(sumType, match_);
         if (node->caseStmt.idx == UINT32_MAX) {
             logError(ctx->L,
@@ -48,33 +49,21 @@ void checkMatchCaseStmt(AstVisitor *visitor, AstNode *node)
             variable->flags |=
                 condition->flags | (flags & flgConst) | flgTemporary;
             AstNode *init = shallowCloneAstNode(ctx->pool, condition);
-            if (!isReferenceType(match_) && hasFlag(variable, Reference)) {
-                variable->type = makeReferenceType(
-                    ctx->types, match_, variable->flags & flgConst);
-                init = makeReferenceOfExpr(
-                    ctx->pool,
-                    &init->loc,
-                    condition->type->flags,
-                    init,
-                    NULL,
-                    makeReferenceType(ctx->types,
-                                      condition->type,
-                                      condition->flags & flgConst));
-            }
-            else {
-                variable->type = match_;
-            }
+            init = makeCastExpr(
+                ctx->pool,
+                &variable->loc,
+                flgUnionCast,
+                init,
+                makeTypeReferenceNode(ctx->pool, match_, &variable->loc),
+                NULL,
+                match_);
+            init->castExpr.idx = node->caseStmt.idx;
 
-            variable->varDecl.init =
-                makeCastExpr(ctx->pool,
-                             &variable->loc,
-                             flgNone,
-                             init,
-                             makeTypeReferenceNode(
-                                 ctx->pool, variable->type, &variable->loc),
-                             NULL,
-                             variable->type);
-            variable->varDecl.init->castExpr.idx = node->caseStmt.idx;
+            variable->type =
+                isReferenceType(condition->type)
+                    ? makeReferenceType(ctx->types, match_, (flags & flgConst))
+                    : makePointerType(ctx->types, match_, (flags & flgConst));
+            variable->varDecl.init = init;
         }
     }
 
@@ -99,7 +88,7 @@ void checkMatchStmt(AstVisitor *visitor, AstNode *node)
     }
 
     u64 flags = flgNone;
-    const Type *unwrapped = stripOnce(expr_, &flags);
+    const Type *unwrapped = stripPointerOrReferenceOnce(expr_, &flags);
     if (!typeIs(unwrapped, Union)) {
         logError(ctx->L,
                  &expr->loc,

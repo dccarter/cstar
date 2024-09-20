@@ -345,6 +345,9 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
             node->ident.resolvesTo = goi.s->applied.decl;
             node->ident.value = getDeclarationName(goi.s->applied.decl);
         }
+        if (typeIs(node->type, Func) &&
+            getMemberFunctionThis(node->type->func.decl))
+            node->flags |= flgAddThis;
         return node->type;
     }
 

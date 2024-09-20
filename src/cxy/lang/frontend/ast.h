@@ -527,6 +527,7 @@ struct AstNode {
             struct AstNode *members;
             struct AstNode *typeParams;
             const Type *thisType;
+            struct AstNode *base;
             struct AstNode *closureForward;
         } structDecl;
 
@@ -535,8 +536,8 @@ struct AstNode {
             struct AstNode *members;
             struct AstNode *typeParams;
             const Type *thisType;
-            struct AstNode *implements;
             struct AstNode *base;
+            struct AstNode *implements;
         } classDecl;
 
         struct {
@@ -1486,6 +1487,11 @@ int compareNamedAstNodes(const void *lhs, const void *rhs);
 
 SortedNodes *makeSortedNodes(MemPool *pool,
                              AstNode *nodes,
+                             int (*compare)(const void *, const void *));
+
+void makeSortedNodesInMemory(SortedNodes *sortedNodes,
+                             AstNode *nodes,
+                             u64 count,
                              int (*compare)(const void *, const void *));
 
 const AstNode *getOptionalDecl();

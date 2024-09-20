@@ -140,8 +140,14 @@ typedef struct AppliedTypeParams {
     cstring name;                                                              \
     cstring ns;                                                                \
     const Type *from;                                                          \
-    void *codegen;                                                             \
-    void *dbg;
+    void *dbg;                                                                 \
+    union {                                                                    \
+        void *codegen;                                                         \
+        struct {                                                               \
+            bool generating;                                                   \
+            bool generated;                                                    \
+        };                                                                     \
+    };
 
 #ifdef __cpluplus
 
@@ -332,6 +338,8 @@ bool isPointerType(const Type *type);
 
 bool isReferenceType(const Type *type);
 
+bool isPointerOrReferenceType(const Type *type);
+
 bool isReferable(const Type *type);
 
 bool isVoidPointer(const Type *type);
@@ -485,6 +493,8 @@ static inline const Type *findModuleMemberType(const Type *type, cstring member)
     const NamedTypeMember *found = findModuleMember(type, member);
     return found ? found->type : NULL;
 }
+
+int sortCompareStructMember(const void *lhs, const void *rhs);
 
 TypeMembersContainer *makeTypeMembersContainer(TypeTable *types,
                                                const NamedTypeMember *members,

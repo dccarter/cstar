@@ -89,8 +89,20 @@ static HashCode hashType(HashCode hash, const Type *type)
         hash = hashTypes(hash, type->func.params, type->func.paramsCount);
         hash = hashType(hash, type->func.retType);
         break;
-    case typEnum:
     case typStruct:
+        if (hasFlag(type, Anonymous)) {
+            for (u64 i = 0; i < type->tStruct.members->count; i++) {
+                const NamedTypeMember *member =
+                    type->tStruct.members->sortedMembers[i];
+                if (nodeIs(member->decl, FieldDecl)) {
+                    hash = hashStr(hash, member->name);
+                    hash = hashType(hash, member->type);
+                }
+            }
+            break;
+        }
+        // fallthrough
+    case typEnum:
     case typModule:
         if (type->name)
             hash = hashStr(hash, type->name);
@@ -249,6 +261,31 @@ bool compareTypes(const Type *lhs, const Type *rhs)
     case typModule:
         return typeIs(right, Module) && left->module.path == right->module.path;
     case typStruct:
+        if (hasFlag(left, Anonymous) && hasFlag(right, Anonymous)) {
+            TypeMembersContainer *membersL = left->tStruct.members,
+                                 *membersR = right->tStruct.members;
+            if (membersL->count != membersR->count)
+                return false;
+            NamedTypeMember **sortedL = membersL->sortedMembers,
+                            **sortedR = membersR->sortedMembers;
+            u64 i = 0, j = 0;
+            for (; i < membersL->count && j < membersR->count;) {
+                if (!nodeIs(sortedL[i]->decl, FieldDecl)) {
+                    i++;
+                    continue;
+                }
+                if (!nodeIs(sortedR[j]->decl, FieldDecl)) {
+                    j++;
+                    continue;
+                }
+
+                if (sortedL[i]->name != sortedR[j]->name)
+                    return false;
+                if (!compareTypes(sortedL[i++]->type, sortedR[j++]->type))
+                    return false;
+            }
+            return true;
+        }
     case typClass:
         if (typeIs(right, This))
             return compareTypes(left, right->_this.that);
@@ -350,13 +387,6 @@ static GetOrInset getOrInsertType(TypeTable *table, const Type *type)
     Type tmp = *type;
     tmp.ns = table->currentNamespace;
     return getOrInsertTypeScoped(table, &tmp);
-}
-
-static int sortCompareStructMember(const void *lhs, const void *rhs)
-{
-    const NamedTypeMember *left = *((const NamedTypeMember **)lhs),
-                          *right = *((const NamedTypeMember **)rhs);
-    return left->name == right->name ? 0 : strcmp(left->name, right->name);
 }
 
 static int sortCompareEnumOption(const void *lhs, const void *rhs)
@@ -549,7 +579,7 @@ const Type *stripAll(const Type *type)
     return NULL;
 }
 
-const Type *stripOnce(const Type *type, u64 *flags)
+const Type *stripPointerOnce(const Type *type, u64 *flags)
 {
     type = resolveType(type);
     if (typeIs(type, Wrapped)) {
@@ -563,6 +593,29 @@ const Type *stripOnce(const Type *type, u64 *flags)
             *flags |= type->flags;
         type = type->pointer.pointed;
     }
+
+    if (flags)
+        *flags |= type->flags;
+
+    return type;
+}
+
+const Type *stripPointerOrReferenceOnce(const Type *type, u64 *flags)
+{
+    type = resolveType(type);
+    if (typeIs(type, Wrapped)) {
+        if (flags)
+            *flags |= type->flags;
+        type = type->wrapped.target;
+    }
+
+    if (flags)
+        *flags |= type->flags;
+    if (typeIs(type, Pointer)) {
+        type = type->pointer.pointed;
+    }
+    else if (typeIs(type, Reference))
+        type = type->reference.referred;
 
     if (flags)
         *flags |= type->flags;
@@ -937,8 +990,30 @@ const Type *makeStructType(TypeTable *table,
                            AstNode *decl,
                            u64 flags)
 {
-    GetOrInset ret = getOrInsertType(
-        table, &(Type){.tag = typStruct, .name = name, .flags = flags});
+    GetOrInset ret = {};
+    if (flags & flgAnonymous) {
+        NamedTypeMember **sortedMembers =
+            mallocOrDie(sizeof(NamedTypeMember *) * membersCount);
+        for (u64 i = 0; i < membersCount; i++) {
+            sortedMembers[i] = &members[i];
+        }
+        qsort(sortedMembers,
+              membersCount,
+              sizeof(sortedMembers[0]),
+              sortCompareStructMember);
+        TypeMembersContainer container = {.members = members,
+                                          .sortedMembers = sortedMembers,
+                                          .count = membersCount};
+        ret = getOrInsertType(table,
+                              &(Type){.tag = typStruct,
+                                      .name = name,
+                                      .flags = flags,
+                                      .tStruct = {.members = &container}});
+    }
+    else {
+        ret = getOrInsertType(
+            table, &(Type){.tag = typStruct, .name = name, .flags = flags});
+    }
 
     if (!ret.f) {
         Type *type = (Type *)ret.s;
@@ -974,6 +1049,18 @@ const Type *findStructType(TypeTable *table, cstring name, u64 flags)
 {
     return findTypeScoped(
         table, &(Type){.tag = typStruct, .name = name, .flags = flags});
+}
+
+const Type *findAnonymousStructType(TypeTable *table,
+                                    NamedTypeMember **members,
+                                    u64 count,
+                                    u64 flags)
+{
+    TypeMembersContainer container = {.sortedMembers = members, .count = count};
+    return findTypeScoped(table,
+                          &(Type){.tag = typStruct,
+                                  .flags = flags | flgAnonymous,
+                                  .tStruct = {.members = &container}});
 }
 
 const Type *findAliasType(TypeTable *table, cstring name, u64 flags)

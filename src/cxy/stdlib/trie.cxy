@@ -24,7 +24,7 @@ struct TrieNode[T] {
         return node
     }
 
-    func `destructor`() {
+    func `destructor`(): void {
         if (!isnull(&children)) {
             for (var node: children) {
                 delete *node.1

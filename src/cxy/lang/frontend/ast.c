@@ -2727,11 +2727,23 @@ SortedNodes *makeSortedNodes(MemPool *pool,
                              int (*compare)(const void *, const void *))
 {
     u64 count = countAstNodes(nodes);
-    if (count == 0)
+    if (nodes == NULL)
         return NULL;
     SortedNodes *sortedNodes = allocFromMemPool(
         pool, sizeof(SortedNodes) + (sizeof(AstNode *) * count));
+
     csAssert0(sortedNodes);
+    makeSortedNodesInMemory(sortedNodes, nodes, count, compare);
+    return sortedNodes;
+}
+
+void makeSortedNodesInMemory(SortedNodes *sortedNodes,
+                             AstNode *nodes,
+                             u64 count,
+                             int (*compare)(const void *, const void *))
+{
+    if (count == 0)
+        return;
     sortedNodes->count = count;
     sortedNodes->compare = compare ?: compareNamedAstNodes;
 
@@ -2740,7 +2752,6 @@ SortedNodes *makeSortedNodes(MemPool *pool,
         sortedNodes->nodes[i] = node;
 
     qsort(sortedNodes->nodes, count, sizeof(AstNode *), sortedNodes->compare);
-    return sortedNodes;
 }
 
 AstNode *findInSortedNodes(SortedNodes *sorted, cstring name)

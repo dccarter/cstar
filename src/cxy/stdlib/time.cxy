@@ -1,11 +1,11 @@
 module time
 
-import "time.h" as ctime
-
 ##if (defined MACOS) {
+    import "_time.h" as ctime
     import "sys/_types/_time_t.h" as _time_t
 }
 else {
+    import "time.h" as ctime
     import "bits/types/time_t.h" as _time_t
     import "bits/types/struct_tm.h" as struct_tm
 }
@@ -20,11 +20,13 @@ else {
 type tm = struct_tm.tm
 }
 
+pub type time_t = _time_t.time_t
+
 pub struct Time {
-    - _t: _time_t.time_t
+    - _t: time_t
     - _tm: tm
 
-    func `init`(t: _time_t.time_t) {
+    func `init`(t: time_t) {
         _t = t
         ctime.gmtime_r(ptrof _t, ptrof _tm)
     }
