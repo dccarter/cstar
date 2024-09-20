@@ -46,6 +46,18 @@ static void mangleType(FormatState *state, const Type *type)
         }
         append(state, "_", 1);
         break;
+    case typUnion:
+        if (type->tUnion.count > 3) {
+            format(state, "U{u64}", (FormatArg[]){{.u64 = type->index}});
+        }
+        else {
+            append(state, "U_", 2);
+            for (u64 i = 0; i < type->tUnion.count; i++) {
+                mangleType(state, type->tUnion.members[i].type);
+            }
+        }
+        append(state, "_", 1);
+        break;
     case typFunc:
         append(state, "F", 1);
         for (u64 i = 0; i < type->func.paramsCount; i++) {

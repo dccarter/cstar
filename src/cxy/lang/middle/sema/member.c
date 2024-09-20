@@ -51,7 +51,7 @@ static const Type *determineMemberTargetType(TypingContext *ctx,
         return NULL;
     }
 
-    const Type *stripped = stripOnce(type, NULL);
+    const Type *stripped = stripPointerOnce(type, NULL);
     if (!typeIs(stripped, Enum)) {
         logError(ctx->L,
                  &node->loc,

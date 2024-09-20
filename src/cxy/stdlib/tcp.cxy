@@ -30,11 +30,12 @@ func configureSocket(fd: i32)  {
     rc = socket.setsockopt(fd, SOL_SOCKET!, SO_REUSEADDR!, ptrof opt, <u32>sizeof!(opt));
     assert!(rc == 0);
 
-#if (defined MACOS) {
-    opt = 1;
-    rc = socket.setsockopt(fd, SOL_SOCKET!, SO_NOSIGPIPE!, ptrof opt, <u32>sizeof!(opt));
-    assert!(rc == 0 && errno! != EINVAL!);
-}
+//#if (defined MACOS) {
+//    opt = 1;
+//    rc = socket.setsockopt(fd, SOL_SOCKET!, SO_NOSIGPIPE!, ptrof opt, <u32>sizeof!(opt));
+//    const err = errno!;
+//    assert!(rc == 0 && err != EINVAL!);
+//}
 }
 
 pub class TcpSocket {

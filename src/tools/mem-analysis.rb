@@ -1,3 +1,4 @@
+#!ruby
 require 'set'
 mem = { }
 show=ARGV[1]

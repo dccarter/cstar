@@ -5,9 +5,19 @@ project(cxy
         DESCRIPTION "Cxy is a transpiler for a high level programming language that tries to simplify C"
         LANGUAGES C CXX)
 
+# Configure path for loading project cmake scripts
+set(CMAKE_MODULE_PATH
+        ${CMAKE_MODULE_PATH}
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+
+if (LLVM_ROOT_DIR)
+    set(CMAKE_PREFIX_PATH
+            ${CMAKE_PREFIX_PATH}
+            ${LLVM_ROOT_DIR}/lib/cmake/llvm
+            ${LLVM_ROOT_DIR}/lib/cmake/clang)
+endif ()
+
 find_package(Clang REQUIRED)
-set(CMAKE_C_COMPILER ${CLANG_EXECUTABLE})
-set(CMAKE_CXX_COMPILER ${CLANG_EXECUTABLE})
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
@@ -29,19 +39,6 @@ if (CMAKE_BUILD_TYPE MATCHES "asan")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS_DEBUG} -fsanitize=address -fno-omit-frame-pointer -g")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fno-omit-frame-pointer -g")
     set(CMAKE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -fno-omit-frame-pointer -fsanitize=address")
-endif ()
-
-
-# Configure path for loading project cmake scripts
-set(CMAKE_MODULE_PATH
-        ${CMAKE_MODULE_PATH}
-        ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
-
-if (LLVM_ROOT_DIR)
-    set(CMAKE_PREFIX_PATH
-            ${CMAKE_PREFIX_PATH}
-            ${LLVM_ROOT_DIR}/lib/cmake/llvm
-            ${LLVM_ROOT_DIR}/lib/cmake/clang)
 endif ()
 
 option(ENABLE_TESTS "Enable CMake tests" ON)

@@ -381,17 +381,25 @@ static inline AstNode *parseChar(Parser *P)
 
 static inline AstNode *parseInteger(Parser *P)
 {
-    const Token *tok = consume0(P, tokIntLiteral);
+    const Token prev = *previous(P);
+    bool isNegative = prev.tag == tokMinus;
+    const Token tok = *consume0(P, tokIntLiteral);
     AstNode *type = NULL;
     AstNode *node = newAstNode(
         P,
-        &tok->fileLoc.begin,
-        &(AstNode){.tag = astIntegerLit, .intLiteral.uValue = tok->iVal});
+        &(isNegative ? &tok : &prev)->fileLoc.begin,
+        &(AstNode){.tag = astIntegerLit, .intLiteral.uValue = tok.iVal});
+
+    if (isNegative) {
+        node->intLiteral.isNegative = true;
+        node->intLiteral.value = -tok.iVal;
+    }
+
     if (match(P, tokColon)) {
         type = parseType(P);
         return newAstNode(
             P,
-            &tok->fileLoc.begin,
+            &(isNegative ? &tok : &prev)->fileLoc.begin,
             &(AstNode){.tag = astTypedExpr,
                        .typedExpr = {.expr = node, .type = type}});
     }
@@ -400,11 +408,13 @@ static inline AstNode *parseInteger(Parser *P)
 
 static inline AstNode *parseFloat(Parser *P)
 {
+    bool isNegative = previous(P)->tag == tokMinus;
     const Token *tok = consume0(P, tokFloatLiteral);
     AstNode *node = newAstNode(
         P,
         &tok->fileLoc.begin,
-        &(AstNode){.tag = astFloatLit, .floatLiteral.value = tok->fVal});
+        &(AstNode){.tag = astFloatLit,
+                   .floatLiteral.value = isNegative ? -tok->fVal : tok->fVal});
     if (match(P, tokColon)) {
         AstNode *type = parseType(P);
         return newAstNode(
@@ -580,12 +590,15 @@ static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
     Token start = *current(P);
     bool isRefof = check(P, tokBAnd);
     bool isPtrof = check(P, tokPtrof);
-    if (check(P, tokMinus) && peek(P, 1)->tag == tokIntLiteral) {
-        consume0(P, tokMinus);
-        AstNode *lit = parseInteger(P);
-        lit->intLiteral.isNegative = true;
-        lit->intLiteral.value = -((i64)lit->intLiteral.uValue);
-        return lit;
+    if (check(P, tokMinus, tokPlus)) {
+        if (checkPeek(P, 1, tokIntLiteral)) {
+            advance(P);
+            return parseInteger(P);
+        }
+        if (checkPeek(P, 1, tokFloatLiteral)) {
+            advance(P);
+            return parseFloat(P);
+        }
     }
 
     if (check(P, tokDot) && peek(P, 1)->tag == tokIdent) {
@@ -765,7 +778,7 @@ static inline bool maybeAnonymousStruct(Parser *P)
 {
     // {} or { x: }
     return (checkPeek(P, 1, tokIdent) && checkPeek(P, 2, tokColon)) ||
-           checkPeek(P, 1, tokLBrace);
+           checkPeek(P, 1, tokRBrace);
 }
 
 static AstNode *functionParam(Parser *P)

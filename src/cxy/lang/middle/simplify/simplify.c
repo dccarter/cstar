@@ -44,6 +44,14 @@ static bool compareNodeToExternDecl(const void *lhs, const void *rhs)
     return ((NodeToExternDecl *)lhs)->node == ((NodeToExternDecl *)rhs)->node;
 }
 
+static bool nodeNeedsTemporaryVar(const AstNode *node)
+{
+    if (nodeIs(node, PointerOf) || nodeIs(node, ReferenceOf))
+        return nodeNeedsTemporaryVar(node->unaryExpr.operand);
+    else
+        return !nodeIsLeftValue(node) && !isLiteralExpr(node);
+}
+
 static bool isVirtualDispatch(const AstNode *target, const AstNode *member)
 {
     const Type *type = stripReference(target->type);
@@ -576,7 +584,7 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
         if (typeIs(func->type->func.params[i], Auto))
             continue;
 
-        if (!nodeIsLeftValue(arg) && !isLiteralExpr(arg)) {
+        if (nodeNeedsTemporaryVar(arg)) {
             astVisit(visitor, arg);
             AstNode *var =
                 makeVarDecl(ctx->pool,
@@ -748,31 +756,6 @@ static void visitStmtExpr(AstVisitor *visitor, AstNode *node)
     }
 }
 
-static void visitIndexExpr(AstVisitor *visitor, AstNode *node)
-{
-    SimplifyContext *ctx = getAstVisitorContext(visitor);
-    astVisitFallbackVisitAll(visitor, node);
-    AstNode *index = node->indexExpr.index;
-    if (!nodeIsLeftValue(index) && !isLiteralExpr(index)) {
-        AstNode *var = makeVarDecl(ctx->pool,
-                                   &index->loc,
-                                   flgMoved,
-                                   makeAnonymousVariable(ctx->strings, "_i"),
-                                   NULL,
-                                   index,
-                                   NULL,
-                                   index->type);
-        node->indexExpr.index = makeResolvedIdentifier(ctx->pool,
-                                                       &index->loc,
-                                                       var->_namedNode.name,
-                                                       0,
-                                                       var,
-                                                       NULL,
-                                                       index->type);
-        astModifierAdd(&ctx->block, var);
-    }
-}
-
 static void visitMemberExpr(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
@@ -781,7 +764,7 @@ static void visitMemberExpr(AstVisitor *visitor, AstNode *node)
         return;
 
     AstNode *target = node->memberExpr.target;
-    if (!nodeIsLeftValue(target) && !nodeIs(target, TypeRef)) {
+    if (nodeNeedsTemporaryVar(target) && !nodeIs(target, TypeRef)) {
         AstNode *var = makeVarDecl(ctx->pool,
                                    &target->loc,
                                    flgMoved,
@@ -806,7 +789,7 @@ static void visitReferenceOfExpr(AstVisitor *visitor, AstNode *node)
     SimplifyContext *ctx = getAstVisitorContext(visitor);
     astVisitFallbackVisitAll(visitor, node);
     AstNode *operand = node->unaryExpr.operand;
-    if (!nodeIsLeftValue(operand)) {
+    if (nodeNeedsTemporaryVar(operand)) {
         AstNode *var = makeVarDecl(ctx->pool,
                                    &operand->loc,
                                    flgMoved,
@@ -967,34 +950,6 @@ static void visitVarDecl(AstVisitor *visitor, AstNode *node)
     AstNode *init = node->varDecl.init;
     if (!hasFlag(node, TopLevelDecl)) {
         astVisit(visitor, init);
-        if (init == NULL) {
-            AstNode *zeroInit = makeBackendCallExpr(
-                ctx->pool,
-                &node->loc,
-                flgNone,
-                bfiZeromem,
-                makePointerOfExpr(
-                    ctx->pool,
-                    &node->loc,
-                    flgNone,
-                    makeResolvedIdentifier(ctx->pool,
-                                           &node->loc,
-                                           node->varDecl.name,
-                                           0,
-                                           node,
-                                           NULL,
-                                           node->type),
-                    NULL,
-                    makePointerType(ctx->types, node->type, flgNone)),
-                makeVoidType(ctx->types));
-            astModifierAddAsNext(&ctx->block,
-                                 makeExprStmt(ctx->pool,
-                                              &node->loc,
-                                              flgNone,
-                                              zeroInit,
-                                              NULL,
-                                              makeVoidType(ctx->types)));
-        }
         return;
     }
 

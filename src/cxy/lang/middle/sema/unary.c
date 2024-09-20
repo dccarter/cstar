@@ -129,7 +129,7 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
             else {
                 logError(ctx->L,
                          &node->unaryExpr.operand->loc,
-                         "struct '{t}' does not overload dereference "
+                         "struct '{t}' does not truthy dereference "
                          "`deref` operator",
                          (FormatArg[]){{.t = operand}});
                 operand = ERROR_TYPE(ctx);

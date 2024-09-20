@@ -27,13 +27,6 @@ static int searchCompareEnumOption(const void *lhs, const void *rhs)
     return left->name == right->name ? 0 : strcmp(left->name, right->name);
 }
 
-static int sortCompareStructMember(const void *lhs, const void *rhs)
-{
-    const NamedTypeMember *left = *((const NamedTypeMember **)lhs),
-                          *right = *((const NamedTypeMember **)rhs);
-    return left->name == right->name ? 0 : strcmp(left->name, right->name);
-}
-
 static void printManyTypes(FormatState *state,
                            const Type **types,
                            u64 count,
@@ -237,7 +230,7 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
         if (typeIs(to->_this.that, Alias) && typeIs(from, Reference))
             return isTypeAssignableFrom(to->_this.that,
                                         from->reference.referred);
-        return to->_this.that == from;
+        return isTypeAssignableFrom(to->_this.that, from);
     case typTuple:
         if (!typeIs(from, Tuple) || to->tuple.count != from->tuple.count)
             return false;
@@ -375,6 +368,11 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
         return findUnionTypeIndex(from,
                                   typeIs(to, Pointer) ? to->pointer.pointed
                                                       : to) != UINT32_MAX;
+    case typReference:
+        if (isReferenceType(unwrappedTo))
+            return isTypeAssignableFrom(to, from);
+        else
+            return isTypeAssignableFrom(to, from->reference.referred);
     case typClass:
         if (isVoidPointer(unwrappedTo))
             return true;
@@ -628,6 +626,20 @@ bool isReferenceType(const Type *type)
         return isReferenceType(type->info.target);
 
     return typeIs(type, Reference);
+}
+
+bool isPointerOrReferenceType(const Type *type)
+{
+    type = resolveType(type);
+
+    if (typeIs(type, Wrapped))
+        return isPointerOrReferenceType(unwrapType(type, NULL));
+
+    if (typeIs(type, Info))
+        return isPointerOrReferenceType(type->info.target);
+
+    return typeIs(type, Pointer) || typeIs(type, Reference) ||
+           typeIs(type, Array) || typeIs(type, String);
 }
 
 bool isReferable(const Type *type)
@@ -955,6 +967,13 @@ IntMinMax getIntegerTypeMinMax(const Type *type)
     return minMaxTable[type->primitive.id];
 }
 
+int sortCompareStructMember(const void *lhs, const void *rhs)
+{
+    const NamedTypeMember *left = *((const NamedTypeMember **)lhs),
+                          *right = *((const NamedTypeMember **)rhs);
+    return left->name == right->name ? 0 : strcmp(left->name, right->name);
+}
+
 TypeMembersContainer *makeTypeMembersContainer(TypeTable *types,
                                                const NamedTypeMember *members,
                                                u64 count)
@@ -1127,7 +1146,7 @@ const Type *getOptionalTargetType(const Type *type)
     if (!hasFlag(type, Optional))
         return NULL;
 
-    return type->tStruct.members->members[1].type;
+    return type->tStruct.decl->structDecl.typeParams->type;
 }
 
 const Type *getSliceTargetType(const Type *type)

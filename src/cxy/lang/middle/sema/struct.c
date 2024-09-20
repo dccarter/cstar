@@ -88,12 +88,16 @@ static void preCheckStructMembers(AstNode *node, NamedTypeMember *members)
     }
 }
 
-static bool checkAnonymousStructExpr(AstVisitor *visitor, AstNode *node)
+static const Type *findCompatibleAnonymousType(AstVisitor *visitor,
+                                               AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    AstNode *field = node->structExpr.fields;
-    AstNodeList members = {};
-    for (; field; field = field->next) {
+    AstNode *fields = node->structExpr.fields, *field = fields;
+    u64 count = countAstNodes(fields);
+    NamedTypeMember *members = mallocOrDie(sizeof(NamedTypeMember) * count);
+    NamedTypeMember **sortedMembers =
+        mallocOrDie(sizeof(NamedTypeMember *) * count);
+    for (u64 i = 0; field; field = field->next, i++) {
         AstNode *value = field->fieldExpr.value;
         value->parentScope = field;
         const Type *type = checkType(visitor, value);
@@ -101,51 +105,96 @@ static bool checkAnonymousStructExpr(AstVisitor *visitor, AstNode *node)
             node->type = type;
             continue;
         }
-        insertAstNode(
-            &members,
-            makeStructField(ctx->pool,
-                            &field->loc,
-                            field->fieldExpr.name,
-                            flgNone,
-                            makeTypeReferenceNode(ctx->pool, type, &field->loc),
-                            NULL,
-                            NULL));
+        field->type = type;
+        members[i] =
+            (NamedTypeMember){.type = type, .name = field->fieldExpr.name};
+        sortedMembers[i] = &members[i];
     }
 
-    if (typeIs(node->type, Error))
+    if (node->type == ERROR_TYPE(ctx)) {
+        free(members);
+        free(sortedMembers);
+        return ERROR_TYPE(ctx);
+    }
+
+    qsort(sortedMembers,
+          count,
+          sizeof(sortedMembers[0]),
+          sortCompareStructMember);
+
+    const Type *type =
+        findAnonymousStructType(ctx->types, sortedMembers, count, flgAnonymous);
+    
+    free(members);
+    free(sortedMembers);
+
+    if (type)
+        return node->type = type;
+    else
+        return NULL;
+}
+
+static bool checkAnonymousStructExpr(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    AstNode *decl = NULL;
+    const Type *type = findCompatibleAnonymousType(visitor, node);
+    if (type == NULL) {
+        AstNode *field = node->structExpr.fields;
+        AstNodeList members = {};
+        for (; field; field = field->next) {
+            insertAstNode(
+                &members,
+                makeStructField(
+                    ctx->pool,
+                    &field->loc,
+                    field->fieldExpr.name,
+                    flgNone,
+                    makeTypeReferenceNode(ctx->pool, field->type, &field->loc),
+                    NULL,
+                    NULL));
+        }
+
+        decl =
+            makeStructDecl(ctx->pool,
+                           &node->loc,
+                           flgAnonymous,
+                           makeAnonymousVariable(ctx->strings, "__AnonStruct"),
+                           members.first,
+                           NULL,
+                           NULL);
+        AstNode *builtins = createClassOrStructBuiltins(ctx->pool, decl),
+                *builtin = builtins;
+        for (; builtin; builtin = builtin->next) {
+            builtin->funcDecl.this_ =
+                makeFunctionParam(ctx->pool,
+                                  &builtin->loc,
+                                  S_this,
+                                  NULL,
+                                  NULL,
+                                  node->flags & flgConst,
+                                  builtin->funcDecl.signature->params);
+            builtin->parentScope = decl;
+        }
+        insertAstNode(&members, builtins);
+        decl->structDecl.members = members.first;
+        decl->parentScope = ctx->root.program;
+
+        type = checkType(visitor, decl);
+        if (typeIs(type, Error)) {
+            node->type = type;
+            return false;
+        }
+
+        addTopLevelDeclaration(ctx, decl);
+    }
+    else if (typeIs(type, Error)) {
         return false;
-    AstNode *decl =
-        makeStructDecl(ctx->pool,
-                       &node->loc,
-                       flgAnonymous,
-                       makeAnonymousVariable(ctx->strings, "__AnonStruct"),
-                       members.first,
-                       NULL,
-                       NULL);
-    AstNode *builtins = createClassOrStructBuiltins(ctx->pool, decl),
-            *builtin = builtins;
-    for (; builtin; builtin = builtin->next) {
-        builtin->funcDecl.this_ =
-            makeFunctionParam(ctx->pool,
-                              &builtin->loc,
-                              S_this,
-                              NULL,
-                              NULL,
-                              node->flags & flgConst,
-                              builtin->funcDecl.signature->params);
-        builtin->parentScope = decl;
     }
-    insertAstNode(&members, builtins);
-    decl->structDecl.members = members.first;
-    decl->parentScope = ctx->root.program;
-
-    const Type *type = checkType(visitor, decl);
-    if (typeIs(type, Error)) {
-        node->type = type;
-        return false;
+    else {
+        decl = type->tStruct.decl;
     }
 
-    addTopLevelDeclaration(ctx, decl);
     node->structExpr.left = makeResolvedPath(ctx->pool,
                                              &node->loc,
                                              decl->structDecl.name,

@@ -1,0 +1,140 @@
+module fserver
+
+import { time_t } from "./time.cxy"
+import { HashMap } from "./hash.cxy"
+import { Request, Response, Server, Method } from "./http.cxy"
+
+#if (!defined CXY_FILE_SERVER_ROUTE) {
+    macro CXY_FILE_SERVER_ROUTE "/1511d5908a7811e790ed6f6e6c696e65"
+}
+
+pub struct Config {
+    compressMin = 2048:u64;
+    enableSendFile = false;
+    cacheExpires = 86400:i64;
+    mappedMin = 2048:u64;
+    root = String("./www/");
+    route = CXY_FILE_SERVER_ROUTE!;
+}
+
+struct CachedFile {
+    fd: i32 = -1;
+    data: ^void = null;
+    path: String = null;
+    len = 0:u64;
+    size = 0:u64;
+    lastMod: time_t = 0;
+    lastAccess: time_t = 0;
+    useFd = false;
+    isMapped = false;
+    flags = 0:u8;
+
+    const func `str`(os: &OutputStream) {}
+}
+
+type CachedFiles = HashMap[String, CachedFile, HashCase, EqualsCase]
+
+struct MimeConfig {
+    allowCompress = false;
+    allowCaching = true;
+    allowRange = true;
+    cacheExpires = -1:i64;
+}
+
+struct MimeType {
+    mime: String
+    config = MimeConfig{};
+    func `init`(mime: String) {
+        this.mime = &&mime
+    }
+
+    const func `str`(os: &OutputStream) {}
+}
+
+type MimeTypes = HashMap[String, MimeType, HashCase, EqualsCase]
+
+pub class FileServer {
+    - mimeTypes = MimeTypes();
+    - cachedFiles = CachedFiles();
+    - wwwDir: String = null;
+    - redirects = HashMap[String, String, HashCase, EqualsCase]();
+    - config: Config;
+
+    func `init`[Endpoint](ep: &Endpoint, config: Config = Config{}) {
+        this.config = config
+        initialize()
+
+        ep(config.route, (req: &const Request, resp: &Response) => {
+            var path = req.path();
+            this.get(req, resp, null, null)
+        })([Method.Get, Method.Head])
+    }
+
+    func mime[T](ext: String, mm: string, config: T) {
+        if (!mimeTypes.[ext]) {
+            mimeTypes.[ext] = MimeType(&&mm)
+        }
+        updateMime(&&ext, &&config)
+    }
+
+    func updateMime[T](ext: String, config: T) : void {
+        var mm = mimeTypes.[ext];
+        assert!(!!mm);
+        update[MimeConfig, T](&(*mm).config, config)
+    }
+
+    - func initialize() : void {
+        // add text mime types
+        mime(".html", "text/html", { allowCaching: false })
+        mime(".css", "text/css", {})
+        mime(".csv", "text/csv", {})
+        mime(".txt", "text/plain", {})
+        mime(".sgml","text/sgml", {})
+        mime(".tsv", "text/tab-separated-values", {})
+
+        // add compressed mime types
+        mime(".bz", "application/x-bzip", { allowCompress: false })
+        mime(".bz2", "application/x-bzip2", { allowCompress: false })
+        mime(".gz", "application/x-gzip", { allowCompress: false })
+        mime(".tgz", "application/x-tar", { allowCompress: false })
+        mime(".tar", "application/x-tar", { allowCompress: false })
+        mime(".zip", "application/zip, application/x-compressed-zip", { allowCompress: false })
+        mime(".7z", "application/zip, application/x-compressed-zip", { allowCompress: false })
+
+        // add image mime types
+        mime(".jpg", "image/jpeg", {})
+        mime(".png", "image/png", {})
+        mime(".svg", "image/svg+xml", {})
+        mime(".gif", "image/gif", {})
+        mime(".bmp", "image/bmp", {})
+        mime(".tiff","image/tiff", {})
+        mime(".ico", "image/x-icon", {})
+
+        // add video mime types
+        mime(".avi",  "video/avi", {})
+        mime(".mpeg", "video/mpeg", {})
+        mime(".mpg",  "video/mpeg", {})
+        mime(".mp4",  "video/mp4", {})
+        mime(".qt",   "video/quicktime", {})
+
+        // add audio mime types
+        mime(".au",  "audio/basic", {})
+        mime(".midi","audio/x-midi", {})
+        mime(".mp3", "audio/mpeg", {})
+        mime(".ogg", "audio/vorbis, application/ogg", {})
+        mime(".ra",   "audio/x-pn-realaudio, audio/vnd.rn-realaudio", {})
+        mime(".ram",  "audio/x-pn-realaudio, audio/vnd.rn-realaudio", {})
+        mime(".wav", "audio/wav, audio/x-wav", {})
+
+        // Other common mime types
+        mime(".json",  "application/json", {})
+        mime(".map",   "application/json", {})
+        mime(".js",    "application/javascript", {})
+        mime(".ttf",   "font/ttf", {})
+        mime(".xhtml", "application/xhtml+xml", {})
+        mime(".xml",   "application/xml", {})
+    }
+
+    - func get(req: &const Request, resp: &Response, path: String, ext: String): void {
+    }
+}

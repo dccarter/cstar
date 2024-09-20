@@ -18,7 +18,7 @@ pub type State = ae.State
 
 macro __cxy_coro_setjmp(ctx) =({
     var ret: i32 = 0;
-    asm("""
+    @volatile asm("""
         lea LJMPRET$=(%rip), %rcx
         xor $0, $0
         movq %rbx,   ($1)
@@ -39,7 +39,7 @@ macro __cxy_coro_setjmp(ctx) =({
 })
 
 macro __cxy_coro_longjmp(ctx) {
-    asm("""
+    @volatile asm("""
         movq    $$1, %rdx
         movq 56($0), %rcx
         movq 48($0), %rsp
@@ -66,7 +66,7 @@ macro __cxy_coro_longjmp(ctx) {
 }
 
 macro __cxy_coro_setsp(x) {
-    alloca!(#u64)
+    asm(""::"r"(alloca!(#u64)))
     @volatile asm("leaq (%rax), %rsp" :: "rax"(x!))
 }
 

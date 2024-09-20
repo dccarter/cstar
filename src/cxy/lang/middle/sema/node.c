@@ -267,11 +267,34 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
     const Type *target = resolveAndUnThisType(callee->type);
 
     AstNodeList stmts = {};
-    AstNode *var = insertAstNode(
-        &stmts,
-        isClassType(target)
-            ? createSmartPointerAllocClass(ctx, target, &node->loc)
-            : createStructInitialize(ctx, target, &node->loc));
+    AstNode *var = NULL;
+    if (isClassType(target)) {
+        var = insertAstNode(
+            &stmts, createSmartPointerAllocClass(ctx, target, &node->loc));
+        insertAstNode(&stmts,
+                      makeExprStmt(ctx->pool,
+                                   &node->loc,
+                                   flgNone,
+                                   makeBackendCallExpr(
+                                       ctx->pool,
+                                       &node->loc,
+                                       flgNone,
+                                       bfiZeromem,
+                                       makeResolvedPath(ctx->pool,
+                                                        &node->loc,
+                                                        var->_namedNode.name,
+                                                        flgNone,
+                                                        var,
+                                                        NULL,
+                                                        var->type),
+                                       makeVoidType(ctx->types)),
+                                   NULL,
+                                   makeVoidType(ctx->types)));
+    }
+    else {
+        var = insertAstNode(&stmts,
+                            createStructInitialize(ctx, target, &node->loc));
+    }
     insertAstNode(&stmts, createObjectDefaultInitializer(ctx, var));
     insertAstNode(&stmts,
                   makeExprStmt(ctx->pool,
@@ -440,8 +463,8 @@ AstNode *transformToUnionValue(TypingContext *ctx,
                                const Type *lhs,
                                const Type *rhs)
 {
-    const Type *stripped = stripOnce(lhs, NULL),
-               *strippedRhs = stripOnce(lhs, NULL);
+    const Type *stripped = stripPointerOnce(lhs, NULL),
+               *strippedRhs = stripPointerOnce(lhs, NULL);
     if (strippedRhs != lhs && typeIs(stripped, Union) &&
         stripped != strippedRhs) {
         u32 idx = findUnionTypeIndex(stripped, rhs);

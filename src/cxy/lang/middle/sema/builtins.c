@@ -634,38 +634,6 @@ AstNode *createClassOrStructBuiltins(MemPool *pool, AstNode *node)
                                            NULL));
     }
 
-    //    if (!hasMember(node, S_HashOverload)) {
-    //        insertAstNode(&funcs,
-    //                      makeOperatorOverload(pool,
-    //                                           &loc,
-    //                                           opHashOverload,
-    //                                           NULL,
-    //                                           NULL,
-    //                                           NULL,
-    //                                           flgConst,
-    //                                           NULL,
-    //                                           NULL));
-    //    }
-
-    //    if (!hasMember(node, S_StringOverload)) {
-    //        insertAstNode(
-    //            &funcs,
-    //            makeOperatorOverload(
-    //                pool,
-    //                &loc,
-    //                opStringOverload,
-    //                makeFunctionParam(pool,
-    //                                  &loc,
-    //                                  S_sb,
-    //                                  makePath(pool, &loc, S_String, flgNone,
-    //                                  NULL), NULL, flgNone, NULL),
-    //                NULL,
-    //                NULL,
-    //                flgConst,
-    //                NULL,
-    //                NULL));
-    //    }
-
     csAssert0(!hasMember(node, S_DestructorFwd));
     insertAstNode(
         &funcs,

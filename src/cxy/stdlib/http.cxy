@@ -257,7 +257,7 @@ pub class Response {
     }
 
     @inline
-    const func header(name: String) => _headers.[name]
+    const func header(name: String) => _headers.[&&name]
 }
 
 pub class Request {
@@ -332,8 +332,8 @@ pub class Request {
         var ret = parseHeaders(buf, len);
         var parsed: u64 = 0;
         match (ret) {
-            case Status as status => return status
-            case i32 as consumed => parsed = consumed
+            case Status as status => return *status
+            case i32 as consumed => parsed = *consumed
         }
 
         var remaining = len - parsed;
@@ -458,12 +458,12 @@ class Router {
         var args = path.substr(consumed);
         match (parseRouteArgs(req, &route.params, args)) {
             case Status as value => {
-                resp.end(value)
+                resp.end(*value)
                 return;
             }
             case u64 as value => {
                 // TODO parse route arguments
-                args = args.substr(value)
+                args = args.substr(*value)
             }
         }
 
@@ -489,12 +489,12 @@ class Router {
         var args = path.substr(consumed);
         match (parseRouteArgs(req, &route.params, args)) {
             case Status as value => {
-                resp.end(value)
+                resp.end(*value)
                 return null;
             }
             case u64 as value => {
                 // TODO parse route arguments
-                args = args.substr(value)
+                args = args.substr(*value)
             }
         }
 
@@ -742,6 +742,7 @@ pub class Server[Middlewares] {
         listener.close()
     }
 
+    @[noinline]
     - func handleConnection(sock: TcpSocket): void {
         var connection = Connection[Middlewares](ptrof config, ptrof mws, ptrof router, &&sock);
         connection.handle()
@@ -775,7 +776,7 @@ pub class Cors {
 
                 if (req.route().isMethodSupported(corsMethod.0)) {
                     // only if route supports requested method
-                    res.header("Access-Control-Allow-Methods", *requestMethod);
+                    res.header("Access-Control-Allow-Methods", <String>(*requestMethod));
                     res.end();
                 }
             }

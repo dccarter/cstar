@@ -47,6 +47,8 @@ static void generateFunctionName(FormatState *state, const AstNode *node);
 
 static void addDebugInfo(CodegenContext *ctx, const AstNode *node)
 {
+    if (node == NULL)
+        return;
     FilePos pos = node->loc.begin;
     if (ctx->debug.enabled && (pos.row != ctx->debug.pos.row)) {
         format(getState(ctx),
@@ -134,7 +136,7 @@ static void generateTupleType(CodegenContext *ctx, const Type *type)
 {
     for (u64 i = 0; i < type->tuple.count; i++) {
         const Type *member = type->tuple.members[i];
-        if (!member->codegen)
+        if (!member->generated)
             generateType(ctx, type->tuple.members[i]);
     }
 
@@ -153,7 +155,7 @@ static void generateTupleType(CodegenContext *ctx, const Type *type)
 
 static void generateEnumType(CodegenContext *ctx, const Type *type)
 {
-    if (!type->tEnum.base->codegen)
+    if (!type->tEnum.base->generated)
         generateType(ctx, type->tEnum.base);
     format(typeState(ctx), "typedef ", NULL);
     generateTypeName(ctx, typeState(ctx), type->tEnum.base);
@@ -185,8 +187,10 @@ static void generateClassType(CodegenContext *ctx, const Type *type)
 
     for (u64 i = 0; i < type->tClass.members->count; i++) {
         const NamedTypeMember *member = &type->tClass.members->members[i];
-        if (nodeIs(member->decl, FieldDecl) && !member->type->codegen)
-            generateType(ctx, member->type);
+        if (nodeIs(member->decl, FieldDecl)) {
+            if (!member->type->generated)
+                generateType(ctx, member->type);
+        }
     }
 
     format(typeState(ctx), "struct ", NULL);
@@ -212,12 +216,19 @@ static void generateStructType(CodegenContext *ctx, const Type *type)
     format(typeState(ctx), " ", NULL);
     generateCustomTypeName(ctx, typeState(ctx), type, "Struct");
     format(typeState(ctx), ";\n", NULL);
-
+    ((Type *)type)->generating = true;
     for (u64 i = 0; i < type->tStruct.members->count; i++) {
         const NamedTypeMember *member = &type->tStruct.members->members[i];
-        if (nodeIs(member->decl, FieldDecl) && !member->type->codegen)
-            generateType(ctx, member->type);
+        if (nodeIs(member->decl, FieldDecl)) {
+            if (member->type->generating) {
+                ((Type *)type)->generating = false;
+                return;
+            }
+            if (!member->type->generated)
+                generateType(ctx, member->type);
+        }
     }
+    ((Type *)type)->generating = false;
 
     format(typeState(ctx), "struct ", NULL);
     generateStructAttributes(ctx, type);
@@ -242,17 +253,25 @@ static void generateStructType(CodegenContext *ctx, const Type *type)
 
 static void generateUnionType(CodegenContext *ctx, const Type *type)
 {
-    format(typeState(ctx), "typedef struct ", NULL);
-    generateCustomTypeName(ctx, typeState(ctx), type, "Union");
-    format(typeState(ctx), " ", NULL);
-    generateCustomTypeName(ctx, typeState(ctx), type, "Union");
-    format(typeState(ctx), ";\n", NULL);
+    if (!type->generating) {
+        format(typeState(ctx), "typedef struct ", NULL);
+        generateCustomTypeName(ctx, typeState(ctx), type, "Union");
+        format(typeState(ctx), " ", NULL);
+        generateCustomTypeName(ctx, typeState(ctx), type, "Union");
+        format(typeState(ctx), ";\n", NULL);
+    }
 
+    ((Type *)type)->generating = true;
     for (u64 i = 0; i < type->tUnion.count; i++) {
         const Type *member = type->tUnion.members[i].type;
-        if (!member->codegen)
+        if (member->generating) {
+            ((Type *)type)->generated = false;
+            return;
+        }
+        if (!member->generated)
             generateType(ctx, member);
     }
+    ((Type *)type)->generating = false;
 
     format(typeState(ctx), "struct ", NULL);
     generateStructAttributes(ctx, type);
@@ -278,11 +297,15 @@ static void generateUntaggedUnionType(CodegenContext *ctx, const Type *type)
     generateCustomTypeName(ctx, typeState(ctx), type, "Union");
     format(typeState(ctx), ";\n", NULL);
 
+    ((Type *)type)->generating = true;
     for (u64 i = 0; i < type->untaggedUnion.members->count; i++) {
         const Type *member = type->untaggedUnion.members->members[i].type;
-        if (!member->codegen)
+        if (member->generating)
+            return;
+        if (!member->generated)
             generateType(ctx, member);
     }
+    ((Type *)type)->generating = false;
 
     format(typeState(ctx), "union ", NULL);
     generateStructAttributes(ctx, type);
@@ -331,10 +354,10 @@ static void generateFunctionType(CodegenContext *ctx, const Type *type)
 
 static void generateType(CodegenContext *ctx, const Type *type)
 {
-    if (type->codegen)
+    if (type->generated)
         return;
 
-    ((Type *)type)->codegen = (void *)true;
+    ((Type *)type)->generated = true;
     switch (type->tag) {
     case typClass:
         generateClassType(ctx, type);
@@ -385,7 +408,8 @@ static void generateTypeName(CodegenContext *ctx,
                              FormatState *state,
                              const Type *type)
 {
-    generateType(ctx, type);
+    if (!type->generating)
+        generateType(ctx, type);
 
     u64 flags = flgNone;
     type = unwrapType(type, &flags);
@@ -811,11 +835,17 @@ static void visitCastExpr(ConstAstVisitor *visitor, const AstNode *node)
         return;
     }
 
-    if (typeIs(from, Union)) {
+    if (hasFlag(node, UnionCast) || typeIs(from, Union)) {
+        format(getState(ctx), "&", NULL);
         astConstVisit(visitor, expr);
-        format(getState(ctx),
-               "._{i64}",
-               (FormatArg[]){{.i64 = node->castExpr.idx}});
+        if (isPointerOrReferenceType(from))
+            format(getState(ctx),
+                   "->_{i64}",
+                   (FormatArg[]){{.i64 = node->castExpr.idx}});
+        else
+            format(getState(ctx),
+                   "._{i64}",
+                   (FormatArg[]){{.i64 = node->castExpr.idx}});
         return;
     }
 
@@ -983,15 +1013,36 @@ static void visitBackendCallExpr(ConstAstVisitor *visitor, const AstNode *node)
     }
     case bfiZeromem: {
         const Type *type = node->backendCallExpr.args->type;
-        type =
-            isClassType(type->pointer.pointed) ? type : type->pointer.pointed;
-        format(getState(ctx), "memset(", NULL);
-        astConstVisit(visitor, node->backendCallExpr.args);
-        format(getState(ctx), ", 0, sizeof(", NULL);
-        if (isClassType(type))
-            format(getState(ctx), "_", NULL);
-        generateTypeName(ctx, getState(ctx), type);
-        format(getState(ctx), "))", NULL);
+        if (typeIs(type, Pointer)) {
+            type = type->pointer.pointed;
+            if (isClassType(type)) {
+                format(getState(ctx), "*(", NULL);
+                astConstVisit(visitor, node->backendCallExpr.args);
+                format(getState(ctx), ") = nullptr", NULL);
+            }
+            else if (isStructType(type)) {
+                format(getState(ctx), "*(", NULL);
+                astConstVisit(visitor, node->backendCallExpr.args);
+                format(getState(ctx), ") = (", NULL);
+                generateTypeName(ctx, getState(ctx), type);
+                format(getState(ctx), "){{}", NULL);
+            }
+            else {
+                format(getState(ctx), "memset(", NULL);
+                astConstVisit(visitor, node->backendCallExpr.args);
+                format(getState(ctx), ", 0, sizeof(", NULL);
+                generateTypeName(ctx, getState(ctx), type);
+                format(getState(ctx), "))", NULL);
+            }
+        }
+        else {
+            csAssert0(isClassType(type));
+            format(getState(ctx), "*(", NULL);
+            astConstVisit(visitor, node->backendCallExpr.args);
+            format(getState(ctx), ") = (", NULL);
+            generateCustomTypeName(ctx, getState(ctx), type, "Class");
+            format(getState(ctx), "){{}", NULL);
+        }
         break;
     }
     }
@@ -1004,7 +1055,10 @@ static void visitBackendCallExpr(ConstAstVisitor *visitor, const AstNode *node)
 static void visitInlineAssembly(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    format(getState(ctx), "__asm__(\"", NULL);
+    if (findAttribute(node, S_volatile))
+        format(getState(ctx), "__asm__ __volatile__(\"", NULL);
+    else
+        format(getState(ctx), "__asm__(\"", NULL);
     cstring p = node->inlineAssembly.text;
     while (*p != '\0') {
         switch (*p) {
@@ -1155,7 +1209,8 @@ static void visitSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
     format(getState(ctx), "switch (", NULL);
     astConstVisit(visitor, node->switchStmt.cond);
     format(getState(ctx), ") ", NULL);
-    generateMany(visitor, node->switchStmt.cases, "{{\n", "\n", "}\n");
+    generateMany(visitor, node->switchStmt.cases, "{{\n", "\n", "\n}");
+    EosNl(ctx, node);
 }
 
 static void visitMatchStmt(ConstAstVisitor *visitor, const AstNode *node)
@@ -1164,9 +1219,12 @@ static void visitMatchStmt(ConstAstVisitor *visitor, const AstNode *node)
 
     format(getState(ctx), "switch (", NULL);
     astConstVisit(visitor, node->matchStmt.expr);
-    format(getState(ctx), ".tag", NULL);
+    if (isPointerOrReferenceType(node->matchStmt.expr->type))
+        format(getState(ctx), "->tag", NULL);
+    else
+        format(getState(ctx), ".tag", NULL);
     format(getState(ctx), ") ", NULL);
-    generateMany(visitor, node->switchStmt.cases, "{{\n", "\n", "}");
+    generateMany(visitor, node->switchStmt.cases, "{{\n", "\n", "\n}");
     EosNl(ctx, node);
 }
 
@@ -1180,8 +1238,10 @@ static void visitCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
             format(getState(ctx),
                    "{u32}: {{{>}\n",
                    (FormatArg[]){{.u32 = node->caseStmt.idx}});
-            if (node->caseStmt.variable)
+            if (node->caseStmt.variable) {
                 astConstVisit(visitor, node->caseStmt.variable);
+                format(getState(ctx), "\n", NULL);
+            }
         }
         else {
             astConstVisit(visitor, node->caseStmt.match);
@@ -1191,8 +1251,9 @@ static void visitCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
     else {
         format(getState(ctx), "default: {{{>}\n", NULL);
     }
+    addDebugInfo(ctx, node->caseStmt.body);
     astConstVisit(visitor, node->caseStmt.body);
-    format(getState(ctx), "break;\n{<}\n}", NULL);
+    format(getState(ctx), "\nbreak;{<}\n}", NULL);
 }
 
 static void visitContinueStmt(ConstAstVisitor *visitor, const AstNode *node)
@@ -1234,6 +1295,9 @@ static void visitVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
     if (node->varDecl.init) {
         format(getState(ctx), " = ", NULL);
         astConstVisit(visitor, node->varDecl.init);
+    }
+    else {
+        format(getState(ctx), " = {{}", NULL);
     }
     format(getState(ctx), ";", NULL);
     EosNl(ctx, node);
@@ -1288,14 +1352,26 @@ static void visitFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
     ((AstNode *)node)->codegen = (void *)true;
     if (hasFlag(node, Abstract))
         return;
-    if (hasFlag(node, Constructor))
-        format(getState(ctx), "__attribute__((constructor))\n", NULL);
-    if (findAttribute(node, S_inline))
-        format(getState(ctx),
-               "__attribute__((always_inline)) inline\nstatic ",
-               NULL);
-    else if (hasFlag(node, Extern))
+    if (!hasFlag(node, Extern)) {
+        if (hasFlag(node, Constructor))
+            format(getState(ctx), "__attribute__((constructor))\n", NULL);
+        if (findAttribute(node, S_inline))
+            format(
+                getState(ctx), "__attribute__((always_inline)) inline", NULL);
+        else if (findAttribute(node, S_noinline))
+            format(getState(ctx), "__attribute__((noinline))", NULL);
+        const AstNode *opt = findAttribute(node, S_optimize);
+        if (opt) {
+            const AstNode *value = getAttributeArgument(NULL, NULL, opt, 0);
+            format(getState(ctx),
+                   " __attribute__((optnone))",
+                   (FormatArg[]){{.u64 = value->intLiteral.uValue}});
+        }
+        format(getState(ctx), "\nstatic ", NULL);
+    }
+    else {
         format(getState(ctx), "extern ", NULL);
+    }
     generateTypeName(ctx, getState(ctx), node->type->func.retType);
     format(getState(ctx), " ", NULL);
     generateFunctionName(getState(ctx), node);
@@ -1417,9 +1493,9 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
         [astClassDecl] = astConstVisitSkip,
         [astInterfaceDecl] = astConstVisitSkip,
         [astUnionDecl] = astConstVisitSkip,
-        [astTypeDecl] = astConstVisitSkip,
         [astEnumDecl] = astConstVisitSkip,
         [astTypeRef] = astConstVisitSkip,
+        [astTypeDecl] = astConstVisitSkip,
         [astGenericDecl] = astConstVisitSkip,
         [astImportDecl] = astConstVisitSkip,
         [astMacroDecl] = astConstVisitSkip

@@ -216,6 +216,12 @@ void bindPath(AstVisitor *visitor, AstNode *node)
 
             base->pathElement.resolvesTo = func->funcDecl.this_;
             base->flags |= (func->flags & flgConst);
+            AstNode *resolved = captureSymbol(
+                ctx, ctx->currentClosure, node, base->pathElement.resolvesTo);
+            if (resolved) {
+                base->pathElement.resolvesTo = resolved;
+                node->flags |= flgAddThis;
+            }
 
             if (keyword == S_super) {
                 AstNode *parent =

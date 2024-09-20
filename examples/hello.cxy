@@ -1,11 +1,9 @@
 import "stdlib/io.cxy" as io
+import { FileServer, Config } from "stdlib/fserver.cxy"
+import { Server } from "stdlib/http.cxy"
 
 pub func main(args: [string]) {
-    for (const i: 0..10) {
-        var s = String();
-        if (i == 0) {
-            continue
-        }
-    }
+    var s = Server[()]();
+    var fs = FileServer[Server[()]](&s, Config{});
 }
 

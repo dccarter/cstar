@@ -16,7 +16,7 @@ extern "C" {
 #define CXY_BUILTIN_NAMES(f, ff)    \
     f(main)                         \
     f(__builtins)               \
-    f(__cxy_assert)     \
+    f(__cxy_assert)             \
     f(CXY__builtins_sizeof)     \
     f(this)                     \
     f(This)                     \
@@ -25,6 +25,9 @@ extern "C" {
     f(transient)                \
     f(abstract)                 \
     f(inline)                   \
+    f(noinline)                 \
+    f(optimize)                 \
+    f(volatile)                 \
     f(explicit)                 \
     f(pure)                     \
     f(strlen)                   \

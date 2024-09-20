@@ -75,7 +75,8 @@ extern "C" {
     f(DefaultedFields,      58)                 \
     f(Anonymous,            59)                 \
     f(Constructor,          60)                 \
-    f(TestContext,          61)
+    f(TestContext,          61)                 \
+    f(UnionCast,            63)
 
 // clang-format on
 static const u64 flgNone = 0;
@@ -84,7 +85,7 @@ CXY_LANG_FLAGS(f)
 #undef f
 static const u64 flgTypeApplicable =
     (flgExtern | flgConst | flgOptional | flgClosure | flgSlice |
-     flgFuncTypeParam | flgReferenceMembers);
+     flgFuncTypeParam | flgReferenceMembers | flgAnonymous);
 
 typedef u64 Flags;
 
