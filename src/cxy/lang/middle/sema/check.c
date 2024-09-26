@@ -396,6 +396,9 @@ static void checkProgram(AstVisitor *visitor, AstNode *node)
         ctx->root.current = decl;
         decl->flags |= (isBuiltinModule ? flgBuiltin : flgNone);
         astVisit(visitor, decl);
+        if (decl->tag == astBlockStmt) {
+            printf("We can't have block\n");
+        }
     }
 
     if (isBuiltinModule || node->program.module) {

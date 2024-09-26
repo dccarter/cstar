@@ -8,6 +8,13 @@
 #include "lang/frontend/strings.h"
 #include "lang/frontend/ttable.h"
 
+static AstNode *getEvaluatedBody(const AstNode *loop, AstNode *body)
+{
+    if (!nodeIs(body, BlockStmt) || findAttribute(loop, S_consistent))
+        return body;
+    return body->blockStmt.stmts;
+}
+
 static bool evalExprForStmtIterable(AstVisitor *visitor,
                                     AstNode *node,
                                     AstNodeList *nodes)
@@ -19,22 +26,25 @@ static bool evalExprForStmtIterable(AstVisitor *visitor,
     while (it) {
         AstNode *body = deepCloneAstNode(ctx->pool, node->forStmt.body);
         variable->varDecl.init = it;
+        it = it->next;
         body->parentScope = node->parentScope;
+
         const Type *type = evalType(ctx, body);
         if (type == NULL || typeIs(type, Error)) {
             node->tag = astError;
             return false;
         }
 
-        if (nodeIs(body, BlockStmt) &&
-            findAttribute(node, S_consistent) == NULL) {
-            insertAstNode(nodes, body->blockStmt.stmts);
+        body = getEvaluatedBody(node, body);
+        while (body) {
+            AstNode *tmp = body;
+            body = body->next;
+            if (isNoopNodeAfterEval(tmp))
+                continue;
+            tmp->parentScope = node->parentScope;
+            tmp->next = NULL;
+            insertAstNode(nodes, tmp);
         }
-        else {
-            insertAstNode(nodes, body);
-        }
-
-        it = it->next;
     }
 
     return true;
@@ -54,17 +64,21 @@ static bool evalExprForStmtArray(AstVisitor *visitor,
         variable->varDecl.init = elem;
 
         const Type *type = evalType(ctx, body);
+
         if (type == NULL || typeIs(type, Error)) {
             node->tag = astError;
             return false;
         }
 
-        if (nodeIs(body, BlockStmt) &&
-            findAttribute(node, S_consistent) == NULL) {
-            insertAstNode(nodes, body->blockStmt.stmts);
-        }
-        else {
-            insertAstNode(nodes, body);
+        body = getEvaluatedBody(node, body);
+        while (body) {
+            AstNode *tmp = body;
+            body = body->next;
+            if (isNoopNodeAfterEval(tmp))
+                continue;
+            tmp->parentScope = node->parentScope;
+            tmp->next = NULL;
+            insertAstNode(nodes, tmp);
         }
     }
 
@@ -111,12 +125,15 @@ static bool evalExprForStmtVariadic(AstVisitor *visitor,
                 return false;
             }
 
-            if (nodeIs(body, BlockStmt) &&
-                findAttribute(node, S_consistent) == NULL) {
-                insertAstNode(nodes, body->blockStmt.stmts);
-            }
-            else {
-                insertAstNode(nodes, body);
+            body = getEvaluatedBody(node, body);
+            while (body) {
+                AstNode *tmp = body;
+                body = body->next;
+                if (isNoopNodeAfterEval(tmp))
+                    continue;
+                tmp->parentScope = node->parentScope;
+                tmp->next = NULL;
+                insertAstNode(nodes, tmp);
             }
         }
     }
@@ -147,14 +164,15 @@ static bool evalForStmtWithString(AstVisitor *visitor,
             return false;
         }
 
-        if (!nodeIs(body, Noop)) {
-            if (nodeIs(body, BlockStmt) &&
-                findAttribute(node, S_consistent) == NULL) {
-                insertAstNode(nodes, body->blockStmt.stmts);
-            }
-            else {
-                insertAstNode(nodes, body);
-            }
+        body = getEvaluatedBody(node, body);
+        while (body) {
+            AstNode *tmp = body;
+            body = body->next;
+            if (isNoopNodeAfterEval(tmp))
+                continue;
+            tmp->parentScope = node->parentScope;
+            tmp->next = NULL;
+            insertAstNode(nodes, tmp);
         }
     }
 
@@ -167,7 +185,6 @@ static bool evalForStmtWithRange(AstVisitor *visitor,
 {
     EvalContext *ctx = getAstVisitorContext(visitor);
     AstNode *range = node->forStmt.range, *variable = node->forStmt.var;
-    bool preserve = findAttribute(node, S_consistent) != NULL;
     i64 i = integerLiteralValue(range->rangeExpr.start),
         count = integerLiteralValue(range->rangeExpr.end),
         step = range->rangeExpr.step
@@ -180,9 +197,6 @@ static bool evalForStmtWithRange(AstVisitor *visitor,
             ctx->pool,
             &range->loc,
             &(AstNode){.tag = astIntegerLit, .intLiteral.value = i});
-        if (nodeIs(body, BlockStmt) && !preserve && body->blockStmt.stmts) {
-            body->blockStmt.stmts->parentScope = node->parentScope;
-        }
 
         if (body) {
             body->parentScope = node->parentScope;
@@ -193,11 +207,15 @@ static bool evalForStmtWithRange(AstVisitor *visitor,
                 return false;
             }
 
-            if (nodeIs(body, BlockStmt) && !preserve) {
-                insertAstNode(nodes, body->blockStmt.stmts);
-            }
-            else {
-                insertAstNode(nodes, body);
+            body = getEvaluatedBody(node, body);
+            while (body) {
+                AstNode *tmp = body;
+                body = body->next;
+                if (isNoopNodeAfterEval(tmp))
+                    continue;
+                tmp->parentScope = node->parentScope;
+                tmp->next = NULL;
+                insertAstNode(nodes, tmp);
             }
         }
     }

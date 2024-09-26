@@ -3,49 +3,75 @@
 //
 
 #include "eval.h"
+#include <lang/frontend/flag.h>
+
+static bool evalAstNodeAtIndex(EvalContext *ctx,
+                               AstNode *node,
+                               AstNode *list,
+                               i64 index)
+{
+    AstNode *atIndex = getNodeAtIndex(list, index);
+    if (atIndex == NULL) {
+        logError(ctx->L,
+                 &node->loc,
+                 "index {0} is out of bounds, target has {u64} elements",
+                 (FormatArg[]){{.i64 = index}, {.u64 = countAstNodes(list)}});
+        node->tag = astError;
+        return false;
+    }
+    *node = *atIndex;
+    return true;
+}
+
+bool setEvalStringIndexExprResult(AstNode *node, const AstNode *result)
+{
+    if (result) {
+        *node = *result;
+        return false;
+    }
+    node->tag = astNullLit;
+    return false;
+}
 
 static bool evalStringIndexExpr(EvalContext *ctx, AstNode *node)
 {
     AstNode *target = node->indexExpr.target;
     AstNode *index = node->indexExpr.index;
 
-    if (!nodeIs(target, EnumDecl) && !nodeIs(target, StructDecl)) {
-        logError(ctx->L,
-                 &target->loc,
-                 "comp-time string index operator only supported on enum or "
-                 "struct declaration typeinfo instances",
-                 NULL);
-        node->tag = astError;
-        return false;
+    switch (target->tag) {
+    case astEnumDecl:
+        return setEvalStringIndexExprResult(
+            node, findEnumOptionByName(target, index->stringLiteral.value));
+    case astStructDecl:
+    case astClassDecl:
+    case astInterfaceDecl:
+        return setEvalStringIndexExprResult(
+            node, findInAstNode(target, index->stringLiteral.value));
+    case astComptimeOnly:
+        return setEvalStringIndexExprResult(
+            node, findInComptimeIterable(target, index->stringLiteral.value));
+    case astAttr:
+        if (target->attr.kvpArgs)
+            return setEvalStringIndexExprResult(
+                node,
+                findAttributeArgument(target, index->stringLiteral.value));
+    default:
+        break;
     }
 
-    AstNode *member =
-        nodeIs(target, EnumDecl)
-            ? findEnumOptionByName(target, index->stringLiteral.value)
-            : findInAstNode(target, index->stringLiteral.value);
-
-    if (member == NULL)
-        node->tag = astNullLit;
-    else
-        *node = *member;
-    return true;
+    logError(
+        ctx->L,
+        &target->loc,
+        "comptime string index expression is not supported on given target",
+        NULL);
+    node->tag = astError;
+    return false;
 }
 
 static bool evalIntegerIndexExpr(EvalContext *ctx, AstNode *node)
 {
     AstNode *target = node->indexExpr.target;
     AstNode *index = node->indexExpr.index;
-
-    if (!nodeIs(target, ArrayExpr) && !nodeIs(target, StringLit)) {
-        logError(ctx->L,
-                 &target->loc,
-                 "comp-time integer index operator only supported on string or "
-                 "array "
-                 "expressions",
-                 NULL);
-        node->tag = astError;
-        return false;
-    }
 
     i64 i = (i64)nodeGetNumericLiteral(index);
     u64 len = nodeIs(target, StringLit) ? strlen(target->stringLiteral.value)
@@ -61,16 +87,51 @@ static bool evalIntegerIndexExpr(EvalContext *ctx, AstNode *node)
         return false;
     }
 
-    if (nodeIs(target, StringLit)) {
+    switch (target->tag) {
+    case astStringLit:
+        if (i > strlen(target->stringLiteral.value)) {
+            logError(
+                ctx->L,
+                &node->loc,
+                "index {i64} is out of range for string {s}",
+                (FormatArg[]){{.i64 = i}, {.s = target->stringLiteral.value}});
+            return false;
+        }
         clearAstBody(node);
         node->tag = astCharLit;
         node->charLiteral.value = (wchar)target->stringLiteral.value[i];
-    }
-    else {
-        *node = *getNodeAtIndex(target->arrayExpr.elements, i);
+        return true;
+    case astArrayExpr:
+        return evalAstNodeAtIndex(ctx, node, target->arrayExpr.elements, i);
+    case astTupleExpr:
+        return evalAstNodeAtIndex(ctx, node, target->tupleExpr.elements, i);
+    case astAttr:
+        if (target->attr.kvpArgs) {
+            logError(
+                ctx->L,
+                &node->loc,
+                "attribute {s} argument were given by name, use named index "
+                "expression",
+                (FormatArg[]){{.s = target->attr.name}});
+            node->tag = astError;
+            return false;
+        }
+        return evalAstNodeAtIndex(ctx, node, target->attr.args, i);
+    case astComptimeOnly:
+        if (hasFlag(target, ComptimeIterable))
+            return evalAstNodeAtIndex(ctx, node, target->next, i);
+        break;
+    default:
+        break;
     }
 
-    return true;
+    logError(ctx->L,
+             &target->loc,
+             "comp-time integer index operator is not supported on current "
+             "expression",
+             NULL);
+    node->tag = astError;
+    return false;
 }
 
 void evalIndexExpr(AstVisitor *visitor, AstNode *node)

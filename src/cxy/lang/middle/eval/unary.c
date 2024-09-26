@@ -82,18 +82,11 @@ static void evalPrefixPlusOperation(EvalContext *ctx, AstNode *node)
 static void evalLogicNotOperation(EvalContext *ctx, AstNode *node)
 {
     AstNode *rhs = node->unaryExpr.operand;
-    if (nodeIs(rhs, StringLit)) {
-        logError(ctx->L,
-                 &node->loc,
-                 "comp-time operand of prefix `!` cannot be of type string",
-                 NULL);
-
-        node->tag = astError;
+    if (!evalBooleanCast(ctx, rhs))
         return;
-    }
 
     node->tag = astBoolLit;
-    node->boolLiteral.value = !nodeGetNumericLiteral(rhs);
+    node->boolLiteral.value = !rhs->boolLiteral.value;
 }
 
 static void evalBitNotOperation(EvalContext *ctx, AstNode *node)

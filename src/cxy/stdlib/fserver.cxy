@@ -2,6 +2,7 @@ module fserver
 
 import { time_t } from "./time.cxy"
 import { HashMap } from "./hash.cxy"
+import "std/log.cxy"
 import { Request, Response, Server, Method } from "./http.cxy"
 
 #if (!defined CXY_FILE_SERVER_ROUTE) {
@@ -54,6 +55,7 @@ struct MimeType {
 type MimeTypes = HashMap[String, MimeType, HashCase, EqualsCase]
 
 pub class FileServer {
+    LOG_TAG = "FILE_SERVER";
     - mimeTypes = MimeTypes();
     - cachedFiles = CachedFiles();
     - wwwDir: String = null;
@@ -133,6 +135,21 @@ pub class FileServer {
         mime(".ttf",   "font/ttf", {})
         mime(".xhtml", "application/xhtml+xml", {})
         mime(".xml",   "application/xml", {})
+
+        // Usually '/' falls back to index.html
+        alias("/", "index.html")
+    }
+
+    func alias(src: String, dst: String) : void {
+        if (!dst.rIndexOf('.':char)) {
+            ERR!( "redirecting '" << src << "' to unsupported file format: '" << dst << "'" )
+            assert!(false)
+        }
+
+        if (!(redirects.[&&src] = &&dst)) {
+            ERR!( "redirect '" << src << "' already added" )
+            assert!(false)
+        }
     }
 
     - func get(req: &const Request, resp: &Response, path: String, ext: String): void {

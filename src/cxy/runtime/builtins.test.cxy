@@ -3,3 +3,27 @@ test "__bswap" {
     ok!(__bswap32(0xff000000:u32) == 0x000000ff:u32)
     ok!(__bswap16(0xff00:u16) == 0x00ff:u16)
 }
+
+test "min/max" {
+    ok!(min(0, 1) == 0)
+    ok!(min(-100, 100) == -100)
+    ok!(min(0.0006, 0.5) == 0.0006)
+
+    ok!(max(0, 1) == 1)
+    ok!(max(-100, 100) == 100)
+    ok!(max(0.0006, 0.5) == 0.5)
+}
+
+test "String::(indexOf/rIndexOf)" {
+    var s = String("Hello World");
+    var idx = s.indexOf('C':char);
+    ok!(!idx)
+
+    idx = s.indexOf('o':char);
+    ok!(!!idx)
+    ok!(*idx == 4)
+
+    idx = s.rIndexOf('o':char);
+    ok!(!!idx)
+    ok!(*idx == 7)
+}
