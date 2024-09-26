@@ -685,6 +685,29 @@ pub class String : OutputStream {
         }
     }
 
+    func indexOf(ch: char) : __Optional[u64] {
+        var i = 0:u64;
+        while (i < _size) {
+            if (_data.[i] == ch)
+                return Some(i)
+            i++
+        }
+        return None[u64]()
+    }
+
+    func rIndexOf(ch: char) : __Optional[u64] {
+        if (_size == 0)
+            return None[u64]()
+
+        var i = _size - 1;
+        while (i > 0) {
+            if (_data.[i] == ch)
+                return Some(i)
+            i--
+        }
+        return None[u64]()
+    }
+
     @inline
     func `+`[U](other: &const U) => this << other
 
@@ -1088,7 +1111,7 @@ pub func println(...args: auto) {
 pub func min[T](a: T, b: T) => a < b? a : b
 
 @inline
-pub func max[T](a: T, b: T) => a < b? a : b
+pub func max[T](a: T, b: T) => a > b? a : b
 
 pub struct Equals[K] {
     func `()`(lhs: &const K, rhs: &const K): bool => lhs == rhs

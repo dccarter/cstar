@@ -131,6 +131,25 @@ bool evalBooleanCast(EvalContext *ctx, AstNode *node)
                                   (node->stringLiteral.value[0] != '\0');
         node->tag = astBoolLit;
         break;
+    case astComptimeOnly:
+        node->boolLiteral.value = node->next != NULL;
+        node->tag = astBoolLit;
+        break;
+    case astAttr:
+    case astFuncParamDecl:
+    case astEnumOptionDecl:
+    case astClassDecl:
+    case astStructDecl:
+    case astEnumDecl:
+    case astInterfaceDecl:
+    case astFieldDecl:
+    case astTypeDecl:
+    case astUnionDecl:
+    case astFuncDecl:
+    case astVarDecl:
+        node->boolLiteral.value = true;
+        node->tag = astBoolLit;
+        break;
     default:
         logError(ctx->L,
                  &node->loc,

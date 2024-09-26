@@ -1,9 +1,3 @@
-import "stdlib/io.cxy" as io
-import { FileServer, Config } from "stdlib/fserver.cxy"
-import { Server } from "stdlib/http.cxy"
 
-pub func main(args: [string]) {
-    var s = Server[()]();
-    var fs = FileServer[Server[()]](&s, Config{});
+func main(args: [string]) {
 }
-

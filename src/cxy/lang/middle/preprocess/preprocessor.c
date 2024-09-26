@@ -19,8 +19,10 @@ static void substituteAstNode(AstVisitor *visitor,
                               bool clone)
 {
     PreprocessorContext *ctx = getAstVisitorContext(visitor);
-    AstNode *body =
-        (clone && nodeIs(with, MacroDecl)) ? with->macroDecl.body : with;
+    AstNode *body = (clone && nodeIs(with, MacroDecl)) ? with->macroDecl.body
+                    : (nodeIs(with, BlockStmt) && hasFlag(with, Comptime))
+                        ? with->blockStmt.stmts
+                        : with;
     AstNodeList replacements = {};
     for (; body;) {
         AstNode *substitute = clone ? deepCloneAstNode(ctx->pool, body) : body;

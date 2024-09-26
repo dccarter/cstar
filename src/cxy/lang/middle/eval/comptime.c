@@ -58,12 +58,10 @@ static inline AstNode *comptimeWrapped(EvalContext *ctx,
                                        AstNode *node,
                                        u64 flags)
 {
-    if (node)
-        return makeAstNode(
-            ctx->pool,
-            loc,
-            &(AstNode){.tag = astComptimeOnly, .next = node, .flags = flags});
-    return NULL;
+    return makeAstNode(
+        ctx->pool,
+        loc,
+        &(AstNode){.tag = astComptimeOnly, .next = node, .flags = flags});
 }
 
 static inline const Type *actualType(const Type *type)
@@ -92,29 +90,21 @@ static AstNode *getName(EvalContext *ctx,
     cstring name = NULL;
     switch (node->tag) {
     case astFieldDecl:
-        name = node->structField.name;
-        break;
     case astStructDecl:
     case astClassDecl:
-        name = node->structDecl.name;
-        break;
     case astEnumDecl:
-        name = node->enumDecl.name;
-        break;
     case astFuncDecl:
-        name = node->funcDecl.name;
-        break;
     case astFuncParamDecl:
-        name = node->funcParam.name;
+    case astVarDecl:
+    case astEnumOptionDecl:
+    case astAttr:
+        name = node->_namedNode.name;
         break;
     case astPrimitiveType:
         name = getPrimitiveTypeName(node->primitiveType.id);
         break;
     case astGenericParam:
         return getName(ctx, loc, getTypeDecl(stripAll(node->type)), NULL);
-    case astEnumOptionDecl:
-        name = node->enumOption.name;
-        break;
     default:
         return NULL;
     }
@@ -151,6 +141,20 @@ static AstNode *getMembers(EvalContext *ctx,
         break;
     }
     return NULL;
+}
+
+static AstNode *getAttributes(EvalContext *ctx,
+                              attr(unused) const FileLoc *loc,
+                              AstNode *node,
+                              attr(unused) AstNode *args)
+{
+    AstNode *decl = node;
+    if (nodeIs(decl, GenericParam))
+        decl = getTypeDecl(decl->type);
+    if (decl == NULL)
+        return NULL;
+
+    return comptimeWrapped(ctx, &node->loc, decl->attrs, flgComptimeIterable);
 }
 
 static AstNode *getMembersCount(EvalContext *ctx,
@@ -255,12 +259,14 @@ static AstNode *getParams(EvalContext *ctx,
                           attr(unused) AstNode *args)
 {
 
-    AstNode *params = NULL;
+    AstNode *params;
     AstNode *decl = node;
 getParam_from_decl:
     if (decl == NULL)
         return NULL;
-    if (nodeIs(decl, FuncDecl))
+    if (nodeIs(decl, Attr))
+        params = decl->attr.args;
+    else if (nodeIs(decl, FuncDecl))
         params = decl->funcDecl.signature->params;
     else if (nodeIs(decl, FuncType))
         params = decl->funcType.params;
@@ -675,6 +681,7 @@ static void initDefaultMembers(EvalContext *ctx)
 
     ADD_MEMBER("name", getName);
     ADD_MEMBER("members", getMembers);
+    ADD_MEMBER("attributes", getAttributes);
     ADD_MEMBER("Tinfo", getTypeInfo);
     ADD_MEMBER("elementType", getElementType);
     ADD_MEMBER("pointedType", makePointedTypeAstNode);

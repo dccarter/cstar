@@ -450,6 +450,21 @@ static inline AstNode *parseIdentifier(Parser *P)
     return ident;
 }
 
+static inline AstNode *parseSymbol(Parser *P)
+{
+    const Token tok = *consume0(P, tokColon);
+    consume0(P, tokIdent);
+    AstNode *ident =
+        newAstNode(P,
+                   &tok.fileLoc.begin,
+                   &(AstNode){.tag = astSymbol,
+                              .symbol.value = getTokenString(P, &tok, false)});
+    if (check(P, tokLNot))
+        return macroExpression(P, ident);
+
+    return ident;
+}
+
 static inline AstNode *parseIdentifierWithAlias(Parser *P)
 {
     Token tok = *consume0(P, tokIdent);
@@ -2429,6 +2444,11 @@ static AstNode *parseClassOrStructMember(Parser *P)
     return member;
 }
 
+static AstNode *comptimeClassOrStructDecl(Parser *P)
+{
+    return comptime(P, parseClassOrStructMember);
+}
+
 static AstNode *parseInterfaceMember(Parser *P)
 {
     AstNode *member = NULL, *attrs = NULL;
@@ -2453,6 +2473,18 @@ static AstNode *parseInterfaceMember(Parser *P)
     return member;
 }
 
+static AstNode *comptimeBlock(Parser *P, AstNode *(*parser)(Parser *))
+{
+    Token tok = *consume0(P, tokLBrace);
+    AstNode *node = parseManyNoSeparator(P, tokRBrace, parser);
+    consume0(P, tokRBrace);
+    return newAstNode(P,
+                      &tok.fileLoc.begin,
+                      &(AstNode){.tag = astBlockStmt,
+                                 .flags = flgComptime,
+                                 .blockStmt.stmts = node});
+}
+
 static AstNode *parseComptimeIf(Parser *P, AstNode *(*parser)(Parser *))
 {
     AstNode *cond;
@@ -2465,15 +2497,12 @@ static AstNode *parseComptimeIf(Parser *P, AstNode *(*parser)(Parser *))
         cond = expression(P, true);
     }
     consume0(P, tokRParen);
-    consume0(P, tokLBrace);
-    AstNode *body = parseManyNoSeparator(P, tokRBrace, parser);
-    consume0(P, tokRBrace);
+    AstNode *body = comptimeBlock(P, parser);
 
     AstNode *otherwise = NULL;
     if (match(P, tokElse)) {
-        if (match(P, tokLBrace)) {
-            otherwise = parseManyNoSeparator(P, tokRBrace, parser);
-            consume0(P, tokRBrace);
+        if (check(P, tokLBrace)) {
+            otherwise = comptimeBlock(P, parser);
         }
         else {
             consume0(P, tokHash);
@@ -2502,9 +2531,8 @@ static AstNode *parseComptimeWhile(Parser *P, AstNode *(*parser)(Parser *))
         cond = expression(P, true);
     }
     consume0(P, tokRParen);
-    consume0(P, tokLBrace);
-    AstNode *body = parseManyNoSeparator(P, tokRBrace, parser);
-    consume0(P, tokRBrace);
+
+    AstNode *body = comptimeBlock(P, parser);
 
     return makeAstNode(P->memPool,
                        &tok.fileLoc,
@@ -2522,9 +2550,7 @@ static AstNode *parseComptimeFor(Parser *P, AstNode *(*parser)(Parser *))
     AstNode *range = expression(P, true);
     consume0(P, tokRParen);
 
-    consume0(P, tokLBrace);
-    AstNode *body = parseManyNoSeparator(P, tokRBrace, parser);
-    consume0(P, tokRBrace);
+    AstNode *body = comptimeBlock(P, parser);
 
     return makeAstNode(
         P->memPool,
@@ -2601,7 +2627,7 @@ static AstNode *classOrStructDecl(Parser *P, bool isPublic, bool isExtern)
     if (!isExtern || check(P, tokLBrace)) {
         consume0(P, tokLBrace);
         while (!check(P, tokRBrace, tokEoF)) {
-            listAddAstNode(&members, comptime(P, parseClassOrStructMember));
+            listAddAstNode(&members, comptime(P, comptimeClassOrStructDecl));
         }
         consume0(P, tokRBrace);
     }

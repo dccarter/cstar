@@ -98,6 +98,8 @@ struct StrPool;
     f(CCode)                \
     f(Define)               \
     f(Attr)                 \
+    f(AttrDecl)             \
+    f(Symbol)               \
     f(Path)                 \
     f(PathElem)             \
     f(Substitution)         \
@@ -308,6 +310,10 @@ struct AstNode {
             AstNode *clobbers;
             AstNode *flags;
         } inlineAssembly;
+
+        struct {
+            cstring value;
+        } symbol;
 
         struct {
             cstring value;
@@ -802,6 +808,11 @@ AstNode *makeStringLiteral(MemPool *pool,
                            cstring value,
                            AstNode *next,
                            const Type *type);
+
+AstNode *makeSymbol(MemPool *pool,
+                    const FileLoc *loc,
+                    cstring value,
+                    AstNode *next);
 
 AstNode *makeIdentifier(MemPool *pool,
                         const FileLoc *loc,
@@ -1454,7 +1465,7 @@ AstNode *makeTypeReferenceNode2(MemPool *pool,
                                 AstNode *next);
 
 AstNode *findInAstNode(AstNode *node, cstring name);
-
+AstNode *findInComptimeIterable(AstNode *node, cstring name);
 AstNode *resolvePath(const AstNode *path);
 
 AstNode *resolveAstNode(AstNode *node);

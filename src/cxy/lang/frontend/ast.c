@@ -76,6 +76,7 @@ static void recordClonedAstNode(CloneAstConfig *config,
     case astIdentifier:
     case astClosureExpr:
     case astMatchStmt:
+    case astBlockStmt:
         mapAstNode(&config->mapping, from, to);
         break;
     default:
@@ -286,6 +287,19 @@ AstNode *makeStringLiteral(MemPool *pool,
                                   .next = next,
                                   .type = type,
                                   .stringLiteral = {.value = value}});
+}
+
+AstNode *makeSymbol(MemPool *pool,
+                    const FileLoc *loc,
+                    cstring value,
+                    AstNode *next)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astSymbol,
+                                  .flags = flgNone,
+                                  .next = next,
+                                  .symbol = {.value = value}});
 }
 
 AstNode *makeIdentifier(MemPool *pool,
@@ -1827,7 +1841,7 @@ AstNode *findEnumOptionByName(AstNode *node, cstring name)
     return NULL;
 }
 
-cstring getMemberName(const AstNode *member)
+cstring getNamedNodeName(const AstNode *member)
 {
     switch (member->tag) {
     case astFuncDecl:
@@ -1837,6 +1851,7 @@ cstring getMemberName(const AstNode *member)
     case astUnionDecl:
     case astTypeDecl:
     case astEnumDecl:
+    case astAttr:
         return member->_namedNode.name;
     default:
         return NULL;
@@ -1847,7 +1862,7 @@ AstNode *findMemberByName(AstNode *node, cstring name)
 {
     AstNode *member = node;
     while (member) {
-        if (getMemberName(member) == name)
+        if (getNamedNodeName(member) == name)
             return member;
         member = member->next;
     }
@@ -2615,6 +2630,18 @@ AstNode *findInAstNode(AstNode *node, cstring name)
     default:
         unreachable("NOT SUPPORTED");
     }
+}
+
+AstNode *findInComptimeIterable(AstNode *node, cstring name)
+{
+    if (node == NULL || name == NULL)
+        return NULL;
+    AstNode *it = node->next;
+    for (; it; it = it->next) {
+        if (name == getNamedNodeName(it))
+            return it;
+    }
+    return NULL;
 }
 
 AstNode *resolvePath(const AstNode *path)

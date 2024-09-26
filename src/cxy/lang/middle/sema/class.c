@@ -79,22 +79,25 @@ static void evalClassMembers(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *member = node->classDecl.members;
     AstNode *prev = NULL;
-    for (u64 i = 0; member; member = member->next, i++) {
+    for (u64 i = 0; member; i++) {
         const Type *type;
         if (hasFlag(member, Comptime)) {
             if (!evaluate(ctx->evaluator, member)) {
                 node->type = ERROR_TYPE(ctx);
                 return;
             }
+
             if (nodeIs(member, Noop)) {
+                while (nodeIs(member, Noop))
+                    member = member->next;
                 if (prev == NULL) {
-                    node->structDecl.members = member->next;
+                    node->structDecl.members = member;
                 }
                 else {
-                    prev->next = member->next;
+                    prev->next = member;
                 }
-                member = member->next;
                 member->parentScope = node;
+                continue;
             }
         }
         prev = member;
@@ -110,6 +113,8 @@ static void evalClassMembers(AstVisitor *visitor, AstNode *node)
 
         if (typeIs(type, Error))
             node->type = ERROR_TYPE(ctx);
+
+        member = member->next;
     }
 }
 
@@ -243,7 +248,7 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
     AstNode *base = node->classDecl.base, *vTableMember = NULL;
     if (node->type)
         return;
-    
+
     if (node->classDecl.base) {
         checkBaseDecl(visitor, node);
         if (typeIs(node->type, Error))

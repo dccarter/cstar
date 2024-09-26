@@ -60,6 +60,7 @@ void evalPathEpilogue(AstVisitor *visitor,
 
 void evalIfStmt(AstVisitor *visitor, AstNode *node);
 void evalForStmt(AstVisitor *visitor, AstNode *node);
+bool isNoopNodeAfterEval(const AstNode *node);
 
 #ifdef __cplusplus
 }

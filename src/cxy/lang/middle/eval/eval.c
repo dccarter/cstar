@@ -38,6 +38,12 @@ static void evalFallback(AstVisitor *visitor, AstNode *node)
     node->tag = astError;
 }
 
+bool isNoopNodeAfterEval(const AstNode *node)
+{
+    return nodeIs(node, Noop) ||
+           (nodeIs(node, VarDecl) && hasFlag(node, Comptime));
+}
+
 const Type *evalType(EvalContext *ctx, AstNode *node)
 {
     astVisit(ctx->typer, node);
@@ -108,7 +114,6 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
         node->tag = astError;
         return;
     }
-    bool flatten = findAttribute(node, S_consistent) == NULL;
 
     AstNode *next = node->next;
     u64 visited = node->flags & flgVisited;
@@ -116,7 +121,7 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
     if (cond->boolLiteral.value) {
         // select then branch & reclaim else branch if any
         AstNode *replacement = node->ifStmt.body;
-        if (flatten && nodeIs(replacement, BlockStmt))
+        if (nodeIs(replacement, BlockStmt))
             replacement = replacement->blockStmt.stmts
                               ?: makeAstNop(ctx->pool, &replacement->loc);
         replacement->parentScope = node->parentScope;
@@ -129,7 +134,7 @@ void evalIfStmt(AstVisitor *visitor, AstNode *node)
     else if (node->ifStmt.otherwise) {
         // select otherwise, reclaim if branch
         AstNode *replacement = node->ifStmt.otherwise;
-        if (flatten && nodeIs(replacement, BlockStmt))
+        if (nodeIs(replacement, BlockStmt))
             replacement = replacement->blockStmt.stmts
                               ?: makeAstNop(ctx->pool, &replacement->loc);
 
@@ -325,6 +330,7 @@ void initEvalVisitor(AstVisitor *visitor, EvalContext *ctx)
         [astIdentifier] = astVisitSkip,
         [astTypeRef] = astVisitSkip,
         [astList] = astVisitSkip,
+        [astComptimeOnly] = astVisitSkip,
         [astNoop] = astVisitSkip,
     }, .fallback = evalFallback);
 

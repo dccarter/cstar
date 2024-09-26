@@ -31,6 +31,7 @@
     case astList:                                                              \
     case astBranch:                                                            \
     case astPhi:                                                               \
+    case astComptimeOnly:                                                      \
         break;                                                                 \
     case astAttr:                                                              \
         MODE##VisitManyNodes(visitor, node->attr.args);                        \
