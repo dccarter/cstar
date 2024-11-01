@@ -1,3 +1,18 @@
+import { Server, Request, Response } from "stdlib/http.cxy"
+import { FileServer } from "stdlib/fserver.cxy"
+
+func own(v: String) {
+}
+
+func borrow(x: &const String) {
+}
+
+func mutate(x: &String) {
+
+}
 
 func main(args: [string]) {
+    var server = Server[()]();
+    var fs = FileServer(&server);
+    server.start()
 }

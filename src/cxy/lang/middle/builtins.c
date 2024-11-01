@@ -41,29 +41,34 @@ static inline void addOverridableBuiltin(cstring name)
 
 bool isBuiltinsInitialized() { return cxy_builtins.module != NULL; }
 
-void initializeBuiltins(Log *L, const FileLoc *loc, const Type *module)
+void initializeBuiltins(Log *L)
 {
-    if (cxy_builtins.module != NULL) {
-        logWarning(L,
-                   &cxy_builtins.loc,
-                   "re-initializing builtins should not allowed",
-                   NULL);
+    if (cxy_builtins.L != NULL) {
+        logWarning(
+            L, NULL, "re-initializing builtins should not allowed", NULL);
         return;
     }
+    csAssert0(cxy_builtins.module == NULL);
     cxy_builtins.L = L;
-    cxy_builtins.module = module;
+    cxy_builtins.module = NULL;
     cxy_builtins.overrides = newHashTable(sizeof(BuiltinOverride));
-    cxy_builtins.loc = *loc;
 #define f(name) addOverridableBuiltin(S_##name);
     OVERRIDABLE_BUILTINS(f)
 #undef f
 }
 
+void setBuiltinsModule(const Type *module, const FileLoc *loc)
+{
+    csAssert0(cxy_builtins.module == NULL);
+    cxy_builtins.module = module;
+    cxy_builtins.loc = *loc;
+}
+
 AstNode *findBuiltinDecl(cstring name)
 {
-    csAssert0(cxy_builtins.module);
     AstNode *node = findBuiltinOverride(name);
     if (node == NULL) {
+        csAssert0(cxy_builtins.module);
         const NamedTypeMember *member =
             findModuleMember(cxy_builtins.module, name);
         node = member ? (AstNode *)member->decl : NULL;

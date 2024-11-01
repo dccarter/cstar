@@ -50,7 +50,7 @@ struct FixedWidth {
 
 class Logger {
     - os: OutputStream;
-    - _level: Level = .DEBUG;
+    - _level: Level = .TRACE;
 
     func `init`() {
         os = stdout

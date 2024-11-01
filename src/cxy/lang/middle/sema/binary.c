@@ -101,6 +101,7 @@ static void checkBinaryOperatorOverload(AstVisitor *visitor, AstNode *node)
                  (FormatArg[]){{.t = target},
                                {.s = getBinaryOpString(node->binaryExpr.op)}});
         node->type = ERROR_TYPE(ctx);
+        return;
     }
 
     const Type *right = checkType(visitor, node->binaryExpr.rhs);

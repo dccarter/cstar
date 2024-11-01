@@ -213,7 +213,10 @@ static void generateStructType(CodegenContext *ctx, const Type *type)
 {
     format(typeState(ctx), "typedef struct ", NULL);
     generateCustomTypeName(ctx, typeState(ctx), type, "Struct");
-    format(typeState(ctx), " ", NULL);
+    if (hasFlag(type, Extern))
+        format(typeState(ctx), " _", NULL);
+    else
+        format(typeState(ctx), " ", NULL);
     generateCustomTypeName(ctx, typeState(ctx), type, "Struct");
     format(typeState(ctx), ";\n", NULL);
     ((Type *)type)->generating = true;

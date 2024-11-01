@@ -222,7 +222,7 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
             node->callExpr.callee = callee;
         }
     }
-    else if (typeIs(callee_, Tuple) && hasFlag(callee_, FuncTypeParam)) {
+    else if (typeIs(rawType, Tuple) && hasFlag(rawType, FuncTypeParam)) {
         node->callExpr.callee = makeMemberExpr(
             ctx->pool,
             &callee->loc,
@@ -234,7 +234,7 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
                                NULL,
                                getPrimitiveType(ctx->types, prtI64)),
             NULL,
-            callee_->tuple.members[1]);
+            rawType->tuple.members[1]);
 
         node->callExpr.args = makeMemberExpr(
             ctx->pool,
@@ -247,7 +247,7 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
                                NULL,
                                getPrimitiveType(ctx->types, prtI64)),
             node->callExpr.args,
-            callee_->tuple.members[0]);
+            rawType->tuple.members[0]);
 
         node->type = checkType(visitor, node);
         return;

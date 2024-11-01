@@ -54,6 +54,67 @@ static bool resolveGenericDeclDefaults(AstVisitor *visitor,
     return status;
 }
 
+static const Type *closureArgToClosureParamType(TypingContext *ctx,
+                                                const FileLoc *loc,
+                                                const Type *argType)
+{
+    const Type *opCall = findStructMemberType(argType, S_CallOverload);
+    const Type **funcTypeParams =
+        mallocOrDie(sizeof(Type *) * (opCall->func.paramsCount + 1));
+    funcTypeParams[0] = makeVoidPointerType(ctx->types, flgNone);
+    AstNodeList funcTypeDeclParams = {};
+    insertAstNode(
+        &funcTypeDeclParams,
+        makeFunctionParam(
+            ctx->pool,
+            loc,
+            NULL,
+            makeTypeReferenceNode(
+                ctx->pool, makeVoidPointerType(ctx->types, flgNone), loc),
+            NULL,
+            flgNone,
+            NULL));
+
+    for (u64 i = 0; i < opCall->func.paramsCount; i++) {
+        funcTypeParams[i + 1] = opCall->func.params[i];
+        insertAstNode(
+            &funcTypeDeclParams,
+            makeFunctionParam(
+                ctx->pool,
+                loc,
+                NULL,
+                makeTypeReferenceNode(ctx->pool, funcTypeParams[i + 1], loc),
+                NULL,
+                funcTypeParams[i + 1]->flags,
+                NULL));
+    }
+
+    AstNode *funcTypeDecl = makeFunctionType(
+        ctx->pool,
+        loc,
+        funcTypeDeclParams.first,
+        makeTypeReferenceNode(ctx->pool, opCall->func.retType, loc),
+        opCall->flags,
+        NULL,
+        NULL);
+    funcTypeDecl->type = makeFuncType(
+        ctx->types,
+        &(Type){.tag = typFunc,
+                .func = {.params = funcTypeParams,
+                         .paramsCount = opCall->func.paramsCount + 1,
+                         .retType = opCall->func.retType,
+                         .decl = funcTypeDecl}});
+
+    const Type *paramType =
+        makeTupleType(ctx->types,
+                      (const Type *[]){makeVoidPointerType(ctx->types, flgNone),
+                                       funcTypeDecl->type},
+                      2,
+                      flgFuncTypeParam);
+    free(funcTypeParams);
+    return paramType;
+}
+
 static bool inferGenericFunctionTypes(AstVisitor *visitor,
                                       const AstNode *generic,
                                       const Type **paramTypes,
@@ -61,19 +122,14 @@ static bool inferGenericFunctionTypes(AstVisitor *visitor,
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     csAssert0(ctx->currentCall);
-    AstNode *call = ctx->currentCall, *arg = call->callExpr.args,
-            *params = generic->genericDecl.params,
+    AstNode *decl = generic->genericDecl.decl, *call = ctx->currentCall,
+            *arg = call->callExpr.args, *params = generic->genericDecl.params,
             *param = getNodeAtIndex(params, index);
 
     u64 argsCount = countAstNodes(arg);
-
-    if (argsCount == 0) {
-        if (!hasFlag(param, Variadic))
+    if (argsCount < decl->funcDecl.requiredParamsCount) {
+        if (!hasFlag(generic, Variadic))
             return false;
-        call->callExpr.args =
-            makeTupleExpr(ctx->pool, &call->loc, flgNone, NULL, NULL, NULL);
-        argsCount = 1;
-        arg = call->callExpr.args;
     }
 
     const Type **argTypes = mallocOrDie(sizeof(Type *) * argsCount);
@@ -90,72 +146,28 @@ static bool inferGenericFunctionTypes(AstVisitor *visitor,
     }
 
     for (; param; param = param->next, index++) {
-        if (param->genericParam.inferIndex > argsCount) {
-            csAssert0(hasFlag(param, Variadic));
-            paramTypes[index] =
-                makeTupleType(ctx->types, NULL, 0, param->flags);
-            continue;
+        if (hasFlag(param, Variadic)) {
+            arg = getNodeAtIndex(call->callExpr.args,
+                                 param->genericParam.inferIndex - 1);
+            if (arg == NULL) {
+                paramTypes[index] = makeVoidType(ctx->types);
+                break;
+            }
+
+            while (arg) {
+                if (hasFlag(arg->type, Closure))
+                    paramTypes[index++] = closureArgToClosureParamType(
+                        ctx, &param->loc, arg->type);
+                else
+                    paramTypes[index++] = arg->type;
+                arg = arg->next;
+            }
+            break;
         }
 
         if (hasFlag(argTypes[param->genericParam.inferIndex - 1], Closure)) {
-            const Type *opCall = findStructMemberType(
-                argTypes[param->genericParam.inferIndex - 1], S_CallOverload);
-            const Type **funcTypeParams =
-                mallocOrDie(sizeof(Type *) * (opCall->func.paramsCount + 1));
-            funcTypeParams[0] = makeVoidPointerType(ctx->types, flgNone);
-            AstNodeList funcTypeDeclParams = {};
-            insertAstNode(
-                &funcTypeDeclParams,
-                makeFunctionParam(ctx->pool,
-                                  &param->loc,
-                                  NULL,
-                                  makeTypeReferenceNode(
-                                      ctx->pool,
-                                      makeVoidPointerType(ctx->types, flgNone),
-                                      &param->loc),
-                                  NULL,
-                                  flgNone,
-                                  NULL));
-
-            for (u64 i = 0; i < opCall->func.paramsCount; i++) {
-                funcTypeParams[i + 1] = opCall->func.params[i];
-                insertAstNode(&funcTypeDeclParams,
-                              makeFunctionParam(
-                                  ctx->pool,
-                                  &param->loc,
-                                  NULL,
-                                  makeTypeReferenceNode(ctx->pool,
-                                                        funcTypeParams[i + 1],
-                                                        &param->loc),
-                                  NULL,
-                                  funcTypeParams[i + 1]->flags,
-                                  NULL));
-            }
-
-            AstNode *funcTypeDecl = makeFunctionType(
-                ctx->pool,
-                &param->loc,
-                funcTypeDeclParams.first,
-                makeTypeReferenceNode(
-                    ctx->pool, opCall->func.retType, &param->loc),
-                opCall->flags,
-                NULL,
-                NULL);
-            funcTypeDecl->type = makeFuncType(
-                ctx->types,
-                &(Type){.tag = typFunc,
-                        .func = {.params = funcTypeParams,
-                                 .paramsCount = opCall->func.paramsCount + 1,
-                                 .retType = opCall->func.retType,
-                                 .decl = funcTypeDecl}});
-
-            paramTypes[index] = makeTupleType(
-                ctx->types,
-                (const Type *[]){makeVoidPointerType(ctx->types, flgNone),
-                                 funcTypeDecl->type},
-                2,
-                flgFuncTypeParam);
-            free(funcTypeParams);
+            paramTypes[index] = closureArgToClosureParamType(
+                ctx, &param->loc, argTypes[param->genericParam.inferIndex - 1]);
         }
         else {
             const Type *inferred = argTypes[param->genericParam.inferIndex - 1];
@@ -180,10 +192,16 @@ static bool inferGenericFunctionTypes(AstVisitor *visitor,
 
 static bool transformVariadicFunctionCallArgs(AstVisitor *visitor,
                                               const AstNode *func,
-                                              u64 flags)
+                                              u64 *variadicArgsCount)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    AstNode *args = ctx->currentCall->callExpr.args;
+    AstNode *args = ctx->currentCall->callExpr.args, *arg = args;
+    while (arg) {
+        checkType(visitor, arg);
+        if (typeIs(arg->type, Error))
+            return false;
+        arg = arg->next;
+    }
 
     u64 requiredCount = func->funcDecl.requiredParamsCount,
         totalParams = func->funcDecl.paramsCount;
@@ -200,53 +218,7 @@ static bool transformVariadicFunctionCallArgs(AstVisitor *visitor,
     }
 
     if (argsCount >= totalParams) {
-        AstNode *last = getLastAstNode(args);
-        checkType(visitor, last);
-
-        if (typeIs(last->type, Error))
-            return false;
-
-        if (hasFlag(last, Variadic)) {
-            logError(ctx->L,
-                     &last->loc,
-                     "passing a variadic function parameter to a "
-                     "generic/variadic "
-                     "function not supported, consider using spread `...` "
-                     "operator",
-                     NULL);
-            return false;
-        }
-
-        if (totalParams == 1) {
-            if (nodeIs(args, SpreadExpr) && args->next == NULL) {
-                ctx->currentCall->callExpr.args->next = args->spreadExpr.expr;
-            }
-            else {
-                *ctx->currentCall->callExpr.args = (AstNode){
-                    .tag = astTupleExpr,
-                    .flags = flgVariadic | flags,
-                    .loc = *manyNodesLoc(args),
-                    .tupleExpr = {.elements = duplicateAstNode(ctx->pool, args),
-                                  .len = 1 + (argsCount - totalParams)}};
-            }
-        }
-        else {
-            AstNode *variadic = getNodeAtIndex(args, totalParams - 2);
-            args = variadic->next;
-            if (nodeIs(args, SpreadExpr) && args->next == NULL) {
-                variadic->next = args->spreadExpr.expr;
-            }
-            else {
-                variadic->next = makeAstNode(
-                    ctx->pool,
-                    manyNodesLoc(args),
-                    &(AstNode){
-                        .tag = astTupleExpr,
-                        .flags = flgVariadic | flags,
-                        .tupleExpr = {.elements = args,
-                                      .len = 1 + (argsCount - totalParams)}});
-            }
-        }
+        *variadicArgsCount = argsCount - totalParams;
     }
 
     return true;
@@ -263,6 +235,41 @@ static void removeEmptyVariadicFunctionParameter(AstNode *node)
         }
         prev->next = NULL;
     }
+    else {
+        node->funcDecl.signature->params = NULL;
+    }
+}
+
+static void addVariadicParamsToSubstitute(TypingContext *ctx,
+                                          const AstNode *generic,
+                                          AstNode *substitute,
+                                          const Type *type,
+                                          u64 variadicArgumentsCount)
+{
+    const Type **paramTypes = type->applied.args;
+    u64 offset = generic->genericDecl.paramsCount;
+    AstNode *param = getLastAstNode(substitute->funcDecl.signature->params);
+    if (typeIs(paramTypes[offset - 1], Void)) {
+        param->type = paramTypes[offset - 1];
+        removeEmptyVariadicFunctionParameter(substitute);
+        return;
+    }
+
+    cstring prefix = param->funcParam.name;
+    int j = 0;
+    while (j < variadicArgumentsCount) {
+        param->next = makeFunctionParam(
+            ctx->pool,
+            &param->loc,
+            makeStringf(ctx->strings, "%s%d", prefix, j + 1),
+            makeTypeReferenceNode(
+                ctx->pool, paramTypes[offset + j], &param->loc),
+            NULL,
+            flgNone,
+            NULL);
+        param = param->next;
+        j++;
+    }
 }
 
 const Type *resolveGenericDecl(AstVisitor *visitor,
@@ -271,12 +278,12 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
 {
 
     TypingContext *ctx = getAstVisitorContext(visitor);
-
+    u64 variadicArgumentsCount = 0;
     if (hasFlag(generic, Variadic)) {
         const AstNode *decl = generic->genericDecl.decl;
         // transform function call params
         if (!transformVariadicFunctionCallArgs(
-                visitor, decl, generic->flags & flgReference)) //
+                visitor, decl, &variadicArgumentsCount)) //
         {
             return node->type = ERROR_TYPE(ctx);
         }
@@ -285,7 +292,7 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
     const Type *type = generic->type;
     AstNode *args = node->pathElement.args, *arg = args;
     u64 index = 0, argsCount = countAstNodes(args),
-        paramsCount = type->generic.paramsCount;
+        paramsCount = type->generic.paramsCount + variadicArgumentsCount;
     const Type **paramTypes = NULL;
 
     if (argsCount > paramsCount)
@@ -366,11 +373,24 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
     cstring namespace = pushGenericDeclNamespace(ctx->types, generic);
     type = goi.s;
     ((Type *)type)->applied.decl = substitute;
-    bool isEmptyTuple = false;
     for (u64 i = 0; param; param = param->next, i++) {
         param->type = type->applied.args[i];
-        isEmptyTuple =
-            typeIs(param->type, Tuple) && param->type->tuple.count == 0;
+        if (hasFlag(param, Variadic)) {
+            csAssert0(param->next == NULL);
+            int j = 1;
+            cstring prefix = param->genericParam.name;
+            while (++i < type->applied.argsCount) {
+                param->next = makeAstNode(
+                    ctx->pool,
+                    &param->loc,
+                    &(AstNode){.tag = astGenericParam,
+                               .type = type->applied.args[i],
+                               .genericParam = {
+                                   .name = makeStringf(
+                                       ctx->strings, "%s%u", prefix, j++)}});
+                param = param->next;
+            }
+        }
     }
 
     if (nodeIs(substitute, StructDecl) && hasFlag(generic, Builtin)) {
@@ -381,8 +401,10 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
     }
 
     if (nodeIs(substitute, FuncDecl)) {
-        if (hasFlag(substitute, Variadic) && isEmptyTuple)
-            removeEmptyVariadicFunctionParameter(substitute);
+        if (hasFlag(generic, Variadic)) {
+            addVariadicParamsToSubstitute(
+                ctx, generic, substitute, type, variadicArgumentsCount);
+        }
 
         // check signature first in case there is recursion in the body
         node->type = checkFunctionSignature(visitor, substitute);

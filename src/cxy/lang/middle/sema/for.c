@@ -34,7 +34,7 @@ static const Type *findIteratorType(TypingContext *ctx, AstNode *range)
         return NULL;
     }
 
-    csAssert0(typeIs(rangeOp, Func) && typeIs(rangeOp->func.retType, Struct) &&
+    csAssert0(typeIs(rangeOp, Func) && typeIs(rangeOp->func.retType, Class) &&
               hasFlag(rangeOp->func.retType, Closure));
 
     const Type *iterator =

@@ -92,49 +92,35 @@ static bool evalExprForStmtVariadic(AstVisitor *visitor,
     EvalContext *ctx = getAstVisitorContext(visitor);
     AstNode *range = node->forStmt.range, *variable = node->forStmt.var;
 
-    const Type *tuple = unwrapType(range->type, NULL);
-    if (tuple) {
-        csAssert0(nodeIs(range, Identifier));
-        u64 count = tuple->tuple.count;
-        for (u64 i = 0; i < count; i++) {
-            AstNode *body = deepCloneAstNode(ctx->pool, node->forStmt.body);
-            body->parentScope = node->parentScope;
-            variable->varDecl.init =
-                makeMemberExpr(ctx->pool,
-                               &range->loc,
-                               range->flags,
-                               makeResolvedIdentifier(ctx->pool,
-                                                      &range->loc,
-                                                      range->ident.value,
-                                                      0,
-                                                      range->ident.resolvesTo,
-                                                      NULL,
-                                                      range->type),
-                               makeUnsignedIntegerLiteral(
-                                   ctx->pool,
-                                   &range->loc,
-                                   i,
-                                   NULL,
-                                   getPrimitiveType(ctx->types, prtU64)),
-                               NULL,
-                               tuple->tuple.members[i]);
+    csAssert0(nodeIs(range, FuncParamDecl));
+    if (typeIs(range->type, Void))
+        return true;
 
-            const Type *type = evalType(ctx, body);
-            if (type == NULL || typeIs(type, Error)) {
-                node->tag = astError;
-                return false;
-            }
+    for (; range; range = range->next) {
+        AstNode *body = deepCloneAstNode(ctx->pool, node->forStmt.body);
+        body->parentScope = node->parentScope;
+        variable->varDecl.init = makeResolvedIdentifier(ctx->pool,
+                                                        &range->loc,
+                                                        range->funcDecl.name,
+                                                        0,
+                                                        range,
+                                                        NULL,
+                                                        range->type);
+        const Type *type = evalType(ctx, body);
+        if (type == NULL || typeIs(type, Error)) {
+            node->tag = astError;
+            return false;
+        }
 
-            body = getEvaluatedBody(node, body);
-            while (body) {
-                AstNode *tmp = body;
-                body = body->next;
-                if (isNoopNodeAfterEval(tmp))
-                    continue;
-                tmp->parentScope = node->parentScope;
-                tmp->next = NULL;
-                insertAstNode(nodes, tmp);
-            }
+        body = getEvaluatedBody(node, body);
+        while (body) {
+            AstNode *tmp = body;
+            body = body->next;
+            if (isNoopNodeAfterEval(tmp))
+                continue;
+            tmp->parentScope = node->parentScope;
+            tmp->next = NULL;
+            insertAstNode(nodes, tmp);
         }
     }
 
@@ -258,11 +244,6 @@ void evalForStmt(AstVisitor *visitor, AstNode *node)
             node->tag = astError;
             return;
         }
-        node->forStmt.range->tag = astIdentifier;
-        node->forStmt.range->ident.value =
-            range.path.elements->pathElement.name;
-        node->forStmt.range->ident.resolvesTo =
-            range.path.elements->pathElement.resolvesTo;
         if (!evalExprForStmtVariadic(visitor, node, &nodes))
             return;
         break;

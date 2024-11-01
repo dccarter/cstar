@@ -163,7 +163,10 @@ void checkTypedExpr(AstVisitor *visitor, AstNode *node)
 
     const Type *type = checkType(visitor, node->typedExpr.type);
     if (isTypeCastAssignable(type, expr) ||
-        (isPointerType(expr) && (isPointerType(type) || isIntegerType(type)))) {
+        (isPointerType(expr) &&
+         (isPointerType(type) || isIntegerType(type))) || //
+        (expr->tag == typPrimitive && expr->primitive.id == prtU64 &&
+         isVoidPointer(type))) {
         node->type = type;
     }
     else {

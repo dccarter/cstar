@@ -94,7 +94,8 @@ static HashCode hashType(HashCode hash, const Type *type)
             for (u64 i = 0; i < type->tStruct.members->count; i++) {
                 const NamedTypeMember *member =
                     type->tStruct.members->sortedMembers[i];
-                if (nodeIs(member->decl, FieldDecl)) {
+                if (nodeIs(member->decl, FieldDecl) ||
+                    nodeIs(member->decl, FieldExpr)) {
                     hash = hashStr(hash, member->name);
                     hash = hashType(hash, member->type);
                 }
@@ -264,7 +265,7 @@ bool compareTypes(const Type *lhs, const Type *rhs)
         if (hasFlag(left, Anonymous) && hasFlag(right, Anonymous)) {
             TypeMembersContainer *membersL = left->tStruct.members,
                                  *membersR = right->tStruct.members;
-            if (membersL->count != membersR->count)
+            if ((membersL->count - 3) != membersR->count)
                 return false;
             NamedTypeMember **sortedL = membersL->sortedMembers,
                             **sortedR = membersR->sortedMembers;
@@ -274,7 +275,8 @@ bool compareTypes(const Type *lhs, const Type *rhs)
                     i++;
                     continue;
                 }
-                if (!nodeIs(sortedR[j]->decl, FieldDecl)) {
+                if (!(nodeIs(sortedR[j]->decl, FieldDecl) ||
+                      nodeIs(sortedR[j]->decl, FieldExpr))) {
                     j++;
                     continue;
                 }

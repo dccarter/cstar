@@ -36,15 +36,16 @@ File.readlines(ARGV[0], chomp: true).each do |line|
     elsif tag == "drop"
         mem[addr][:drop] = mem[addr][:drop] + 1
         mem[addr][:drops].add(line[line.index('@')+1, line.length-1])
+        mem[addr][:refs] = mem[addr][:refs] - 1
     elsif tag == "get"
         mem[addr][:get] = mem[addr][:get] + 1
         mem[addr][:gets].add(line[line.index('@')+1, line.length-1])
+        mem[addr][:refs] = mem[addr][:refs] + 1
     elsif tag == "freed"
         mem[addr][:freed] = true
     end
 end
-
-mem.each { |addr, info|
+sorted = mem.sort{ |(_, a), (_, b)| b[:refs] <=> a[:refs] }.each{ |addr, info|
     if not info[:freed]
         puts "#{addr} @ #{info[:loc]}"
         puts "    refs: #{info[:refs]}, drop: #{info[:drop]}, get: #{info[:get]}"

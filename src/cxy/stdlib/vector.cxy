@@ -135,12 +135,14 @@ pub class Vector[T] {
         return null
     }
 
-    const func indexOf(elem: T) : u64? {
-        for (var i: 0.._size) {
-            if (elem == _data.[i])
-                return (<u64> i)
+    #if (!(T.isTuple || T.isUnion) ) {
+        const func indexOf(elem: T) : u64? {
+            for (var i: 0.._size) {
+                if (elem == _data.[i])
+                    return (<u64> i)
+            }
+            return null
         }
-        return null
     }
 
     #if (!(T.isStruct || T.isClass) || has_member!(#T, "op__str", #const func(_: &OutputStream) -> void)) {

@@ -74,12 +74,6 @@ range
 module
 // CHECK: 'import' @([[@LINE+1]]
 import
-// CHECK: 'cDefine' @([[@LINE+1]]
-cDefine
-// CHECK: 'cInclude' @([[@LINE+1]]
-cInclude
-// CHECK: 'cSources' @([[@LINE+1]]
-cSources
 // CHECK: 'as' @([[@LINE+1]]
 as
 // CHECK: 'asm' @([[@LINE+1]]

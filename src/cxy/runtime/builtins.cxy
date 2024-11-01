@@ -104,7 +104,7 @@ struct __mem {
 
 #const MEMORY_MAGIC = 0xAEAEAEAE:u32
 
-@[pure, linkage("External"), noinline, optimize(0)]
+@[pure, linkage("External"), noinline, optimize(0), __override_builtin("__smart_ptr_alloc")]
 func __smart_ptr_alloc(size: u64, dctor: func(ptr: sptr) -> void = null) {
     var ptr = malloc(size + sizeof!(__mem));
     if (ptr == null) {
@@ -439,6 +439,29 @@ pub struct CString {
         var ep: ^const char;
         return <T>strtod(s !: ^const char, ptrof ep);
     }
+
+    func indexOf(ch: char) : __Optional[u64] {
+        var i = 0:u64;
+        while (i < _size) {
+            if (s.[i] == ch)
+                return Some(i)
+            i++
+        }
+        return None[u64]()
+    }
+
+    func rIndexOf(ch: char) : __Optional[u64] {
+        if (_size == 0)
+            return None[u64]()
+
+        var i = _size - 1;
+        while (i > 0) {
+            if (s.[i] == ch)
+                return Some(i)
+            i--
+        }
+        return None[u64]()
+    }
 }
 
 #const CXY_STRING_BUILDER_DEFAULT_CAPACITY = 32:u64
@@ -713,7 +736,6 @@ pub class String : OutputStream {
 
     @inline
     func `str`(sb: OutputStream) {
-        printf("This is another thing\n");
         sb.append(_data, _size)
     }
 
@@ -803,6 +825,7 @@ pub class String : OutputStream {
     @inline const func capacity() => _capacity
     @inline const func data() => _data
     @inline const func empty() => _size == 0
+    @inline const func str() => _data !: string
     @inline const func cstr() => CString(_data !: string, _size)
     @inline const func substr(start: u64, count: i64 = -1) => cstr().substr(start, count)
 }
@@ -1010,7 +1033,7 @@ func __union_copy[T](obj: &T) : T {
 
     match (obj) {
         #for (const member: 0 .. T.membersCount) {
-            case #{typeat!(T, member)} as &y => {
+            case #{typeat!(T, member)} as y => {
                 #const M = typeat!(T, member);
                 #if (M.isClass) {
                     #if (defined __DEBUG && defined TRACE_MEMORY)
@@ -1025,7 +1048,7 @@ func __union_copy[T](obj: &T) : T {
                 else #if (M.isUnion && M.hasReferenceMembers)
                     return __union_copy(y)
                 else
-                    return y
+                    return <#{typeat!(T, member)}>y
             }
         }
     }

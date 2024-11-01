@@ -31,20 +31,28 @@ static const Type *createStructForClosure(AstVisitor *visitor, AstNode *node)
                                                    flgPublic,
                                                    NULL,
                                                    NULL));
+    AstNode *init = insertAstNode(
+        &members,
+        makeFunctionDecl(ctx->pool,
+                         &node->loc,
+                         S_InitOverload,
+                         NULL,
+                         NULL,
+                         makeBlockStmt(ctx->pool, &node->loc, NULL, NULL, NULL),
+                         flgPublic,
+                         NULL,
+                         NULL));
 
-    AstNode *closure =
-        makeAstNode(ctx->pool,
-                    &node->loc,
-                    &(AstNode){.tag = astStructDecl,
-                               .flags = flgClosure,
-                               .structDecl = {.name = makeAnonymousVariable(
-                                                  ctx->strings, "__Closure"),
-                                              .members = members.first}});
-
-    func->funcDecl.this_ = makeFunctionParam(
+    AstNode *closure = makeAstNode(
         ctx->pool,
-        &func->loc,
-        S_this,
+        &node->loc,
+        &(AstNode){.tag = members.first ? astClassDecl : astStructDecl,
+                   .flags = flgClosure,
+                   .structDecl = {
+                       .name = makeAnonymousVariable(ctx->strings, "__Closure"),
+                       .members = members.first}});
+
+    AstNode *thisType =
         makePointerAstNode(ctx->pool,
                            &func->loc,
                            flgNone,
@@ -56,10 +64,17 @@ static const Type *createStructForClosure(AstVisitor *visitor, AstNode *node)
                                             func->funcDecl.signature->params,
                                             NULL),
                            NULL,
-                           NULL),
-        NULL,
-        flgNone,
-        func->funcDecl.signature->params);
+                           NULL);
+    func->funcDecl.this_ = makeFunctionParam(ctx->pool,
+                                             &func->loc,
+                                             S_this,
+                                             thisType,
+                                             NULL,
+                                             flgNone,
+                                             func->funcDecl.signature->params);
+    init->funcDecl.this_ = makeFunctionParam(
+        ctx->pool, &func->loc, S_this, thisType, NULL, flgNone, NULL);
+
     AstNode *it = members.first;
     for (; it; it = it->next) {
         it->parentScope = closure;
@@ -78,7 +93,9 @@ static void transformClosureToStructExpr(AstVisitor *visitor,
                                          AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    AstNodeList fields = {};
+    AstNodeList stmts = {};
+    AstNode *var = insertAstNode(
+        &stmts, createSmartPointerAllocClass(ctx, type, &node->loc));
 
     for (u64 i = 0; i < node->closureExpr.captureCount; i++) {
         Capture *capture = &node->closureExpr.capture[i];
@@ -103,24 +120,63 @@ static void transformClosureToStructExpr(AstVisitor *visitor,
                 NULL,
                 makeReferenceType(ctx->types, fieldType, fieldType->flags));
 
-        insertAstNode(&fields,
-                      // file: value
-                      makeFieldExpr(ctx->pool,
-                                    &capture->node->loc,
-                                    name,
-                                    flgPrivate | capture->node->flags,
-                                    // value
-                                    value,
-                                    NULL,
-                                    NULL));
+        insertAstNode(
+            &stmts,
+            makeExprStmt(
+                ctx->pool,
+                &node->loc,
+                flgNone,
+                makeAssignExpr(
+                    ctx->pool,
+                    &node->loc,
+                    flgNone,
+                    makeMemberExpr(
+                        ctx->pool,
+                        &node->loc,
+                        capture->flags,
+                        makeResolvedIdentifier(ctx->pool,
+                                               &node->loc,
+                                               var->varDecl.name,
+                                               0,
+                                               var,
+                                               NULL,
+                                               var->type),
+                        makeResolvedIdentifier(ctx->pool,
+                                               &node->loc,
+                                               name,
+                                               0,
+                                               findMemberDeclInType(type, name),
+                                               NULL,
+                                               value->type),
+                        NULL,
+                        value->type),
+                    opAssign,
+                    value,
+                    NULL,
+                    value->type),
+                NULL,
+                var->type));
     }
+    insertAstNode(&stmts,
+                  makeExprStmt(ctx->pool,
+                               &node->loc,
+                               flgNone,
+                               makeResolvedPath(ctx->pool,
+                                                &node->loc,
+                                                var->_namedNode.name,
+                                                flgMoved,
+                                                var,
+                                                NULL,
+                                                var->type),
+                               NULL,
+                               var->type));
 
+    node->tag = astStmtExpr;
+    node->type = var->type;
     clearAstBody(node);
-    node->tag = astStructExpr;
-    node->type = type;
-    node->structExpr.fields = fields.first;
-    node->structExpr.left =
-        makePath(ctx->pool, &node->loc, type->name, flgNone, type);
+    node->stmtExpr.stmt =
+        makeBlockStmt(ctx->pool, &node->loc, stmts.first, NULL, var->type);
+    node->stmtExpr.stmt->flags |= flgBlockReturns;
 }
 
 static AstNode *makeClosureForwardFunction(AstVisitor *visitor, AstNode *node)
@@ -198,7 +254,9 @@ static AstNode *makeClosureForwardFunction(AstVisitor *visitor, AstNode *node)
                         // &__Closure
                         makeTypeReferenceNode(
                             ctx->pool,
-                            makePointerType(ctx->types, node->type, flgNone),
+                            //                            makePointerType(ctx->types,
+                            //                            node->type, flgNone),
+                            node->type,
                             &node->loc),
                         NULL,
                         makePointerType(ctx->types, node->type, flgNone)),
@@ -259,15 +317,17 @@ AstNode *transformClosureArgument(AstVisitor *visitor, AstNode *node)
             ctx->pool,
             &node->loc,
             flgNone,
-            typeIs(node->type, Pointer)
-                ? node
-                : makePointerOfExpr(
-                      ctx->pool,
-                      &node->loc,
-                      flgNone,
-                      node,
-                      NULL,
-                      makePointerType(ctx->types, node->type, flgNone)),
+            //            typeIs(node->type, Pointer)
+            //                ? node
+            //                : makePointerOfExpr(
+            //                      ctx->pool,
+            //                      &node->loc,
+            //                      flgNone,
+            //                      node,
+            //                      NULL,
+            //                      makePointerType(ctx->types, node->type,
+            //                      flgNone)),
+            node,
             makeTypeReferenceNode(ctx->pool,
                                   makeVoidPointerType(ctx->types, flgNone),
                                   &node->loc),

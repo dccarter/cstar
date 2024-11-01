@@ -17,12 +17,15 @@ extern "C" {
     f(evin)                        \
     f(evout)                       \
     f(sleep)                       \
-    f(istimeout)
+    f(istimeout)                   \
+    f(__smart_ptr_alloc)           \
+    f(__smart_ptr_alloc_trace)
 
 // clang-format on
 
 bool isBuiltinsInitialized();
-void initializeBuiltins(Log *L, const FileLoc *loc, const Type *module);
+void initializeBuiltins(Log *L);
+void setBuiltinsModule(const Type *module, const FileLoc *loc);
 AstNode *findBuiltinDecl(cstring name);
 const Type *findBuiltinType(cstring name);
 bool isBuiltinString(const Type *type);

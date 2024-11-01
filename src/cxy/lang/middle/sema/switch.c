@@ -127,6 +127,9 @@ void checkDuplicateCaseMatches(TypingContext *ctx,
 void checkCaseStmt(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
+    if (nodeIs(node->parentScope, BlockStmt))
+        node->parentScope = node->parentScope->parentScope;
+
     if (nodeIs(node->parentScope, MatchStmt)) {
         checkMatchCaseStmt(visitor, node);
         return;

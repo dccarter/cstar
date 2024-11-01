@@ -17,10 +17,10 @@ static inline bool isInlineFunction(const AstNode *node)
 
 static inline bool isIteratorFunction(const Type *type)
 {
-    if (!typeIs(type, Struct) || !hasFlag(type, Closure))
+    if (!typeIs(type, Class) || !hasFlag(type, Closure))
         return false;
 
-    const Type *iter = findStructMemberType(type, S_CallOverload);
+    const Type *iter = findClassMemberType(type, S_CallOverload);
     if (iter == NULL)
         return false;
 
@@ -236,6 +236,7 @@ void checkFunctionParam(AstVisitor *visitor, AstNode *node)
         return;
     }
 
+    node->flags |= type ? (type->flags & flgConst) : flgNone;
     if (hasFlag(type, Const) && !hasFlag(type_, Const))
         type_ = makeWrappedType(ctx->types, type_, flgConst);
 

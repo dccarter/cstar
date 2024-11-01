@@ -220,7 +220,7 @@ void bindPath(AstVisitor *visitor, AstNode *node)
                 ctx, ctx->currentClosure, node, base->pathElement.resolvesTo);
             if (resolved) {
                 base->pathElement.resolvesTo = resolved;
-                node->flags |= flgAddThis;
+                base->flags |= flgAddThis;
             }
 
             if (keyword == S_super) {
