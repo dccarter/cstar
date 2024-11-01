@@ -1,9 +1,17 @@
 module fserver
 
-import { time_t } from "./time.cxy"
+import { time_t, Time } from "./time.cxy"
+import { Vector } from "./vector.cxy"
 import { HashMap } from "./hash.cxy"
-import "std/log.cxy"
-import { Request, Response, Server, Method } from "./http.cxy"
+import "./log.cxy"
+import { Stat, stat, fstat } from "stdlib/os.cxy"
+import { Request, Response, Server, Method, Status } from "./http.cxy"
+
+import "sys/fcntl.h" as fcntl
+import "unistd.h" as unistd
+import "_stdlib.h" as stdlib
+import "sys/mman.h" as vmem
+import "sys/syslimits.h" as limits // for PATH_MAX! macro
 
 #if (!defined CXY_FILE_SERVER_ROUTE) {
     macro CXY_FILE_SERVER_ROUTE "/1511d5908a7811e790ed6f6e6c696e65"
@@ -30,7 +38,31 @@ struct CachedFile {
     isMapped = false;
     flags = 0:u8;
 
+    func `init`() {}
+
     const func `str`(os: &OutputStream) {}
+
+    func clear() {
+        if (data != null) {
+            if (isMapped) {
+                vmem.munmap(data, size)
+            }
+            else {
+                free(data)
+            }
+            data = null
+        }
+        unistd.close(fd)
+        isMapped = false
+        useFd = false
+        fd = -1
+        lastMod = 0
+        lastAccess = 0
+    }
+
+    func `destructor`() {
+        clear()
+    }
 }
 
 type CachedFiles = HashMap[String, CachedFile, HashCase, EqualsCase]
@@ -58,18 +90,34 @@ pub class FileServer {
     LOG_TAG = "FILE_SERVER";
     - mimeTypes = MimeTypes();
     - cachedFiles = CachedFiles();
-    - wwwDir: String = null;
     - redirects = HashMap[String, String, HashCase, EqualsCase]();
-    - config: Config;
+    - wwwDir: String
+    - config: Config
 
     func `init`[Endpoint](ep: &Endpoint, config: Config = Config{}) {
         this.config = config
         initialize()
 
         ep(config.route, (req: &const Request, resp: &Response) => {
-            var path = req.path();
-            this.get(req, resp, null, null)
+            var path = <String>req.uri();
+            var idx = path.rIndexOf('.':char);
+            if (!idx) {
+                var aliasedPath = this.redirects.[path];
+                if (!aliasedPath) {
+                    resp.end(Status.NOT_FOUND)
+                    return
+                }
+                idx =  path.rIndexOf('.':char);
+            }
+            var ext = String(path.substr(*idx));
+            if (req.method() == .Get) {
+                this.get(req, resp, path, &&ext)
+            }
+            else {
+                this.head(req, resp, path, &&ext)
+            }
         })([Method.Get, Method.Head])
+          .setAttrs({isStatic: true})
     }
 
     func mime[T](ext: String, mm: string, config: T) {
@@ -80,7 +128,7 @@ pub class FileServer {
     }
 
     func updateMime[T](ext: String, config: T) : void {
-        var mm = mimeTypes.[ext];
+        var mm = mimeTypes.[&&ext];
         assert!(!!mm);
         update[MimeConfig, T](&(*mm).config, config)
     }
@@ -138,6 +186,19 @@ pub class FileServer {
 
         // Usually '/' falls back to index.html
         alias("/", "index.html")
+
+        setupWwwDir()
+    }
+
+    - func setupWwwDir() : void {
+        var absolute: [char, PATH_MAX!];
+        if (config.root.empty()) {
+            unistd.getcwd(absolute !: ^char, PATH_MAX!)
+        }
+        else {
+            stdlib.realpath(config.root.str() !: ^const char, absolute)
+        }
+        wwwDir = String(absolute !: string)
     }
 
     func alias(src: String, dst: String) : void {
@@ -152,6 +213,297 @@ pub class FileServer {
         }
     }
 
-    - func get(req: &const Request, resp: &Response, path: String, ext: String): void {
+    - func requestPrologue(
+        req: &const Request, resp: &Response, path: String, ext: String
+    ) : Status | (&MimeType, &CachedFile) {
+        var mime = mimeTypes.[ext];
+        if (!mime) {
+            TRC!("extension type " << ext << " not supported")
+            return Status.NOT_FOUND
+        }
+
+        var mm = *mime;
+        var sf = loadFile(path, mm);
+        if (!sf) {
+            TRC!("requested static resource (" << path << ") does not exist");
+            return Status.NOT_FOUND
+        }
+
+        var cf = *sf;
+        if (mm.config.allowCaching) {
+            // if file supports cache headers employ cache headers
+            const cc = req.header("If-Modified-Since");
+            if (cc) {
+                const ifMod = Time((*cc).str());
+                if (ifMod.timestamp() >= cf.lastMod) {
+                    // file was not modified
+                    return Status.NOT_MODIFIED
+                }
+            }
+
+            cacheControl(req, resp, &cf, mm);
+        }
+
+        if (mm.config.allowRange) {
+            // let clients know that the server accepts ranges for current mime type
+            resp.header("Accept-Ranges", "bytes");
+        }
+        else {
+            // let clients know that the server doesn't accepts ranges for current mime type
+            resp.header("Accept-Ranges", "none");
+        }
+
+        return (mm, cf)
+    }
+
+    - func get(req: &const Request, resp: &Response, path: String, ext: String): Status {
+        match (requestPrologue(req, resp, path, ext)) {
+            case Status as s => return *s
+            case (&MimeType, &CachedFile) as s {
+                // set the content type
+                resp.header("Content-Type", s.0.mime);
+                // prepare the Response
+                return prepareResponse(req, resp, s.1, s.0);
+            }
+            else => return Status.INTERNAL_ERROR
+        }
+    }
+
+    func head(req: &const Request, resp: &Response, path: String, ext: String) {
+        match (requestPrologue(req, resp, path, ext)) {
+            case Status as s => return *s
+            else => return Status.OK
+        }
+    }
+
+    func prepareResponse(req: &const Request, resp: &Response, cf: &CachedFile, mm: &const MimeType): Status {
+        const rng = req.header("Range");
+        if (!!rng && mm.config.allowRange) {
+            // prepare range based Request
+            return buildRangeResponse(req, resp, *rng, cf, mm);
+        }
+        else {
+            resp.body() << CString(cf.data !: string, cf.len);
+            return Status.OK
+        }
+    }
+
+    - func buildRangeResponse(
+        req: &const Request,
+        resp: &Response,
+        rng: &const String,
+        cf: &CachedFile,
+        mm: &const MimeType
+    ) : Status {
+        var i = 0:i64;
+        var j = 0:i64;
+        var s = rng.cstr();
+        var ranges = Vector[(i64, i64)]();
+        while (i < s.size()) {
+            // Skip white-space
+            while(s.[i] == ' ':char) i++;
+            var start = s.toi[i64]();
+            var end: i64;
+            s = s.substr(j)
+            var tmp = s.indexOf('-':char);
+            if (tmp) {
+                i = <i64> *tmp
+                s = s.substr(i+1)
+                end = s.toi[i64]()
+            }
+            else {
+                end = <i64>cf.len
+            }
+
+            TRC!("partial content: " << start << "-" << end << "/" << cf.len)
+            // build partial content chunk
+            if (start > end || start >= cf.len || end > cf.len) {
+                TRC!("requested range is out of bounds")
+                return Status.REQUEST_RANGE_INVALID
+            }
+            ranges.push((start, end))
+
+            tmp = s.indexOf(',':char)
+            if (tmp) {
+                i = (<i64> *tmp + 1)
+            }
+        }
+
+        // depending on the number of requested ranges, build Response
+        if (ranges.size() == 1) {
+            var rng = ranges.[0];
+            resp.body() << CString(cf.data !: string, cf.len).substr(rng.0, rng.1)
+            // add the range header
+            var header = String();
+            header << "bytes " << rng.0 << '-' << rng.1 << '/' << cf.len
+            resp.header("Content-Range", &&header)
+            return Status.PARTIAL_CONTENT
+        }
+        else if (ranges.size() != 0) {
+            // multiple ranges specified, not supported for now
+            return Status.NOT_ACCEPTABLE
+        }
+        return Status.OK
+    }
+
+    func cacheControl(req: &const Request, resp: &Response, cf: &CachedFile, mm: &const MimeType) : void {
+        // get http data format
+        var dt = String();
+        dt << Time(cf.lastMod)
+        resp.header("Last-Modified", &&dt)
+        // add cache control header
+        if (mm.config.cacheExpires > 0) {
+            var b = String();
+            b << "public, max-age=" << mm.config.cacheExpires
+            resp.header("Cache-Control", &&b);
+        }
+    }
+
+    func loadFile(rel: String, mm: &const MimeType) : __Optional[&CachedFile] {
+        var it = cachedFiles.[rel];
+        if (!it) {
+            var pathOpt = fileExists(&rel);
+            if (pathOpt) {
+                var cf = CachedFile{};
+                var s: Stat;
+
+                const path = pathOpt.move();
+                cf.fd = fcntl.open(path.str() !: ^const char, O_RDONLY!)
+                if (cf.fd < 0) {
+                    WRN!("opening static resource(" << path << ") failed")
+                    return null
+                }
+
+                if (fstat(cf.fd, ptrof s) != 0) {
+                    DBG!("static resource cannot b stat'd: " << path)
+                    return null
+                }
+                TRC!(
+                    "lastModified: " << s.st_mtimespec.tv_sec << ", " <<
+                    "lassAccessed: " << s.st_atimespec.tv_sec
+                )
+                if (!readFile(&cf, &s)) {
+                    TRC!("loading file (" << path << ") failed")
+                    unistd.close(cf.fd)
+                    return null
+                }
+
+                cf.lastMod    = <time_t> s.st_mtimespec.tv_sec
+                cf.lastAccess = <time_t> s.st_atimespec.tv_sec
+                cf.len        = s.st_size
+                cf.path       = &&path
+
+                // file successfully loaded, add file to cache
+                TRC!("file '" << cf.path << "' loaded and cached")
+                cachedFiles.[rel] = &&cf
+                return cachedFiles.[rel]
+            }
+            return null
+        }
+        else {
+            var cf = *it;
+            var s: Stat;
+            stat(cf.path.str(), ptrof s)
+
+            // reload file if it was recently modified
+            if(cf.lastMod != s.st_mtimespec.tv_sec) {
+                cf.clear();
+
+                cf.fd = fcntl.open(cf.path.data(), O_RDONLY!)
+                if (cf.fd < 0) {
+                    WRN!("opening static resource(" << cf.path << ") failed")
+                    cachedFiles.remove(rel)
+                    return null
+                }
+                else {
+                    if (!readFile(cf, s)) {
+                        TRC!("loading file " << cf.path << " failed")
+                        unistd.close(cf.fd)
+                        cachedFiles.remove(rel)
+                        return null
+                    }
+                }
+
+                cf.lastMod    = <time_t> s.st_mtimespec.tv_sec
+                cf.lastAccess = <time_t> s.st_atimespec.tv_sec
+                cf.len        = s.st_size
+                TRC!("file '" << cf.path << "' cache refreshed")
+            }
+            return it
+        }
+    }
+
+    func readFile(cf: &CachedFile, s: &const Stat) : bool {
+        if (cf.fd < 0) {
+            TRC!("reloading a closed file not allowed")
+            return false
+        }
+
+        if (s.st_size >= config.mappedMin) {
+            var total = s.st_size;
+            var pageSize = unistd.sysconf(<i32> _SC_PAGE_SIZE!);
+            total += pageSize - (total % pageSize)
+            cf.data = vmem.mmap(null, total, PROT_READ!, MAP_SHARED!, cf.fd, 0)
+            if (cf.data == (-1:u64 !: ^void)) {
+                WRN!("mapping static resource (" << cf.fd << ") of size " << total << " failed: " << errno!);
+                return false;
+            }
+            cf.isMapped = true
+            cf.size = s.st_size
+        }
+        else {
+            // read file
+            var total = s.st_size + 8;
+            var nread = 0:u64;
+            var toread = s.st_size;
+            var b = malloc(total) !: ^char;
+             while (nread < toread) {
+                var cread = unistd.read(cf.fd, ptroff!(b + nread), toread - nread);
+                if (cread < 0) {
+                    WRN!("reading file " << cf.fd << " failed: " << errno!())
+                    free(b !: ^void)
+                    return false
+                }
+                nread += cread
+            }
+            cf.data = b
+            cf.isMapped = false
+            cf.size = nread
+        }
+
+        return true
+    }
+
+    func fileExists(rel: &const String) : String? {
+        // we want to ensure that the file is within the base directory
+        var b = String();
+        // append base, followed by file
+        b << wwwDir << rel
+        var absolute: [char, PATH_MAX!];
+        var p = stdlib.realpath(b.str() !: ^const char, absolute);
+        if (p == null)
+            return null
+
+        if (CString(absolute !: string, wwwDir.size()) != wwwDir.cstr()) {
+            // path violation
+            DBG!("requested path has back references: " << rel)
+            return null
+        }
+
+        var s: Stat;
+        if (stat(absolute !: string, ptrof s) != 0) {
+            // file does not exist
+            DBG!("requested path '" <<  (absolute !: string) << "' does not exist, errno: " << errno!)
+            return null
+        }
+
+        if ((s.st_mode & S_IFMT!) != S_IFREG!) {
+            // file does not exist
+            DBG!("requested path '" <<  (absolute !: string) << "' is not a regular file, mode: " << (s.st_mode & S_IFMT!))
+            return null
+        }
+
+        // dup over the generated path buffer
+        return String(absolute !: string)
     }
 }

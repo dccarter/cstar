@@ -1,0 +1,13 @@
+module os
+
+import "sys/stat.h" as st
+import "native/nos.h" as nos
+
+import "./native/index.cxy"
+
+pub type Stat = st.stat
+
+@inline
+pub func stat(path: string, s: ^Stat) => nos.fs_stat(path !: ^const char, s)
+@inline
+pub func fstat(fd: i32, s: ^Stat) => nos.fs_fstat(fd, s)

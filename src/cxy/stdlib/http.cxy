@@ -34,7 +34,7 @@ pub enum Method : u32 {
     Unknown
 }
 
-enum Status : i32 {
+pub enum Status : i32 {
     CONTINUE			        = 100,
     SWITCHING_PROTOCOLS		    = 101,
     OK				            = 200,
@@ -253,7 +253,7 @@ pub class Response {
 
     @inline
     func header(name: String, value: String) {
-        _headers.[name] = value
+        _headers.[&&name] = &&value
     }
 
     @inline
@@ -268,6 +268,7 @@ pub class Request {
     - _query = HashMap[String, String]();
     - _params = HashMap[CString, CString]();
     - _path: String = null;
+    - _uri: String = null;
     - _body: String = null;
     - _minorVersion: i32 = 1;
     - _contentLength: u64 = 0;
@@ -367,15 +368,28 @@ pub class Request {
     func route(it: ^Route) {
         _route = it
     }
+
+    @[inline, prop]
+    const func uri() => &_uri
+
+    @[inline]
+    func uri(it: String) {
+        _uri = it
+    }
 }
 
 type HandlerFn = func(req: &const Request, res: &Response) -> void
+
+pub struct RouteAttrs {
+    isStatic = false;
+}
 
 class Route {
     - prefix: CString
     - handler: lambda_of!(#HandlerFn)
     - params: Vector[CString]
     - _methods: u32
+    - _attrs = RouteAttrs{};
 
     func `init`(methods: u32, prefix: CString, fn: HandlerFn, params: Vector[CString]) {
         handler = fn
@@ -397,6 +411,12 @@ class Route {
     }
 
     @inline
+    func setAttrs[T](attrs: T) {
+        update[RouteAttrs, T](&_attrs, &&attrs)
+        return &this
+    }
+
+    @inline
     const func `==`(other: &This) => prefix == other.prefix
 
     @inline
@@ -404,6 +424,9 @@ class Route {
 
     @inline
     const func isMethodSupported(method: Method) => (_methods & (1:u32 << (<u32>method))) != 0
+
+    @inline
+    const func attrs() => &_attrs
 }
 
 class Router {
@@ -454,19 +477,23 @@ class Router {
             return;
         }
 
-        var consumed, route = *found;
+        var consumed, route = found.move();
         var args = path.substr(consumed);
-        match (parseRouteArgs(req, &route.params, args)) {
-            case Status as value => {
-                resp.end(*value)
-                return;
-            }
-            case u64 as value => {
-                // TODO parse route arguments
-                args = args.substr(*value)
+        if (!route.attrs().isStatic) {
+            match (parseRouteArgs(req, &route.params, args)) {
+                case Status as value => {
+                    resp.end(*value)
+                    return;
+                }
+                case u64 as value => {
+                    // TODO parse route arguments
+                    args = args.substr(*value)
+                }
             }
         }
-
+        else {
+            req.uri(String(args))
+        }
         route(req, resp)
     }
 
@@ -479,7 +506,7 @@ class Router {
             return null;
         }
 
-        var consumed, route = *found;
+        var consumed, route = found.move();
         if (!route.isMethodSupported(req.method())) {
             TRC!("not found: unsupported method '" << req.method() << "'")
             resp.end(Status.NOT_FOUND)
@@ -487,18 +514,23 @@ class Router {
         }
 
         var args = path.substr(consumed);
-        match (parseRouteArgs(req, &route.params, args)) {
-            case Status as value => {
-                resp.end(*value)
-                return null;
-            }
-            case u64 as value => {
-                // TODO parse route arguments
-                args = args.substr(*value)
+        if (!route.attrs().isStatic) {
+            match (parseRouteArgs(req, &route.params, args)) {
+                case Status as value => {
+                    resp.end(*value)
+                    return null;
+                }
+                case u64 as value => {
+                    // TODO parse route arguments
+                    args = args.substr(*value)
+                }
             }
         }
+        else {
+            req.uri(String(args))
+        }
 
-        return route
+        return &&route
     }
 
     - func parseParams(params: &Vector[CString], path: string, idx: i64) : void {
@@ -594,7 +626,7 @@ pub class Connection[Middlewares] {
             sendResponse()
             return;
         }
-        invokeRouteHandler(*route)
+        invokeRouteHandler(route.move())
 
         sendResponse()
     }

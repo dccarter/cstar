@@ -1,20 +1,6 @@
 //
 // Created by Carter Mbotho on 2024-04-26.
 //
-#include <strings.h>
-struct Create {
-    int id;
-    double value;
-};
+#include <sys/stat.h>
 
-struct Delete {
-    int id;
-    double value;
-};
-
-union Command {
-    struct Create create;
-    struct Delete del;
-};
-
-void sendCommand(union Command *command) { strncasecmp() }
+int fs_stat(const char *path, struct stat *st);

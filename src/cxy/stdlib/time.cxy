@@ -53,4 +53,7 @@ pub struct Time {
     const func `str`(os: &OutputStream) {
         format(HTTP_TIME_FMT!, os)
     }
+
+    @inline
+    const func timestamp() { return _t }
 }

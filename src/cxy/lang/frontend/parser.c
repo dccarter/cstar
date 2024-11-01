@@ -931,6 +931,7 @@ static AstNode *parseArrayType(Parser *P)
 static AstNode *parseGenericParam(Parser *P)
 {
     AstNodeList constraints = {NULL};
+    bool isVariadic = match(P, tokElipsis) != NULL;
     Token tok = *consume0(P, tokIdent);
     if (match(P, tokColon)) {
         do {
@@ -941,16 +942,42 @@ static AstNode *parseGenericParam(Parser *P)
     }
 
     AstNode *defaultValue = NULL;
-    if (match(P, tokAssign))
+    if (!isVariadic && match(P, tokAssign))
         defaultValue = parsePath(P);
 
     return newAstNode(
         P,
         &tok.fileLoc.begin,
         &(AstNode){.tag = astGenericParam,
+                   .flags = isVariadic ? flgVariadic : flgNone,
                    .genericParam = {.name = getTokenString(P, &tok, false),
                                     .constraints = constraints.first,
                                     .defaultValue = defaultValue}});
+}
+
+static AstNode *parseGenericParams(Parser *P)
+{
+    AstNodeList params = {};
+    do {
+        AstNode *param = insertAstNode(&params, parseGenericParam(P));
+        if (hasFlag(param, Variadic) || check(P, tokRBracket))
+            break;
+    } while (match(P, tokComma));
+
+    if (check(P, tokRBracket))
+        return params.first;
+
+    if (hasFlag(params.last, Variadic)) {
+        parserError(P,
+                    &current(P)->fileLoc,
+                    "variadic template parameter should be the last parameter",
+                    NULL);
+    }
+    else {
+        reportUnexpectedToken(P,
+                              "expecting a comma ',' or closing bracket ']'");
+    }
+    unreachable();
 }
 
 // async enclosure(a: T, ...b:T[]) -> T;
@@ -961,7 +988,7 @@ static AstNode *parseFuncType(Parser *P)
     u64 flags = match(P, tokAsync) ? flgAsync : flgNone;
     consume0(P, tokFunc);
     if (match(P, tokLBracket)) {
-        gParams = parseMany(P, tokRBracket, tokComma, parseGenericParam);
+        gParams = parseGenericParams(P);
         consume0(P, tokRBracket);
     }
 
@@ -1872,8 +1899,7 @@ static AstNode *funcDecl(Parser *P, u64 flags)
             reportUnexpectedToken(
                 P, "a '(', virtual functions cannot have generic parameters");
 
-        gParams = parseAtLeastOne(
-            P, "generic params", tokRBracket, tokComma, parseGenericParam);
+        gParams = parseGenericParams(P);
         consume0(P, tokRBracket);
     }
 
@@ -2600,11 +2626,7 @@ static AstNode *classOrStructDecl(Parser *P, bool isPublic, bool isExtern)
 
     if (!isExtern) {
         if (match(P, tokLBracket)) {
-            gParams = parseAtLeastOne(P,
-                                      "generic type params",
-                                      tokRBracket,
-                                      tokComma,
-                                      parseGenericParam);
+            gParams = parseGenericParams(P);
             consume0(P, tokRBracket);
         }
 
@@ -2662,8 +2684,7 @@ static AstNode *interfaceDecl(Parser *P, bool isPublic)
     cstring name = getTokenString(P, consume0(P, tokIdent), false);
 
     if (match(P, tokLBracket)) {
-        gParams = parseAtLeastOne(
-            P, "generic type params", tokRBracket, tokComma, parseGenericParam);
+        gParams = parseGenericParams(P);
         consume0(P, tokRBracket);
     }
 

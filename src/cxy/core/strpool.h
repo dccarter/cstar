@@ -36,6 +36,7 @@ const char *makeStringSized(StrPool *, const char *, u64);
 
 const char *makeAnonymousVariable(StrPool *pool, const char *prefix);
 
+const char *makeStringf(StrPool *strings, const char *fmt, ...);
 const char *makeStringConcat_(StrPool *, const char *, ...);
 
 #define makeStringConcat(P, S1, ...)                                           \

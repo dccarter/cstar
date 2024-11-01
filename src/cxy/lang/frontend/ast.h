@@ -543,7 +543,10 @@ struct AstNode {
             struct AstNode *typeParams;
             const Type *thisType;
             struct AstNode *base;
-            struct AstNode *implements;
+            union {
+                struct AstNode *closureForward;
+                struct AstNode *implements;
+            };
         } classDecl;
 
         struct {
@@ -773,6 +776,11 @@ AstNode *makeIntegerLiteral(MemPool *pool,
                             i64 value,
                             AstNode *next,
                             const Type *type);
+
+AstNode *makeEmptyAst(MemPool *pool,
+                      const FileLoc *loc,
+                      AstNode *next,
+                      const Type *type);
 
 AstNode *makeUnsignedIntegerLiteral(MemPool *pool,
                                     const FileLoc *loc,

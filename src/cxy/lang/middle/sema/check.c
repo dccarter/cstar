@@ -303,6 +303,37 @@ static void checkSpreadExpr(AstVisitor *visitor, AstNode *node)
     }
 
     const Type *type = checkType(visitor, expr);
+    if (typeIs(type, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    if (hasFlag(expr, Variadic)) {
+        expr->type = type;
+        csAssert0(nodeIs(expr, Path));
+        AstNode *param = getResolvedPath(expr);
+        csAssert0(nodeIs(param, FuncParamDecl));
+        if (param->next == NULL) {
+            replaceAstNode(node, expr);
+            return;
+        }
+
+        param = param->next;
+        AstNode *first = expr, *arg = expr;
+        while (param) {
+            arg->next = makeResolvedPath(ctx->pool,
+                                         &param->loc,
+                                         param->funcParam.name,
+                                         flgNone,
+                                         param,
+                                         NULL,
+                                         param->type);
+            arg = arg->next;
+            param = param->next;
+        }
+        replaceAstNode(node, first);
+        return;
+    }
 
     if (!typeIs(type, Tuple)) {
         logError(ctx->L,

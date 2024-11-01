@@ -122,6 +122,10 @@ void transformArrayExprToSlice(AstVisitor *visitor,
                                const Type *slice,
                                AstNode *expr);
 
+AstNode *createSmartPointerAllocClass(TypingContext *ctx,
+                                      const Type *type,
+                                      const FileLoc *loc);
+
 void transformToMemberCallExpr(AstVisitor *visitor,
                                AstNode *node,
                                AstNode *target,

@@ -1,9 +1,7 @@
 #include "add.h"
-#include "errno.h"
-#include "time.h"
-#include <stdio.h>
-
-void sendCommand(union Command *command)
+#include "unistd.h"
+int fs_stat(const char *path, struct stat *st)
 {
-    time_t printf("sending %d %g\n", command->create.id, command->create.value);
+    S_IFREG
+    return stat(path, st);
 }

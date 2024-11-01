@@ -115,3 +115,24 @@ const char *makeStringConcat_(StrPool *pool, const char *s1, ...)
 
     return makeString(pool, variable);
 }
+
+const char *makeStringVf(StrPool *strings, const char *fmt, va_list args)
+{
+    char *buf = NULL;
+    size_t size = strlen(fmt) + 128;
+    FILE *fp = open_memstream(&buf, &size);
+    int ret = vfprintf(fp, fmt, args);
+    fclose(fp);
+    const char *str = makeStringSized(strings, buf, ret);
+    free(buf);
+    return str;
+}
+
+const char *makeStringf(StrPool *strings, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    const char *str = makeStringVf(strings, fmt, ap);
+    va_end(ap);
+    return str;
+}

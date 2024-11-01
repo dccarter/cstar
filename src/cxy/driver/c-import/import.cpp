@@ -488,7 +488,8 @@ AstNode *toCxy(IncludeContext &ctx, const clang::FunctionDecl &decl)
                                         flgNone,
                                         nullptr));
     }
-
+    u16 optionalParams = 0;
+    u16 paramsCount = (u16)paramTypes.size();
     if (decl.isVariadic()) {
         insertAstNode(&params,
                       makeFunctionParam(
@@ -500,13 +501,15 @@ AstNode *toCxy(IncludeContext &ctx, const clang::FunctionDecl &decl)
                           nullptr,
                           flags,
                           nullptr));
+        paramTypes.push_back(makeAutoType(ctx.types));
+        optionalParams++;
     }
 
     Type func = {.tag = typFunc,
                  .name = name,
                  .flags = flags | flgExtern | flgPublic,
                  .func = {
-                     .paramsCount = (u16)paramTypes.size(),
+                     .paramsCount = u16(paramsCount + optionalParams),
                      .retType = toCxy(ctx, decl.getReturnType()),
                      .params = paramTypes.data(),
                  }};
@@ -523,6 +526,7 @@ AstNode *toCxy(IncludeContext &ctx, const clang::FunctionDecl &decl)
         flgExtern | flgPublic | flags,
         nullptr,
         nullptr);
+    node->funcDecl.requiredParamsCount = paramsCount;
 
     func.func.decl = node;
     node->type = makeFuncType(ctx.types, &func);

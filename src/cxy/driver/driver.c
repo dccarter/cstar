@@ -256,7 +256,7 @@ static bool compileBuiltin(CompilerDriver *driver,
     if (compileProgram(driver, program, fileName, false)) {
         insertAstNode(&driver->startup,
                       copyAstNode(driver->pool, program->program.decls));
-        initializeBuiltins(driver->L, &program->loc, program->type);
+        setBuiltinsModule(program->type, &program->loc);
         return true;
     }
 
@@ -287,6 +287,7 @@ bool initCompilerDriver(CompilerDriver *compiler,
     csAssert0(compiler->backend);
     initCompilerPreprocessor(compiler);
     initCImporter(compiler);
+    initializeBuiltins(compiler->L);
 
     if (options->cmd == cmdBuild || !options->withoutBuiltins) {
         return compileBuiltin(compiler,
@@ -294,7 +295,6 @@ bool initCompilerDriver(CompilerDriver *compiler,
                               CXY_BUILTINS_SOURCE_SIZE,
                               "__builtins.cxy");
     }
-
     return true;
 }
 

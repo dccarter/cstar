@@ -55,6 +55,16 @@ static void transformVariadicFunction(ShakeAstContext *ctx,
 {
 
     AstNode *parent = node->parentScope;
+    if (nodeIs(parent, GenericDecl)) {
+        AstNode *gparam = getLastAstNode(parent->genericDecl.params);
+        if (hasFlag(gparam, Variadic)) {
+            gparam->genericParam.inferIndex = node->funcDecl.paramsCount;
+            if (parent->genericDecl.inferrable == -1)
+                parent->genericDecl.inferrable = 0;
+            return;
+        }
+    }
+
     bool isReference = findAttribute(param, S_transient);
     node->flags |= flgVariadic;
     AstNode *genericParam = makeAstNode(
@@ -80,8 +90,7 @@ static void transformVariadicFunction(ShakeAstContext *ctx,
         parent->flags |= flgVariadic | (isReference ? flgReference : flgNone);
         if (parent->genericDecl.inferrable == -1)
             parent->genericDecl.inferrable = 0;
-        else
-            parent->genericDecl.inferrable++;
+        parent->genericDecl.paramsCount++;
     }
     else {
         *node = (AstNode){.tag = astGenericDecl,
@@ -405,10 +414,12 @@ void shakeFuncDecl(AstVisitor *visitor, AstNode *node)
         astVisit(visitor, param);
         if (isStrOverload)
             param->flags |= flgReference;
+        if (hasFlag(node, Variadic) && param->next == NULL)
+            param->flags |= flgVariadic;
 
         if (param->funcParam.def) {
             if (!hasDefaultParams) {
-                required = total;
+                required = total - 1;
             }
             hasDefaultParams = true;
         }
@@ -545,6 +556,9 @@ static void shakeGenericDecl(AstVisitor *visitor, AstNode *node)
         callocOrDie(sizeof(InferenceInfo), node->genericDecl.paramsCount);
     int index = -1;
     for (u16 i = 0; gparam; gparam = gparam->next, i++) {
+        node->flags |= (gparam->flags & flgVariadic);
+        decl->flags |= (gparam->flags & flgVariadic);
+
         if (gparam->genericParam.defaultValue != NULL) {
             logWarning(ctx->L,
                        &gparam->loc,

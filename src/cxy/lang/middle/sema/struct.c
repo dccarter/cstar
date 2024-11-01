@@ -106,8 +106,8 @@ static const Type *findCompatibleAnonymousType(AstVisitor *visitor,
             continue;
         }
         field->type = type;
-        members[i] =
-            (NamedTypeMember){.type = type, .name = field->fieldExpr.name};
+        members[i] = (NamedTypeMember){
+            .type = type, .name = field->fieldExpr.name, .decl = field};
         sortedMembers[i] = &members[i];
     }
 
@@ -124,7 +124,7 @@ static const Type *findCompatibleAnonymousType(AstVisitor *visitor,
 
     const Type *type =
         findAnonymousStructType(ctx->types, sortedMembers, count, flgAnonymous);
-    
+
     free(members);
     free(sortedMembers);
 
