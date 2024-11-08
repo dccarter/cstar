@@ -172,6 +172,14 @@ static const char *formatArg(FormatState *state,
             write(state, arg->s, args[(*index)++].len);
         }
         else if (*ptr == 'E') {
+            ptr++;
+            u64 len = UINT64_MAX, i = 0;
+            if (*ptr == 'l')
+                len = args[(*index)++].len;
+            const char *p = arg->s;
+            while (*p != '\0' && i++ < len) {
+                format(state, "{cE}", (FormatArg[]){{.c = *p++}});
+            }
         }
         else
             writeStr(state, arg->s);
@@ -333,6 +341,31 @@ void printWithStyle(FormatState *state, const char *str, FormatStyle style)
 void printKeyword(FormatState *state, const char *keyword)
 {
     printWithStyle(state, keyword, keywordStyle);
+}
+
+void printAssemblyString(FormatState *state, const char *p)
+{
+    format(state, "{$}\"", (FormatArg[]){{.style = stringStyle}});
+    while (*p != '\0') {
+        switch (*p) {
+        case '$':
+            if (p[1] == '$') {
+                format(state, "$", NULL);
+                p++;
+            }
+            else
+                format(state, "%", NULL);
+            break;
+        case '%':
+            format(state, "%%", NULL);
+            break;
+        default:
+            format(state, "{cE}", (FormatArg[]){{.c = *p}});
+            break;
+        }
+        p++;
+    }
+    format(state, "\"{$}", (FormatArg[]){{.style = resetStyle}});
 }
 
 void printEscapedChar(FormatState *state, char chr)

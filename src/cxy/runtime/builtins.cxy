@@ -210,17 +210,19 @@ pub struct __Optional[T] {
     #if (T.isClass || T.hasReferenceMembers ) {
 
         func `destructor`() {
-            #if (T.isClass)
-                #if (defined __DEBUG && defined TRACE_MEMORY)
-                    __smart_ptr_drop_trace(val !: sptr, __SrcLoc{file: file!, line: line!})
+            if (ok) {
+                #if (T.isClass)
+                    #if (defined __DEBUG && defined TRACE_MEMORY)
+                        __smart_ptr_drop_trace(val !: sptr, __SrcLoc{file: file!, line: line!})
+                    else
+                        __smart_ptr_drop(val !: sptr)
+                else #if (T.isTuple)
+                    __tuple_dctor(&val)
+                else #if (T.isUnion)
+                    __union_dctor(&val)
                 else
-                    __smart_ptr_drop(val !: sptr)
-            else #if (T.isTuple)
-                __tuple_dctor(&val)
-            else #if (T.isUnion)
-                __union_dctor(&val)
-            else
-                val.op__destructor()
+                    val.op__destructor()
+            }
         }
     }
 

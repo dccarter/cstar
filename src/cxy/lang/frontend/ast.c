@@ -1624,6 +1624,71 @@ bool isLiteralExpr(const AstNode *node)
     }
 }
 
+bool isLiteralExprExt(const AstNode *node)
+{
+    if (node == NULL)
+        return false;
+    switch (node->tag) {
+    case astStringLit:
+    case astIntegerLit:
+    case astBoolLit:
+    case astFloatLit:
+    case astCharLit:
+    case astNullLit:
+        return true;
+    case astTypedExpr:
+    case astCastExpr:
+        return isLiteralExprExt(node->castExpr.expr);
+    case astGroupExpr:
+        return isLiteralExprExt(node->groupExpr.expr);
+    case astUnaryExpr:
+        return isLiteralExprExt(node->unaryExpr.operand);
+    case astTupleExpr:
+        for (AstNode *elem = node->tupleExpr.elements; elem;
+             elem = elem->next) {
+            if (!isLiteralExprExt(elem))
+                return false;
+        }
+        return true;
+    case astStructExpr:
+        for (AstNode *elem = node->structExpr.fields; elem; elem = elem->next) {
+            if (!nodeIs(elem, FieldDecl))
+                continue;
+            if (!isLiteralExprExt(elem->structField.value))
+                return false;
+        }
+        return true;
+    case astArrayExpr:
+        for (AstNode *elem = node->arrayExpr.elements; elem;
+             elem = elem->next) {
+            if (!isLiteralExprExt(elem))
+                return false;
+        }
+        return true;
+    default:
+        return isEnumLiteral(node);
+    }
+}
+
+bool isSizeofExpr(const AstNode *node)
+{
+    if (node == NULL)
+        return false;
+    switch (node->tag) {
+    case astBackendCall:
+        return node->backendCallExpr.func == bfiSizeOf;
+    case astTypedExpr:
+    case astCastExpr:
+        return isLiteralExpr(node->castExpr.expr);
+    case astGroupExpr:
+        return isLiteralExpr(node->groupExpr.expr);
+    case astUnaryExpr:
+        return isLiteralExpr(node->unaryExpr.operand);
+    default:
+        return false;
+    }
+}
+
 bool isStaticExpr(const AstNode *node)
 {
     if (node == NULL)
@@ -2685,6 +2750,30 @@ AstNode *resolveAstNode(AstNode *node)
     }
 }
 
+AstNode *resolveIdentifier(AstNode *node)
+{
+    if (node == NULL)
+        return NULL;
+    switch (node->tag) {
+    case astIdentifier:
+        return node->ident.resolvesTo;
+    case astCastExpr:
+    case astTypedExpr:
+        return resolveIdentifier(node->castExpr.expr);
+    case astGroupExpr:
+        return resolveIdentifier(node->groupExpr.expr);
+    case astPointerOf:
+    case astReferenceOf:
+    case astUnaryExpr: {
+        Operator op = node->unaryExpr.op;
+        if (op == opMove || op == opPtrof || opRefof || op == opDeref)
+            return resolveIdentifier(node->unaryExpr.operand);
+    }
+    default:
+        return NULL;
+    }
+}
+
 AstNode *getResolvedPath(const AstNode *path)
 {
     if (!nodeIs(path, Path))
@@ -2809,6 +2898,35 @@ CCodeKind getCCodeKind(TokenTag tag)
     default:
         unreachable();
     }
+}
+
+bool nodeIsMemberFunctionReference(const AstNode *node)
+{
+    if (!nodeIs(node, MemberExpr) || !typeIs(node->type, Func))
+        return false;
+    AstNode *target = node->memberExpr.target;
+    if (nodeIs(target, TypeRef))
+        return true;
+    if (nodeIs(target, Identifier))
+        target = target->ident.resolvesTo;
+    return isClassOrStructAstNode(target);
+}
+
+bool nodeIsEnumOptionReference(const AstNode *node)
+{
+    if (!nodeIs(node, MemberExpr) || !typeIs(node->type, Enum))
+        return false;
+    AstNode *target = node->memberExpr.target;
+    if (nodeIs(target, MemberExpr))
+        target = target->memberExpr.member;
+
+    if (target == NULL || nodeIs(target, TypeRef))
+        return true;
+
+    if (nodeIs(target, Identifier))
+        target = target->ident.resolvesTo;
+    return nodeIs(target, EnumDecl) || nodeIs(target, TypeDecl) ||
+           nodeIs(target, GenericParam);
 }
 
 bool nodeIsLeftValue(const AstNode *node)

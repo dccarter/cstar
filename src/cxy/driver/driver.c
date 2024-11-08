@@ -14,6 +14,7 @@
 #include "lang/frontend/strings.h"
 #include "lang/frontend/ttable.h"
 #include "lang/middle/builtins.h"
+#include "lang/middle/mir/context.h"
 
 #include "src/builtins.h"
 
@@ -283,6 +284,8 @@ bool initCompilerDriver(CompilerDriver *compiler,
 
     internCommonStrings(compiler->strings);
     const Options *options = &compiler->options;
+    compiler->mir = mirContextCreate(compiler);
+    csAssert0(compiler->mir);
     compiler->backend = initCompilerBackend(compiler, argc, argv);
     csAssert0(compiler->backend);
     initCompilerPreprocessor(compiler);

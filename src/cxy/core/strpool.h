@@ -42,6 +42,8 @@ const char *makeStringConcat_(StrPool *, const char *, ...);
 #define makeStringConcat(P, S1, ...)                                           \
     makeStringConcat_((P), (S1), ##__VA_ARGS__, NULL)
 
+const char *makeStringf(StrPool *strings, const char *fmt, ...);
+
 #ifdef __cplusplus
 }
 #endif

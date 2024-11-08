@@ -184,6 +184,7 @@ static AstNode *makeClosureForwardFunction(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *call = findInAstNode(node, S_CallOverload);
     csAssert0(call);
+    const Type *ret = call->type->func.retType;
 
     AstNodeList params = {};
     AstNodeList argList = {NULL};
@@ -216,15 +217,7 @@ static AstNode *makeClosureForwardFunction(AstVisitor *visitor, AstNode *node)
 
     // func __Closure__fwd(self: &void, ...) : Ret =>
     //      (<&__Closure>self).op__call(...)
-    AstNode *forward = makeFunctionDecl(
-        ctx->pool,
-        &node->loc,
-        makeStringConcat(ctx->strings, node->structDecl.name, "__fwd"),
-        // self: &void, ...
-        params.first,
-        // Ret
-        makeTypeReferenceNode(ctx->pool, call->type->func.retType, &node->loc),
-        // (<&__Closure>self).op__call(...)
+    AstNode *body = // (<&__Closure>self).op__call(...)
         makeExprStmt(
             ctx->pool,
             &node->loc,
@@ -275,7 +268,18 @@ static AstNode *makeClosureForwardFunction(AstVisitor *visitor, AstNode *node)
                 NULL,
                 call->type->func.retType),
             NULL,
-            NULL),
+            NULL);
+    AstNode *forward = makeFunctionDecl(
+        ctx->pool,
+        &node->loc,
+        makeStringConcat(ctx->strings, node->structDecl.name, "__fwd"),
+        // self: &void, ...
+        params.first,
+        // Ret
+        makeTypeReferenceNode(ctx->pool, call->type->func.retType, &node->loc),
+        typeIs(ret, Void)
+            ? makeBlockStmt(ctx->pool, &node->loc, body, NULL, NULL)
+            : body,
         flgNone,
         NULL,
         NULL);

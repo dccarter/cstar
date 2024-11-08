@@ -632,35 +632,6 @@ static void generateMainFunction(CodegenContext *ctx, const Type *type)
     format(getState(ctx), "{<}\n}\n", NULL);
 }
 
-static bool isMemberFunctionReference(const AstNode *node)
-{
-    if (!nodeIs(node, MemberExpr) || !typeIs(node->type, Func))
-        return false;
-    AstNode *target = node->memberExpr.target;
-    if (nodeIs(target, TypeRef))
-        return true;
-    if (nodeIs(target, Identifier))
-        target = target->ident.resolvesTo;
-    return isClassOrStructAstNode(target);
-}
-
-static bool isEnumOptionReference(const AstNode *node)
-{
-    if (!nodeIs(node, MemberExpr) || !typeIs(node->type, Enum))
-        return false;
-    AstNode *target = node->memberExpr.target;
-    if (nodeIs(target, MemberExpr))
-        target = target->memberExpr.member;
-
-    if (target == NULL || nodeIs(target, TypeRef))
-        return true;
-
-    if (nodeIs(target, Identifier))
-        target = target->ident.resolvesTo;
-    return nodeIs(target, EnumDecl) || nodeIs(target, TypeDecl) ||
-           nodeIs(target, GenericParam);
-}
-
 static inline bool isImportDeclReference(const AstNode *node)
 {
     return nodeIs(node, Identifier) &&
@@ -887,12 +858,12 @@ static void visitMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
                   *member = node->memberExpr.member;
     const AstNode *parent = node->parentScope;
 
-    if (isMemberFunctionReference(node)) {
+    if (nodeIsMemberFunctionReference(node)) {
         generateFunctionName(getState(ctx), getTypeDecl(node->type));
         return;
     }
 
-    if (isEnumOptionReference(node)) {
+    if (nodeIsEnumOptionReference(node)) {
         generateEnumOptionName(ctx, getState(ctx), member);
         return;
     }
@@ -1613,11 +1584,6 @@ bool compilerBackendMakeExecutable(CompilerDriver *driver)
     if (driver->backend == NULL)
         return false;
     CBackend *backend = (CBackend *)driver->backend;
-    if (backend->output) {
-        generateCodeEpilogue(backend->output);
-        fclose(backend->output);
-        backend->output = NULL;
-    }
     // compile the source file
     Options *opts = &driver->options;
     FormatState cmd = newFormatState("\t", true);
@@ -1692,6 +1658,14 @@ bool compilerBackendMakeExecutable(CompilerDriver *driver)
 
     cstring command = formatStateToString(&cmd);
     freeFormatState(&cmd);
+
+    if (backend->output) {
+        generateCodeEpilogue(backend->output);
+        fprintf(backend->output, "\n/* %s */\n", command);
+        fclose(backend->output);
+        backend->output = NULL;
+    }
+
     int rc = system(command);
     if (rc != 0) {
         logError(driver->L,

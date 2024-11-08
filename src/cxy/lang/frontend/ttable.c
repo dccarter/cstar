@@ -515,6 +515,34 @@ const Type *resolveAndUnThisType(const Type *type)
     return NULL;
 }
 
+const Type *resolveUnThisUnwrapType(const Type *type)
+{
+    while (type) {
+        switch (type->tag) {
+        case typAlias:
+            type = resolveUnThisUnwrapType(type->alias.aliased);
+            break;
+        case typInfo:
+            type = resolveUnThisUnwrapType(type->info.target);
+            break;
+        case typOpaque:
+            if (hasFlag(type, ForwardDecl)) {
+                return resolveUnThisUnwrapType(type->opaque.decl->type) ?: type;
+            }
+            return type;
+        case typThis:
+            type = resolveUnThisUnwrapType(type->_this.that);
+            break;
+        case typWrapped:
+            type = resolveUnThisUnwrapType(type->wrapped.target);
+            break;
+        default:
+            return type;
+        }
+    }
+    return NULL;
+}
+
 const Type *stripPointer(const Type *type)
 {
     while (true) {
