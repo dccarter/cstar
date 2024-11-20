@@ -479,8 +479,12 @@ static void implementDestructorForwardFunction(AstVisitor *visitor,
         NULL,
         NULL);
 
-    fwd->funcDecl.body =
-        makeExprStmt(ctx->pool, &fwd->loc, flgNone, call, NULL, NULL);
+    fwd->funcDecl.body = makeBlockStmt(
+        ctx->pool,
+        &fwd->loc,
+        makeExprStmt(ctx->pool, &fwd->loc, flgNone, call, NULL, NULL),
+        NULL,
+        NULL);
 }
 
 static void implementHashFunction(AstVisitor *visitor,

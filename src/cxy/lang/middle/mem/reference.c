@@ -34,28 +34,6 @@ static bool isIdentifier(const AstNode *node)
     }
 }
 
-static AstNode *resolveIdentifier(AstNode *node)
-{
-    switch (node->tag) {
-    case astIdentifier:
-        return node->ident.resolvesTo;
-    case astCastExpr:
-    case astTypedExpr:
-        return resolveIdentifier(node->castExpr.expr);
-    case astGroupExpr:
-        return resolveIdentifier(node->groupExpr.expr);
-    case astPointerOf:
-    case astReferenceOf:
-    case astUnaryExpr: {
-        Operator op = node->unaryExpr.op;
-        if (op == opMove || op == opPtrof || opRefof || op == opDeref)
-            return resolveIdentifier(node->unaryExpr.operand);
-    }
-    default:
-        return NULL;
-    }
-}
-
 const AstNode *resolveCallExpr(const AstNode *node)
 {
     if (node == NULL)

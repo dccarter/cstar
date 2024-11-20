@@ -173,7 +173,12 @@ set(CXY_MIDDLE_SOURCES
 
         src/cxy/lang/middle/mem/manage.c
         src/cxy/lang/middle/mem/mem.c
-        src/cxy/lang/middle/mem/reference.c)
+        src/cxy/lang/middle/mem/reference.c
+
+        src/cxy/lang/middle/mir/context.c
+        src/cxy/lang/middle/mir/node.c
+        src/cxy/lang/middle/mir/print.c
+)
 
 if (ENABLE_LLVM_BACKEND)
     set(CXY_LANG_BACKEND_SOURCES

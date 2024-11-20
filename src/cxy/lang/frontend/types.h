@@ -132,6 +132,8 @@ typedef struct AppliedTypeParams {
     u64 count;
 } AppliedTypeParams;
 
+struct MirType;
+
 #define CXY_TYPE_HEAD                                                          \
     TTag tag;                                                                  \
     u64 size;                                                                  \
@@ -147,7 +149,8 @@ typedef struct AppliedTypeParams {
             bool generating;                                                   \
             bool generated;                                                    \
         };                                                                     \
-    };
+    };                                                                         \
+    const struct MirType *mir;
 
 #ifdef __cpluplus
 

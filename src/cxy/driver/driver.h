@@ -10,6 +10,8 @@
 extern "C" {
 #endif
 
+struct MirContext;
+
 typedef struct CompilerPreprocessor {
     MemPool *pool;
     HashTable symbols;
@@ -33,6 +35,7 @@ typedef struct CompilerDriver {
     AstNode *mainModule;
     AstNodeList startup;
     CompilerPreprocessor preprocessor;
+    struct MirContext *mir;
     void *backend;
     void *cImporter;
     bool hasTestCases;

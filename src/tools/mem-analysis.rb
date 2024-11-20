@@ -45,11 +45,10 @@ File.readlines(ARGV[0], chomp: true).each do |line|
         mem[addr][:freed] = true
     end
 end
+
 sorted = mem.sort{ |(_, a), (_, b)| b[:refs] <=> a[:refs] }.each{ |addr, info|
-    if not info[:freed]
-        puts "#{addr} @ #{info[:loc]}"
-        puts "    refs: #{info[:refs]}, drop: #{info[:drop]}, get: #{info[:get]}"
-    end
+    puts "#{addr} @ #{info[:loc]}"
+    puts "    refs: #{info[:refs]}, drop: #{info[:drop]}, get: #{info[:get]}"
 }
 
 if mem.key?(show)

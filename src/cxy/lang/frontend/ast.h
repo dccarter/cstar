@@ -189,6 +189,7 @@ typedef enum {
 } BackendFuncId;
 
 struct IrValue;
+struct MirNode;
 
 #define CXY_AST_NODE_HEAD                                                      \
     AstTag tag;                                                                \
@@ -202,8 +203,11 @@ struct IrValue;
         struct AstNode *link;                                                  \
     } list;                                                                    \
     struct AstNode *attrs;                                                     \
-    void *codegen;                                                             \
-    struct IrValue *ir;
+    union {                                                                    \
+        void *codegen;                                                         \
+        struct MirNode *ir;                                                    \
+    };                                                                         \
+    struct MirNode *mir;
 
 typedef enum { iptModule, iptPath } ImportKind;
 typedef enum { cInclude, cDefine, cSources } CCodeKind;
@@ -356,7 +360,13 @@ struct AstNode {
         struct {
             u64 len;
             struct AstNode *elements;
-        } tupleType, tupleExpr;
+            bool isLiteral;
+        } tupleExpr;
+
+        struct {
+            u64 len;
+            struct AstNode *elements;
+        } tupleType;
 
         struct {
             struct AstNode *elementType;
@@ -543,10 +553,8 @@ struct AstNode {
             struct AstNode *typeParams;
             const Type *thisType;
             struct AstNode *base;
-            union {
-                struct AstNode *closureForward;
-                struct AstNode *implements;
-            };
+            struct AstNode *closureForward;
+            struct AstNode *implements;
         } classDecl;
 
         struct {
@@ -632,6 +640,7 @@ struct AstNode {
         struct {
             struct AstNode *left;
             struct AstNode *fields;
+            bool isLiteral;
         } structExpr;
 
         struct {
@@ -1370,6 +1379,10 @@ bool isAssignableExpr(const AstNode *node);
 
 bool isLiteralExpr(const AstNode *node);
 
+bool isLiteralExprExt(const AstNode *node);
+
+bool isSizeofExpr(const AstNode *node);
+
 bool isStaticExpr(const AstNode *node);
 
 bool isEnumLiteral(const AstNode *node);
@@ -1478,6 +1491,8 @@ AstNode *resolvePath(const AstNode *path);
 
 AstNode *resolveAstNode(AstNode *node);
 
+AstNode *resolveIdentifier(AstNode *node);
+
 AstNode *getResolvedPath(const AstNode *path);
 
 AstNode *getMemberFunctionThis(AstNode *node);
@@ -1522,19 +1537,23 @@ static inline AstNode *underlyingDeclaration(AstNode *decl)
     return nodeIs(decl, GenericDecl) ? decl->genericDecl.decl : decl;
 }
 
-static bool isStructDeclaration(AstNode *node)
+static inline bool isStructDeclaration(AstNode *node)
 {
     return nodeIs(node, StructDecl) ||
            nodeIs(node, GenericDecl) &&
                isStructDeclaration(node->genericDecl.decl);
 }
 
-static bool isClassDeclaration(AstNode *node)
+static inline bool isClassDeclaration(AstNode *node)
 {
     return nodeIs(node, ClassDecl) ||
            nodeIs(node, GenericDecl) &&
                isClassDeclaration(node->genericDecl.decl);
 }
+
+bool nodeIsMemberFunctionReference(const AstNode *node);
+
+bool nodeIsEnumOptionReference(const AstNode *node);
 
 bool nodeIsLeftValue(const AstNode *node);
 

@@ -89,6 +89,7 @@ void format(FormatState *, const char *format_str, const FormatArg *args);
 void append(FormatState *, const char *s, size_t bytes);
 void printWithStyle(FormatState *, const char *, FormatStyle);
 void printKeyword(FormatState *, const char *);
+void printAssemblyString(FormatState *, const char *);
 void printUtf8(FormatState *state, uint32_t, bool);
 void printEscapedChar(FormatState *state, char chr);
 void writeFormatState(const FormatState *, FILE *);

@@ -25,6 +25,7 @@ typedef struct SimplifyContext {
     AstNodeList init;
     AstNodeList *startup;
     bool traceMemory;
+    bool referencesDestructibleVars;
     union {
         struct {
             AstNode *currentFunction;
@@ -44,12 +45,19 @@ static bool compareNodeToExternDecl(const void *lhs, const void *rhs)
     return ((NodeToExternDecl *)lhs)->node == ((NodeToExternDecl *)rhs)->node;
 }
 
+static inline bool nodeIsComplexExpr(const AstNode *node)
+{
+    return !nodeIsLeftValue(node) && !isLiteralExprExt(node) &&
+           !isSizeofExpr(node);
+}
+
 static bool nodeNeedsTemporaryVar(const AstNode *node)
 {
     if (nodeIs(node, PointerOf) || nodeIs(node, ReferenceOf))
         return nodeNeedsTemporaryVar(node->unaryExpr.operand);
     else
-        return !nodeIsLeftValue(node) && !isLiteralExpr(node);
+        return !nodeIsLeftValue(node) && !isLiteralExprExt(node) &&
+               !isSizeofExpr(node);
 }
 
 static bool isVirtualDispatch(const AstNode *target, const AstNode *member)
@@ -592,7 +600,7 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
                             flgMoved | (arg->flags & flgConst),
                             makeAnonymousVariable(ctx->strings, "_a"),
                             NULL,
-                            shallowCloneAstNode(ctx->pool, arg),
+                            deepCloneAstNode(ctx->pool, arg),
                             NULL,
                             arg->type);
             arg->tag = astIdentifier;
@@ -673,6 +681,17 @@ static void visitIdentifier(AstVisitor *visitor, AstNode *node)
             node->ident.resolvesTo = f2e->target;
         }
     }
+
+    node = node->ident.resolvesTo;
+    if (!nodeIs(node, VarDecl) && !nodeIs(node, FuncParamDecl))
+        return;
+    if (!isClassType(node->type) && !hasReferenceMembers(node->type))
+        return;
+    if (hasFlags(node,
+                 flgMoved | flgTemporary | flgReference | flgTopLevelDecl))
+        return;
+
+    ctx->referencesDestructibleVars = true;
 }
 
 static void visitPathElement(AstVisitor *visitor, AstNode *node)
@@ -909,6 +928,32 @@ void visitIfStmt(AstVisitor *visitor, AstNode *node)
     astVisitFallbackVisitAll(visitor, node);
 }
 
+void visitReturnStmt(AstVisitor *visitor, AstNode *node)
+{
+    SimplifyContext *ctx = getAstVisitorContext(visitor);
+    AstNode *expr = node->returnStmt.expr;
+    if (expr == NULL)
+        return;
+    ctx->referencesDestructibleVars = false;
+    astVisit(visitor, expr);
+    if (resolveIdentifier(expr) || !ctx->referencesDestructibleVars)
+        return;
+
+    AstNode *var = makeVarDecl(ctx->pool,
+                               &expr->loc,
+                               flgMoved,
+                               makeAnonymousVariable(ctx->strings, "_rt"),
+                               NULL,
+                               deepCloneAstNode(ctx->pool, expr),
+                               NULL,
+                               expr->type);
+    expr->tag = astIdentifier;
+    expr->ident.value = var->_namedNode.name;
+    expr->ident.resolvesTo = var;
+    expr->flags |= flgMove;
+    astModifierAdd(&ctx->block, var);
+}
+
 static void visitWhileStmt(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
@@ -1101,7 +1146,6 @@ static AstNode *simplifyCode(CompilerDriver *driver, AstNode *node)
         [astIdentifier] = visitIdentifier,
         [astCallExpr] = visitCallExpr,
         [astStmtExpr] = visitStmtExpr,
-        //[astIndexExpr] = visitIndexExpr,
         [astStructExpr] = visitStructExpr,
         [astMemberExpr] = visitMemberExpr,
         [astReferenceOf] = visitReferenceOfExpr,
@@ -1110,6 +1154,7 @@ static AstNode *simplifyCode(CompilerDriver *driver, AstNode *node)
         [astBlockStmt] = visitBlockStmt,
         [astWhileStmt] = visitWhileStmt,
         [astIfStmt] = visitIfStmt,
+        [astReturnStmt] = visitReturnStmt,
         [astStructDecl] = visitStructDecl,
         [astClassDecl] = visitStructDecl,
         [astFuncDecl] = visitFuncDecl,

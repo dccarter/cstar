@@ -110,8 +110,19 @@ static AstNode *executeDumpIR(CompilerDriver *driver, AstNode *node)
 {
     csAssert0(nodeIs(node, Metadata));
     node->metadata.stages |= BIT(ccs_DumpIR);
+    if (!(node->metadata.stages & BIT(ccsLower))) {
+        logError(driver->L,
+                 builtinLoc(),
+                 "cannot dump ir before the AST is lowered",
+                 NULL);
+        return NULL;
+    }
 
-    return backendDumpIR(driver, node);
+    if (dumpMir(driver, node->metadata.node)) {
+        node->metadata.stages |= BIT(ccs_DumpIR);
+        return node;
+    }
+    return NULL;
 }
 
 static AstNode *executePreprocessAst(CompilerDriver *driver, AstNode *node)
@@ -204,7 +215,7 @@ static AstNode *executeLower(CompilerDriver *driver, AstNode *node)
         return NULL;
     }
 
-    node->metadata.node = lowerAstNode(driver, node->metadata.node);
+    node->metadata.node = astToMir(driver, node->metadata.node);
 
     if (hasErrors(driver->L))
         return NULL;
@@ -378,7 +389,7 @@ static CompilerStageExecutor compilerStageExecutors[ccsCOUNT] = {
     [ccsBind] = executeBindAst,
     [ccsTypeCheck] = executeTypeCheckAst,
     [ccsSimplify] = executeSimplify,
-    // [ccsLower] = executeLower,
+    [ccsLower] = executeLower,
     [ccsMemoryMgmt] = executeMemoryManagement,
     [ccsCodegen] = executeGenerateCode,
     // TODO causing issues

@@ -43,6 +43,8 @@ const Type *resolveType(const Type *type);
 
 const Type *resolveAndUnThisType(const Type *type);
 
+const Type *resolveUnThisUnwrapType(const Type *type);
+
 const Type *stripPointer(const Type *type);
 
 const Type *stripReference(const Type *type);

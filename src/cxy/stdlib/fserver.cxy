@@ -14,7 +14,7 @@ import "sys/mman.h" as vmem
 import "sys/syslimits.h" as limits // for PATH_MAX! macro
 
 #if (!defined CXY_FILE_SERVER_ROUTE) {
-    macro CXY_FILE_SERVER_ROUTE "/1511d5908a7811e790ed6f6e6c696e65"
+    macro CXY_FILE_SERVER_ROUTE "/www"
 }
 
 pub struct Config {
