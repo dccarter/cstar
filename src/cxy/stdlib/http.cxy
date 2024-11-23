@@ -333,8 +333,8 @@ pub class Request {
         var ret = parseHeaders(buf, len);
         var parsed: u64 = 0;
         match (ret) {
-            case Status as status => return *status
-            case i32 as consumed => parsed = *consumed
+            case Status as status => return status
+            case i32 as consumed => parsed = consumed
         }
 
         var remaining = len - parsed;
@@ -482,12 +482,12 @@ class Router {
         if (!route.attrs().isStatic) {
             match (parseRouteArgs(req, &route.params, args)) {
                 case Status as value => {
-                    resp.end(*value)
+                    resp.end(value)
                     return;
                 }
                 case u64 as value => {
                     // TODO parse route arguments
-                    args = args.substr(*value)
+                    args = args.substr(value)
                 }
             }
         }
@@ -517,12 +517,12 @@ class Router {
         if (!route.attrs().isStatic) {
             match (parseRouteArgs(req, &route.params, args)) {
                 case Status as value => {
-                    resp.end(*value)
+                    resp.end(value)
                     return null;
                 }
                 case u64 as value => {
                     // TODO parse route arguments
-                    args = args.substr(*value)
+                    args = args.substr(value)
                 }
             }
         }
@@ -634,11 +634,11 @@ pub class Connection[Middlewares] {
     - func invokeRouteHandler(route: Route) : void {
         req.route(ptrof route)
         #for (const i: 0..Middlewares.membersCount) {
-            if (!resp.ok())
-                return;
             // invoke middlewares
             mws.#{i}.before(&req, &resp)
             defer mws.#{i}.after(&req, &resp)
+            if (!resp.ok())
+                return;
         }
         // handle route
         route(&req, &resp)
@@ -758,7 +758,7 @@ pub class Server[Middlewares] {
             if (!sock)
                 continue;
 
-            spawn! {
+            async {
                 var name: [char, 64];
                 var s = sock.move();
                 sprintf(name, "conn-%hu", s.address().port())

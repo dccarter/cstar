@@ -322,7 +322,7 @@ macro yield() __scheduler.yield()
 macro running() __scheduler.running
 macro setname(NAME) { __scheduler.running.name = NAME! }
 
-macro __spawn(CALL, NAME) {
+macro __async(CALL, NAME) {
     if (__cxy_coro_setjmp!(ptrof __scheduler.running.ctx) == 0) {
         var cr = __scheduler.prologue(NAME!, file!, line!);
         __cxy_coro_setsp!(cr !: ^void)
@@ -330,8 +330,6 @@ macro __spawn(CALL, NAME) {
         __scheduler.epilogue()
     }
 }
-
-macro spawn(BLOCK) __spawn!(BLOCK!, null)
 
 @[inline, __override_builtin("timestamp")]
 func __now() => ae.aeOsTime()

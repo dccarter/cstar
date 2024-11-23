@@ -676,6 +676,23 @@ bool isClassType(const Type *type)
            (typeIs(type, This) && typeIs(type->_this.that, Class));
 }
 
+bool isComplexType(const Type *type)
+{
+    type = resolveUnThisUnwrapType(type);
+    if (type == NULL)
+        return false;
+    
+    switch (type->tag) {
+    case typStruct:
+    case typClass:
+    case typTuple:
+    case typUnion:
+        return true;
+    default:
+        return false;
+    }
+}
+
 bool isClassReferenceType(const Type *type)
 {
     return isReferenceType(type) && isClassType(stripReference(type));
@@ -684,8 +701,6 @@ bool isClassReferenceType(const Type *type)
 bool isStructType(const Type *type)
 {
     type = unwrapType(type, NULL);
-    //    if (typeIs(type, Info))
-    //        return isStructType(type->info.target);
     return typeIs(type, Struct) ||
            (typeIs(type, This) && typeIs(type->_this.that, Struct));
 }

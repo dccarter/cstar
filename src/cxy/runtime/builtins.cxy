@@ -63,8 +63,7 @@ pub func __cxy_panic(file: string, line: u64, column: u64, msg: string) {
     var len = sprintf(buf, ":%u:%u\n", line, column);
     write(2, buf, len)
     #if (defined __DEBUG && defined TRACE_MEMORY) {
-        var loc: __SrcLoc;
-        (TRACE_MEMORY!)("flush", null, &loc)
+        (TRACE_MEMORY!)("flush", file, line, null)
     }
     abort()
 }
@@ -157,36 +156,31 @@ func __smart_ptr_drop(ptr: sptr) {
 
 #if (defined __DEBUG && defined TRACE_MEMORY) {
 
-pub struct __SrcLoc {
-    file: string
-    line: u64
+@[pure, linkage("External")]
+func __trace_memory_stdout(tag: string, path: string, line: u64, ptr: sptr) {
+    printf(" mem(%-5.5s: %p) @ %s:%llu\n", tag, ptr, path, line)
 }
 
-@[linkage("External")]
-func __trace_memory_stdout(tag: string, ptr: sptr, loc: &const __SrcLoc) {
-    printf(" mem(%-5.5s: %p) @ %s:%llu\n", tag, ptr, loc.file, loc.line)
-}
-
-pub extern func __trace_memory_custom(tag: string, ptr: sptr, loc: &const __SrcLoc) : void
+pub extern func __trace_memory_custom(tag: string, path: string, line: u64, ptr: sptr) : void
 
 @[pure, linkage("External")]
-func __smart_ptr_alloc_trace(size: u64, dctor: func(ptr: sptr) -> void, loc: __SrcLoc) {
+func __smart_ptr_alloc_trace(size: u64, dctor: func(ptr: sptr) -> void, path: string, line: u64) {
     var ptr = __smart_ptr_alloc(size, dctor);
-    (TRACE_MEMORY!)("alloc", ptr, &loc)
+    (TRACE_MEMORY!)("alloc", path, line, ptr)
     return ptr
 }
 
 @[pure, linkage("External")]
-func __smart_ptr_get_trace(ptr: sptr, loc: __SrcLoc) {
-    (TRACE_MEMORY!)("get", ptr, &loc)
+func __smart_ptr_get_trace(ptr: sptr, path: string, line: u64) {
+    (TRACE_MEMORY!)("get", path, line, ptr)
     return __smart_ptr_get(ptr)
 }
 
 @[pure, linkage("External")]
-func __smart_ptr_drop_trace(ptr: sptr, loc: __SrcLoc) {
-    (TRACE_MEMORY!)("drop", ptr, &loc)
+func __smart_ptr_drop_trace(ptr: sptr, path: string, line: u64) {
+    (TRACE_MEMORY!)("drop", path, line, ptr)
     if (__smart_ptr_drop(ptr))
-        (TRACE_MEMORY!)("freed", ptr, &loc)
+        (TRACE_MEMORY!)("freed", path, line, ptr)
 }
 
 }
@@ -207,38 +201,22 @@ pub struct __Optional[T] {
 
     @inline func `init`(value: T) { val = &&value; ok = true }
 
-    #if (T.isClass || T.hasReferenceMembers ) {
-
-        func `destructor`() {
-            if (ok) {
-                #if (T.isClass)
-                    #if (defined __DEBUG && defined TRACE_MEMORY)
-                        __smart_ptr_drop_trace(val !: sptr, __SrcLoc{file: file!, line: line!})
-                    else
-                        __smart_ptr_drop(val !: sptr)
-                else #if (T.isTuple)
-                    __tuple_dctor(&val)
-                else #if (T.isUnion)
-                    __union_dctor(&val)
-                else
-                    val.op__destructor()
-            }
+    func `destructor`() {
+        if (ok) {
+            #if (T.isClass || T.hasReferenceMembers)
+                delete val
+            else #if (has_member!(#T, "op__destructor", #func() -> void))
+                val.op__destructor()
         }
     }
 
-    #if (T.isClass || T.hasReferenceMembers ) {
-
-        @inline func `copy`() {
-            #if (T.isClass)
-                return This{ ok: ok, val: __smart_ptr_get(val !: sptr) !: T }
-            else #if (T.isTuple)
-                return This{  ok: ok, val: __tuple_copy(&val) }
-            else #if (T.isUnion)
-                return This{  ok: ok, val: __union_copy(&val) }
-            else
-                return This{ ok: ok, val: val.op__copy() }
-        }
-
+    @inline func `copy`() {
+        #if (T.isClass || T.hasReferenceMembers)
+            return This{ ok: ok, val: __copy!(val) }
+        else #if (has_member!(#T, "op__copy", #func() -> T))
+            return This{ ok: ok, val: val.op__copy() }
+        else
+            return This{ ok: ok, val: val }
     }
 
     @inline func `!!`() => ok
@@ -945,17 +923,10 @@ func __tuple_dctor[T](tup: &T) {
     require!(T.isTuple, "expecting a tuple type, got `{t}`", #T)
     #for (const i : 0 .. T.membersCount) {
         #const M = typeat!(T, #{i});
-        #if (M.isClass)
-            #if (defined __DEBUG && defined TRACE_MEMORY)
-                __smart_ptr_drop_trace(tup.#{i} !: ^void, __SrcLoc{file: file!, line: line!})
-            else
-                __smart_ptr_drop(tup.#{i} !: ^void)
+        #if (M.isClass || M.hasReferenceMembers)
+                delete tup.#{i}
         else #if (has_member!(#M, "op__destructor", #func() -> void))
             tup.#{i}.op__destructor()
-        else #if (M.isTuple && M.hasReferenceMembers)
-            __tuple_dctor[#{M}](&tup.#{i})
-        else #if (M.isUnion && M.hasReferenceMembers)
-            __union_dctor[#{M}](&tup.#{i})
     }
 }
 
@@ -966,17 +937,10 @@ func __union_dctor[T](obj: &T) {
         #for (const i: 0..#{T.membersCount}) {
             case #{typeat!(T, i)} as &y => {
                 #const M = typeat!(T, i);
-                #if (M.isClass)
-                    #if (defined __DEBUG && defined TRACE_MEMORY)
-                        __smart_ptr_drop_trace(y !: ^void, __SrcLoc{file: file!, line: line!})
-                    else
-                        __smart_ptr_drop(y !: ^void)
+                #if (M.isClass || M.hasReferenceMembers)
+                    delete y
                 else #if (has_member!(#M, "op__destructor", #func() -> void))
                     y.op__destructor()
-                else #if (M.isTuple && M.hasReferenceMembers)
-                    __tuple_dctor[#{M}](y)
-                else #if (M.isUnion && M.hasReferenceMembers)
-                    __union_dctor[#{M}](y)
             }
         }
     }
@@ -988,34 +952,16 @@ func __tuple_copy[T](tup: &T) {
     #const nodes = mk_ast_list!();
     #for (const member: 0 .. T.membersCount) {
         #const M = typeat!(T, member);
-        #if (M.isClass) {
-            #if (defined __DEBUG && defined TRACE_MEMORY)
-                ast_list_add!(
-                    #{nodes},
-                    __smart_ptr_get_trace(tup.#{mk_integer!(member)} !: ^void, __SrcLoc{file: file!, line: line!}) !: M
-                )
-            else
-                ast_list_add!(
-                    #{nodes},
-                    __smart_ptr_get(tup.#{mk_integer!(member)} !: ^void) !: M
-                )
+        #if (M.isClass || M.hasReferenceMembers) {
+            ast_list_add!(
+                #{nodes},
+                __copy!(tup.#{mk_integer!(member)})
+            )
         }
         else #if (has_member!(#M, "op__copy", #func() -> M )) {
             ast_list_add!(
                 #{nodes},
                 tup.#{mk_integer!(member)}.op__copy()
-            )
-        }
-        else #if (M.isTuple && M.hasReferenceMembers) {
-            ast_list_add!(
-                #{nodes},
-                __tuple_copy(&tup.#{mk_integer!(member)})
-            )
-        }
-        else #if (M.isUnion && M.hasReferenceMembers) {
-            ast_list_add!(
-                #{nodes},
-                __union_copy(&tup.#{mk_integer!(member)})
             )
         }
         else {
@@ -1037,71 +983,17 @@ func __union_copy[T](obj: &T) : T {
         #for (const member: 0 .. T.membersCount) {
             case #{typeat!(T, member)} as y => {
                 #const M = typeat!(T, member);
-                #if (M.isClass) {
-                    #if (defined __DEBUG && defined TRACE_MEMORY)
-                        return __smart_ptr_get_trace(y !: ^void, __SrcLoc{file: file!, line: line!}) !: M
-                    else
-                        return __smart_ptr_get(y !: ^void) !: M
+                #if (M.isClass || M.hasReferenceMembers ) {
+                    return <T>__copy!(y)
                 }
                 else #if (has_member!(#M, "op__copy", #func() -> M ))
-                    return y.op__copy()
-                else #if (M.isTuple && M.hasReferenceMembers)
-                    return __tuple_copy(y)
-                else #if (M.isUnion && M.hasReferenceMembers)
-                    return __union_copy(y)
+                    return <T> y.op__copy()
                 else
-                    return <#{typeat!(T, member)}>y
+                    return <T> obj
             }
         }
+        else => abort()
     }
-}
-
-pub func allocate[T](len: u32 = 0) {
-    #if (T.isClass) {
-        var obj = (__smart_ptr_alloc(sizeof!(#T), T.op__destructor_fwd) !: T);
-        // this will ensure that default values are assigned
-        init_defaults!(obj)
-        return obj
-    }
-    else {
-        var obj: ^T = null;
-        #if (T.hasReferenceMembers) {
-            obj = <^T> __smart_ptr_alloc(sizeof!(#T), T.op__destructor_fwd)
-        }
-        else {
-            obj = <^T> __smart_ptr_alloc(sizeof!(#T))
-        }
-
-        #if (T.isStruct)
-            // this will ensure that default values are assigned
-            init_defaults!(obj)
-
-        return obj
-    }
-}
-
-pub func __construct0[T](@transient ...args: auto) {
-    require!(T.isClass, "type '{t}' unsupported by `make`", #T)
-
-    var obj;
-    #if (has_member!(typeof!(T), "op__destructor_fwd", #func(_:^void) -> void))
-        obj = (__smart_ptr_alloc(sizeof!(#T), T.op__destructor_fwd) !: T);
-    else
-        obj = (__smart_ptr_alloc(sizeof!(#T), null) !: T);
-    // this will ensure that default values are assigned
-    init_defaults!(obj)
-    obj.op__init(...args)
-    return obj
-}
-
-pub func __construct1[T](@transient ...args: auto) {
-    require!(T.isStruct, "type '{t}' unsupported by `create`, only structs can be created", #T)
-
-    var obj: T;
-    // this will ensure that default values are assigned
-    init_defaults!(obj)
-    obj.op__init(...args)
-    return obj
 }
 
 macro stackAlloc(T, ...ARGS) =({
@@ -1111,8 +1003,8 @@ macro stackAlloc(T, ...ARGS) =({
     obj
 })
 
-pub var stdout: OutputStream = __construct0[FileOutputStream](1);
-pub var stderr: OutputStream = __construct0[FileOutputStream](2);
+pub var stdout: OutputStream = FileOutputStream(1);
+pub var stderr: OutputStream = FileOutputStream(2);
 
 @inline
 pub func print[T](data: &const T) {

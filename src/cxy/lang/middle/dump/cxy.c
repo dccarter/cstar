@@ -115,9 +115,10 @@ static void dumpBackendCall(ConstAstVisitor *visitor, const AstNode *node)
 {
     DumpContext *ctx = getConstAstVisitorContext(visitor);
     printKeyword(ctx->state, "__bc");
-    format(ctx->state,
-           "({u64}",
-           (FormatArg[]){{.u64 = node->backendCallExpr.func}});
+    format(
+        ctx->state,
+        "({s}",
+        (FormatArg[]){{.s = getBackendCallString(node->backendCallExpr.func)}});
     dumpManyAstNodesEnclosed(visitor,
                              node->backendCallExpr.args,
                              node->backendCallExpr.args ? ", " : NULL,
@@ -547,9 +548,22 @@ static void dumpUnaryExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     DumpContext *ctx = getConstAstVisitorContext(visitor);
     if (node->unaryExpr.isPrefix) {
-        format(ctx->state,
-               "{s}",
-               (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)}});
+        switch (node->unaryExpr.op) {
+        case opDelete:
+        case opAwait:
+        case opPtrof:
+            format(ctx->state,
+                   "{$}{s}{$} ",
+                   (FormatArg[]){{.style = keywordStyle},
+                                 {.s = getUnaryOpString(node->unaryExpr.op)},
+                                 {.style = resetStyle}});
+            break;
+        default:
+            format(ctx->state,
+                   "{s}",
+                   (FormatArg[]){{.s = getUnaryOpString(node->unaryExpr.op)}});
+            break;
+        }
         astConstVisit(visitor, node->unaryExpr.operand);
     }
     else {

@@ -16,7 +16,11 @@ extern "C" {
 typedef struct VariableTrace {
     AstNode *variable;
     const BlockScope *scope;
+    u8 state;
+    u32 prev;
 } VariableTrace;
+
+enum { vtsUnsigned = 0, vtsAssigned = 1, vtsMaybeAssigned = 2 };
 
 typedef struct MemoryManagementContext {
     Log *L;
@@ -52,6 +56,11 @@ void withSavedStack(Visitor func, AstVisitor *visitor, AstNode *node);
 const AstNode *resolveCallExpr(const AstNode *node);
 const AstNode *getCallExprCalleeFunc(const AstNode *node);
 bool isTransientCallExpr(const AstNode *node);
+
+BlockScope *vtPushBlockScope(BlockScopeContainer *bsc, AstNode *node);
+void vtPopBlockScope(BlockScopeContainer *bsc);
+u32 vtCreate(BlockScope *scope, AstNode *var);
+VariableTrace *vtGet(BlockScope *scope, u32 idx);
 
 #ifdef __cplusplus
 }

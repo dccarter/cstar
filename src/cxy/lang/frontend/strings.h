@@ -105,7 +105,7 @@ extern "C" {
     f(__tuple_copy)             \
     f(__union_dctor)            \
     f(__union_copy)             \
-    f(__SrcLoc)                 \
+    f(__async)                  \
     f(CXY__main)                \
     f(resolve)                  \
     f(reject)                   \

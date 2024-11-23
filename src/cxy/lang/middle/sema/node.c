@@ -170,43 +170,28 @@ static AstNode *createCallObjectInit(TypingContext *ctx,
         NULL);
 }
 
-AstNode *createSmartPointerAllocClass(TypingContext *ctx,
-                                      const Type *type,
-                                      const FileLoc *loc)
+AstNode *createAllocateClass(TypingContext *ctx,
+                             const Type *type,
+                             const FileLoc *loc)
 {
-    AstNode *sptrAlloc =
-        findBuiltinDecl(ctx->traceMemory ? S_sptr_alloc_trace : S_sptr_alloc);
-    csAssert0(sptrAlloc);
-    AstNode *args = makeBackendCallExpr(
-        ctx->pool,
-        loc,
-        flgNone,
-        bfiSizeOf,
-        makeTypeReferenceNode(ctx->pool, makeTypeInfo(ctx->types, type), loc),
-        getPrimitiveType(ctx->types, prtU64));
     AstNode *dctorFwd = findMemberDeclInType(type, S_DestructorFwd);
-    if (dctorFwd) {
-        args->next = makeMemberExpr(ctx->pool,
-                                    loc,
-                                    flgNone,
-                                    makeTypeReferenceNode(ctx->pool, type, loc),
-                                    makeResolvedIdentifier(ctx->pool,
-                                                           loc,
-                                                           S_DestructorFwd,
-                                                           0,
-                                                           dctorFwd,
-                                                           NULL,
-                                                           dctorFwd->type),
-                                    NULL,
-                                    dctorFwd->type);
-    }
-    else {
-        args->next =
-            makeNullLiteral(ctx->pool, loc, NULL, makeNullType(ctx->types));
-    }
-
-    if (ctx->traceMemory)
-        args->next->next = makeSrLocNode(ctx->pool, loc);
+    AstNode *args = makeTypeReferenceNode(ctx->pool, type, loc);
+    args->next =
+        dctorFwd
+            ? makeMemberExpr(ctx->pool,
+                             loc,
+                             flgNone,
+                             makeTypeReferenceNode(ctx->pool, type, loc),
+                             makeResolvedIdentifier(ctx->pool,
+                                                    loc,
+                                                    S_DestructorFwd,
+                                                    0,
+                                                    dctorFwd,
+                                                    NULL,
+                                                    dctorFwd->type),
+                             NULL,
+                             dctorFwd->type)
+            : makeNullLiteral(ctx->pool, loc, NULL, makeNullType(ctx->types));
 
     return makeVarDecl(
         ctx->pool,
@@ -214,25 +199,19 @@ AstNode *createSmartPointerAllocClass(TypingContext *ctx,
         flgTemporary,
         makeAnonymousVariable(ctx->strings, "__obj"),
         NULL,
-        makeTypedExpr(ctx->pool,
-                      loc,
-                      flgNone,
-                      makeCallExpr(ctx->pool,
-                                   loc,
-                                   makeResolvedPath(ctx->pool,
-                                                    loc,
-                                                    sptrAlloc->_namedNode.name,
-                                                    flgNone,
-                                                    sptrAlloc,
-                                                    NULL,
-                                                    sptrAlloc->type),
-                                   args,
-                                   flgNone,
-                                   NULL,
-                                   sptrAlloc->type->func.retType),
-                      makeTypeReferenceNode(ctx->pool, type, loc),
-                      NULL,
-                      type),
+        makeTypedExpr(
+            ctx->pool,
+            loc,
+            flgNone,
+            makeBackendCallExpr(ctx->pool,
+                                loc,
+                                flgNone,
+                                bfiMemAlloc,
+                                args,
+                                makeVoidPointerType(ctx->types, flgNone)),
+            makeTypeReferenceNode(ctx->pool, type, loc),
+            NULL,
+            type),
         NULL,
         type);
 }
@@ -269,8 +248,8 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
     AstNodeList stmts = {};
     AstNode *var = NULL;
     if (isClassType(target)) {
-        var = insertAstNode(
-            &stmts, createSmartPointerAllocClass(ctx, target, &node->loc));
+        var =
+            insertAstNode(&stmts, createAllocateClass(ctx, target, &node->loc));
         insertAstNode(&stmts,
                       makeExprStmt(ctx->pool,
                                    &node->loc,

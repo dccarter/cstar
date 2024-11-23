@@ -94,8 +94,8 @@ static void transformClosureToStructExpr(AstVisitor *visitor,
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNodeList stmts = {};
-    AstNode *var = insertAstNode(
-        &stmts, createSmartPointerAllocClass(ctx, type, &node->loc));
+    AstNode *var =
+        insertAstNode(&stmts, createAllocateClass(ctx, type, &node->loc));
 
     for (u64 i = 0; i < node->closureExpr.captureCount; i++) {
         Capture *capture = &node->closureExpr.capture[i];

@@ -121,6 +121,20 @@ const Type *typeGetMember(const Type *type, u64 index)
     return resolveUnThisUnwrapType(members->members[index].type);
 }
 
+const Type *makeTaggedUnionType(AstToMirContext *ctx, const Type *type)
+{
+    return makeStructType(
+        ctx->mir->types,
+        NULL,
+        (NamedTypeMember[]){
+            {.name = makeString(ctx->mir->strings, "tag"),
+             .type = ctx->mir->types->primitiveTypes[prtU32]},
+            {.name = makeString(ctx->mir->strings, "value"), .type = type}},
+        2,
+        NULL,
+        flgNone);
+}
+
 static MirNode *makeLocalVar(AstToMirContext *ctx,
                              const FileLoc *loc,
                              cstring name,
@@ -540,12 +554,8 @@ static void visitCastExpr(AstVisitor *visitor, AstNode *node)
 
     if (hasFlag(node, UnionCast) || typeIs(from->type, Union)) {
         astToMirRet(withMirFlags(
-            makeMirMemberOp(
-                ctx->mir,
-                &node->loc,
-                makeMirMemberOp(ctx->mir, &node->loc, expr, 1, NULL),
-                node->castExpr.idx,
-                NULL),
+            makeMirUnionMemberOp(
+                ctx->mir, &node->loc, expr, node->castExpr.idx, NULL),
             flags));
     }
     else {
@@ -724,29 +734,21 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
 static void visitUnionValue(AstVisitor *visitor, AstNode *node)
 {
     AstToMirContext *ctx = getAstVisitorContext(visitor);
-    const Type *type = makeStructType(
-        ctx->mir->types,
-        NULL,
-        (NamedTypeMember[]){{.name = makeString(ctx->mir->strings, "tag"),
-                             .type = ctx->mir->types->primitiveTypes[prtU32]},
-                            {.name = makeString(ctx->mir->strings, "value"),
-                             .type = node->type}},
-        2,
-        NULL,
-        flgNone);
-    MirNode *tmp = makeLocalTempVar(ctx, &node->unionValue.value->loc, type);
+    MirNode *tmp =
+        makeLocalTempVar(ctx, &node->unionValue.value->loc, node->type);
     // tmp.0 = tag
     insertInCurrentBlock(
         ctx,
         makeMirAssignOp( // tmp.0 = tag
             ctx->mir,
             &node->loc,
-            makeMirMemberOp(
+            makeMirMemberOpEx(
                 ctx->mir,
                 &node->loc,
                 makeMirLoadOp(
                     ctx->mir, &node->loc, tmp->AllocaOp.name, tmp, NULL),
                 0,
+                node->type,
                 NULL),
             makeMirUnsignedConst(ctx->mir,
                                  &node->loc,
@@ -756,19 +758,11 @@ static void visitUnionValue(AstVisitor *visitor, AstNode *node)
             makeMirAssignOp( // tmp.1.{idx} = value
                 ctx->mir,
                 &node->loc,
-                makeMirMemberOp( // tmp.1.{idx}
+                makeMirUnionMemberOp( // tmp.1.{idx}
                     ctx->mir,
                     &node->loc,
-                    makeMirMemberOp( // tmp.1
-                        ctx->mir,
-                        &node->loc,
-                        makeMirLoadOp(ctx->mir,
-                                      &node->loc,
-                                      tmp->AllocaOp.name,
-                                      tmp,
-                                      NULL),
-                        1,
-                        NULL),
+                    makeMirLoadOp(
+                        ctx->mir, &node->loc, tmp->AllocaOp.name, tmp, NULL),
                     node->unionValue.idx,
                     NULL),
                 convertAstToMir(visitor, node->unionValue.value),
@@ -780,21 +774,32 @@ static void visitUnionValue(AstVisitor *visitor, AstNode *node)
 static void visitBackendCallExpr(AstVisitor *visitor, AstNode *node)
 {
     AstToMirContext *ctx = getAstVisitorContext(visitor);
+    AstNode *args = node->backendCallExpr.args;
     switch (node->backendCallExpr.func) {
     case bfiAlloca:
-        astToMirRet(makeLocalTempVar(
-            ctx, &node->loc, node->backendCallExpr.args->type));
+        astToMirRet(makeLocalTempVar(ctx, &node->loc, args->type));
         break;
     case bfiSizeOf:
-        astToMirRet(makeMirSizeofOp(
-            ctx->mir, &node->loc, node->backendCallExpr.args->type, NULL));
+        astToMirRet(makeMirSizeofOp(ctx->mir, &node->loc, args->type, NULL));
         break;
     case bfiZeromem:
         astToMirRet(makeMirZeromemOp(
-            ctx->mir,
-            &node->loc,
-            convertAstToMir(visitor, node->backendCallExpr.args),
-            NULL));
+            ctx->mir, &node->loc, convertAstToMir(visitor, args), NULL));
+        break;
+    case bfiCopy:
+        astToMirRet(makeMirCopyOp(
+            ctx->mir, &node->loc, convertAstToMir(visitor, args), NULL));
+        break;
+    case bfiDrop:
+        astToMirRet(makeMirDropOp(
+            ctx->mir, &node->loc, convertAstToMir(visitor, args), NULL));
+        break;
+    case bfiMemAlloc:
+        astToMirRet(makeMirMallocOp(ctx->mir,
+                                    &node->loc,
+                                    convertAstToMir(visitor, args),
+                                    node->type,
+                                    NULL));
         break;
     }
 }
@@ -1402,6 +1407,7 @@ MirNode *makeMirLoadOp(MirContext *ctx,
 {
     return newMirNode(LoadOp, __B(.name = name, .var = var), .type = var->type);
 }
+
 MirNode *makeMirAssignOp(MirContext *ctx,
                          const FileLoc *loc,
                          MirNode *lValue,
@@ -1443,6 +1449,23 @@ MirNode *makeMirCastOp(MirContext *ctx,
 {
     return newMirNode(
         CastOp, __B(.expr = expr, .type = type), .type = type->type);
+}
+
+MirNode *makeMirDropOp(MirContext *ctx,
+                       const FileLoc *loc,
+                       MirNode *operand,
+                       MirNode *next)
+{
+    return newMirNode(DropOp, __B(.operand = operand), .type = operand->type);
+}
+
+MirNode *makeMirMallocOp(MirContext *ctx,
+                         const FileLoc *loc,
+                         MirNode *operand,
+                         const Type *type,
+                         MirNode *next)
+{
+    return newMirNode(MallocOp, __B(.operand = operand), .type = type);
 }
 
 MirNode *makeMirMoveOp(MirContext *ctx,
@@ -1548,6 +1571,30 @@ MirNode *makeMirMemberOp(MirContext *ctx,
 {
     return newMirNode(MemberOp,
                       __B(.target = target, .index = index),
+                      .type = typeGetMember(target->type, index));
+}
+
+MirNode *makeMirMemberOpEx(MirContext *ctx,
+                           const FileLoc *loc,
+                           MirNode *target,
+                           u64 index,
+                           const Type *type,
+                           MirNode *next)
+{
+    return newMirNode(
+        MemberOp, __B(.target = target, .index = index), .type = type);
+}
+
+MirNode *makeMirUnionMemberOp(MirContext *ctx,
+                              const FileLoc *loc,
+                              MirNode *target,
+                              u64 index,
+                              MirNode *next)
+{
+    return newMirNode(MemberOp,
+                      __B(.target = makeMirMemberOpEx(
+                              ctx, loc, target, 1, target->type, NULL),
+                          .index = index),
                       .type = typeGetMember(target->type, index));
 }
 

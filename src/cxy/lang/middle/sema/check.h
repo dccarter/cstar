@@ -94,6 +94,7 @@ bool checkMemberFunctions(AstVisitor *visitor,
                           NamedTypeMember *members);
 
 void implementClassOrStructBuiltins(AstVisitor *visitor, AstNode *node);
+u64 removeClassOrStructBuiltins(AstNode *node);
 
 void checkBaseDecl(AstVisitor *visitor, AstNode *node);
 void checkImplements(AstVisitor *visitor,
@@ -107,9 +108,9 @@ AstNode *makeDropReferenceCall(TypingContext *ctx,
 
 AstNode *makeAllocateCall(TypingContext *ctx, AstNode *node);
 
-AstNode *makeGetReferenceCall(TypingContext *ctx,
-                              AstNode *member,
-                              const FileLoc *loc);
+AstNode *makeCopyReferenceCall(TypingContext *ctx,
+                               AstNode *member,
+                               const FileLoc *loc);
 
 AstNode *makeSliceConstructor(TypingContext *ctx,
                               const Type *slice,
@@ -122,9 +123,9 @@ void transformArrayExprToSlice(AstVisitor *visitor,
                                const Type *slice,
                                AstNode *expr);
 
-AstNode *createSmartPointerAllocClass(TypingContext *ctx,
-                                      const Type *type,
-                                      const FileLoc *loc);
+AstNode *createAllocateClass(TypingContext *ctx,
+                             const Type *type,
+                             const FileLoc *loc);
 
 void transformToMemberCallExpr(AstVisitor *visitor,
                                AstNode *node,

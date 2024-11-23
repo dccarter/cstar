@@ -178,7 +178,10 @@ typedef struct {
 #define BACKEND_FUNC_IDS(f)    \
     f(SizeOf)                  \
     f(Alloca)                  \
-    f(Zeromem)
+    f(Zeromem)                 \
+    f(MemAlloc)                \
+    f(Copy)                    \
+    f(Drop)
 
 // clang-format on
 
@@ -188,7 +191,6 @@ typedef enum {
 #undef f
 } BackendFuncId;
 
-struct IrValue;
 struct MirNode;
 
 #define CXY_AST_NODE_HEAD                                                      \
@@ -487,6 +489,7 @@ struct AstNode {
 
         struct {
             const char *name;
+            u32 idx;
             struct AstNode *type;
             struct AstNode *def;
             u32 index;
@@ -494,11 +497,17 @@ struct AstNode {
 
         struct {
             cstring name;
+            u32 idx;
             struct AstNode *names;
             struct AstNode *type;
             struct AstNode *init;
             void *codegen;
         } varDecl;
+
+        struct {
+            cstring _name;
+            u32 _idx;
+        };
 
         struct {
             cstring name;
@@ -1528,14 +1537,16 @@ void makeSortedNodesInMemory(SortedNodes *sortedNodes,
                              u64 count,
                              int (*compare)(const void *, const void *));
 
-const AstNode *getOptionalDecl();
-
 AstNode *findInSortedNodes(SortedNodes *sorted, cstring name);
+
+AstNode *nodeGetFuncParams(const AstNode *decl);
 
 static inline AstNode *underlyingDeclaration(AstNode *decl)
 {
     return nodeIs(decl, GenericDecl) ? decl->genericDecl.decl : decl;
 }
+
+cstring getBackendCallString(BackendFuncId bfi);
 
 static inline bool isStructDeclaration(AstNode *node)
 {

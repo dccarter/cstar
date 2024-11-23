@@ -68,15 +68,18 @@ static void evaluateStructMembers(AstVisitor *visitor, AstNode *node)
     }
 }
 
-static void preCheckStructMembers(AstNode *node, NamedTypeMember *members)
+static bool preCheckStructMembers(AstNode *node, NamedTypeMember *members)
 {
     AstNode *member = node->structDecl.members;
+    bool referenceMembers = false;
     for (u64 i = 0; member; member = member->next, i++) {
         if (nodeIs(member, FieldDecl)) {
             members[i] = (NamedTypeMember){.name = member->structField.name,
                                            .type = member->type,
                                            .decl = member};
             member->structField.index = i;
+            referenceMembers = referenceMembers || isClassType(member->type) ||
+                               hasReferenceMembers(member->type);
         }
         else {
             members[i] = (NamedTypeMember){.name = getDeclarationName(member),
@@ -86,6 +89,7 @@ static void preCheckStructMembers(AstNode *node, NamedTypeMember *members)
             node->flags |= member->flags & (flgAbstract | flgVirtual);
         }
     }
+    return referenceMembers;
 }
 
 static const Type *findCompatibleAnonymousType(AstVisitor *visitor,
@@ -451,7 +455,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
         mallocOrDie(sizeof(NamedTypeMember) * membersCount);
 
     ctx->currentStruct = node;
-    preCheckStructMembers(node, members);
+    bool referenceMembers = preCheckStructMembers(node, members);
     ctx->currentStruct = NULL;
 
     if (typeIs(node->type, Error))
@@ -466,9 +470,14 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
                        node->flags & (flgTypeApplicable | flgReferenceMembers));
     node->type = this;
 
-    implementClassOrStructBuiltins(visitor, node);
-    if (typeIs(node->type, Error))
-        goto checkStructMembersError;
+    if (referenceMembers) {
+        implementClassOrStructBuiltins(visitor, node);
+        if (typeIs(node->type, Error))
+            goto checkStructMembersError;
+    }
+    else {
+        membersCount -= removeClassOrStructBuiltins(node);
+    }
 
     ctx->currentStruct = node;
     if (checkMemberFunctions(visitor, node, members)) {

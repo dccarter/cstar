@@ -2886,6 +2886,14 @@ AstNode *findInSortedNodes(SortedNodes *sorted, cstring name)
     return sorted->nodes[found];
 }
 
+AstNode *nodeGetFuncParams(const AstNode *decl)
+{
+    if (nodeIs(decl, FuncDecl))
+        return decl->funcDecl.signature->params;
+    csAssert0(nodeIs(decl, FuncType));
+    return decl->funcType.params;
+}
+
 CCodeKind getCCodeKind(TokenTag tag)
 {
     switch (tag) {
@@ -2897,6 +2905,18 @@ CCodeKind getCCodeKind(TokenTag tag)
         return cSources;
     default:
         unreachable();
+    }
+}
+
+cstring getBackendCallString(BackendFuncId bfi)
+{
+    switch (bfi) {
+#define f(NAME)                                                                \
+    case bfi##NAME:                                                            \
+        return #NAME;
+        BACKEND_FUNC_IDS(f)
+    default:
+        return "Unknown";
     }
 }
 

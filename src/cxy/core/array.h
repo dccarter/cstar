@@ -41,7 +41,10 @@ void *popDynArray(DynArray *);
 #define dynArrayAt(T, arr, idx) ((T)(arr)->elems)[(idx)]
 #define dynArrayEmpty(arr) ((arr)->size == 0)
 #define dynArrayBack(T, arr) dynArrayAt(T, (arr), (arr)->size - 1)
-
+#define dynArrayFor(NAME, T, arr)                                              \
+    u64 LINE_VAR(i) = 0;                                                       \
+    for (T *NAME = &((arr)->elems[LINE_VAR(i)]); LINE_VAR(i) < (arr)->size;    \
+         NAME = &((arr)->elems[LINE_VAR(i)]), LINE_VAR(i)++)
 #ifdef __cplusplus
 }
 #endif

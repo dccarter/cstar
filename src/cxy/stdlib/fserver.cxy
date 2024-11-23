@@ -258,7 +258,7 @@ pub class FileServer {
 
     - func get(req: &const Request, resp: &Response, path: String, ext: String): Status {
         match (requestPrologue(req, resp, path, ext)) {
-            case Status as s => return *s
+            case Status as s => return s
             case (&MimeType, &CachedFile) as s {
                 // set the content type
                 resp.header("Content-Type", s.0.mime);
@@ -271,7 +271,7 @@ pub class FileServer {
 
     func head(req: &const Request, resp: &Response, path: String, ext: String) {
         match (requestPrologue(req, resp, path, ext)) {
-            case Status as s => return *s
+            case Status as s => return s
             else => return Status.OK
         }
     }

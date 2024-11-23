@@ -210,21 +210,23 @@ static AstNode *makeFilenameNode(AstVisitor *visitor,
                        visitor->current->loc.fileName ?: "<native>"});
 }
 
-static AstNode *makeFuncNode(AstVisitor *visitor,
+static AstNode *makeCopyNode(AstVisitor *visitor,
                              attr(unused) const AstNode *node,
                              attr(unused) AstNode *args)
 {
     EvalContext *ctx = getAstVisitorContext(visitor);
-    if (!validateMacroArgumentCount(ctx, &node->loc, args, 0))
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
         return NULL;
+    const Type *type = args->type ?: evalType(ctx, args);
+    if (typeIs(type, Error))
+        return NULL;
+    if (!nodeIsLeftValue(args)) {
+        logError(ctx->L, &args->loc, "expecting a lvalue expression", NULL);
+        return NULL;
+    }
 
-    return makeAstNode(
-        ctx->pool,
-        builtinLoc(),
-        &(AstNode){.tag = astStringLit,
-                   .type = makeStringType(ctx->types),
-                   .stringLiteral.value =
-                       visitor->current->loc.fileName ?: "<native>"});
+    return makeBackendCallExpr(
+        ctx->pool, &node->loc, flgNone, bfiCopy, args, type);
 }
 
 static AstNode *makeHasMemberNode(AstVisitor *visitor,
@@ -860,8 +862,8 @@ static AstNode *makeBackendCallNode(AstVisitor *visitor,
         if (type == NULL || typeIs(type, Error))
             return NULL;
     }
-    arg = args->next;
 
+    arg = args->next;
     args->tag = astBackendCall;
     args->backendCallExpr.func = id;
     args->backendCallExpr.args = arg->next;
@@ -1368,7 +1370,7 @@ static int compareBuiltinMacros(const void *lhs, const void *rhs)
  * or a trie, but with these minimal entries, it's fast enough.
  */
 static const BuiltinMacro builtinMacros[] = {
-    {.name = "__func", makeFuncNode},
+    {.name = "__copy", makeCopyNode},
     {.name = "assert", makeAssertNode},
     {.name = "ast_list_add", actionAstListAdd},
     {.name = "ast_paste", makeAstPasteNode},

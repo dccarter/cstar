@@ -69,56 +69,53 @@ static bool needsMemoryManagement(const AstNode *node)
            (isClassType(node->type) || hasReferenceMembers(node->type));
 }
 
-static inline bool needsMemoryCopy(const AstNode *node)
+static AstNode *makeZeromemNode(MMContext *ctx, AstNode *node, AstNode *next)
 {
-    return !hasFlag(node, Move) && needsMemoryManagement(node);
-}
-
-static AstNode *makeZeromemNode(MMContext *ctx,
-                                AstNode *node,
-                                const Type *type,
-                                AstNode *next)
-{
-    return makeExprStmt(
-        ctx->pool,
-        &node->loc,
-        flgNone,
-        makeBackendCallExpr(
-            ctx->pool,
-            &node->loc,
-            flgNone,
-            bfiZeromem,
+    node = deepCloneAstNode(ctx->pool, node);
+    if (isClassType(node->type))
+        node =
             makePointerOfExpr(ctx->pool,
                               &node->loc,
                               flgNone,
                               deepCloneAstNode(ctx->pool, node),
                               NULL,
-                              makePointerType(ctx->types, type, flgNone)),
-            makeVoidType(ctx->types)),
-        next,
-        makeVoidType(ctx->types));
+                              makePointerType(ctx->types, node->type, flgNone));
+
+    return makeExprStmt(ctx->pool,
+                        &node->loc,
+                        flgNone,
+                        makeBackendCallExpr(ctx->pool,
+                                            &node->loc,
+                                            flgNone,
+                                            bfiZeromem,
+                                            node,
+                                            makeVoidType(ctx->types)),
+                        next,
+                        makeVoidType(ctx->types));
 }
 
-static void transformToZeromemNode(MMContext *ctx, AstNode *node, AstNode *expr)
+static void transformNodeToZeromem(MMContext *ctx, AstNode *node, AstNode *expr)
 {
+    if (isClassType(expr->type))
+        expr =
+            makePointerOfExpr(ctx->pool,
+                              &expr->loc,
+                              flgNone,
+                              expr,
+                              NULL,
+                              makePointerType(ctx->types, expr->type, flgNone));
     node->tag = astBackendCall;
-    node->flags = flgNone, node->type = makeVoidType(ctx->types);
+    node->flags = flgNone;
+    node->type = makeVoidType(ctx->types);
     node->backendCallExpr.func = bfiZeromem;
-    node->backendCallExpr.args =
-        makePointerOfExpr(ctx->pool,
-                          &node->loc,
-                          flgNone,
-                          expr,
-                          NULL,
-                          makePointerType(ctx->types, expr->type, flgNone));
+    node->backendCallExpr.args = expr;
 }
 
-static AstNode *invokeTupleDestructor(MMContext *ctx, AstNode *node)
+static AstNode *createTupleDrop(MMContext *ctx, AstNode *node)
 {
     const Type *type = node->type;
     const Type *destructor = type->tuple.destructorFunc;
     csAssert0(destructor);
-    AstNode *dctor = addExternalDecl(ctx, destructor->func.decl);
 
     AstNode *args = (nodeIs(node, MemberExpr) || nodeIs(node, IndexExpr))
                         ? deepCloneAstNode(ctx->pool, node)
@@ -129,33 +126,19 @@ static AstNode *invokeTupleDestructor(MMContext *ctx, AstNode *node)
                                                  node,
                                                  NULL,
                                                  type);
-    return makeCallExpr(
-        ctx->pool,
-        &node->loc,
-        makeResolvedIdentifier(ctx->pool,
+    return makeBackendCallExpr(ctx->pool,
                                &node->loc,
-                               destructor->name,
-                               0,
-                               dctor,
-                               NULL,
-                               destructor),
-        makeReferenceOfExpr(ctx->pool,
-                            &args->loc,
-                            flgNone,
-                            args,
-                            NULL,
-                            makeReferenceType(ctx->types, args->type, flgNone)),
-        flgNone,
-        NULL,
-        destructor->func.retType);
+                               flgNone,
+                               bfiDrop,
+                               args,
+                               destructor->func.retType);
 }
 
-static AstNode *invokeUnionDestructor(MMContext *ctx, AstNode *node)
+static AstNode *createUnionDrop(MMContext *ctx, AstNode *node)
 {
     const Type *type = node->type;
     const Type *destructor = type->tUnion.destructorFunc;
     csAssert0(destructor);
-    AstNode *dctor = addExternalDecl(ctx, destructor->func.decl);
 
     AstNode *args = (nodeIs(node, MemberExpr) || nodeIs(node, IndexExpr))
                         ? deepCloneAstNode(ctx->pool, node)
@@ -166,163 +149,91 @@ static AstNode *invokeUnionDestructor(MMContext *ctx, AstNode *node)
                                                  node,
                                                  NULL,
                                                  type);
-    return makeCallExpr(
-        ctx->pool,
-        &node->loc,
-        makeResolvedIdentifier(ctx->pool,
+    return makeBackendCallExpr(ctx->pool,
                                &node->loc,
-                               destructor->name,
-                               0,
-                               dctor,
-                               NULL,
-                               destructor),
-        makeReferenceOfExpr(ctx->pool,
-                            &args->loc,
-                            flgNone,
-                            args,
-                            NULL,
-                            makeReferenceType(ctx->types, args->type, flgNone)),
-        flgNone,
-        NULL,
-        destructor->func.retType);
+                               flgNone,
+                               bfiDrop,
+                               args,
+                               destructor->func.retType);
 }
 
-static void transformToTupleDestruct(MMContext *ctx,
-                                     AstNode *node,
-                                     AstNode *expr)
+static void transformToTupleDrop(MMContext *ctx, AstNode *node, AstNode *expr)
 {
     const Type *type = expr->type;
     const Type *destructor = type->tuple.destructorFunc;
     csAssert0(destructor);
-    AstNode *dctor = addExternalDecl(ctx, destructor->func.decl);
 
     node->tag = astExprStmt;
     node->flags = flgNone;
     node->type = makeVoidType(ctx->types);
     clearAstBody(node);
-    node->exprStmt.expr = makeCallExpr(
-        ctx->pool,
-        &node->loc,
-        makeResolvedIdentifier(ctx->pool,
-                               &node->loc,
-                               destructor->name,
-                               0,
-                               dctor,
-                               NULL,
-                               destructor),
-        makeReferenceOfExpr(ctx->pool,
-                            &expr->loc,
-                            flgNone,
-                            expr,
-                            NULL,
-                            makeReferenceType(ctx->types, expr->type, flgNone)),
-        flgNone,
-        NULL,
-        destructor->func.retType);
+    node->exprStmt.expr = makeBackendCallExpr(ctx->pool,
+                                              &node->loc,
+                                              flgNone,
+                                              bfiDrop,
+                                              expr,
+                                              destructor->func.retType);
 }
 
-static void transformToUnionDestruct(MMContext *ctx,
-                                     AstNode *node,
-                                     AstNode *expr)
+static void transformToUnionDrop(MMContext *ctx, AstNode *node, AstNode *expr)
 {
     const Type *type = expr->type;
     const Type *destructor = type->tUnion.destructorFunc;
     csAssert0(destructor);
-    AstNode *dctor = addExternalDecl(ctx, destructor->func.decl);
 
     node->tag = astExprStmt;
     node->flags = flgNone;
     node->type = makeVoidType(ctx->types);
     clearAstBody(node);
-    node->exprStmt.expr = makeCallExpr(
-        ctx->pool,
-        &node->loc,
-        makeResolvedIdentifier(ctx->pool,
-                               &node->loc,
-                               destructor->name,
-                               0,
-                               dctor,
-                               NULL,
-                               destructor),
-        makeReferenceOfExpr(ctx->pool,
-                            &expr->loc,
-                            flgNone,
-                            expr,
-                            NULL,
-                            makeReferenceType(ctx->types, expr->type, flgNone)),
-        flgNone,
-        NULL,
-        destructor->func.retType);
+    node->exprStmt.expr = makeBackendCallExpr(ctx->pool,
+                                              &node->loc,
+                                              flgNone,
+                                              bfiDrop,
+                                              expr,
+                                              destructor->func.retType);
 }
 
-static AstNode *invokeStructDestructor(MMContext *ctx, AstNode *node)
+static AstNode *createStructDrop(MMContext *ctx, AstNode *node)
 {
     AstNode *destructor =
         findMemberDeclInType(node->type, S_DestructorOverload);
     const Type *type = destructor->type;
     csAssert0(destructor);
-    AstNode *dctor = addExternalDecl(ctx, destructor);
 
-    return makeCallExpr(
+    return makeBackendCallExpr(
         ctx->pool,
         &node->loc,
-        makeResolvedIdentifier(
-            ctx->pool, &node->loc, type->name, 0, dctor, NULL, type),
-        makePointerOfExpr(ctx->pool,
-                          &node->loc,
-                          flgNone,
-                          (nodeIs(node, MemberExpr) || nodeIs(node, IndexExpr))
-                              ? deepCloneAstNode(ctx->pool, node)
-                              : makeResolvedIdentifier(ctx->pool,
-                                                       &node->loc,
-                                                       node->_namedNode.name,
-                                                       0,
-                                                       node,
-                                                       NULL,
-                                                       node->type),
-                          NULL,
-                          makePointerType(ctx->types, node->type, flgNone)),
         flgNone,
-        NULL,
+        bfiDrop,
+        (nodeIs(node, MemberExpr) || nodeIs(node, IndexExpr))
+            ? deepCloneAstNode(ctx->pool, node)
+            : makeResolvedIdentifier(ctx->pool,
+                                     &node->loc,
+                                     node->_namedNode.name,
+                                     0,
+                                     node,
+                                     NULL,
+                                     node->type),
         type->func.retType);
 }
 
-static void transformToStructDestruct(MMContext *ctx,
-                                      AstNode *node,
-                                      AstNode *expr)
+static void transformToStructDrop(MMContext *ctx, AstNode *node, AstNode *expr)
 {
     AstNode *destructor =
         findMemberDeclInType(expr->type, S_DestructorOverload);
     const Type *type = destructor->type;
     csAssert0(destructor);
-    AstNode *dctor = addExternalDecl(ctx, destructor);
 
     node->tag = astExprStmt;
     node->type = makeVoidType(ctx->types);
     node->flags = flgNone;
     clearAstBody(node);
-    node->exprStmt.expr = makeCallExpr(
-        ctx->pool,
-        &node->loc,
-        makeResolvedIdentifier(
-            ctx->pool, &node->loc, type->name, 0, dctor, NULL, type),
-        makePointerOfExpr(ctx->pool,
-                          &node->loc,
-                          flgNone,
-                          expr,
-                          NULL,
-                          makePointerType(ctx->types, node->type, flgNone)),
-        flgNone,
-        NULL,
-        type->func.retType);
+    node->exprStmt.expr = makeBackendCallExpr(
+        ctx->pool, &node->loc, flgNone, bfiDrop, expr, type->func.retType);
 }
 
-static AstNode *invokeClassDropRef(MMContext *ctx, AstNode *node)
+static AstNode *createClassDrop(MMContext *ctx, AstNode *node)
 {
-    AstNode *drop =
-        findBuiltinDecl(ctx->traceMemory ? S_sptr_drop_trace : S_sptr_drop);
-    csAssert0(drop);
-
     AstNode *target = (nodeIs(node, MemberExpr) || nodeIs(node, IndexExpr))
                           ? deepCloneAstNode(ctx->pool, node)
                           : makeResolvedIdentifier(ctx->pool,
@@ -331,134 +242,71 @@ static AstNode *invokeClassDropRef(MMContext *ctx, AstNode *node)
                                                    0,
                                                    node,
                                                    NULL,
-                                                   NULL);
-    target->type = makeVoidPointerType(ctx->types, flgNone);
-    if (ctx->traceMemory)
-        target->next = makeSrLocNode(ctx->pool, &node->loc);
+                                                   node->type);
 
-    return makeCallExpr(ctx->pool,
-                        &node->loc,
-                        makeResolvedIdentifier(ctx->pool,
-                                               &node->loc,
-                                               drop->_namedNode.name,
-                                               0,
-                                               drop,
-                                               NULL,
-                                               drop->type),
-                        target,
-                        flgNone,
-                        NULL,
-                        drop->type->func.retType);
+    return makeBackendCallExpr(ctx->pool,
+                               &node->loc,
+                               flgNone,
+                               bfiDrop,
+                               target,
+                               makeVoidType(ctx->types));
 }
 
-static void transformToClassDropRef(MMContext *ctx,
-                                    AstNode *node,
-                                    AstNode *expr)
+static void transformToClassDrop(MMContext *ctx, AstNode *node, AstNode *expr)
 {
-    AstNode *drop =
-        findBuiltinDecl(ctx->traceMemory ? S_sptr_drop_trace : S_sptr_drop);
-    csAssert0(drop);
-
-    expr->type = makeVoidPointerType(ctx->types, flgNone);
-    if (ctx->traceMemory)
-        expr->next = makeSrLocNode(ctx->pool, &node->loc);
-
     node->tag = astExprStmt;
     node->flags = flgNone;
     node->type = makeVoidType(ctx->types);
     clearAstBody(node);
-    node->exprStmt.expr =
-        makeCallExpr(ctx->pool,
-                     &node->loc,
-                     makeResolvedIdentifier(ctx->pool,
-                                            &node->loc,
-                                            drop->_namedNode.name,
-                                            0,
-                                            drop,
-                                            NULL,
-                                            drop->type),
-                     expr,
-                     flgNone,
-                     NULL,
-                     drop->type->func.retType);
+    node->exprStmt.expr = makeBackendCallExpr(ctx->pool,
+                                              &node->loc,
+                                              flgNone,
+                                              bfiDrop,
+                                              expr,
+                                              makeVoidType(ctx->types));
 }
 
-static void transformToCopyTuple(MMContext *ctx, AstNode *node, AstNode *expr)
+static void transformToTupleCopy(MMContext *ctx, AstNode *node, AstNode *expr)
 {
     const Type *type = node->type;
     const Type *copy = type->tuple.copyFunc;
     csAssert0(copy);
-    AstNode *decl = addExternalDecl(ctx, copy->func.decl);
 
-    node->tag = astCallExpr;
+    node->tag = astBackendCall;
     clearAstBody(node);
-    node->callExpr.callee = makeResolvedIdentifier(
-        ctx->pool, &node->loc, copy->name, 0, decl, NULL, copy);
-    node->callExpr.args =
-        makeReferenceOfExpr(ctx->pool,
-                            &expr->loc,
-                            flgNone,
-                            expr,
-                            NULL,
-                            makeReferenceType(ctx->types, expr->type, flgNone));
+    node->backendCallExpr.func = bfiCopy;
+    node->backendCallExpr.args = expr;
 }
 
-static void transformToCopyUnion(MMContext *ctx, AstNode *node, AstNode *expr)
+static void transformToUnionCopy(MMContext *ctx, AstNode *node, AstNode *expr)
 {
     const Type *type = node->type;
     const Type *copy = type->tUnion.copyFunc;
     csAssert0(copy);
-    AstNode *decl = addExternalDecl(ctx, copy->func.decl);
 
-    node->tag = astCallExpr;
+    node->tag = astBackendCall;
     clearAstBody(node);
-    node->callExpr.callee = makeResolvedIdentifier(
-        ctx->pool, &node->loc, copy->name, 0, decl, NULL, copy);
-    node->callExpr.args =
-        makeReferenceOfExpr(ctx->pool,
-                            &expr->loc,
-                            flgNone,
-                            expr,
-                            NULL,
-                            makeReferenceType(ctx->types, expr->type, flgNone));
+    node->backendCallExpr.func = bfiCopy;
+    node->backendCallExpr.args = expr;
 }
 
-static void transformToClassRefGet(MMContext *ctx, AstNode *node, AstNode *expr)
+static void transformToClassCopy(MMContext *ctx, AstNode *node, AstNode *expr)
 {
-    AstNode *get =
-        findBuiltinDecl(ctx->traceMemory ? S_sptr_get_trace : S_sptr_ref);
-    csAssert0(get);
-
-    expr->type = makeVoidPointerType(ctx->types, flgNone);
-    if (ctx->traceMemory)
-        expr->next = makeSrLocNode(ctx->pool, &node->loc);
-
-    node->tag = astCallExpr;
+    node->tag = astBackendCall;
     clearAstBody(node);
-    node->callExpr.callee = makeResolvedIdentifier(
-        ctx->pool, &node->loc, get->_namedNode.name, 0, get, NULL, get->type);
-    node->callExpr.args = expr;
+    node->backendCallExpr.func = bfiCopy;
+    node->backendCallExpr.args = expr;
 }
 
-static void transformToCopyStruct(MMContext *ctx, AstNode *node, AstNode *expr)
+static void transformStructCopy(MMContext *ctx, AstNode *node, AstNode *expr)
 {
     const Type *type = node->type;
     const Type *copy = findMemberInType(type, S_CopyOverload);
     csAssert0(copy);
-    AstNode *decl = addExternalDecl(ctx, copy->func.decl);
-
-    AstNode *args =
-        makePointerOfExpr(ctx->pool,
-                          &node->loc,
-                          flgNone,
-                          expr,
-                          NULL,
-                          makePointerType(ctx->types, node->type, flgNone));
-    node->tag = astCallExpr;
+    node->tag = astBackendCall;
     clearAstBody(node);
-    node->callExpr.callee = makeResolvedIdentifier(
-        ctx->pool, &node->loc, copy->name, 0, decl, NULL, copy);
-    node->callExpr.args = args;
+    node->backendCallExpr.func = bfiCopy;
+    node->backendCallExpr.args = expr;
 }
 
 void transformToMove(MMContext *ctx, AstNode *node, AstNode *expr)
@@ -474,23 +322,21 @@ void transformToMove(MMContext *ctx, AstNode *node, AstNode *expr)
                                 expr,
                                 NULL,
                                 node->type);
-    body->next = makeZeromemNode(
-        ctx,
-        expr,
-        isClassType(node->type) ? makeVoidPointerType(ctx->types, flgNone)
-                                : node->type,
-        makeExprStmt(ctx->pool,
-                     &node->loc,
-                     flgNone,
-                     makeResolvedIdentifier(ctx->pool,
-                                            &node->loc,
-                                            body->varDecl.name,
-                                            flgNone,
-                                            body,
-                                            NULL,
-                                            body->type),
-                     NULL,
-                     body->type));
+    body->next =
+        makeZeromemNode(ctx,
+                        expr,
+                        makeExprStmt(ctx->pool,
+                                     &node->loc,
+                                     flgNone,
+                                     makeResolvedIdentifier(ctx->pool,
+                                                            &node->loc,
+                                                            body->varDecl.name,
+                                                            flgNone,
+                                                            body,
+                                                            NULL,
+                                                            body->type),
+                                     NULL,
+                                     body->type));
 
     node->tag = astStmtExpr;
     clearAstBody(node);
@@ -532,13 +378,13 @@ static void transformToCopyWithExpr(MMContext *ctx,
                                     AstNode *expr)
 {
     if (isTupleType(node->type))
-        transformToCopyTuple(ctx, node, expr);
+        transformToTupleCopy(ctx, node, expr);
     else if (isStructType(node->type))
-        transformToCopyStruct(ctx, node, expr);
+        transformStructCopy(ctx, node, expr);
     else if (isUnionType(node->type))
-        transformToCopyUnion(ctx, node, expr);
+        transformToUnionCopy(ctx, node, expr);
     else
-        transformToClassRefGet(ctx, node, expr);
+        transformToClassCopy(ctx, node, expr);
 }
 
 static void transformToCopy(MMContext *ctx, AstNode *node)
@@ -547,25 +393,25 @@ static void transformToCopy(MMContext *ctx, AstNode *node)
         return; // nothing to move
 
     if (isTupleType(node->type))
-        transformToCopyTuple(ctx, node, copyAstNode(ctx->pool, node));
+        transformToTupleCopy(ctx, node, copyAstNode(ctx->pool, node));
     else if (isStructType(node->type))
-        transformToCopyStruct(ctx, node, copyAstNode(ctx->pool, node));
+        transformStructCopy(ctx, node, copyAstNode(ctx->pool, node));
     else if (isUnionType(node->type))
-        transformToCopyUnion(ctx, node, copyAstNode(ctx->pool, node));
+        transformToUnionCopy(ctx, node, copyAstNode(ctx->pool, node));
     else
-        transformToClassRefGet(ctx, node, copyAstNode(ctx->pool, node));
+        transformToClassCopy(ctx, node, copyAstNode(ctx->pool, node));
 }
 
 static inline AstNode *createDestruct(MMContext *ctx, AstNode *node)
 {
     if (isTupleType(node->type))
-        return invokeTupleDestructor(ctx, node);
+        return createTupleDrop(ctx, node);
     else if (isStructType(node->type))
-        return invokeStructDestructor(ctx, node);
+        return createStructDrop(ctx, node);
     else if (isUnionType(node->type))
-        return invokeUnionDestructor(ctx, node);
+        return createUnionDrop(ctx, node);
     else
-        return invokeClassDropRef(ctx, node);
+        return createClassDrop(ctx, node);
 }
 
 static inline void transformToDestruct(MMContext *ctx,
@@ -573,13 +419,13 @@ static inline void transformToDestruct(MMContext *ctx,
                                        AstNode *expr)
 {
     if (isTupleType(expr->type))
-        transformToTupleDestruct(ctx, node, expr);
+        transformToTupleDrop(ctx, node, expr);
     else if (isStructType(expr->type))
-        transformToStructDestruct(ctx, node, expr);
+        transformToStructDrop(ctx, node, expr);
     else if (isUnionType(expr->type))
-        transformToUnionDestruct(ctx, node, expr);
+        transformToUnionDrop(ctx, node, expr);
     else
-        transformToClassDropRef(ctx, node, expr);
+        transformToClassDrop(ctx, node, expr);
 }
 
 static void addDestruct(MMContext *ctx, AstNode *node)
@@ -639,7 +485,6 @@ static void visitBlockStmt(AstVisitor *visitor, AstNode *node)
     MMContext *ctx = getAstVisitorContext(visitor);
     AstNode *stmt = node->blockStmt.stmts;
     astModifierInit(&ctx->block, node);
-
     for (; stmt; stmt = stmt->next) {
         astModifierNext(&ctx->block, stmt);
         astVisit(visitor, stmt);
@@ -688,26 +533,33 @@ static void visitExprStmt(AstVisitor *visitor, AstNode *node)
     }
     else {
         astVisit(visitor, expr);
+        while (nodeIs(expr, ExprStmt)) {
+            replaceAstNode(node, expr);
+            expr = expr->exprStmt.expr;
+        }
     }
 }
 
 static void visitVarDecl(AstVisitor *visitor, AstNode *node)
 {
     MMContext *ctx = getAstVisitorContext(visitor);
-    if (needsMemoryManagement(node)) {
-        if (!hasFlags(node, flgReturned | flgMoved)) {
-            addDeferredDestruct(ctx, node);
+    AstNode *init = node->varDecl.init;
+    if (hasFlag(node, TopLevelDecl) || !needsMemoryManagement(node)) {
+        astVisit(visitor, init);
+        return;
+    }
+
+    if (!hasFlags(node, flgReturned | flgMoved)) {
+        addDeferredDestruct(ctx, node);
+        if (init) {
             astVisit(visitor, node->varDecl.init);
             if (isLeftValueExpr(node->varDecl.init)) {
                 transformToCopy(ctx, node->varDecl.init);
             }
         }
-        else {
-            astVisit(visitor, node->varDecl.init);
-        }
     }
     else {
-        astVisit(visitor, node->varDecl.init);
+        astVisit(visitor, init);
     }
 }
 
@@ -751,7 +603,8 @@ static void visitCastExpr(AstVisitor *visitor, AstNode *node)
     AstNode *to = node->castExpr.to, *expr = node->castExpr.expr;
     astVisit(visitor, expr);
 
-    if (!isReferenceType(expr->type) || isReferenceType(to->type))
+    if (!isReferenceType(expr->type) || isReferenceType(to->type) ||
+        isUnionType(stripReference(expr->type)))
         return;
 
     const Type *type = to->type;
@@ -785,8 +638,7 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
     const AstNode *decl = getTypeDecl(func);
     if (hasFlag(decl, Extern))
         return;
-    AstNode *param = nodeIs(decl, FuncDecl) ? decl->funcDecl.signature->params
-                                            : decl->funcType.params;
+    AstNode *param = nodeGetFuncParams(decl);
     if (nodeIsThisParam(param)) {
         param = param->next;
         arg = arg ? arg->next : NULL;
@@ -822,19 +674,13 @@ static void visitUnaryExpr(AstVisitor *visitor, AstNode *node)
             transformToMove(ctx, node, operand);
         }
         else if (op == opDelete) {
-            AstNode *zeroMem =
-                makeZeromemNode(ctx,
-                                operand,
-                                isClassType(operand->type)
-                                    ? makeVoidPointerType(ctx->types, flgNone)
-                                    : operand->type,
-                                NULL);
+            AstNode *zeroMem = makeZeromemNode(ctx, operand, NULL);
             transformToDestruct(ctx, node, operand);
             astModifierAddAsNext(&ctx->block, zeroMem);
         }
     }
     else if (op == opDelete) {
-        transformToZeromemNode(ctx, node, operand);
+        transformNodeToZeromem(ctx, node, operand);
     }
 }
 

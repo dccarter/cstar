@@ -887,6 +887,28 @@ static AstNode *closure(Parser *P)
             .closureExpr = {.params = params, .ret = ret, .body = body}});
 }
 
+static AstNode *async(Parser *P)
+{
+    Token tok = *consume0(P, tokAsync);
+    AstNode *name = NULL;
+    if (check(P, tokStringLiteral))
+        name = parseString(P);
+    else
+        name = makeNullLiteral(P->memPool, &tok.fileLoc, NULL, NULL);
+
+    AstNode *body = statement(P, true);
+    body->next = name;
+
+    return newAstNode(
+        P,
+        &tok.fileLoc.begin,
+        &(AstNode){.tag = astMacroCallExpr,
+                   .macroCallExpr = {
+                       .callee = makeIdentifier(
+                           P->memPool, &tok.fileLoc, S___async, 0, NULL, NULL),
+                       .args = body}});
+}
+
 static AstNode *tuple(
     Parser *P,
     cstring msg,
@@ -1435,7 +1457,7 @@ static AstNode *primary(Parser *P, bool allowStructs)
     case tokRange:
         return range(P);
     case tokAsync:
-        return closure(P);
+        return async(P);
     default:
         reportUnexpectedToken(P, "a primary expression");
     }

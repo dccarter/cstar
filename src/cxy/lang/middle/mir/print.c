@@ -117,6 +117,17 @@ static void printMirNode(PrintContext *ctx, const MirNode *node)
         appendString(&ctx->state, " ");
         printMirNode(ctx, node->CastOp.type);
         break;
+    case mirMallocOp:
+        format(&ctx->state,
+               "({$}malloc{$} ({$}sizeof{$} ",
+               (FormatArg[]){{.style = keywordStyle},
+                             {.style = resetStyle},
+                             {.style = keywordStyle},
+                             {.style = resetStyle}});
+        printType(&ctx->state, node->type);
+        format(&ctx->state, ") ", NULL);
+        printMirNode(ctx, node->MallocOp.operand);
+        break;
     case mirMoveOp:
         appendString(&ctx->state, "(&& ");
         printMirNode(ctx, node->MoveOp.operand);
@@ -234,9 +245,10 @@ static void printMirNode(PrintContext *ctx, const MirNode *node)
                            {.i64 = it->CaseOp.matches->SignedConst.value},
                            {.s = it->CaseOp.body->BasicBlock.name}});
         }
-        format(&ctx->state,
-               " @{s}",
-               (FormatArg[]){{.s = node->SwitchOp.def->BasicBlock.name}});
+        if (node->SwitchOp.def)
+            format(&ctx->state,
+                   " @{s}",
+                   (FormatArg[]){{.s = node->SwitchOp.def->BasicBlock.name}});
         break;
 
     case mirReturnOp:
