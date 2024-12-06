@@ -53,6 +53,9 @@ void checkMatchCaseStmt(AstVisitor *visitor, AstNode *node)
             node->caseStmt.variable->type = type;
         }
     }
+    else {
+        node->parentScope->matchStmt.defaultCase = node;
+    }
 
     if (body) {
         node->type = checkType(visitor, body);

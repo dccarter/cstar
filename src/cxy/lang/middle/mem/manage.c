@@ -658,7 +658,8 @@ static void visitUnionValueExpr(AstVisitor *visitor, AstNode *node)
     MMContext *ctx = getAstVisitorContext(visitor);
     AstNode *value = node->unionValue.value;
     astVisit(visitor, value);
-    if (needsMemoryManagement(value) && isLeftValueExpr(value)) {
+    if (needsMemoryManagement(value) && isLeftValueExpr(value) &&
+        !hasFlag(value, Move)) {
         transformToCopy(ctx, value);
     }
 }

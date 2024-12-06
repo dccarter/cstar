@@ -1300,6 +1300,8 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right)
 const Type *findMemberInType(const Type *type, cstring name)
 {
     const Type *found = NULL;
+    if (type == NULL)
+        return false;
     switch (type->tag) {
     case typThis:
         found = findMemberInType(type->_this.that, name);

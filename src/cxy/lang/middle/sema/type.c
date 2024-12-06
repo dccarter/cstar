@@ -77,7 +77,7 @@ const Type *checkTypeShallow(AstVisitor *visitor, AstNode *node, bool shallow)
     if (node == NULL)
         return NULL;
     bool wasShallow = ctx->shallow;
-    ctx->shallow = shallow;
+    ctx->shallow = wasShallow || shallow;
     if (hasFlag(node, Comptime)) {
         node->flags &= ~flgComptime;
         bool status = evaluate(ctx->evaluator, node);

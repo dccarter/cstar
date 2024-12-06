@@ -297,7 +297,7 @@ pub async func tcpConnect(addr: Address, deadline: i64 = 0): TcpSocket {
 
         var err: i32;
         var errSize = <u32>sizeof!(err);
-        rc = socket.getsockopt(fd, SOL_SOCKET!, SO_ERROR!, ptrof err !: ^void, ptrof errSize)
+        rc = socket.getsockopt(fd, SOL_SOCKET!, SO_ERROR!, (ptrof err) !: ^void, ptrof errSize)
         if (rc != 0) {
             err = errno!
             unistd.close(fd)

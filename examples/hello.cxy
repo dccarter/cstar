@@ -1,35 +1,41 @@
-import { FileServer } from "stdlib/fserver.cxy"
-import { Config, Server, Request, Response, Status } from "stdlib/http.cxy"
-import { Address } from "stdlib/net.cxy"
+import { Vector } from "stdlib/vector.cxy"
 
-import "stdlib/log.cxy"
-
-class Log {
-    @static
-    LOG_TAG = "MW_LOG";
-
-    func `init`(){}
-
-    func before(req: &const Request, resp: &Response) {
-        DBG!( req.method() << " " << req.path() )
-        resp.end(Status.BAD_REQUEST)
-    }
-
-    func after(req: &const Request, resp: &Response) {
-        DBG!( req.method() << " " << req.path() )
-    }
+struct Flag {
+    short: char
+    name: string
+    desc: string = ""
+    required = false
 }
 
-func main(args: [string]) {
-     var server = Server[(Log)]();
-     var api = Server[()](Config{address: Address("0.0.0.0", 8081)});
-     api("/hello", (req: &const Request, resp: &Response) => {
-         resp.body() << "Hello, World!"
-     })
+struct Str : Flag {
+    value: string = null
+}
 
+struct Int: Flag {
+    value: i64 = 0
+}
 
+struct Float: Flag {
+    value: f64 = 0
+}
 
-     var fs = FileServer(&server);
-     async { api.start() }
-     server.start()
+type Option = Flag | Str | Int | Float
+
+struct Command {
+    name: string
+    desc: string
+    options: [Option];
+}
+
+func main() {
+    Command{
+        name: "build",
+        desc: "Builds the application",
+        options: [
+            Int{
+                short: 'h',
+                name: "help"
+            }
+        ]
+    }
 }

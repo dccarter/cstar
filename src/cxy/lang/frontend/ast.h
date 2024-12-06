@@ -98,7 +98,7 @@ struct StrPool;
     f(CCode)                \
     f(Define)               \
     f(Attr)                 \
-    f(AttrDecl)             \
+    f(Annotation)           \
     f(Symbol)               \
     f(Path)                 \
     f(PathElem)             \
@@ -360,6 +360,11 @@ struct AstNode {
         } attr;
 
         struct {
+            cstring name;
+            struct AstNode *value;
+        } annotation;
+
+        struct {
             u64 len;
             struct AstNode *elements;
             bool isLiteral;
@@ -554,6 +559,7 @@ struct AstNode {
             const Type *thisType;
             struct AstNode *base;
             struct AstNode *closureForward;
+            struct AstNode *annotations;
         } structDecl;
 
         struct {
@@ -563,6 +569,7 @@ struct AstNode {
             const Type *thisType;
             struct AstNode *base;
             struct AstNode *closureForward;
+            struct AstNode *annotations;
             struct AstNode *implements;
         } classDecl;
 
@@ -695,12 +702,14 @@ struct AstNode {
             u64 index;
             struct AstNode *cond;
             struct AstNode *cases;
+            struct AstNode *defaultCase;
         } switchStmt;
 
         struct {
             u64 index;
             struct AstNode *expr;
             struct AstNode *cases;
+            struct AstNode *defaultCase;
         } matchStmt;
 
         struct {

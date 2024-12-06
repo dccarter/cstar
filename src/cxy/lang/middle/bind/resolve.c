@@ -21,6 +21,33 @@ static inline bool isCallableDecl(AstNode *node)
             nodeIs(node->genericDecl.decl, FuncDecl));
 }
 
+static void bindInheritBaseFields(AstVisitor *visitor, AstNode *node)
+{
+    BindContext *ctx = getAstVisitorContext(visitor);
+    AstNodeList list = {};
+    AstNode *base = node->structDecl.base;
+    astVisit(visitor, base);
+    AstNode *target = resolvePath(base);
+    if (!nodeIs(target, StructDecl)) {
+        logError(ctx->L,
+                 &base->loc,
+                 "struct can only inherit fields from other structs",
+                 NULL);
+        return;
+    }
+    AstNode *member = target->structDecl.members;
+    for (; member; member = member->next) {
+        if (nodeIs(member, FieldDecl)) {
+            AstNode *field = deepCloneAstNode(ctx->pool, member);
+            field->next = NULL;
+            field->parentScope = node;
+            insertAstNode(&list, field);
+        }
+    }
+    insertAstNode(&list, node->structDecl.members);
+    node->structDecl.members = list.first;
+}
+
 static inline bool shouldCaptureSymbol(const AstNode *closure,
                                        const AstNode *symbol)
 {
@@ -401,11 +428,15 @@ void bindStructField(AstVisitor *visitor, AstNode *node)
 void bindStructDecl(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
-    AstNode *member = node->structDecl.members;
 
     pushScope(ctx->env, node);
     defineSymbol(ctx->env, ctx->L, S_This, node);
 
+    if (node->structDecl.base) {
+        bindInheritBaseFields(visitor, node);
+    }
+
+    AstNode *member = node->structDecl.members;
     for (; member; member = member->next) {
         if (isCallableDecl(member)) {
             if (nodeIs(member, FuncDecl)) {

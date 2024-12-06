@@ -405,6 +405,14 @@ static bool checkComparisonOperation(EvalContext *ctx, AstNode *node)
             nodeGetNumericLiteral(lhs) OP nodeGetNumericLiteral(rhs);          \
     }
 
+static void evalIsOperation(EvalContext *ctx, AstNode *node)
+{
+    logError(ctx->L,
+             &node->loc,
+             "operator `is` is not a valid comptime operator",
+             NULL);
+}
+
 CXY_DEFINE_BINARY_EQ_COMP_OPERATOR(Eq, ==)
 
 CXY_DEFINE_BINARY_EQ_COMP_OPERATOR(Ne, !=)

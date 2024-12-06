@@ -337,7 +337,9 @@ static inline bool isImportModuleACHeader(cstring module)
     return ext != NULL && strcmp(ext + 1, "h") == 0;
 }
 
-static cstring getModuleLocation(CompilerDriver *driver, const AstNode *source)
+static cstring getModuleLocation(CompilerDriver *driver,
+                                 const AstNode *source,
+                                 bool isInclude)
 {
     cstring importer = source->loc.fileName,
             modulePath = source->stringLiteral.value;
@@ -356,7 +358,7 @@ static cstring getModuleLocation(CompilerDriver *driver, const AstNode *source)
         char tmp[PATH_MAX];
         return makeString(driver->strings, realpath(path, tmp));
     }
-    else if (driver->options.libDir != NULL) {
+    else if (!isInclude && driver->options.libDir != NULL) {
         char tmp[PATH_MAX];
         u64 libDirLen = strlen(driver->options.libDir);
         memcpy(path, driver->options.libDir, libDirLen);
@@ -374,15 +376,27 @@ static cstring getModuleLocation(CompilerDriver *driver, const AstNode *source)
         memcpy(&path[driver->currentDirLen + 1], modulePath, modulePathLen);
         path[driver->currentDirLen + 1 + modulePathLen] = '\0';
         if (realpath(path, tmp) == NULL) {
-            logError(driver->L,
-                     &source->loc,
-                     "stdlib module '{s}' not found, perhaps import local "
-                     "module with relative path './{s}'",
-                     (FormatArg[]){{.s = modulePath}, {.s = modulePath}});
+            logError(
+                driver->L,
+                &source->loc,
+                "stdlib module/include path '{s}' not found, perhaps "
+                "import/include a local module with relative path './{s}' ",
+                (FormatArg[]){{.s = modulePath}, {.s = modulePath}});
             return NULL;
         }
         return makeString(driver->strings, tmp);
     }
+}
+
+cstring getIncludeFileLocation(CompilerDriver *driver,
+                               const FileLoc *loc,
+                               cstring path)
+{
+    return getModuleLocation(driver,
+                             &(AstNode){.loc = *loc,
+                                        .tag = astStringLit,
+                                        .stringLiteral.value = path},
+                             true);
 }
 
 const Type *compileModule(CompilerDriver *driver,
@@ -394,7 +408,7 @@ const Type *compileModule(CompilerDriver *driver,
     bool cached = true;
     cstring path = source->stringLiteral.value;
     if (!isImportModuleACHeader(source->stringLiteral.value)) {
-        path = getModuleLocation(driver, source);
+        path = getModuleLocation(driver, source, false);
         if (path == NULL)
             return NULL;
 
@@ -495,9 +509,11 @@ bool compileFile(const char *fileName, CompilerDriver *driver)
     startCompilerStats(driver);
     AstNode *program =
         parseFile(driver, fileName, driver->options.cmd == cmdTest);
-    program->flags |= flgMain;
-
-    return compileProgram(driver, program, fileName, true);
+    if (program) {
+        program->flags |= flgMain;
+        return compileProgram(driver, program, fileName, true);
+    }
+    return false;
 }
 
 bool compileString(CompilerDriver *driver,

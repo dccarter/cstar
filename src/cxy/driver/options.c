@@ -285,7 +285,7 @@ static void initializeOptions(StrPool *strings, Options *options)
     options->frameworkSearchPaths = newDynArray(sizeof(char *));
     options->libraries = newDynArray(sizeof(char *));
     options->defines = newDynArray(sizeof(CompilerDefine));
-#ifdef __APPLE__
+#if 0 // ifdef __APPLE__
     pushOnDynArray(&options->defines, &(CompilerDefine){"MACOS", "1"});
     FormatState state = newFormatState(NULL, true);
     exec("xcrun --show-sdk-path", &state);
@@ -308,7 +308,8 @@ static void initializeOptions(StrPool *strings, Options *options)
     }
 #else
     FormatState state = newFormatState(NULL, true);
-    exec("clang -E -v -x c++ /dev/null 2>&1 | grep -e \"^ /\" | xargs realpath",
+    exec("clang -E -v -x c++ /dev/null 2>&1 | grep -e \"^ /\" | cut -d \" \" "
+         "-f 2 | xargs realpath",
          &state);
     char *includeDirs = formatStateToString(&state);
     const char *p = includeDirs;
@@ -327,8 +328,13 @@ static void initializeOptions(StrPool *strings, Options *options)
     }
     free(includeDirs);
     freeFormatState(&state);
+#ifdef __APPLE__
+    pushOnDynArray(&options->defines, &(CompilerDefine){"MACOS", "1"});
+#else
     pushStringOnDynArray(&options->cDefines, "-D_XOPEN_SOURCE=1");
     pushStringOnDynArray(&options->cDefines, "-D_DEFAULT_SOURCE");
+#endif
+
 #endif
 }
 

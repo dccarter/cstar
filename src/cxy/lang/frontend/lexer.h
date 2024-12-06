@@ -24,14 +24,22 @@ enum {
     lxMaybeNotFloat = BIT(4),
 };
 
-typedef struct Lexer {
+typedef struct LexerBuffer {
+    struct LexerBuffer *prev;
     const char *fileName;
     const char *fileData;
     size_t fileSize;
     FilePos filePos;
+    bool ownData;
+} LexerBuffer;
+
+typedef struct Lexer {
+    LexerBuffer *cleanup;
+    LexerBuffer *buffer;
     Log *log;
     HashTable keywords;
     u32 flags;
+    u32 cleanupCount;
 } Lexer;
 
 Lexer newLexer(const char *fileName,
@@ -42,7 +50,7 @@ Lexer newLexer(const char *fileName,
 void freeLexer(Lexer *);
 
 Token advanceLexer(Lexer *);
-
+void lexerPush(Lexer *L, const char *fileName);
 #ifdef __cplusplus
 }
 #endif

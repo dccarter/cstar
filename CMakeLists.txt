@@ -87,7 +87,8 @@ set(CXY_CORE_SOURCES
         src/cxy/core/utils.c)
 
 set(CXY_3RD_PARTY_SOURCES
-        src/3rdParty/cJSON.c)
+        src/3rdParty/cJSON.c
+        src/3rdParty/toml/toml.c)
 
 set(CXY_FRONTEND_SOURCES
         src/cxy/lang/frontend/ast.c
@@ -197,6 +198,7 @@ endif ()
 
 set(CXY_DRIVER_SOURCES
         src/cxy/driver/cc.c
+        src/cxy/driver/cxyfile.c
         src/cxy/driver/driver.c
         src/cxy/driver/options.c
         src/cxy/driver/stages.c

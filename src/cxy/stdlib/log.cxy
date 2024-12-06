@@ -3,21 +3,16 @@ module logger
 import { Time } from "./time.cxy"
 
 enum Level {
+    @str("TRC")
     TRACE,
+    @str("DBG")
     DEBUG,
+    @str("INF")
     INFO,
+    @str("WRN")
     WARNING,
+    @str("ERR")
     ERROR
-}
-
-func levelToString(os: &OutputStream, level: Level) {
-    switch (level) {
-        case .INFO => os << "INF"
-        case .DEBUG => os << "DBG"
-        case .TRACE => os << "TRC"
-        case .WARNING => os << "WRN"
-        case .ERROR => os << "ERR"
-    }
 }
 
 struct Repeat {
@@ -68,12 +63,7 @@ class Logger {
 
     func log(lvl: Level, tag: string) : &OutputStream {
         Time().format(LOG_TIME_FMT!, &os)
-        stdout << " "
-
-        levelToString(&os, lvl)
-
-        os << " " << FixedWidth(tag, 10) << " "
-
+        os << " " << lvl << " " << FixedWidth(tag, 10) << " "
         return &os
     }
 }

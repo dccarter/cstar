@@ -230,6 +230,15 @@ static void visitMacroDecl(AstVisitor *visitor, AstNode *node)
     }
 }
 
+static void visitStructClassDecl(AstVisitor *visitor, AstNode *node)
+{
+    AstNode *annot = node->classDecl.annotations;
+    for (; annot; annot = annot->next) {
+        astVisit(visitor, annot->annotation.value);
+    }
+    astVisitFallbackVisitAll(visitor, node);
+}
+
 // static void visitProgram(AstVisitor *visitor, AstNode *node)
 //{
 //     PreprocessorContext *ctx = getAstVisitorContext(visitor);
@@ -265,6 +274,8 @@ AstNode *preprocessAst(CompilerDriver *driver, AstNode *node)
         [astTernaryExpr] = visitTernaryExpr,
         [astIfStmt] = visitIfStmt,
         [astMacroDecl] = visitMacroDecl,
+        [astStructDecl] = visitStructClassDecl,
+        [astClassDecl] = visitStructClassDecl,
     }, .fallback = astVisitFallbackVisitAll, .dispatch = dispatch);
     // clang-format on
 

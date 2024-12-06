@@ -616,6 +616,104 @@ static void visitCastExpr(AstVisitor *visitor, AstNode *node)
             node->unionValue.value = expr;
         }
     }
+    else if (isUnionType(expr->type) && !hasFlag(node, BitUnionCast)) {
+        AstNode *builtinAssert = findBuiltinDecl(S___cxy_assert);
+        csAssert0(builtinAssert);
+        u32 idx = findUnionTypeIndex(expr->type, stripReference(to->type));
+        csAssert0(idx != UINT32_MAX);
+        AstNodeList args = {};
+        insertAstNode(
+            &args,
+            makeBinaryExpr(
+                ctx->pool,
+                &expr->loc,
+                flgNone,
+                makeMemberExpr(ctx->pool,
+                               &expr->loc,
+                               flgNone,
+                               deepCloneAstNode(ctx->pool, expr),
+                               makeUnsignedIntegerLiteral(
+                                   ctx->pool,
+                                   &expr->loc,
+                                   0,
+                                   NULL,
+                                   getPrimitiveType(ctx->types, prtU64)),
+                               NULL,
+                               getPrimitiveType(ctx->types, prtU64)),
+                opEq,
+                makeUnsignedIntegerLiteral(
+                    ctx->pool,
+                    &expr->loc,
+                    idx,
+                    NULL,
+                    getPrimitiveType(ctx->types, prtU64)),
+                NULL,
+                getPrimitiveType(ctx->types, prtBool)));
+        insertAstNode(&args,
+                      makeStringLiteral(ctx->pool,
+                                        &expr->loc,
+                                        expr->loc.fileName,
+                                        NULL,
+                                        makeStringType(ctx->types)));
+        insertAstNode(
+            &args,
+            makeUnsignedIntegerLiteral(ctx->pool,
+                                       &expr->loc,
+                                       expr->loc.begin.row,
+                                       NULL,
+                                       getPrimitiveType(ctx->types, prtU64)));
+        insertAstNode(
+            &args,
+            makeUnsignedIntegerLiteral(ctx->pool,
+                                       &expr->loc,
+                                       expr->loc.begin.col,
+                                       NULL,
+                                       getPrimitiveType(ctx->types, prtU64)));
+
+        AstNode *assert = makeExprStmt(
+            ctx->pool,
+            &node->loc,
+            flgNone,
+            makeCallExpr(ctx->pool,
+                         &node->loc,
+                         makeResolvedIdentifier(ctx->pool,
+                                                &node->loc,
+                                                S___cxy_assert,
+                                                0,
+                                                builtinAssert,
+                                                NULL,
+                                                builtinAssert->type),
+                         args.first,
+                         node->flags,
+                         NULL,
+                         builtinAssert->type->func.retType),
+            NULL,
+            makeVoidType(ctx->types));
+        astModifierAdd(&ctx->block, assert);
+    }
+}
+
+static void visitIndexExpr(AstVisitor *visitor, AstNode *node)
+{
+    SimplifyContext *ctx = getAstVisitorContext(visitor);
+    AstNode *target = node->indexExpr.target, *index = node->indexExpr.index;
+    astVisit(visitor, target);
+    astVisit(visitor, index);
+    if (nodeNeedsTemporaryVar(index)) {
+        AstNode *var = makeVarDecl(ctx->pool,
+                                   &index->loc,
+                                   flgMoved | (index->flags & flgConst),
+                                   makeAnonymousVariable(ctx->strings, "_idx"),
+                                   NULL,
+                                   deepCloneAstNode(ctx->pool, index),
+                                   NULL,
+                                   index->type);
+        index->tag = astIdentifier;
+        index->ident.value = var->_namedNode.name;
+        index->ident.resolvesTo = var;
+        index->flags |= flgMove;
+        astModifierAdd(&ctx->block, var);
+    }
 }
 
 static void visitCallExpr(AstVisitor *visitor, AstNode *node)
@@ -735,6 +833,36 @@ static void visitIdentifier(AstVisitor *visitor, AstNode *node)
         return;
 
     ctx->referencesDestructibleVars = true;
+}
+
+static void visitBinaryExpr(AstVisitor *visitor, AstNode *node)
+{
+    astVisitFallbackVisitAll(visitor, node);
+    if (node->binaryExpr.op == opIs) {
+        SimplifyContext *ctx = getAstVisitorContext(visitor);
+        AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;
+        const Type *type = stripPointerOrReferenceOnce(lhs->type, NULL);
+        csAssert0(isUnionType(type));
+        u32 idx = findUnionTypeIndex(type, rhs->type);
+        csAssert0(idx != UINT32_MAX);
+        // Convert to lhs.tag == idx
+        lhs->memberExpr.target = deepCloneAstNode(ctx->pool, lhs);
+        lhs->tag = astMemberExpr;
+        lhs->memberExpr.member =
+            makeIntegerLiteral(ctx->pool,
+                               &lhs->loc,
+                               0,
+                               NULL,
+                               getPrimitiveType(ctx->types, prtU64));
+        lhs->type = getPrimitiveType(ctx->types, prtU64);
+
+        rhs->tag = astIntegerLit;
+        rhs->intLiteral.isNegative = false;
+        rhs->intLiteral.uValue = idx;
+        rhs->type = getPrimitiveType(ctx->types, prtU64);
+
+        node->binaryExpr.op = opEq;
+    }
 }
 
 static void visitPathElement(AstVisitor *visitor, AstNode *node)
@@ -1244,6 +1372,8 @@ static AstNode *simplifyCode(CompilerDriver *driver, AstNode *node)
         [astPath] = visitPathExpr,
         [astPathElem] = visitPathElement,
         [astIdentifier] = visitIdentifier,
+        [astBinaryExpr] = visitBinaryExpr,
+        [astIndexExpr] = visitIndexExpr,
         [astCallExpr] = visitCallExpr,
         [astCastExpr] = visitCastExpr,
         [astStmtExpr] = visitStmtExpr,

@@ -255,6 +255,8 @@ void checkSwitchStmt(AstVisitor *visitor, AstNode *node)
         if (case_->caseStmt.match)
             matches[i++] = (NodeComparisonContext){
                 .node = case_->caseStmt.match, .ctx = ctx};
+        else
+            node->switchStmt.defaultCase = case_;
     }
 
     if (typeIs(node->type, Error)) {

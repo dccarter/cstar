@@ -120,8 +120,8 @@ bool isTypeConst(const Type *type)
 
 bool isTypeAssignableFrom(const Type *to, const Type *from)
 {
-    to = resolveType(to);
-    from = resolveType(from);
+    to = resolveAndUnThisType(to);
+    from = resolveAndUnThisType(from);
     if (to == from)
         return true;
     if (hasFlag(to, Optional) && !hasFlag(from, Optional)) {
@@ -243,7 +243,7 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
 
     case typUnion:
         for (u64 i = 0; i < to->tUnion.count; i++) {
-            if (to->tUnion.members[i].type == from)
+            if (unThisType(to->tUnion.members[i].type) == from)
                 return true;
         }
         return false;
@@ -681,7 +681,7 @@ bool isComplexType(const Type *type)
     type = resolveUnThisUnwrapType(type);
     if (type == NULL)
         return false;
-    
+
     switch (type->tag) {
     case typStruct:
     case typClass:
@@ -1178,7 +1178,7 @@ u32 findUnionTypeIndex(const Type *tagged, const Type *type)
     if (!typeIs(tagged, Union))
         return UINT32_MAX;
     for (u32 i = 0; i < tagged->tUnion.count; i++) {
-        if (tagged->tUnion.members[i].type == type)
+        if (resolveAndUnThisType(tagged->tUnion.members[i].type) == type)
             return i;
     }
     return UINT32_MAX;

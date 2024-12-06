@@ -39,7 +39,7 @@ extern "C" {
     f(TopLevelDecl,         22)                 \
     f(Generated,            23)                 \
     f(Executable,           24)                 \
-    f(ImportAlias,          25)                 \
+    f(BitUnionCast,         25)                 \
     f(EnumLiteral,          26)                 \
     f(Comptime,             27)                 \
     f(Visited,              28)                 \
@@ -76,6 +76,7 @@ extern "C" {
     f(Anonymous,            59)                 \
     f(Constructor,          60)                 \
     f(TestContext,          61)                 \
+    f(Annotation,           62)                 \
     f(UnionCast,            63)
 
 // clang-format on

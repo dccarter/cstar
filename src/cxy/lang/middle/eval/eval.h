@@ -37,7 +37,8 @@ bool evalStringBuilderAppend(EvalContext *ctx,
 AstNode *evalAstNodeMemberAccess(EvalContext *ctx,
                                  const FileLoc *loc,
                                  AstNode *node,
-                                 cstring name);
+                                 cstring name,
+                                 bool annotation);
 
 bool verifyBinaryExprOperand(EvalContext *ctx, AstNode *node);
 bool evalBooleanCast(EvalContext *ctx, AstNode *node);

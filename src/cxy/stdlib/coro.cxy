@@ -114,16 +114,16 @@ struct CachedStack {
     link: ^This
 }
 
-macro MAX_CACHED_STACKS() 32:u64
+macro MAX_CACHED_STACKS 32:u64
 
 class CoroutineScheduler {
     running: ^Coroutine = null; /* Currently running coroutine. */
     /* List of coroutines ready for execution. */
-    - ready: List[Coroutine] = List[Coroutine]{};
+    - ready = List[Coroutine]{};
     /* Coroutine that we don't launch */
-    - main: Coroutine = Coroutine("main", -1);
+    - main = Coroutine("main", -1);
     /* Cache some stacks */
-    - stacks: List[CachedStack] = List[CachedStack]{};
+    - stacks = List[CachedStack]{};
     /* Coroutine ID generator */
     - idGenerator: i32 = 0;
     /* Counter used in rescheduling coroutines */

@@ -550,12 +550,19 @@ pub class OutputStream {
          else #if(#U == CString)
             appendString(val.s)
         else #if (U.isEnum) {
-             appendString(#{U.name})
-             appendChar('.')
              switch(val) {
                 #for (const V: U.members) {
-                    case U.#{mk_ident!(V.name)} =>
-                        appendString(#{V.name})
+                    case U.#{mk_ident!(V.name)} => {
+                        #const attr = V.attributes.["str"];
+                        #if (attr) {
+                            appendString(#{attr.[0]})
+                        }
+                        else {
+                            appendString(#{U.name})
+                            appendChar('.')
+                            appendString(#{V.name})
+                        }
+                    }
                 }
             }
         }
@@ -818,7 +825,7 @@ pub class BufferedOutputStream: OutputStream {
     func `init`(capacity: u64 = 1024) {
         _capacity = capacity
         _size = 0
-        _buffer = (malloc(capacity) !: ^char)
+        _buffer = malloc(capacity) !: ^char
     }
 
     virtual func flush(str: ^const void, size: u64): void

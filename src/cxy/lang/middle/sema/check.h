@@ -172,7 +172,7 @@ const Type *checkTypeShallow(AstVisitor *visitor, AstNode *node, bool shallow);
 
 static inline const Type *checkType(AstVisitor *visitor, AstNode *node)
 {
-    return checkTypeShallow(visitor, node, true);
+    return checkTypeShallow(visitor, node, false);
 }
 
 const Type *checkFunctionSignature(AstVisitor *visitor, AstNode *node);

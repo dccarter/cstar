@@ -1917,7 +1917,8 @@ cstring getNamedNodeName(const AstNode *member)
     case astTypeDecl:
     case astEnumDecl:
     case astAttr:
-        return member->_namedNode.name;
+    case astAnnotation:
+        return member->_name;
     default:
         return NULL;
     }
@@ -2703,8 +2704,9 @@ AstNode *findInComptimeIterable(AstNode *node, cstring name)
         return NULL;
     AstNode *it = node->next;
     for (; it; it = it->next) {
-        if (name == getNamedNodeName(it))
-            return it;
+        if (name == getNamedNodeName(it)) {
+            return nodeIs(it, Annotation) ? it->annotation.value : it;
+        }
     }
     return NULL;
 }

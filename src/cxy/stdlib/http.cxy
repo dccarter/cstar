@@ -294,7 +294,7 @@ pub class Request {
             ptrof path,
             ptrof pathLen,
             ptrof minorVersion,
-            ptrof headers !: ^parser.phr_header,
+            (ptrof headers) !: ^parser.phr_header,
             ptrof numHeaders,
             0);
 

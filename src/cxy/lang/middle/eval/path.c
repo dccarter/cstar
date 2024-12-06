@@ -48,8 +48,8 @@ void evalPathEpilogue(AstVisitor *visitor,
         else {
             while (elem) {
                 cstring name = elem->pathElement.alt ?: elem->pathElement.name;
-                AstNode *tmp =
-                    evalAstNodeMemberAccess(ctx, &elem->loc, symbol, name);
+                AstNode *tmp = evalAstNodeMemberAccess(
+                    ctx, &elem->loc, symbol, name, false);
 
                 if (tmp == NULL) {
                     logError(ctx->L,

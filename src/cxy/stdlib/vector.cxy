@@ -135,7 +135,7 @@ pub class Vector[T] {
         return null
     }
 
-    #if (!(T.isTuple || T.isUnion) ) {
+    #if (!(T.isTuple || T.isUnion || T.isUnresolved) ) {
         const func indexOf(elem: T) : u64? {
             for (var i: 0.._size) {
                 if (elem == _data.[i])

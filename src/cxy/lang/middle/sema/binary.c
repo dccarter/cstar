@@ -15,6 +15,7 @@ typedef enum {
     optLogical,
     optComparison,
     optEquality,
+    optTypeEquality,
     optRange,
 } BinaryOperatorKind;
 
@@ -34,7 +35,9 @@ static BinaryOperatorKind getBinaryOperatorKind(Operator op)
         return optLogical;
 
         AST_CMP_EXPR_LIST(f)
-        return (op == opEq || op == opNe) ? optEquality : optComparison;
+        if (op == opEq || op == opNe)
+            return optEquality;
+        return (op == opIs) ? optTypeEquality : optComparison;
 #undef f
     case opRange:
         return optRange;
@@ -200,6 +203,30 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
     node->binaryExpr.rhs->parentScope = node;
     const Type *right = checkType(visitor, node->binaryExpr.rhs);
 
+    if (typeIs(right, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    if (opKind == optTypeEquality) {
+        if (!nodeIs(rhs, TypeRef) && !hasFlag(rhs, Typeinfo)) {
+            logError(
+                ctx->L,
+                &node->loc,
+                "left hand side of `{$}is{$}` operator must be a type",
+                (FormatArg[]){{.style = keywordStyle}, {.style = resetStyle}});
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+
+        node->type = getPrimitiveType(ctx->types, prtBool);
+        if (!isUnionType(left_)) {
+            node->tag = astBoolLit;
+            node->boolLiteral.value = compareTypes(left, right);
+        }
+        return;
+    }
+
     const Type *type = unwrapType(promoteType(ctx->types, left, right), NULL);
 
     if (type == NULL) {
@@ -289,7 +316,6 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
         }
         node->type = getPrimitiveType(ctx->types, prtBool);
         break;
-
     case optRange: {
         if (!isIntegralType(left)) {
             logError(ctx->L,

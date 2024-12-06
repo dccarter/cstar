@@ -192,6 +192,14 @@ static void evalLOrOperation(PreprocessorContext *ctx, AstNode *node)
         nodeGetNumericLiteral(lhs) || nodeGetNumericLiteral(rhs);
 }
 
+static void evalIsOperation(PreprocessorContext *ctx, AstNode *node)
+{
+    logError(ctx->L,
+             &node->loc,
+             "operator `is` is not a valid comptime operator",
+             NULL);
+}
+
 #define CXY_DEFINE_BINARY_EQ_COMP_OPERATOR(Name, OP)                           \
     static void eval##Name##Operation(PreprocessorContext *ctx, AstNode *node) \
     {                                                                          \

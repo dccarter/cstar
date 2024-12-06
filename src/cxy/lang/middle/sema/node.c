@@ -443,10 +443,10 @@ AstNode *transformToUnionValue(TypingContext *ctx,
                                const Type *rhs)
 {
     const Type *stripped = stripPointerOnce(lhs, NULL),
-               *strippedRhs = stripPointerOnce(lhs, NULL);
+               *strippedRhs = resolveAndUnThisType(stripPointerOnce(rhs, NULL));
     if (strippedRhs != lhs && typeIs(stripped, Union) &&
         stripped != strippedRhs) {
-        u32 idx = findUnionTypeIndex(stripped, rhs);
+        u32 idx = findUnionTypeIndex(stripped, strippedRhs);
         csAssert0(idx != UINT32_MAX);
         return makeUnionValueExpr(
             ctx->pool, &right->loc, right->flags, right, idx, NULL, lhs);

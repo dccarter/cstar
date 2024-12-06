@@ -86,7 +86,7 @@ static CmdFlag *cmdFindByName(CmdFlag *args,
                               u32 len)
 {
     for (int i = 0; i < nargs; i++) {
-        if (args[i].name == NULL)
+        if (args[i].name == NULL || strlen(args[i].name) != len)
             continue;
         if (strncmp(args[i].name, name, len) == 0)
             return &args[i];
@@ -117,6 +117,7 @@ static CmdCommand *cmdFindCommandByName(CmdParser *P, const char *name)
     for (int i = 0; i < P->ncmds; i++) {
         if (P->cmds[i]->name == NULL)
             continue;
+
         if (strcmp(P->cmds[i]->name, name) == 0)
             return P->cmds[i];
     }

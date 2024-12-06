@@ -829,7 +829,7 @@ static void visitCastExpr(ConstAstVisitor *visitor, const AstNode *node)
     }
 
     if (hasFlag(node, UnionCast) || typeIs(from, Union)) {
-        if (isReferenceType(to))
+        if (isReferenceType(to) && !isClassType(stripReference(to)))
             format(getState(ctx), "&", NULL);
         astConstVisit(visitor, expr);
         if (isPointerOrReferenceType(from))
@@ -898,7 +898,7 @@ static void visitMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
     }
 
     if (nodeIs(member, IntegerLit)) {
-        if (isUnionType(stripReference(target->type))) {
+        if (isUnionType(stripPointerOrReferenceOnce(target->type, NULL))) {
             format(getState(ctx), "tag", NULL);
         }
         else {
@@ -951,7 +951,11 @@ static void visitStructExpr(ConstAstVisitor *visitor, const AstNode *node)
     format(getState(ctx), "(", NULL);
     generateTypeName(ctx, getState(ctx), node->type);
     format(getState(ctx), ")", NULL);
-    generateMany(visitor, node->structExpr.fields, "{{{>}\n", ",\n", "{<}\n}");
+    if (node->structExpr.fields)
+        generateMany(
+            visitor, node->structExpr.fields, "{{{>}\n", ",\n", "{<}\n}");
+    else
+        format(getState(ctx), "{{}", NULL);
 }
 
 static void visitTupleExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -1328,7 +1332,13 @@ static void visitSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
     format(getState(ctx), "switch (", NULL);
     astConstVisit(visitor, node->switchStmt.cond);
     format(getState(ctx), ") ", NULL);
-    generateMany(visitor, node->switchStmt.cases, "{{\n", "\n", "\n}");
+    generateMany(visitor, node->switchStmt.cases, "{{\n", "\n", NULL);
+    if (node->switchStmt.defaultCase == NULL) {
+        format(getState(ctx),
+               "default: {{ unreachable(\"unreachable\"); }\n",
+               NULL);
+    }
+    format(getState(ctx), "}\n", NULL);
     EosNl(ctx, node);
 }
 
@@ -1656,6 +1666,16 @@ static void generatedCodePrologue(FILE *f)
         "#pragma GCC diagnostic ignored \"-Wincompatible-pointer-types\"\n"
         "#else\n"
         "#error \"Unsupported compiler\"\n"
+        "#endif\n"
+        "\n"
+        "#if __has_attribute(__builtin_unreachable)\n"
+        "#define unreachable(...)\n"
+        "    do {\n"
+        "        assert(!\"Unreachable code reached\");\n"
+        "        __builtin_unreachable();\n"
+        "    } while (0)\n"
+        "#else\n"
+        "#define unreachable(...) abort();\n"
         "#endif\n");
     appendCode(f, "\n");
 }
