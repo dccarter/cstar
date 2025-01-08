@@ -553,10 +553,8 @@ struct AstNode {
             struct AstNode *typeParams;
             const Type *thisType;
             struct AstNode *base;
-            union {
-                struct AstNode *closureForward;
-                struct AstNode *implements;
-            };
+            struct AstNode *closureForward;
+            struct AstNode *implements;
         } classDecl;
 
         struct {
