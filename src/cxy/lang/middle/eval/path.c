@@ -122,6 +122,12 @@ void evalPathEpilogue(AstVisitor *visitor,
             csAssert0(false);
         }
     }
+    else if (nodeIs(symbol, FuncParamDecl)) {
+        node->tag = astIdentifier;
+        node->ident.value = symbol->funcParam.name;
+        node->ident.resolvesTo = symbol;
+        node->flags |= (symbol->flags & flgVariadic);
+    }
     else {
         replaceAstNodeWith(
             node, nodeIs(symbol, VarDecl) ? symbol->varDecl.init : symbol);

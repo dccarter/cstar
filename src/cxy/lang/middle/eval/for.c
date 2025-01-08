@@ -92,7 +92,8 @@ static bool evalExprForStmtVariadic(AstVisitor *visitor,
     EvalContext *ctx = getAstVisitorContext(visitor);
     AstNode *range = node->forStmt.range, *variable = node->forStmt.var;
 
-    csAssert0(nodeIs(range, FuncParamDecl));
+    csAssert0(nodeIs(range, Identifier));
+    range = range->ident.resolvesTo;
     if (typeIs(range->type, Void))
         return true;
 
@@ -234,7 +235,7 @@ void evalForStmt(AstVisitor *visitor, AstNode *node)
         if (!evalExprForStmtArray(visitor, node, &nodes))
             return;
         break;
-    case astFuncParamDecl:
+    case astIdentifier:
         if (!hasFlag(node->forStmt.range, Variadic)) {
             logError(ctx->L,
                      &rangeLoc,

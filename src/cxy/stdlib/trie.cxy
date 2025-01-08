@@ -78,11 +78,10 @@ pub class Trie[Data] {
         for (var i: 0..len) {
             var child = node.get(prefix.[i]);
             if (!child)
-                continue
+                break
 
             node = *child;
             if (node.data) {
-
                 found = (i+1, *node.data)
             }
         }
