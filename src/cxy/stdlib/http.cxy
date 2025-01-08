@@ -80,7 +80,7 @@ pub enum Status : i32 {
 @inline
 func toupper(c: wchar) => <char>(<u32>ctype.toupper(<i32>c))
 
-pub func methodFromString(method: CString) {
+pub func methodFromString(method: __string) {
     var x = toupper(method.[0]);
     var maybe = (Method.Unknown, "");
 
@@ -100,7 +100,7 @@ pub func methodFromString(method: CString) {
         default  => return (Method.Unknown, 0:u64)
     }
 
-    var str = CString(maybe.1);
+    var str = __string(maybe.1);
     if (method.size() < str.size())
         return (Method.Unknown, 0:u64)
 
@@ -111,7 +111,6 @@ pub func methodFromString(method: CString) {
 }
 
 pub func statusText(status: Status) {
-    var r: string;
     switch (status) {
         case .CONTINUE =>
             return "HTTP/1.1 100 Continue"
@@ -223,7 +222,7 @@ pub func methodName(method: Method) {
 
 type HeaderMap = HashMap[String, String, HashCase, EqualsCase];
 pub var CONTENT_LENGTH_S = String("Content-Length");
-pub var CONTENT_LENGTH_CS = CString("Content-Length");
+pub var CONTENT_LENGTH_CS = __string("Content-Length");
 pub var DATE_S = String("Date");
 pub var SERVER_S = String("Server");
 pub var CONNECTION_S = String("Connection");
@@ -266,7 +265,7 @@ pub class Request {
     - _headers = HeaderMap();
     - _method: Method = .Unknown;
     - _query = HashMap[String, String]();
-    - _params = HashMap[CString, CString]();
+    - _params = HashMap[__string, __string]();
     - _path: String = null;
     - _uri: String = null;
     - _body: String = null;
@@ -282,7 +281,7 @@ pub class Request {
         var methodLen : u64 = 0;
         var path: ^const char = null;
         var pathLen : u64 = 0;
-        var headers: [parser.phr_header, 128];
+        var headers: [parser.phr_header, 128] = [];
         var numHeaders: u64 = len!(headers);
         var minorVersion: i32 = -1;
 
@@ -294,7 +293,7 @@ pub class Request {
             ptrof path,
             ptrof pathLen,
             ptrof minorVersion,
-            ptrof headers !: ^parser.phr_header,
+            (ptrof headers) !: ^parser.phr_header,
             ptrof numHeaders,
             0);
 
@@ -304,10 +303,10 @@ pub class Request {
             return Status.BAD_REQUEST
         }
 
-        var parsedMethod = methodFromString(CString(method !: string, methodLen));
+        var parsedMethod = methodFromString(__string(method !: string, methodLen));
         if (parsedMethod.0 == .Unknown) {
             // Invalid request method
-            TRC!("bad request: invalid request method " << CString(method !: string, methodLen))
+            TRC!("bad request: invalid request method " << __string(method !: string, methodLen))
             return Status.BAD_REQUEST
         }
         _method = parsedMethod.0
@@ -315,10 +314,10 @@ pub class Request {
         _path = String(path, pathLen)
         for (var i: 0..numHeaders) {
             const header = headers.[i];
-            const headerName = CString(header.name !: string, header.name_len);
+            const headerName = __string(header.name !: string, header.name_len);
             if (EqualsCase{}(&headerName, &CONTENT_LENGTH_CS)) {
                 _contentLength =
-                    CString(header.value !: string, header.value_len).toi[u64]();
+                    __string(header.value !: string, header.value_len).toi[u64]();
             }
             else {
                 _headers.[String(header.name, header.name_len)] =
@@ -333,8 +332,8 @@ pub class Request {
         var ret = parseHeaders(buf, len);
         var parsed: u64 = 0;
         match (ret) {
-            case Status as status => return *status
-            case i32 as consumed => parsed = *consumed
+            case Status as status => return status
+            case i32 as consumed => parsed = consumed
         }
 
         var remaining = len - parsed;
@@ -345,12 +344,12 @@ pub class Request {
     }
 
     @inline
-    func param(name: CString, value: CString) {
+    func param(name: __string, value: __string) {
         _params.[name] = value
     }
 
     @inline
-    const func param(name: CString) => _params.[name]
+    const func param(name: __string) => _params.[name]
 
     @[prop, inline]
     const func path() => &_path
@@ -385,13 +384,13 @@ pub struct RouteAttrs {
 }
 
 class Route {
-    - prefix: CString
+    - prefix: __string
     - handler: lambda_of!(#HandlerFn)
-    - params: Vector[CString]
+    - params: Vector[__string]
     - _methods: u32
     - _attrs = RouteAttrs{};
 
-    func `init`(methods: u32, prefix: CString, fn: HandlerFn, params: Vector[CString]) {
+    func `init`(methods: u32, prefix: __string, fn: HandlerFn, params: Vector[__string]) {
         handler = fn
         this.prefix = prefix
         this.params = params
@@ -446,8 +445,8 @@ class Router {
 
         if (path.[i] == '{':char)
             i--;
-        var prefix = CString(path, i).substr(idx);
-        var params = Vector[CString]();
+        var prefix = __string(path, i).substr(idx);
+        var params = Vector[__string]();
         parseParams(&params, path, i)
         var route = Route(methods, prefix, fn, &&params);
         routes.add(path, i, route)
@@ -469,8 +468,8 @@ class Router {
         return add(1 << methods, path, idx, &&fn)
     }
 
-    func handle(path: CString, req: &Request, resp: &Response) {
-        var found = routes.find(path.data(), path.size());
+    func handle(path: __string, req: &Request, resp: &Response) {
+        var found = routes.find(path.str(), path.size());
         if (!found) {
             TRC!("route: " << path)
             resp.end(Status.NOT_FOUND)
@@ -482,12 +481,12 @@ class Router {
         if (!route.attrs().isStatic) {
             match (parseRouteArgs(req, &route.params, args)) {
                 case Status as value => {
-                    resp.end(*value)
+                    resp.end(value)
                     return;
                 }
                 case u64 as value => {
                     // TODO parse route arguments
-                    args = args.substr(*value)
+                    args = args.substr(value)
                 }
             }
         }
@@ -498,8 +497,8 @@ class Router {
     }
 
     func find(req: &Request, resp: &Response): Route? {
-        var path = req.path().cstr();
-        var found = routes.find(path.data(), path.size());
+        var path = req.path().__str();
+        var found = routes.find(path.str(), path.size());
         if (!found) {
             TRC!("not found: " << req.path())
             resp.end(Status.NOT_FOUND)
@@ -517,23 +516,22 @@ class Router {
         if (!route.attrs().isStatic) {
             match (parseRouteArgs(req, &route.params, args)) {
                 case Status as value => {
-                    resp.end(*value)
+                    resp.end(value)
                     return null;
                 }
                 case u64 as value => {
                     // TODO parse route arguments
-                    args = args.substr(*value)
+                    args = args.substr(value)
                 }
             }
         }
         else {
             req.uri(String(args))
         }
-
         return &&route
     }
 
-    - func parseParams(params: &Vector[CString], path: string, idx: i64) : void {
+    - func parseParams(params: &Vector[__string], path: string, idx: i64) : void {
         var s = path !: ^const char;
         while (path.[idx] == '/':char) {
             idx++
@@ -542,14 +540,14 @@ class Router {
             while (path.[i] != '\0':char && path.[i] != '}':char)
                 i++
             assert!(path.[i] == '}':char)
-            var name = CString(ptroff!(s + idx) !: string, i - idx);
+            var name = __string(ptroff!(s + idx) !: string, i - idx);
             idx = i + 1
             params.push(name)
         }
     }
 
-    - func parseRouteArgs(req: &Request, params: &Vector[CString], path: CString) : u64 | Status {
-        var p = path.data() !: ^const char;
+    - func parseRouteArgs(req: &Request, params: &Vector[__string], path: __string) : u64 | Status {
+        var p = path.data();
         var idx = 0:u64;
         for (var i: 0..params.size()) {
             if (p.[idx++] != '/':char) {
@@ -559,7 +557,7 @@ class Router {
             var j = idx;
             while (p.[j] != '\0':char && p.[j] != '/':char && p.[j] != '?':char)
                 j++;
-            var value = CString(ptroff!(p + idx) !: string, j - idx);
+            var value = __string(ptroff!(p + idx) !: string, j - idx);
             idx = j;
             req.param(params.[<i32>i], value)
         }
@@ -605,9 +603,6 @@ pub class Connection[Middlewares] {
     }
 
     - func handleConnection(): void {
-        // receive request
-        TRC!("Connection " << sock.address())
-
         req = Request()
         resp = Response()
         if (!receive())
@@ -634,18 +629,18 @@ pub class Connection[Middlewares] {
     - func invokeRouteHandler(route: Route) : void {
         req.route(ptrof route)
         #for (const i: 0..Middlewares.membersCount) {
-            if (!resp.ok())
-                return;
             // invoke middlewares
             mws.#{i}.before(&req, &resp)
             defer mws.#{i}.after(&req, &resp)
+            if (!resp.ok())
+                return;
         }
         // handle route
         route(&req, &resp)
     }
 
     - func receive() : bool {
-        var buf: [char, 8192];
+        var buf: [char, 8192] = [];
 
         var received = sock.receive(buf, 8192);
 
@@ -664,7 +659,7 @@ pub class Connection[Middlewares] {
 
     - func sendResponse() : void {
         var sos = BufferedSocketOutputStream(sock);
-        var line0 = CString(statusText(resp.status()));
+        var line0 = __string(statusText(resp.status()));
         sos << line0 << "\r\n"
         if (resp.status() != .OK && resp.body().empty()) {
             resp.body() << line0.substr(9)
@@ -758,8 +753,8 @@ pub class Server[Middlewares] {
             if (!sock)
                 continue;
 
-            spawn! {
-                var name: [char, 64];
+            async {
+                var name: [char, 64] = [];
                 var s = sock.move();
                 sprintf(name, "conn-%hu", s.address().port())
                 setname!(name !: string)
@@ -776,6 +771,8 @@ pub class Server[Middlewares] {
 
     @[noinline]
     - func handleConnection(sock: TcpSocket): void {
+        // receive request
+        TRC!("Connection " << sock.address())
         var connection = Connection[Middlewares](ptrof config, ptrof mws, ptrof router, &&sock);
         connection.handle()
     }
@@ -799,7 +796,7 @@ pub class Cors {
             var requestMethod = req.header("Access-Control-Request-Method");
             if (requestMethod) {
                 var method = *requestMethod;
-                var corsMethod = methodFromString(method.cstr());
+                var corsMethod = methodFromString(method.__str());
                 if (corsMethod.0 == .Unknown) {
                     TRC!("bad request: unknown method " << method )
                     res.end(Status.BAD_REQUEST)
@@ -815,7 +812,7 @@ pub class Cors {
         }
     }
 
-    func after(req: &const Request, res: &Response) {
+    func after(@unused req: &const Request, res: &Response) {
         if (!allowOrigin.empty()) {
             res.header("Access-Control-Allow-Origin", allowOrigin)
         }

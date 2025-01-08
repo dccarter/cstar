@@ -25,9 +25,19 @@ File.readlines(ARGV[0], chomp: true).each do |line|
             :gets => Set[],
             :drop => 0,
             :drops => Set[],
+            :reuse => 0,
+            :reuses => Set[],
             :freed => false,
             :tag => tag
         }
+    elsif tag == "alloc"
+        if mem[addr][:freed]
+            mem[addr][:freed] = false
+            mem[addr][:refs] = 1
+            mem[addr][:reuse] = mem[addr][:reuse] + 1
+            mem[addr][:reuses].add(line[line.index('@')+1, line.length-1])
+            next
+        end
     end
 
     if tag == "alloc"
@@ -48,12 +58,12 @@ end
 
 sorted = mem.sort{ |(_, a), (_, b)| b[:refs] <=> a[:refs] }.each{ |addr, info|
     puts "#{addr} @ #{info[:loc]}"
-    puts "    refs: #{info[:refs]}, drop: #{info[:drop]}, get: #{info[:get]}"
+    puts "    refs: #{info[:refs]}, drop: #{info[:drop]}, get: #{info[:get]} reuse: #{info[:reuse]}"
 }
 
 if mem.key?(show)
     details = mem[show]
-    puts "#{show} :: freed: #{details[:freed]}, get: #{details[:get]}, drop: #{details[:drop]}"
+    puts "#{show} :: freed: #{details[:freed]}, get: #{details[:get]}, drop: #{details[:drop]} reuse: #{details[:reuse]}"
     puts "  alloc: #{details[:loc]}"
     puts "  Get"
     details[:gets].each{ |loc|
@@ -61,6 +71,10 @@ if mem.key?(show)
     }
     puts "  Drop"
     details[:drops].each{ |loc|
+        puts "    #{loc}"
+    }
+    puts "  Reuse"
+    details[:reuses].each{ |loc|
         puts "    #{loc}"
     }
 end

@@ -31,7 +31,7 @@ pub func main(args: [string]) {
         if (!sock)
             continue;
 
-        spawn! { handleConnection( sock.move() ) }
+        async { handleConnection( sock.move() ) }
     }
     println("done")
 }

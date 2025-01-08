@@ -7,12 +7,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-typedef struct __SrcLoc {
-    const char *file;
-    uint64_t line;
-} __SrcLoc;
-
-void __trace_memory_custom(const char *tag, void *ptr, const __SrcLoc *loc)
+void __trace_memory_custom(const char *tag,
+                           const char *path,
+                           uint64_t line,
+                           void *ptr)
 {
     static FILE *output = NULL;
     if (output == NULL) {
@@ -27,8 +25,8 @@ void __trace_memory_custom(const char *tag, void *ptr, const __SrcLoc *loc)
                 " mem(%-5.5s: %p) @ %s:%" PRIu64 "\n",
                 tag,
                 ptr,
-                loc->file,
-                loc->line);
+                path,
+                line);
     }
     else {
         fflush(output);

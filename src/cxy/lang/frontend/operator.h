@@ -31,6 +31,7 @@ extern "C" {
 #define AST_CMP_EXPR_LIST(f)                   \
     f(Eq,  6, Equal,        "==", "eq")        \
     f(Ne,  6, NotEqual,     "!=", "neq")       \
+    f(Is,  6, Is,           "is", "is")        \
     f(Gt,  5, Greater,      ">", "gt")         \
     f(Lt,  5, Less,         "<", "lt")         \
     f(Geq, 5, GreaterEqual, ">=", "geq")       \

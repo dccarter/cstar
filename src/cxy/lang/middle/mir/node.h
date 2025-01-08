@@ -27,6 +27,7 @@
     f(CastOp)                       \
     f(MoveOp)                       \
     f(CopyOp)                       \
+    f(MallocOp)                     \
     f(ReferenceOfOp)                \
     f(PointerOfOp)                  \
     f(DropOp)                       \
@@ -144,11 +145,11 @@ struct MirNode {
 
         struct {
             struct MirNode *operand;
-        } MoveOp, CopyOp, ReferenceOfOp, PointerOfOp, DropOp;
+        } ReferenceOfOp, PointerOfOp;
 
         struct {
             struct MirNode *operand;
-        } ZeromemOp, SizeofOp;
+        } ZeromemOp, SizeofOp, MoveOp, CopyOp, DropOp, MallocOp;
 
         struct {
             u64 len;
@@ -342,6 +343,17 @@ MirNode *makeMirCastOp(MirContext *ctx,
                        MirNode *expr,
                        MirNode *type,
                        MirNode *next);
+MirNode *makeMirDropOp(MirContext *ctx,
+                       const FileLoc *loc,
+                       MirNode *operand,
+                       MirNode *next);
+
+MirNode *makeMirMallocOp(MirContext *ctx,
+                         const FileLoc *loc,
+                         MirNode *operand,
+                         const Type *type,
+                         MirNode *next);
+
 MirNode *makeMirMoveOp(MirContext *ctx,
                        const FileLoc *loc,
                        MirNode *operand,
@@ -391,6 +403,17 @@ MirNode *makeMirMemberOp(MirContext *ctx,
                          MirNode *target,
                          u64 index,
                          MirNode *next);
+MirNode *makeMirMemberOpEx(MirContext *ctx,
+                           const FileLoc *loc,
+                           MirNode *target,
+                           u64 index,
+                           const Type *type,
+                           MirNode *next);
+MirNode *makeMirUnionMemberOp(MirContext *ctx,
+                              const FileLoc *loc,
+                              MirNode *target,
+                              u64 index,
+                              MirNode *next);
 MirNode *makeMirCallOp(MirContext *ctx,
                        const FileLoc *loc,
                        MirNode *func,

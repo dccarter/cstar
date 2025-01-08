@@ -2,11 +2,11 @@ import { Server, Request, Response } from "stdlib/http.cxy"
 
 pub func main()  {
     var server = Server[()]();
-    server("/hello", (req: &const Request, resp: &Response) => {
+    server("/hello", (@unused req: &const Request, resp: &Response) => {
         resp.body() << "Hello, World!"
     })
 
-    server("/quite", (req: &const Request, resp: &Response) => {
+    server("/quite", (@unused req: &const Request, @unused resp: &Response) => {
         server.stop()
     })
     server.start()

@@ -118,18 +118,18 @@ static void evalClassMembers(AstVisitor *visitor, AstNode *node)
     }
 }
 
-static void preCheckClassMembers(AstNode *node, NamedTypeMember *members)
+static bool preCheckClassMembers(AstNode *node, NamedTypeMember *members)
 {
     AstNode *member = node->classDecl.members;
-    AstNodeList constructors = {};
+    bool referenceMembers = false;
     for (u64 i = hasFlag(node, Virtual); member; member = member->next, i++) {
         if (nodeIs(member, FieldDecl)) {
             members[i] = (NamedTypeMember){.name = member->structField.name,
                                            .type = member->type,
                                            .decl = member};
             member->structField.index = i;
-            node->flags |=
-                (member->structField.value ? flgDefaultedFields : flgNone);
+            referenceMembers = referenceMembers || isClassType(member->type) ||
+                               hasReferenceMembers(member->type);
         }
         else {
             members[i] = (NamedTypeMember){.name = getDeclarationName(member),
@@ -138,8 +138,36 @@ static void preCheckClassMembers(AstNode *node, NamedTypeMember *members)
         }
     }
 
-    if (typeIs(node->type, Error))
-        return;
+    return referenceMembers;
+}
+
+static void patchDefaultInitializer(TypingContext *ctx,
+                                    AstNode *init,
+                                    AstNode *vTableMember,
+                                    AstNode *value)
+{
+    csAssert0(value);
+    AstNode *stmt =
+        makeExprStmt(ctx->pool,
+                     builtinLoc(),
+                     flgNone,
+                     makeAssignExpr(ctx->pool,
+                                    builtinLoc(),
+                                    flgNone,
+                                    makeResolvedPath(ctx->pool,
+                                                     builtinLoc(),
+                                                     vTableMember->_name,
+                                                     flgAddThis,
+                                                     vTableMember,
+                                                     NULL,
+                                                     vTableMember->type),
+                                    opAssign,
+                                    value,
+                                    NULL,
+                                    vTableMember->type),
+                     init->funcDecl.body->blockStmt.stmts,
+                     vTableMember->type);
+    init->funcDecl.body->blockStmt.stmts = stmt;
 }
 
 AstNode *makeAllocateCall(TypingContext *ctx, AstNode *node)
@@ -177,68 +205,46 @@ AstNode *makeDropReferenceCall(TypingContext *ctx,
 {
     const Type *type = member->type;
     csAssert0(typeIs(type, Class));
-    AstNode *drop =
-        findBuiltinDecl(ctx->traceMemory ? S_sptr_drop_trace : S_sptr_drop);
-    csAssert0(drop);
     return makeExprStmt(
         ctx->pool,
         loc,
         flgNone,
-        makeCallExpr(ctx->pool,
-                     loc,
-                     makeResolvedPath(ctx->pool,
-                                      loc,
-                                      drop->_namedNode.name,
-                                      drop->flags,
-                                      drop,
-                                      NULL,
-                                      drop->type),
-                     makeResolvedPath(ctx->pool,
-                                      loc,
-                                      member->structField.name,
-                                      member->flags | flgMember | flgAddThis,
-                                      member,
-                                      ctx->traceMemory
-                                          ? makeSrLocNode(ctx->pool, loc)
-                                          : NULL,
-                                      makeVoidPointerType(ctx->types, flgNone)),
-                     flgNone,
-                     NULL,
-                     drop->type->func.retType),
+        makeBackendCallExpr(
+            ctx->pool,
+            loc,
+            flgNone,
+            bfiDrop,
+            makeResolvedPath(ctx->pool,
+                             loc,
+                             member->structField.name,
+                             member->flags | flgMember | flgAddThis,
+                             member,
+                             NULL,
+                             type),
+            makeVoidType(ctx->types)),
         NULL,
         makeVoidType(ctx->types));
 }
 
-AstNode *makeGetReferenceCall(TypingContext *ctx,
-                              AstNode *member,
-                              const FileLoc *loc)
+AstNode *makeCopyReferenceCall(TypingContext *ctx,
+                               AstNode *member,
+                               const FileLoc *loc)
 {
     const Type *type = member->type;
     csAssert0(typeIs(type, Class));
-    AstNode *get =
-        findBuiltinDecl(ctx->traceMemory ? S_sptr_get_trace : S_sptr_ref);
-    csAssert0(get);
-    return makeCallExpr(
+    return makeBackendCallExpr(
         ctx->pool,
         loc,
-        makeResolvedPathElement(ctx->pool,
-                                loc,
-                                get->_namedNode.name,
-                                get->flags,
-                                get,
-                                NULL,
-                                get->type),
+        flgNone,
+        bfiCopy,
         makeResolvedPath(ctx->pool,
                          loc,
                          member->structField.name,
                          member->flags | flgMember | flgAddThis,
                          member,
-                         ctx->traceMemory ? makeSrLocNode(ctx->pool, loc)
-                                          : NULL,
-                         makeVoidPointerType(ctx->types, flgNone)),
-        flgNone,
-        NULL,
-        get->type->func.retType);
+                         NULL,
+                         type),
+        makeVoidPointerType(ctx->types, flgNone));
 }
 
 void checkClassDecl(AstVisitor *visitor, AstNode *node)
@@ -284,16 +290,27 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
         vTableMember = inheritanceMakeVTableMember(ctx, node, NULL);
     }
 
-    u64 membersCount = countAstNodes(node->classDecl.members) + isVirtual;
+    u64 membersCount = countAstNodes(node->classDecl.members) + isVirtual + 1;
     NamedTypeMember *members =
         mallocOrDie(sizeof(NamedTypeMember) * membersCount);
 
+    AstNode *defaultInit =
+        implementDefaultInitializer(visitor, node, isVirtual || vTableMember);
+    if (!defaultInit) {
+        if (typeIs(node->type, Error))
+            goto checkClassInterfacesError;
+        membersCount--;
+    }
     ctx->currentClass = node;
-    preCheckClassMembers(node, members);
+    bool referenceMembers = preCheckClassMembers(node, members);
     ctx->currentClass = NULL;
 
     if (typeIs(node->type, Error))
         goto checkClassMembersError;
+
+    if (!referenceMembers) {
+        membersCount -= removeClassOrStructBuiltins(node);
+    }
 
     ((Type *)this)->_this.that = makeClassType(ctx->types,
                                                getDeclarationName(node),
@@ -306,9 +323,11 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
                                                node->flags & flgTypeApplicable);
     node->type = this;
 
-    implementClassOrStructBuiltins(visitor, node);
-    if (typeIs(node->type, Error))
-        goto checkClassMembersError;
+    if (referenceMembers) {
+        implementClassOrStructBuiltins(visitor, node);
+        if (typeIs(node->type, Error))
+            goto checkClassMembersError;
+    }
 
     ctx->currentClass = node;
     bool retype = checkMemberFunctions(visitor, node, members);
@@ -316,15 +335,24 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
         goto checkClassMembersError;
 
     if (isVirtual) {
+        vTableMember = inheritanceBuildVTableType(visitor, node);
         members[0].name = S_vtable;
-        members[0].decl = inheritanceBuildVTableType(visitor, node);
+        members[0].decl = vTableMember;
         if (members[0].decl == NULL)
             goto checkClassMembersError;
         members[0].type = members[0].decl->type;
+        csAssert0(defaultInit);
+        patchDefaultInitializer(
+            ctx,
+            defaultInit,
+            vTableMember,
+            deepCloneAstNode(ctx->pool, vTableMember->structField.value));
         retype = true;
     }
     else if (vTableMember != NULL) {
-        vTableMember->structField.value = inheritanceBuildVTable(ctx, node);
+        csAssert0(defaultInit);
+        patchDefaultInitializer(
+            ctx, defaultInit, vTableMember, inheritanceBuildVTable(ctx, node));
     }
 
     if (retype) {

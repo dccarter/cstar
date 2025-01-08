@@ -114,16 +114,16 @@ struct CachedStack {
     link: ^This
 }
 
-macro MAX_CACHED_STACKS() 32:u64
+macro MAX_CACHED_STACKS 32:u64
 
 class CoroutineScheduler {
     running: ^Coroutine = null; /* Currently running coroutine. */
     /* List of coroutines ready for execution. */
-    - ready: List[Coroutine] = List[Coroutine]{};
+    - ready = List[Coroutine]{};
     /* Coroutine that we don't launch */
-    - main: Coroutine = Coroutine("main", -1);
+    - main = Coroutine("main", -1);
     /* Cache some stacks */
-    - stacks: List[CachedStack] = List[CachedStack]{};
+    - stacks = List[CachedStack]{};
     /* Coroutine ID generator */
     - idGenerator: i32 = 0;
     /* Counter used in rescheduling coroutines */
@@ -180,7 +180,7 @@ class CoroutineScheduler {
     }
 
     @[static]
-    func eventLoopCallback(loop: ^ae.aeEventLoop, fd: i32, arg: ^void, mask: i32) {
+    func eventLoopCallback(loop: ^ae.aeEventLoop, @unused fd: i32, arg: ^void, mask: i32) {
         // resume the coroutine waiting for the event
         var scheduler = &(loop.context !: This);
         var cr = arg !: ^Coroutine;
@@ -236,7 +236,7 @@ class CoroutineScheduler {
         suspend()
     }
 
-    func prologue(name: string, file: string, line: u64) {
+    func prologue(name: string, @unused file: string, @unused line: u64) {
         var stack = allocStack();
         var cr = ptroff!((stack !: ^Coroutine) + (-1));
         cr.link = null
@@ -307,10 +307,6 @@ class CoroutineScheduler {
         }
     }
 
-    const func `str`(os: &OutputStream) {
-        // os << "CoroutineScheduler<" << (this !: ^void) << ">";
-    }
-
     func `deinit`() {
     }
 }
@@ -322,7 +318,7 @@ macro yield() __scheduler.yield()
 macro running() __scheduler.running
 macro setname(NAME) { __scheduler.running.name = NAME! }
 
-macro __spawn(CALL, NAME) {
+macro __async(CALL, NAME) {
     if (__cxy_coro_setjmp!(ptrof __scheduler.running.ctx) == 0) {
         var cr = __scheduler.prologue(NAME!, file!, line!);
         __cxy_coro_setsp!(cr !: ^void)
@@ -330,8 +326,6 @@ macro __spawn(CALL, NAME) {
         __scheduler.epilogue()
     }
 }
-
-macro spawn(BLOCK) __spawn!(BLOCK!, null)
 
 @[inline, __override_builtin("timestamp")]
 func __now() => ae.aeOsTime()

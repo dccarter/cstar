@@ -155,9 +155,11 @@ static bool inferGenericFunctionTypes(AstVisitor *visitor,
             }
 
             while (arg) {
-                if (hasFlag(arg->type, Closure))
+                if (hasFlag(arg->type, Closure)) {
                     paramTypes[index++] = closureArgToClosureParamType(
                         ctx, &param->loc, arg->type);
+                    implementTupleTypeCopyAndDestructor(visitor, arg);
+                }
                 else
                     paramTypes[index++] = arg->type;
                 arg = arg->next;

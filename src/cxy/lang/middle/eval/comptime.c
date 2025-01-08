@@ -98,7 +98,8 @@ static AstNode *getName(EvalContext *ctx,
     case astVarDecl:
     case astEnumOptionDecl:
     case astAttr:
-        name = node->_namedNode.name;
+    case astAnnotation:
+        name = node->_name;
         break;
     case astPrimitiveType:
         name = getPrimitiveTypeName(node->primitiveType.id);
@@ -113,6 +114,24 @@ static AstNode *getName(EvalContext *ctx,
         ctx->pool,
         loc,
         &(AstNode){.tag = astStringLit, .stringLiteral.value = name});
+}
+
+static AstNode *getValue(EvalContext *ctx,
+                         const FileLoc *loc,
+                         AstNode *node,
+                         attr(unused) attr(unused) AstNode *args)
+{
+    if (node == NULL)
+        return NULL;
+
+    switch (node->tag) {
+    case astAnnotation:
+        if (node->annotation.value)
+            return deepCloneAstNode(ctx->pool, node->annotation.value);
+        return NULL;
+    default:
+        return NULL;
+    }
 }
 
 static AstNode *getMembers(EvalContext *ctx,
@@ -155,6 +174,21 @@ static AstNode *getAttributes(EvalContext *ctx,
         return NULL;
 
     return comptimeWrapped(ctx, &node->loc, decl->attrs, flgComptimeIterable);
+}
+
+static AstNode *getAnnotations(EvalContext *ctx,
+                               attr(unused) const FileLoc *loc,
+                               AstNode *node,
+                               attr(unused) AstNode *args)
+{
+    if (isClassOrStructType(node->type)) {
+        AstNode *decl = getTypeDecl(node->type);
+        return comptimeWrapped(
+            ctx, &node->loc, decl->classDecl.annotations, flgComptimeIterable);
+    }
+    else {
+        return comptimeWrapped(ctx, &node->loc, NULL, flgComptimeIterable);
+    }
 }
 
 static AstNode *getMembersCount(EvalContext *ctx,
@@ -673,6 +707,22 @@ static AstNode *isField(EvalContext *ctx,
                    .boolLiteral.value = nodeIs(node, FieldDecl)});
 }
 
+AstNode *evalAstAnnotationMemberAccess(EvalContext *ctx,
+                                       const FileLoc *loc,
+                                       AstNode *node,
+                                       cstring name)
+{
+    const Type *type = node->type;
+    if (isClassOrStructType(type)) {
+        AstNode *decl = getTypeDecl(type), *annot = decl->classDecl.annotations;
+        for (; annot; annot = annot->next) {
+            if (annot->_name == name)
+                return deepCloneAstNode(ctx->pool, annot->annotation.value);
+        }
+    }
+    return makeNullLiteral(ctx->pool, loc, NULL, makeNullType(ctx->types));
+}
+
 static void initDefaultMembers(EvalContext *ctx)
 {
     defaultMembers = newHashTable(sizeof(AstNodeGetMember));
@@ -680,8 +730,10 @@ static void initDefaultMembers(EvalContext *ctx)
     insertAstNodeGetter(&defaultMembers, makeString(ctx->strings, name), G)
 
     ADD_MEMBER("name", getName);
+    ADD_MEMBER("value", getValue);
     ADD_MEMBER("members", getMembers);
     ADD_MEMBER("attributes", getAttributes);
+    ADD_MEMBER("annotations", getAnnotations);
     ADD_MEMBER("Tinfo", getTypeInfo);
     ADD_MEMBER("elementType", getElementType);
     ADD_MEMBER("pointedType", makePointedTypeAstNode);
@@ -791,8 +843,12 @@ void initComptime(EvalContext *ctx)
 AstNode *evalAstNodeMemberAccess(EvalContext *ctx,
                                  const FileLoc *loc,
                                  AstNode *node,
-                                 cstring name)
+                                 cstring name,
+                                 bool annotation)
 {
+    if (annotation)
+        return evalAstAnnotationMemberAccess(ctx, loc, node, name);
+
     HashTable *table = NULL;
     switch (node->tag) {
     case astStructDecl:

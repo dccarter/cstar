@@ -3,21 +3,16 @@ module logger
 import { Time } from "./time.cxy"
 
 enum Level {
+    @str("TRC")
     TRACE,
+    @str("DBG")
     DEBUG,
+    @str("INF")
     INFO,
+    @str("WRN")
     WARNING,
+    @str("ERR")
     ERROR
-}
-
-func levelToString(os: &OutputStream, level: Level) {
-    switch (level) {
-        case .INFO => os << "INF"
-        case .DEBUG => os << "DBG"
-        case .TRACE => os << "TRC"
-        case .WARNING => os << "WRN"
-        case .ERROR => os << "ERR"
-    }
 }
 
 struct Repeat {
@@ -33,9 +28,9 @@ struct Repeat {
 }
 
 struct FixedWidth {
-    - s: CString
+    - s: __string
     - count: u64
-    func `init`(s: CString, count: u64) {
+    func `init`(s: __string, count: u64) {
         this.s = s
         this.count = count
     }
@@ -50,24 +45,25 @@ struct FixedWidth {
 
 class Logger {
     - os: OutputStream;
-    - _level: Level = .TRACE;
+    - _level: Level = .DEBUG;
 
     func `init`() {
         os = stdout
     }
 
-    func setOutputStream(os: OutputStream) => this.os = os
-    func level(lvl: Level) => _level = lvl
+    func setOutputStream(os: OutputStream) {
+        this.os = &&os
+    }
+
+    func level(lvl: Level) {
+         _level = lvl
+    }
+
     const func level() => _level
 
     func log(lvl: Level, tag: string) : &OutputStream {
         Time().format(LOG_TIME_FMT!, &os)
-        stdout << " "
-
-        levelToString(&os, lvl)
-
-        os << " " << FixedWidth(tag, 10) << " "
-
+        os << " " << lvl << " " << FixedWidth(tag, 10) << " "
         return &os
     }
 }

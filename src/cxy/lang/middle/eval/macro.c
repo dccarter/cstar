@@ -210,21 +210,43 @@ static AstNode *makeFilenameNode(AstVisitor *visitor,
                        visitor->current->loc.fileName ?: "<native>"});
 }
 
-static AstNode *makeFuncNode(AstVisitor *visitor,
+static AstNode *makeCopyNode(AstVisitor *visitor,
                              attr(unused) const AstNode *node,
                              attr(unused) AstNode *args)
 {
     EvalContext *ctx = getAstVisitorContext(visitor);
-    if (!validateMacroArgumentCount(ctx, &node->loc, args, 0))
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
         return NULL;
+    const Type *type = args->type ?: evalType(ctx, args);
+    if (typeIs(type, Error))
+        return NULL;
+    if (!nodeIsLeftValue(args)) {
+        logError(ctx->L, &args->loc, "expecting a lvalue expression", NULL);
+        return NULL;
+    }
+    if (isReferenceType(type))
+        type = type->reference.referred;
+    return makeBackendCallExpr(
+        ctx->pool, &node->loc, flgNone, bfiCopy, args, type);
+}
 
-    return makeAstNode(
-        ctx->pool,
-        builtinLoc(),
-        &(AstNode){.tag = astStringLit,
-                   .type = makeStringType(ctx->types),
-                   .stringLiteral.value =
-                       visitor->current->loc.fileName ?: "<native>"});
+static AstNode *makeForceDropNode(AstVisitor *visitor,
+                                  attr(unused) const AstNode *node,
+                                  attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 1))
+        return NULL;
+    const Type *type = args->type ?: evalType(ctx, args);
+    if (typeIs(type, Error))
+        return NULL;
+    if (!nodeIsLeftValue(args)) {
+        logError(ctx->L, &args->loc, "expecting a lvalue expression", NULL);
+        return NULL;
+    }
+
+    return makeBackendCallExpr(
+        ctx->pool, &node->loc, flgForced, bfiDrop, args, type);
 }
 
 static AstNode *makeHasMemberNode(AstVisitor *visitor,
@@ -860,8 +882,8 @@ static AstNode *makeBackendCallNode(AstVisitor *visitor,
         if (type == NULL || typeIs(type, Error))
             return NULL;
     }
-    arg = args->next;
 
+    arg = args->next;
     args->tag = astBackendCall;
     args->backendCallExpr.func = id;
     args->backendCallExpr.args = arg->next;
@@ -893,23 +915,21 @@ static AstNode *makeLenNode(AstVisitor *visitor,
             args->intLiteral.uValue = len;
             return args;
         }
-        else {
-            AstNode *strLen = findBuiltinDecl(S_strlen);
-            csAssert0(strLen);
-            return makeCallExpr(ctx->pool,
-                                &node->loc,
-                                makeResolvedPath(ctx->pool,
-                                                 &node->loc,
-                                                 S_strlen,
-                                                 strLen->flags | node->flags,
-                                                 strLen,
-                                                 NULL,
-                                                 strLen->type),
-                                args,
-                                node->flags,
-                                NULL,
-                                strLen->type->func.retType);
-        }
+        AstNode *strLen = findBuiltinDecl(S_strlen);
+        csAssert0(strLen);
+        return makeCallExpr(ctx->pool,
+                            &node->loc,
+                            makeResolvedPath(ctx->pool,
+                                             &node->loc,
+                                             S_strlen,
+                                             strLen->flags | node->flags,
+                                             strLen,
+                                             NULL,
+                                             strLen->type),
+                            args,
+                            node->flags,
+                            NULL,
+                            strLen->type->func.retType);
     }
     case typArray:
         // sizeof(a)/sizeof(a[0])
@@ -924,21 +944,20 @@ static AstNode *makeLenNode(AstVisitor *visitor,
         const NamedTypeMember *symbol = findStructMember(raw, S_len);
         if (symbol && nodeIs(symbol->decl, FieldDecl) &&
             isUnsignedType(symbol->type)) {
-            return makeAstNode(
+            return makeMemberExpr(
                 ctx->pool,
                 &node->loc,
-                &(AstNode){
-                    .tag = astMemberExpr,
-                    .flags = args->flags,
-                    .type = symbol->type,
-                    .memberExpr = {.target = args,
-                                   .member = makeAstNode(
-                                       ctx->pool,
+                args->flags,
+                args,
+                makeResolvedIdentifier(ctx->pool,
                                        &args->loc,
-                                       &(AstNode){.tag = astIdentifier,
-                                                  .type = symbol->type,
-                                                  .flags = symbol->decl->flags,
-                                                  .ident.value = S_len})}});
+                                       S_len,
+                                       0,
+                                       (AstNode *)symbol->decl,
+                                       NULL,
+                                       symbol->type),
+                NULL,
+                symbol->type);
         }
         break;
     }
@@ -1368,7 +1387,8 @@ static int compareBuiltinMacros(const void *lhs, const void *rhs)
  * or a trie, but with these minimal entries, it's fast enough.
  */
 static const BuiltinMacro builtinMacros[] = {
-    {.name = "__func", makeFuncNode},
+    {.name = "__copy", makeCopyNode},
+    {.name = "__forcedrop", makeForceDropNode},
     {.name = "assert", makeAssertNode},
     {.name = "ast_list_add", actionAstListAdd},
     {.name = "ast_paste", makeAstPasteNode},

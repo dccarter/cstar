@@ -144,6 +144,7 @@ static void checkReturnStmt(AstVisitor *visitor, AstNode *node)
     }
 
     if (ret) {
+        const Type *retType = resolveAndUnThisType(ret->type);
         if (!isTypeAssignableFrom(ret->type, expr_)) {
             logError(ctx->L,
                      &node->loc,
@@ -160,19 +161,19 @@ static void checkReturnStmt(AstVisitor *visitor, AstNode *node)
             return;
         }
 
-        node->type = ret->type;
+        node->type = retType;
 
-        if (expr && typeIs(ret->type, Union) && ret->type != expr_) {
-            u32 idx = findUnionTypeIndex(ret->type, expr_);
+        if (expr && isUnionType(retType) && retType != expr_) {
+            u32 idx = findUnionTypeIndex(retType, expr_);
             csAssert0(idx != UINT32_MAX);
             node->returnStmt.expr = makeUnionValueExpr(
-                ctx->pool, &expr->loc, expr->flags, expr, idx, NULL, ret->type);
+                ctx->pool, &expr->loc, expr->flags, expr, idx, NULL, retType);
         }
 
-        if (!hasFlag(ret->type, Optional) || hasFlag(expr_, Optional))
+        if (!hasFlag(retType, Optional) || hasFlag(expr_, Optional))
             return;
 
-        const Type *target = getOptionalTargetType(ret->type);
+        const Type *target = getOptionalTargetType(retType);
         if (nodeIs(expr, NullLit)) {
             if (!transformOptionalNone(visitor, expr, target))
                 node->type = ERROR_TYPE(ctx);
@@ -411,6 +412,16 @@ static void checkMacroCallExpr(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     if (!evaluate(ctx->evaluator, node))
         node->type = ERROR_TYPE(ctx);
+}
+
+static void checkRef(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    AstNode *referred = node->reference.target;
+    if (referred->type)
+        node->type = referred->type;
+    else
+        node->type = checkType(visitor, referred);
 }
 
 static void checkProgram(AstVisitor *visitor, AstNode *node)
@@ -714,7 +725,8 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astClosureExpr] = checkClosureExpr,
         [astArrayExpr] = checkArrayExpr,
         [astMacroCallExpr] = checkMacroCallExpr,
-        [astTernaryExpr] = checkTernaryExpr
+        [astTernaryExpr] = checkTernaryExpr,
+        [astRef] = checkRef
     }, .fallback = astVisitFallbackVisitAll, .dispatch = withSavedStack);
     // clang-format on
 

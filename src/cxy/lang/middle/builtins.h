@@ -30,7 +30,6 @@ AstNode *findBuiltinDecl(cstring name);
 const Type *findBuiltinType(cstring name);
 bool isBuiltinString(const Type *type);
 bool overrideBuiltin(cstring name, AstNode *node);
-AstNode *makeSrLocNode(MemPool *pool, const FileLoc *loc);
 
 #ifdef __cplusplus
 }

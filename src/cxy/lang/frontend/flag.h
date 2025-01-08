@@ -32,14 +32,14 @@ extern "C" {
     f(FuncTypeParam,        15)                 \
     f(Member,               16)                 \
     f(AddThis,              17)                 \
-    f(AddSuper,             18)                 \
+    f(OutParam,             18)                 \
     f(Typeinfo,             19)                 \
     f(ForwardDecl,          20)                 \
     f(Reference,            21)                 \
     f(TopLevelDecl,         22)                 \
     f(Generated,            23)                 \
     f(Executable,           24)                 \
-    f(ImportAlias,          25)                 \
+    f(BitUnionCast,         25)                 \
     f(EnumLiteral,          26)                 \
     f(Comptime,             27)                 \
     f(Visited,              28)                 \
@@ -69,13 +69,14 @@ extern "C" {
     f(Abstract,             52)                 \
     f(ModuleInit,           53)                 \
     f(Move,                 54)                 \
-    f(Moved,                55)                 \
+    f(Scoping,              55)                 \
     f(BlockValue,           56)                 \
     f(DiDisable,            57)                 \
-    f(DefaultedFields,      58)                 \
+    f(Forced,               58)                 \
     f(Anonymous,            59)                 \
     f(Constructor,          60)                 \
     f(TestContext,          61)                 \
+    f(Annotation,           62)                 \
     f(UnionCast,            63)
 
 // clang-format on

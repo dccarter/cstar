@@ -69,13 +69,17 @@ static inline void bbInsertAstNode(AstNode *bb, AstNode *node)
 static inline AstNode *createBasicBlock(LoweringContext *ctx,
                                         const AstNode *node)
 {
-    return makeBasicBlockAstNode(
-        ctx->pool, &node->loc, flgNone, ctx->bbIndex++, ctx->currentFunction);
+    return makeBasicBlockAstNode(ctx->pool,
+                                 &node->loc,
+                                 flgNone,
+                                 ctx->bbIndex++,
+                                 ctx->currentFunction,
+                                 NULL);
 }
 
 static inline AstNode *createJumpToBlock(LoweringContext *ctx, AstNode *bb)
 {
-    return makeBranchAstNode(ctx->pool, &bb->loc, flgNone, bb, NULL);
+    return makeBranchAstNode(ctx->pool, &bb->loc, flgNone, bb, NULL, NULL);
 }
 
 static void visitFuncDecl(AstVisitor *visitor, AstNode *node)

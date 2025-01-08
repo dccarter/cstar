@@ -46,30 +46,18 @@ void checkMatchCaseStmt(AstVisitor *visitor, AstNode *node)
 
         if (node->caseStmt.variable) {
             AstNode *variable = node->caseStmt.variable;
-            variable->flags |=
-                condition->flags | (flags & flgConst) | flgTemporary;
-            AstNode *init = shallowCloneAstNode(ctx->pool, condition);
-            init = makeCastExpr(
-                ctx->pool,
-                &variable->loc,
-                flgUnionCast,
-                init,
-                makeTypeReferenceNode(ctx->pool, match_, &variable->loc),
-                NULL,
-                match_);
-            init->castExpr.idx = node->caseStmt.idx;
-
-            variable->type =
-                isReferenceType(condition->type)
-                    ? makeReferenceType(ctx->types, match_, (flags & flgConst))
-                    : makePointerType(ctx->types, match_, (flags & flgConst));
-            variable->varDecl.init = init;
+            const Type *type = node->caseStmt.match->type;
+            if (isComplexType(type) || hasFlag(variable, Reference))
+                type = makeReferenceType(
+                    ctx->types, type, (condition->flags & flgConst));
+            node->caseStmt.variable->type = type;
         }
+    }
+    else {
+        node->parentScope->matchStmt.defaultCase = node;
     }
 
     if (body) {
-        if (nodeIs(body, BlockStmt))
-            body->flags |= flgBlockReturns;
         node->type = checkType(visitor, body);
     }
     else

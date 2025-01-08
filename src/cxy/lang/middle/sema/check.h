@@ -94,6 +94,10 @@ bool checkMemberFunctions(AstVisitor *visitor,
                           NamedTypeMember *members);
 
 void implementClassOrStructBuiltins(AstVisitor *visitor, AstNode *node);
+AstNode *implementDefaultInitializer(AstVisitor *visitor,
+                                     AstNode *node,
+                                     bool isVirtual);
+u64 removeClassOrStructBuiltins(AstNode *node);
 
 void checkBaseDecl(AstVisitor *visitor, AstNode *node);
 void checkImplements(AstVisitor *visitor,
@@ -107,9 +111,9 @@ AstNode *makeDropReferenceCall(TypingContext *ctx,
 
 AstNode *makeAllocateCall(TypingContext *ctx, AstNode *node);
 
-AstNode *makeGetReferenceCall(TypingContext *ctx,
-                              AstNode *member,
-                              const FileLoc *loc);
+AstNode *makeCopyReferenceCall(TypingContext *ctx,
+                               AstNode *member,
+                               const FileLoc *loc);
 
 AstNode *makeSliceConstructor(TypingContext *ctx,
                               const Type *slice,
@@ -122,9 +126,9 @@ void transformArrayExprToSlice(AstVisitor *visitor,
                                const Type *slice,
                                AstNode *expr);
 
-AstNode *createSmartPointerAllocClass(TypingContext *ctx,
-                                      const Type *type,
-                                      const FileLoc *loc);
+AstNode *createAllocateClass(TypingContext *ctx,
+                             const Type *type,
+                             const FileLoc *loc);
 
 void transformToMemberCallExpr(AstVisitor *visitor,
                                AstNode *node,
@@ -144,6 +148,8 @@ AstNode *inheritanceBuildVTable(TypingContext *ctx, AstNode *node);
 
 const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node);
 AstNode *transformClosureArgument(AstVisitor *visitor, AstNode *node);
+
+void implementTupleTypeCopyAndDestructor(AstVisitor *visitor, AstNode *node);
 
 const Type *matchOverloadedFunctionPerfectMatch(Log *L,
                                                 const Type *callee,
@@ -171,7 +177,7 @@ const Type *checkTypeShallow(AstVisitor *visitor, AstNode *node, bool shallow);
 
 static inline const Type *checkType(AstVisitor *visitor, AstNode *node)
 {
-    return checkTypeShallow(visitor, node, true);
+    return checkTypeShallow(visitor, node, false);
 }
 
 const Type *checkFunctionSignature(AstVisitor *visitor, AstNode *node);

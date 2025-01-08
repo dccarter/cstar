@@ -3,10 +3,10 @@ module integer
 pub struct Integer[T] {
     v: T
     func `init`(value: T) { this.v = value }
-    func `init`(str: CString) { this.v = parse(str) }
+    func `init`(str: __string) { this.v = parse(str) }
 
 
-    - func parse(str: CString) {
+    - func parse(str: __string) {
 
     }
 }

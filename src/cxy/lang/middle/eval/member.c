@@ -85,7 +85,8 @@ void evalMemberExpr(AstVisitor *visitor, AstNode *node)
             ctx,
             &node->loc,
             nodeIs(target, Ref) ? target->reference.target : target,
-            member->ident.value);
+            member->ident.value,
+            hasFlag(node, Annotation));
         if (value == NULL) {
             node->tag = astError;
             return;

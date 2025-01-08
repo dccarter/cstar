@@ -1,0 +1,3 @@
+ mem(alloc: 0x600002f30010) @ __builtins.cxy:1013
+ mem(alloc: 0x600002f30030) @ __builtins.cxy:1014
+ mem(alloc: 0x600002d30010) @ /Users/dccarter/projects/cxy/examples/hello.cxy:89

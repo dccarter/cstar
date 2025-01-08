@@ -56,7 +56,21 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    if (!isTypeAssignableFrom(unThisType(type_), init_)) {
+    if (isArrayType(type_) && nodeIs(init, ArrayExpr)) {
+        const Type *target = resolveAndUnThisType(init_->array.elementType),
+                   *initTarget = resolveAndUnThisType(init_->array.elementType);
+        if (!typeIs(initTarget, Auto) &&
+            !isTypeAssignableFrom(target, initTarget)) {
+            logError(ctx->L,
+                     &node->loc,
+                     "array initializer of type {t} cannot be assigned to "
+                     "array of type '{t}'",
+                     (FormatArg[]){{.t = init_}, {.t = type_}});
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+    }
+    else if (!isTypeAssignableFrom(unThisType(type_), init_)) {
         logError(ctx->L,
                  &node->loc,
                  "variable initializer of type '{t}' is not assignable to "
@@ -85,7 +99,6 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
     if (nodeIs(init, NullLit)) {
         if (!transformOptionalNone(visitor, init, target)) {
             node->type = ERROR_TYPE(ctx);
-            return;
         }
     }
     else {
@@ -94,7 +107,6 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
                 visitor, init, copyAstNode(ctx->pool, init))) //
         {
             node->type = ERROR_TYPE(ctx);
-            return;
         }
     }
 }

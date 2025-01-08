@@ -1394,15 +1394,20 @@ AstNode *makeMacroCallAstNode(MemPool *pool,
                    .macroCallExpr = {.callee = callee, .args = args}});
 }
 
-AstNode *makeBasicBlockAstNode(
-    MemPool *pool, const FileLoc *loc, u64 flags, u32 index, AstNode *func)
+AstNode *makeBasicBlockAstNode(MemPool *pool,
+                               const FileLoc *loc,
+                               u64 flags,
+                               u32 index,
+                               AstNode *func,
+                               AstNodeList *stmts)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astBasicBlock,
-                                  .flags = flags,
-                                  .parentScope = func,
-                                  .basicBlock = {.index = index}});
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astBasicBlock,
+                   .flags = flags,
+                   .parentScope = func,
+                   .basicBlock = {.index = index, .stmts = *stmts}});
 }
 
 AstNode *makeReturnAstNode(MemPool *pool,
@@ -1515,14 +1520,16 @@ AstNode *makeBranchAstNode(MemPool *pool,
                            const FileLoc *loc,
                            u64 flags,
                            AstNode *target,
+                           AstNode *cond,
                            AstNode *next)
 {
-    return makeAstNode(pool,
-                       loc,
-                       &(AstNode){.tag = astBranch,
-                                  .flags = flags,
-                                  .next = next,
-                                  .branch = {.target = target}});
+    return makeAstNode(
+        pool,
+        loc,
+        &(AstNode){.tag = astBranch,
+                   .flags = flags,
+                   .next = next,
+                   .branch = {.target = target, .condition = cond}});
 }
 
 AstNode *makeAstClosureCapture(MemPool *pool, AstNode *captured)
@@ -1917,7 +1924,8 @@ cstring getNamedNodeName(const AstNode *member)
     case astTypeDecl:
     case astEnumDecl:
     case astAttr:
-        return member->_namedNode.name;
+    case astAnnotation:
+        return member->_name;
     default:
         return NULL;
     }
@@ -2499,6 +2507,8 @@ const char *getDeclarationName(const AstNode *node)
         return node->define.container->ident.value;
     case astVarDecl:
         return node->varDecl.name;
+    case astFuncParamDecl:
+        return node->funcParam.name;
     default:
         csAssert(false, "%s is not a declaration", getAstNodeName(node));
     }
@@ -2703,8 +2713,9 @@ AstNode *findInComptimeIterable(AstNode *node, cstring name)
         return NULL;
     AstNode *it = node->next;
     for (; it; it = it->next) {
-        if (name == getNamedNodeName(it))
-            return it;
+        if (name == getNamedNodeName(it)) {
+            return nodeIs(it, Annotation) ? it->annotation.value : it;
+        }
     }
     return NULL;
 }
@@ -2886,6 +2897,14 @@ AstNode *findInSortedNodes(SortedNodes *sorted, cstring name)
     return sorted->nodes[found];
 }
 
+AstNode *nodeGetFuncParams(const AstNode *decl)
+{
+    if (nodeIs(decl, FuncDecl))
+        return decl->funcDecl.signature->params;
+    csAssert0(nodeIs(decl, FuncType));
+    return decl->funcType.params;
+}
+
 CCodeKind getCCodeKind(TokenTag tag)
 {
     switch (tag) {
@@ -2900,6 +2919,18 @@ CCodeKind getCCodeKind(TokenTag tag)
     }
 }
 
+cstring getBackendCallString(BackendFuncId bfi)
+{
+    switch (bfi) {
+#define f(NAME)                                                                \
+    case bfi##NAME:                                                            \
+        return #NAME;
+        BACKEND_FUNC_IDS(f)
+    default:
+        return "Unknown";
+    }
+}
+
 bool nodeIsMemberFunctionReference(const AstNode *node)
 {
     if (!nodeIs(node, MemberExpr) || !typeIs(node->type, Func))
@@ -2909,7 +2940,19 @@ bool nodeIsMemberFunctionReference(const AstNode *node)
         return true;
     if (nodeIs(target, Identifier))
         target = target->ident.resolvesTo;
-    return isClassOrStructAstNode(target);
+    return isClassOrStructAstNode(target) || nodeIs(node, ModuleDecl);
+}
+
+bool nodeIsModuleFunctionRef(const AstNode *node)
+{
+    if (!nodeIs(node, MemberExpr) || !typeIs(node->type, Func))
+        return false;
+    AstNode *target = node->memberExpr.target;
+    if (nodeIs(target, TypeRef))
+        return true;
+    if (nodeIs(target, Identifier))
+        target = target->ident.resolvesTo;
+    return typeIs(target->type, Module);
 }
 
 bool nodeIsEnumOptionReference(const AstNode *node)
@@ -2942,7 +2985,7 @@ bool nodeIsLeftValue(const AstNode *node)
         return nodeIsLeftValue(node->groupExpr.expr);
     case astUnaryExpr: {
         Operator op = node->unaryExpr.op;
-        if (op == opMove || op == opPtrof || op == opRefof)
+        if (op == opPtrof || op == opRefof)
             return nodeIsLeftValue(node->unaryExpr.operand);
         return false;
     }

@@ -79,6 +79,7 @@ set(CXY_CORE_SOURCES
         src/cxy/core/e4c.c
         src/cxy/core/format.c
         src/cxy/core/hash.c
+        src/cxy/core/hmap.c
         src/cxy/core/htable.c
         src/cxy/core/log.c
         src/cxy/core/mempool.c
@@ -87,7 +88,8 @@ set(CXY_CORE_SOURCES
         src/cxy/core/utils.c)
 
 set(CXY_3RD_PARTY_SOURCES
-        src/3rdParty/cJSON.c)
+        src/3rdParty/cJSON.c
+        src/3rdParty/toml/toml.c)
 
 set(CXY_FRONTEND_SOURCES
         src/cxy/lang/frontend/ast.c
@@ -173,6 +175,8 @@ set(CXY_MIDDLE_SOURCES
 
         src/cxy/lang/middle/mem/manage.c
         src/cxy/lang/middle/mem/mem.c
+        src/cxy/lang/middle/mem/v2/mem.c
+        src/cxy/lang/middle/mem/v2/finalize.c
         src/cxy/lang/middle/mem/reference.c
 
         src/cxy/lang/middle/mir/context.c
@@ -197,6 +201,7 @@ endif ()
 
 set(CXY_DRIVER_SOURCES
         src/cxy/driver/cc.c
+        src/cxy/driver/cxyfile.c
         src/cxy/driver/driver.c
         src/cxy/driver/options.c
         src/cxy/driver/stages.c

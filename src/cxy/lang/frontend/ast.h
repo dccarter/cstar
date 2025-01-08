@@ -98,7 +98,7 @@ struct StrPool;
     f(CCode)                \
     f(Define)               \
     f(Attr)                 \
-    f(AttrDecl)             \
+    f(Annotation)           \
     f(Symbol)               \
     f(Path)                 \
     f(PathElem)             \
@@ -144,10 +144,18 @@ typedef enum {
         astCOUNT
 } AstTag;
 
+typedef enum {
+    vtsUninitialized = 0,
+    vtsAssigned = 1,
+    vtsMaybeAssigned = 2,
+    vtsMoved = 3,
+    vtsDropped = 4,
+} VariableState;
+
 struct Scope;
 struct AstVisitor;
 
-typedef struct AstNode AstNode;
+typedef AstNode AstNode;
 
 typedef AstNode *(*EvaluateMacro)(struct AstVisitor *,
                                   const AstNode *,
@@ -178,7 +186,10 @@ typedef struct {
 #define BACKEND_FUNC_IDS(f)    \
     f(SizeOf)                  \
     f(Alloca)                  \
-    f(Zeromem)
+    f(Zeromem)                 \
+    f(MemAlloc)                \
+    f(Copy)                    \
+    f(Drop)
 
 // clang-format on
 
@@ -188,7 +199,6 @@ typedef enum {
 #undef f
 } BackendFuncId;
 
-struct IrValue;
 struct MirNode;
 
 #define CXY_AST_NODE_HEAD                                                      \
@@ -213,9 +223,9 @@ typedef enum { iptModule, iptPath } ImportKind;
 typedef enum { cInclude, cDefine, cSources } CCodeKind;
 
 typedef struct FunctionSignature {
-    struct AstNode *params;
-    struct AstNode *ret;
-    struct AstNode *typeParams;
+    AstNode *params;
+    AstNode *ret;
+    AstNode *typeParams;
 } FunctionSignature;
 
 typedef struct SortedNodes {
@@ -223,7 +233,7 @@ typedef struct SortedNodes {
 
     int (*compare)(const void *lhs, const void *rhs);
 
-    struct AstNode *nodes[0];
+    AstNode *nodes[0];
 } SortedNodes;
 
 typedef struct {
@@ -256,10 +266,10 @@ struct AstNode {
 
         struct {
             cstring path;
-            struct AstNode *module;
-            struct AstNode *top;
-            struct AstNode *decls;
-            struct AstNode **tests;
+            AstNode *module;
+            AstNode *top;
+            AstNode *decls;
+            AstNode **tests;
             u64 testsCount;
         } program;
 
@@ -281,10 +291,10 @@ struct AstNode {
 
         struct {
             ImportKind kind;
-            struct AstNode *module;
-            struct AstNode *exports;
-            struct AstNode *alias;
-            struct AstNode *entities;
+            AstNode *module;
+            AstNode *exports;
+            AstNode *alias;
+            AstNode *entities;
         } import;
 
         struct {
@@ -352,34 +362,39 @@ struct AstNode {
 
         struct {
             cstring name;
-            struct AstNode *args;
+            AstNode *args;
             u32 count;
             bool kvpArgs;
         } attr;
 
         struct {
+            cstring name;
+            AstNode *value;
+        } annotation;
+
+        struct {
             u64 len;
-            struct AstNode *elements;
+            AstNode *elements;
             bool isLiteral;
         } tupleExpr;
 
         struct {
             u64 len;
-            struct AstNode *elements;
+            AstNode *elements;
         } tupleType;
 
         struct {
-            struct AstNode *elementType;
-            struct AstNode *dim;
+            AstNode *elementType;
+            AstNode *dim;
         } arrayType;
 
         struct {
-            struct AstNode *type;
+            AstNode *type;
         } optionalType;
 
         struct {
-            struct AstNode *params;
-            struct AstNode *ret;
+            AstNode *params;
+            AstNode *ret;
         } funcType;
 
         struct {
@@ -387,45 +402,45 @@ struct AstNode {
         } primitiveType;
 
         struct {
-            struct AstNode *pointed;
+            AstNode *pointed;
         } pointerType;
 
         struct {
-            struct AstNode *referred;
+            AstNode *referred;
         } referenceType;
 
         struct {
             u64 len;
-            struct AstNode *elements;
+            AstNode *elements;
             bool isLiteral;
         } arrayExpr;
 
         struct {
-            struct AstNode *target;
-            struct AstNode *member;
+            AstNode *target;
+            AstNode *member;
         } memberExpr;
 
         struct {
-            struct AstNode *start;
-            struct AstNode *end;
-            struct AstNode *step;
+            AstNode *start;
+            AstNode *end;
+            AstNode *step;
             bool down;
         } rangeExpr;
 
         struct {
-            struct AstNode *type;
-            struct AstNode *init;
+            AstNode *type;
+            AstNode *init;
         } newExpr;
 
         struct {
-            struct AstNode *target;
-            struct AstNode *index;
+            AstNode *target;
+            AstNode *index;
         } indexExpr;
 
         struct {
             const char *name;
-            struct AstNode *defaultValue;
-            struct AstNode *constraints;
+            AstNode *defaultValue;
+            AstNode *constraints;
             u16 inferIndex;
             bool innerType;
         } genericParam;
@@ -434,17 +449,17 @@ struct AstNode {
             cstring name;
             u16 paramsCount;
             i16 inferrable;
-            struct AstNode *params;
-            struct AstNode *decl;
+            AstNode *params;
+            AstNode *decl;
         } genericDecl;
 
         struct {
             const char *name;
             const char *alt;
-            struct AstNode *args;
+            AstNode *args;
             union {
-                struct AstNode *enclosure;
-                struct AstNode *resolvesTo;
+                AstNode *enclosure;
+                AstNode *resolvesTo;
             };
             u16 index;
             u16 super;
@@ -456,7 +471,7 @@ struct AstNode {
         } externDecl;
 
         struct {
-            struct AstNode *elements;
+            AstNode *elements;
             bool isType;
             u16 inheritanceDepth;
         } path;
@@ -468,65 +483,74 @@ struct AstNode {
             u16 requiredParamsCount;
             u16 paramsCount;
             FunctionSignature *signature;
-            struct AstNode *opaqueParams;
-            struct AstNode *this_;
+            AstNode *opaqueParams;
+            AstNode *this_;
             union {
-                struct AstNode *body;
-                struct AstNode *definition;
+                AstNode *body;
+                AstNode *definition;
             };
         } funcDecl;
 
         struct {
             const char *name;
-            struct AstNode *params;
+            AstNode *params;
             union {
-                struct AstNode *body;
-                struct AstNode *definition;
+                AstNode *body;
+                AstNode *definition;
             };
         } macroDecl;
 
         struct {
             const char *name;
-            struct AstNode *type;
-            struct AstNode *def;
+            u32 idx;
+            AstNode *dropFlags;
+            AstNode *type;
+            AstNode *def;
             u32 index;
         } funcParam;
 
         struct {
             cstring name;
-            struct AstNode *names;
-            struct AstNode *type;
-            struct AstNode *init;
+            u32 idx;
+            AstNode *dropFlags;
+            AstNode *names;
+            AstNode *type;
+            AstNode *init;
             void *codegen;
         } varDecl;
 
         struct {
+            cstring _name;
+            u32 _idx;
+        };
+
+        struct {
             cstring name;
-            struct AstNode *typeParams;
+            AstNode *typeParams;
             union {
-                struct AstNode *aliased;
-                struct AstNode *definition;
+                AstNode *aliased;
+                AstNode *definition;
             };
         } typeDecl;
 
         struct {
-            struct AstNode *members;
-            struct AstNode *typeParams;
+            AstNode *members;
+            AstNode *typeParams;
             SortedNodes *sortedMembers;
         } unionDecl;
 
         struct {
             cstring name;
-            struct AstNode *value;
+            AstNode *value;
             u64 index;
         } enumOption;
 
         struct {
             cstring name;
             u64 len;
-            struct AstNode *base;
-            struct AstNode *options;
-            struct AstNode *getName;
+            AstNode *base;
+            AstNode *options;
+            AstNode *getName;
             SortedNodes *sortedOptions;
         } enumDecl;
 
@@ -534,85 +558,90 @@ struct AstNode {
             cstring name;
             u64 index;
             u32 bits;
-            struct AstNode *type;
-            struct AstNode *value;
+            AstNode *type;
+            AstNode *value;
         } structField;
 
         struct {
             cstring name;
-            struct AstNode *members;
-            struct AstNode *typeParams;
+            AstNode *members;
+            AstNode *typeParams;
             const Type *thisType;
-            struct AstNode *base;
-            struct AstNode *closureForward;
+            AstNode *base;
+            AstNode *closureForward;
+            AstNode *annotations;
         } structDecl;
 
         struct {
             cstring name;
-            struct AstNode *members;
-            struct AstNode *typeParams;
+            AstNode *members;
+            AstNode *typeParams;
             const Type *thisType;
-            struct AstNode *base;
-            struct AstNode *closureForward;
-            struct AstNode *implements;
+            AstNode *base;
+            AstNode *closureForward;
+            AstNode *annotations;
+            AstNode *implements;
         } classDecl;
 
         struct {
             cstring name;
-            struct AstNode *members;
-            struct AstNode *typeParams;
+            AstNode *members;
+            AstNode *typeParams;
         } interfaceDecl;
 
         struct {
             Operator op;
-            struct AstNode *lhs;
-            struct AstNode *rhs;
+            AstNode *lhs;
+            AstNode *rhs;
+            VariableState lhsVariableState;
         } binaryExpr, assignExpr;
 
         struct {
             Operator op;
             bool isPrefix;
-            struct AstNode *operand;
+            AstNode *operand;
         } unaryExpr;
 
         struct {
             AstNode *jmpTo;
-            struct AstNode *cond;
-            struct AstNode *body;
-            struct AstNode *otherwise;
+            AstNode *cond;
+            AstNode *body;
+            AstNode *otherwise;
             bool isTernary;
         } ternaryExpr, ifStmt;
 
         struct {
-            struct AstNode *stmt;
+            AstNode *stmt;
         } stmtExpr;
 
         struct {
-            struct AstNode *parts;
+            AstNode *parts;
         } stringExpr;
 
         struct {
             u32 idx;
-            struct AstNode *expr;
-            struct AstNode *type;
+            AstNode *expr;
+            AstNode *type;
         } typedExpr;
 
         struct {
             u32 idx;
-            struct AstNode *expr;
-            struct AstNode *to;
+            AstNode *expr;
+            AstNode *to;
         } castExpr;
 
         struct {
-            struct AstNode *callee;
-            struct AstNode *args;
+            AstNode *callee;
+            AstNode *args;
             EvaluateMacro evaluator;
             u32 overload;
         } callExpr, macroCallExpr;
 
         struct {
             BackendFuncId func;
-            struct AstNode *args;
+            AstNode *args;
+            AstNode *dropFlags;
+            VariableState state;
         } backendCallExpr;
 
         struct {
@@ -623,81 +652,84 @@ struct AstNode {
                     u64 captureCount;
                 };
             };
-            struct AstNode *params;
-            struct AstNode *ret;
-            struct AstNode *body;
-            struct AstNode *construct;
+            AstNode *params;
+            AstNode *ret;
+            AstNode *body;
+            AstNode *construct;
         } closureExpr;
 
         struct {
             const char *name;
             u64 index;
-            struct AstNode *value;
-            const struct AstNode *structField;
+            AstNode *value;
+            const AstNode *structField;
             const Type *sliceType;
         } fieldExpr;
 
         struct {
-            struct AstNode *left;
-            struct AstNode *fields;
+            AstNode *left;
+            AstNode *fields;
             bool isLiteral;
         } structExpr;
 
         struct {
-            struct AstNode *expr;
+            AstNode *expr;
         } exprStmt, groupExpr, spreadExpr;
 
         struct {
-            struct AstNode *stmt;
-            struct AstNode *block;
+            AstNode *stmt;
+            AstNode *block;
         } deferStmt;
 
         struct {
-            struct AstNode *loop;
+            AstNode *loop;
         } breakExpr, continueExpr;
 
         struct {
-            struct AstNode *func;
-            struct AstNode *expr;
+            AstNode *func;
+            AstNode *expr;
         } returnStmt;
 
         struct {
-            struct AstNodeList epilogue;
-            struct AstNode *stmts;
-            struct AstNode *last;
+            cstring name;
+            AstNodeList epilogue;
+            AstNode *stmts;
+            AstNode *last;
             DynArray dctorBlocks;
             bool returned;
             bool sealed;
         } blockStmt;
 
         struct {
-            struct AstNode *var;
-            struct AstNode *range;
-            struct AstNode *body;
+            AstNode *var;
+            AstNode *range;
+            AstNode *body;
         } forStmt;
 
         struct {
-            struct AstNode *cond;
-            struct AstNode *body;
-            struct AstNode *update;
+            AstNode *cond;
+            AstNode *body;
+            AstNode *update;
         } whileStmt;
 
         struct {
             u64 index;
-            struct AstNode *cond;
-            struct AstNode *cases;
+            AstNode *cond;
+            AstNode *cases;
+            AstNode *defaultCase;
         } switchStmt;
 
         struct {
             u64 index;
-            struct AstNode *expr;
-            struct AstNode *cases;
+            AstNode *expr;
+            AstNode *cases;
+            AstNode *defaultCase;
         } matchStmt;
 
         struct {
-            struct AstNode *match;
-            struct AstNode *body;
-            struct AstNode *variable;
+            AstNode *match;
+            AstNode *body;
+            AstNode *variable;
             u32 idx;
         } caseStmt;
 
@@ -736,6 +768,7 @@ struct AstNode {
 
         struct {
             AstNode *target;
+            AstNode *condition;
         } branch;
 
         struct {
@@ -1279,8 +1312,12 @@ AstNode *makeMacroCallAstNode(MemPool *pool,
                               AstNode *args,
                               AstNode *next);
 
-AstNode *makeBasicBlockAstNode(
-    MemPool *pool, const FileLoc *loc, u64 flags, u32 index, AstNode *func);
+AstNode *makeBasicBlockAstNode(MemPool *pool,
+                               const FileLoc *loc,
+                               u64 flags,
+                               u32 index,
+                               AstNode *func,
+                               AstNodeList *stmts);
 
 AstNode *makeReturnAstNode(MemPool *pool,
                            const FileLoc *loc,
@@ -1293,6 +1330,7 @@ AstNode *makeBranchAstNode(MemPool *pool,
                            const FileLoc *loc,
                            u64 flags,
                            AstNode *target,
+                           AstNode *flagsVar,
                            AstNode *next);
 
 AstNode *makeBranchIfAstNode(MemPool *pool,
@@ -1528,14 +1566,16 @@ void makeSortedNodesInMemory(SortedNodes *sortedNodes,
                              u64 count,
                              int (*compare)(const void *, const void *));
 
-const AstNode *getOptionalDecl();
-
 AstNode *findInSortedNodes(SortedNodes *sorted, cstring name);
+
+AstNode *nodeGetFuncParams(const AstNode *decl);
 
 static inline AstNode *underlyingDeclaration(AstNode *decl)
 {
     return nodeIs(decl, GenericDecl) ? decl->genericDecl.decl : decl;
 }
+
+cstring getBackendCallString(BackendFuncId bfi);
 
 static inline bool isStructDeclaration(AstNode *node)
 {
@@ -1552,6 +1592,8 @@ static inline bool isClassDeclaration(AstNode *node)
 }
 
 bool nodeIsMemberFunctionReference(const AstNode *node);
+
+bool nodeIsModuleFunctionRef(const AstNode *node);
 
 bool nodeIsEnumOptionReference(const AstNode *node);
 

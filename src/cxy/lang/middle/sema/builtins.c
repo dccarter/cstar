@@ -22,31 +22,18 @@ static AstNode *implementCallTupleCopy(TypingContext *ctx,
     const Type *copy_ = type->tuple.copyFunc;
     csAssert0(copy_);
 
-    return makeCallExpr(
+    return makeBackendCallExpr(
         ctx->pool,
         loc,
+        flgNone,
+        bfiCopy,
         makeResolvedPath(ctx->pool,
                          &member->loc,
-                         copy_->name,
-                         flgNone,
-                         copy_->func.decl,
+                         member->structField.name,
+                         member->flags | flgMember | flgAddThis,
+                         member,
                          NULL,
-                         copy_),
-        makeReferenceOfExpr(
-            ctx->pool,
-            &member->loc,
-            flgNone,
-            makeResolvedPath(ctx->pool,
-                             &member->loc,
-                             member->structField.name,
-                             member->flags | flgMember | flgAddThis,
-                             member,
-                             NULL,
-                             type),
-            NULL,
-            makeReferenceType(ctx->types, type, flgNone)),
-        flgNone,
-        NULL,
+                         type),
         copy_->func.retType);
 }
 
@@ -58,30 +45,18 @@ static AstNode *implementCallStructCopyMember(TypingContext *ctx,
     const NamedTypeMember *copy_ = findStructMember(type, S_CopyOverload);
     csAssert0(copy_);
 
-    return makeCallExpr(
+    return makeBackendCallExpr(
         ctx->pool,
         loc,
-        makePathWithElements(ctx->pool,
-                             loc,
-                             flgNone,
-                             makeResolvedPathElement(
-                                 ctx->pool,
-                                 loc,
-                                 member->structField.name,
-                                 member->flags | flgMember | flgAddThis,
-                                 member,
-                                 makeResolvedPathElement(ctx->pool,
-                                                         loc,
-                                                         S_CopyOverload,
-                                                         flgNone,
-                                                         (AstNode *)copy_->decl,
-                                                         NULL,
-                                                         copy_->type),
-                                 type),
-                             NULL),
-        NULL,
         flgNone,
-        NULL,
+        bfiCopy,
+        makeResolvedPath(ctx->pool,
+                         loc,
+                         member->structField.name,
+                         member->flags | flgMember | flgAddThis,
+                         member,
+                         NULL,
+                         type),
         copy_->type->func.retType);
 }
 
@@ -98,31 +73,18 @@ static AstNode *implementCallStructDestructor(TypingContext *ctx,
         ctx->pool,
         loc,
         flgNone,
-        makeCallExpr(
+        makeBackendCallExpr(
             ctx->pool,
             loc,
-            makePathWithElements(
-                ctx->pool,
-                loc,
-                flgNone,
-                makeResolvedPathElement(
-                    ctx->pool,
-                    loc,
-                    member->structField.name,
-                    member->flags | flgMember | flgAddThis,
-                    member,
-                    makeResolvedPathElement(ctx->pool,
-                                            loc,
-                                            S_DestructorOverload,
-                                            flgNone,
-                                            (AstNode *)destructor->decl,
-                                            NULL,
-                                            destructor->type),
-                    type),
-                NULL),
-            NULL,
             flgNone,
-            NULL,
+            bfiDrop,
+            makeResolvedPath(ctx->pool,
+                             loc,
+                             member->structField.name,
+                             member->flags | flgMember | flgAddThis,
+                             member,
+                             NULL,
+                             type),
             destructor->type->func.retType),
         NULL,
         makeVoidType(ctx->types));
@@ -195,31 +157,18 @@ static AstNode *implementCallTupleDestructor(TypingContext *ctx,
         ctx->pool,
         loc,
         flgNone,
-        makeCallExpr(
+        makeBackendCallExpr(
             ctx->pool,
             loc,
+            flgNone,
+            bfiDrop,
             makeResolvedPath(ctx->pool,
                              &member->loc,
-                             destructor->name,
-                             flgNone,
-                             destructor->func.decl,
+                             member->structField.name,
+                             member->flags | flgMember | flgAddThis,
+                             member,
                              NULL,
-                             destructor),
-            makeReferenceOfExpr(
-                ctx->pool,
-                &member->loc,
-                flgNone,
-                makeResolvedPath(ctx->pool,
-                                 &member->loc,
-                                 member->structField.name,
-                                 member->flags | flgMember | flgAddThis,
-                                 member,
-                                 NULL,
-                                 type),
-                NULL,
-                makeReferenceType(ctx->types, type, flgNone)),
-            flgNone,
-            NULL,
+                             type),
             destructor->func.retType),
         NULL,
         makeVoidType(ctx->types));
@@ -270,14 +219,14 @@ static void implementStructCopyFunction(AstVisitor *visitor,
         if (!nodeIs(member, FieldDecl))
             continue;
 
-        const Type *type = member->type;
+        const Type *type = resolveAndUnThisType(member->type);
         AstNode *expr = NULL;
         if (isClassType(type)) {
             expr = makeFieldExpr(ctx->pool,
                                  &copy->loc,
                                  member->structField.name,
                                  member->flags,
-                                 makeGetReferenceCall(ctx, member, &copy->loc),
+                                 makeCopyReferenceCall(ctx, member, &copy->loc),
                                  member,
                                  NULL);
             refMembers = true;
@@ -627,15 +576,16 @@ AstNode *createClassOrStructBuiltins(MemPool *pool, AstNode *node)
 
     if (!hasMember(node, S_DestructorOverload)) {
         insertAstNode(&funcs,
-                      makeOperatorOverload(pool,
-                                           &loc,
-                                           opDestructorOverload,
-                                           NULL,
-                                           NULL,
-                                           NULL,
-                                           flgPublic,
-                                           NULL,
-                                           NULL));
+                      makeOperatorOverload(
+                          pool,
+                          &loc,
+                          opDestructorOverload,
+                          NULL,
+                          makeVoidAstNode(pool, &loc, flgNone, NULL, NULL),
+                          NULL,
+                          flgPublic,
+                          NULL,
+                          NULL));
     }
 
     csAssert0(!hasMember(node, S_DestructorFwd));
@@ -694,4 +644,40 @@ void implementClassOrStructBuiltins(AstVisitor *visitor, AstNode *node)
             break;
         }
     }
+}
+
+u64 removeClassOrStructBuiltins(AstNode *node)
+{
+    AstNodeList members = {};
+    u64 count = 0, total = 0;
+    for (AstNode *it = node->structDecl.members; it;) {
+        AstNode *member = it;
+        it = it->next;
+        total++;
+        member->next = NULL;
+        if (nodeIs(member, FuncDecl)) {
+            switch (member->funcDecl.operatorOverload) {
+            case opDestructorOverload:
+                node->flags |= flgImplementsDeinit;
+                if (member->funcDecl.body == NULL)
+                    continue;
+                break;
+            case opCopyOverload:
+                if (member->funcDecl.body == NULL)
+                    continue;
+                break;
+            case opDestructorFwd:
+                if (member->funcDecl.body == NULL)
+                    continue;
+                break;
+            default:
+                break;
+            }
+        }
+        insertAstNode(&members, member);
+        count++;
+    }
+
+    node->structDecl.members = members.first;
+    return total - count;
 }

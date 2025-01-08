@@ -83,6 +83,7 @@ extern "C" {
     f(Match, "match")               \
     f(For, "for")                   \
     f(In, "in")                     \
+    f(Is, "is")                     \
     f(While, "while")               \
     f(Break, "break")               \
     f(Return, "return")             \
@@ -111,6 +112,7 @@ extern "C" {
     f(Range,  "range")              \
     f(Module, "module")             \
     f(Import, "import")             \
+    f(Include, "include")           \
     f(CDefine, "cDefine")           \
     f(CInclude,"cInclude")          \
     f(CSources, "cSources")         \
@@ -163,6 +165,7 @@ typedef struct {
         double fVal;
         u32 cVal;
     };
+    struct LexerBuffer *buffer;
     FileLoc fileLoc;
 } Token;
 

@@ -17,6 +17,29 @@ typedef struct CompilerPreprocessor {
     HashTable symbols;
 } CompilerPreprocessor;
 
+typedef struct {
+    cstring name;
+    cstring main;
+    DynArray tests;
+    DynArray defines;
+    DynArray cIncludeDirs;
+    DynArray cLibDirs;
+    DynArray cLibs;
+    DynArray cSources;
+    DynArray cDefines;
+    DynArray cFlags;
+} CxyBinary;
+
+typedef struct {
+    cstring name;
+    cstring version;
+    cstring description;
+    cstring defaultRun;
+    cstring repo;
+    DynArray authors;
+    HashTable binaries;
+} CxyPackage;
+
 typedef struct CompilerDriver {
     Options options;
     MemPool *pool;
@@ -35,6 +58,7 @@ typedef struct CompilerDriver {
     AstNode *mainModule;
     AstNodeList startup;
     CompilerPreprocessor preprocessor;
+    CxyPackage package;
     struct MirContext *mir;
     void *backend;
     void *cImporter;
@@ -73,10 +97,16 @@ bool compileString(CompilerDriver *driver,
                    u64 size,
                    cstring filename);
 
+bool loadCxyfile(CompilerDriver *cc, cstring path);
+
 const Type *compileModule(CompilerDriver *driver,
                           const AstNode *source,
                           AstNode *entities,
                           AstNode *alias);
+
+cstring getIncludeFileLocation(CompilerDriver *driver,
+                               const FileLoc *loc,
+                               cstring path);
 
 void *initCompilerBackend(CompilerDriver *driver, int argc, char **argv);
 void deinitCompilerBackend(CompilerDriver *driver);

@@ -45,7 +45,7 @@ static void growDynArray(DynArray *array, size_t capacity)
         reallocOrDie(array->elems, array->elemSize * array->capacity);
 }
 
-void pushOnDynArrayExplicit(DynArray *array, const void *elem, size_t elemSize)
+void *pushOnDynArrayExplicit(DynArray *array, const void *elem, size_t elemSize)
 {
     assert(elemSize == array->elemSize);
     if (array->size >= array->capacity)
@@ -54,6 +54,7 @@ void pushOnDynArrayExplicit(DynArray *array, const void *elem, size_t elemSize)
            elem,
            array->elemSize);
     array->size++;
+    return array->elems + array->elemSize * array->size;
 }
 
 void copyDynArray(DynArray *dst, const DynArray *src)

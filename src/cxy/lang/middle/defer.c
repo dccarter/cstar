@@ -92,6 +92,7 @@ static void visitBlockStmt(AstVisitor *visitor, AstNode *node)
 
     AstNode *stmt = node->blockStmt.stmts;
     astModifierInit(&ctx->block, node);
+    AstNodeList stmts = {};
 
     for (; stmt && !blockScopeIsSealed(scope); stmt = stmt->next) {
         astModifierNext(&ctx->block, stmt);
@@ -104,6 +105,16 @@ static void visitBlockStmt(AstVisitor *visitor, AstNode *node)
     }
 
     blockScopeContainerPop(&ctx->bsc);
+
+    for (stmt = node->blockStmt.stmts; stmt;) {
+        AstNode *curr = stmt;
+        stmt = stmt->next;
+        curr->next = NULL;
+        if (!nodeIs(curr, Noop)) {
+            insertAstNode(&stmts, curr);
+        }
+    }
+    node->blockStmt.stmts = stmts.first;
 }
 
 static void visitBreakContinue(AstVisitor *visitor, AstNode *node)

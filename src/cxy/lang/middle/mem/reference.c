@@ -107,8 +107,7 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
     MMContext *ctx = getAstVisitorContext(visitor);
     AstNode *callee = node->callExpr.callee, *args = node->callExpr.args;
     AstNode *func = getTypeDecl(callee->type),
-            *params = nodeIs(func, FuncType) ? func->funcType.params
-                                             : func->funcDecl.signature->params;
+            *params = nodeGetFuncParams(func);
     if (hasFlag(func, Extern))
         return;
 
@@ -231,7 +230,6 @@ void checkReferenceVariables(MMContext *context, AstNode *node)
     }, .fallback = astVisitFallbackVisitAll, .dispatch = withSavedStack);
     // clang-format on
 
-    blockScopeContainerInit(&context->bsc, sizeof(VariableTrace));
     astVisit(&visitor, node);
     blockScopeContainerDeinit(&context->bsc);
 }
