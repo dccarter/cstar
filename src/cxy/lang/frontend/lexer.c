@@ -1,4 +1,5 @@
 #include "lexer.h"
+#include "core/alloc.h"
 #include "core/hash.h"
 #include "core/utils.h"
 #include "token.h"
@@ -34,6 +35,46 @@ static void registerKeywords(HashTable *keywords)
 #undef f
 }
 
+static LexerBuffer *newLexerBuffer(const char *fileName,
+                                   const char *fileData,
+                                   size_t fileSize)
+{
+    LexerBuffer *buffer = mallocOrDie(sizeof(LexerBuffer));
+    buffer->fileName = fileName;
+    buffer->fileData = fileData;
+    buffer->fileSize = fileSize;
+    buffer->filePos = (FilePos){.row = 1, .col = 1};
+    buffer->ownData = false;
+    buffer->prev = NULL;
+    return buffer;
+}
+
+static void deleteLexerBuffer(LexerBuffer *b)
+{
+    if (b->ownData) {
+        free((void *)b->fileData);
+    }
+    free(b);
+}
+
+static void deleteLexerBufferChain(LexerBuffer *b)
+{
+    while (b) {
+        LexerBuffer *tmp = b;
+        b = b->prev;
+        deleteLexerBuffer(tmp);
+    }
+}
+static void popBuffer(Lexer *L)
+{
+    if (L->buffer && L->buffer->prev) {
+        LexerBuffer *b = L->buffer;
+        L->buffer = b->prev;
+        b->prev = L->cleanup;
+        L->cleanup = b;
+    }
+}
+
 Lexer newLexer(const char *fileName,
                const char *fileData,
                size_t fileSize,
@@ -46,10 +87,7 @@ Lexer newLexer(const char *fileName,
             KEYWORD_COUNT
     };
     Lexer lexer = {.log = log,
-                   .fileName = fileName,
-                   .fileData = fileData,
-                   .fileSize = fileSize,
-                   .filePos = {.row = 1, .col = 1},
+                   .buffer = newLexerBuffer(fileName, fileData, fileSize),
                    .keywords =
                        newHashTableWithCapacity(KEYWORD_COUNT, sizeof(Keyword)),
                    .flags = lxNone};
@@ -57,39 +95,49 @@ Lexer newLexer(const char *fileName,
     return lexer;
 }
 
-void freeLexer(Lexer *lexer) { freeHashTable(&lexer->keywords); }
-
 static bool isEofReached(const Lexer *lexer)
 {
-    return lexer->fileSize <= lexer->filePos.byteOffset;
+    return lexer->buffer->fileSize <= lexer->buffer->filePos.byteOffset;
 }
 
 static const char *getCurPtr(const Lexer *lexer)
 {
     // assert(!isEofReached(lexer));
     static const char EoF = EOF;
-    return isEofReached(lexer) ? &EoF
-                               : &lexer->fileData[lexer->filePos.byteOffset];
+    return isEofReached(lexer)
+               ? &EoF
+               : &lexer->buffer->fileData[lexer->buffer->filePos.byteOffset];
 }
 
-static char getCurChar(const Lexer *lexer) { return *getCurPtr(lexer); }
+static char getCurChar(Lexer *lexer) { return *getCurPtr(lexer); }
 
-static char peekNextChar(const Lexer *lexer)
+static char peekNextChar_(const LexerBuffer *b)
 {
-    if (lexer->fileSize == (1 + lexer->filePos.byteOffset))
+    if (b->fileSize == (1 + b->filePos.byteOffset)) {
+        if (b->prev) {
+            return peekNextChar_(b->prev);
+        }
         return EOF;
-    return lexer->fileData[lexer->filePos.byteOffset + 1];
+    }
+    return b->fileData[b->filePos.byteOffset + 1];
+}
+
+static inline char peekNextChar(const Lexer *lexer)
+{
+    return peekNextChar_(lexer->buffer);
 }
 
 static void skipChar(Lexer *lexer)
 {
     if (getCurChar(lexer) == '\n') {
-        lexer->filePos.row++;
-        lexer->filePos.col = 1;
+        lexer->buffer->filePos.row++;
+        lexer->buffer->filePos.col = 1;
     }
     else
-        lexer->filePos.col++;
-    lexer->filePos.byteOffset++;
+        lexer->buffer->filePos.col++;
+    lexer->buffer->filePos.byteOffset++;
+    if (isEofReached(lexer) && lexer->buffer->prev)
+        popBuffer(lexer);
 }
 
 static inline bool isSpaceOrPunctuation(char c)
@@ -145,14 +193,27 @@ static bool skipMultiLineComment(Lexer *lexer)
     return nest == 0;
 }
 
-static Token makeToken(Lexer *lexer, const FilePos *begin, TokenTag tag)
+static inline Token makeToken(Lexer *lexer, const FilePos *begin, TokenTag tag)
 {
     return (Token){
         .tag = tag,
-        .fileLoc = {.fileName = lexer->fileName,
+        .fileLoc = {.fileName = lexer->buffer->fileName,
                     .begin = *begin,
-                    .end = lexer->filePos},
+                    .end = lexer->buffer->filePos},
+        .buffer = lexer->buffer,
     };
+}
+
+static inline Token makeToken_(Lexer *lexer,
+                               LexerBuffer *buffer,
+                               const FilePos *begin,
+                               TokenTag tag)
+{
+    return (Token){.tag = tag,
+                   .fileLoc = {.fileName = lexer->buffer->fileName,
+                               .begin = *begin,
+                               .end = buffer->filePos},
+                   .buffer = buffer};
 }
 
 static Token makeIntLiteral(Lexer *lexer, const FilePos *begin, uintmax_t iVal)
@@ -180,18 +241,20 @@ static Token makeInvalidToken(Lexer *lexer,
 
 static Token multilineString(Lexer *lexer)
 {
-    FilePos begin = lexer->filePos;
+    FilePos begin = lexer->buffer->filePos;
+    LexerBuffer *buffer = lexer->buffer;
     skipChar(lexer);
     while (!isEofReached(lexer)) {
         if (acceptChar(lexer, '"')) {
-            FilePos end = lexer->filePos;
+            FilePos end = lexer->buffer->filePos;
             if (getCurChar(lexer) == '"' && peekNextChar(lexer) == '"') {
                 skipChar(lexer);
                 skipChar(lexer);
-                return (Token){.fileLoc = {.fileName = lexer->fileName,
+                return (Token){.fileLoc = {.fileName = lexer->buffer->fileName,
                                            .begin = begin,
                                            .end = end},
-                               .tag = tokStringLiteral};
+                               .tag = tokStringLiteral,
+                               .buffer = buffer};
             }
         }
         else {
@@ -205,12 +268,12 @@ Token advanceLexer(Lexer *lexer)
 {
     if (lexer->flags & lxExitStringExpr) {
         lexer->flags &= ~lxExitStringExpr;
-        return makeToken(lexer, &lexer->filePos, tokRString);
+        return makeToken(lexer, &lexer->buffer->filePos, tokRString);
     }
 
     if (lexer->flags & lxReturnLStrFmt) {
         lexer->flags &= ~lxReturnLStrFmt;
-        return makeToken(lexer, &lexer->filePos, tokLStrFmt);
+        return makeToken(lexer, &lexer->buffer->filePos, tokLStrFmt);
     }
 
     if (lexer->flags & lxMaybeNotFloat) {
@@ -221,19 +284,26 @@ Token advanceLexer(Lexer *lexer)
 
     while (true) {
         bool parsingStringLiteral = false;
-        FilePos begin = lexer->filePos;
+        FilePos begin = lexer->buffer->filePos;
+        LexerBuffer *buffer = NULL;
         if (lexer->flags & lxEnterStringExpr) {
             lexer->flags &= ~lxEnterStringExpr;
             lexer->flags |= lxContinueStringExpr;
             skipChar(lexer);
+            buffer = lexer->buffer;
             goto lexerLexString;
         }
 
         skipSpaces(lexer);
-        begin = lexer->filePos;
+        begin = lexer->buffer->filePos;
 
+        while (isEofReached(lexer) && lexer->buffer->prev) {
+            popBuffer(lexer);
+            skipSpaces(lexer);
+        }
         if (isEofReached(lexer))
             return makeToken(lexer, &begin, tokEoF);
+        buffer = lexer->buffer;
 
         if (acceptChar(lexer, '('))
             return makeToken(lexer, &begin, tokLParen);
@@ -425,7 +495,8 @@ Token advanceLexer(Lexer *lexer)
                     if (getCurChar(lexer) == '$' &&
                         peekNextChar(lexer) == '{') {
                         skipChar(lexer); // skip $
-                        Token tok = makeToken(lexer, &begin, tokStringLiteral);
+                        Token tok =
+                            makeToken_(lexer, buffer, &begin, tokStringLiteral);
                         lexer->flags |= lxReturnLStrFmt;
                         skipChar(lexer); // skip {
                         return tok;
@@ -441,7 +512,7 @@ Token advanceLexer(Lexer *lexer)
             if (!acceptChar(lexer, '\"'))
                 return makeInvalidToken(
                     lexer, &begin, "unterminated string literal");
-            return makeToken(lexer, &begin, tokStringLiteral);
+            return makeToken_(lexer, buffer, &begin, tokStringLiteral);
         }
 
         if (acceptChar(lexer, '\'')) {
@@ -474,12 +545,13 @@ Token advanceLexer(Lexer *lexer)
             return makeToken(lexer, &begin, tokLString);
         }
 
+        begin = buffer->filePos;
         if (getCurChar(lexer) == '_' || isalpha(getCurChar(lexer))) {
             skipChar(lexer);
             while (getCurChar(lexer) == '_' || isalnum(getCurChar(lexer)))
                 skipChar(lexer);
-            const char *name = lexer->fileData + begin.byteOffset;
-            size_t len = lexer->filePos.byteOffset - begin.byteOffset;
+            const char *name = buffer->fileData + begin.byteOffset;
+            size_t len = buffer->filePos.byteOffset - begin.byteOffset;
             Keyword *keyword =
                 findInHashTable(&lexer->keywords,
                                 &(Keyword){.name = name, .len = len},
@@ -487,7 +559,7 @@ Token advanceLexer(Lexer *lexer)
                                 sizeof(Keyword),
                                 compareKeywords);
             return keyword ? makeToken(lexer, &begin, keyword->tag)
-                           : makeToken(lexer, &begin, tokIdent);
+                           : makeToken_(lexer, buffer, &begin, tokIdent);
         }
 
         if (isdigit(getCurChar(lexer))) {
@@ -577,6 +649,26 @@ Token advanceLexer(Lexer *lexer)
         skipChar(lexer);
         return makeInvalidToken(lexer, &begin, "invalid token");
     }
+}
+
+void freeLexer(Lexer *lexer)
+{
+    deleteLexerBufferChain(lexer->buffer);
+    deleteLexerBufferChain(lexer->cleanup);
+    lexer->buffer = NULL;
+    lexer->cleanup = NULL;
+    freeHashTable(&lexer->keywords);
+}
+
+void lexerPush(Lexer *L, const char *fileName)
+{
+    LexerBuffer *buffer = mallocOrDie(sizeof(LexerBuffer));
+    buffer->fileName = fileName;
+    buffer->filePos = (FilePos){.row = 1, .col = 1};
+    buffer->fileData = readFile(fileName, &buffer->fileSize);
+    buffer->ownData = true;
+    buffer->prev = L->buffer;
+    L->buffer = buffer;
 }
 
 bool isKeyword(TokenTag tag)

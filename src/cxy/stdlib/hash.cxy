@@ -93,7 +93,7 @@ pub class HashMap[K, V, Hasher = Hash[K], Cmp = Equals[K]] {
     }
 
     @inline
-    - func removeAt(key: K, index: u64) {
+    - func removeAt(index: u64) {
         var removed: V? = _data.[index].value;
 
         var next = incrementWrap(_capacity, index);
@@ -183,10 +183,9 @@ pub class HashMap[K, V, Hasher = Hash[K], Cmp = Equals[K]] {
     func remove(key: K) : V? {
         const hashCode = Hasher{}(&key) | #{OCCUPIED_MASK};
         var index = hashModPrime(hashCode, _capacity);
-        var found = false;
         while (isBucketOccupied(index)) {
             if (_hashes.[index] == hashCode && Cmp{}(&_data.[index].key, &key)) {
-                return removeAt(key, index)
+                return removeAt(index)
             }
             index = incrementWrap(_capacity, index)
         }
@@ -312,7 +311,7 @@ pub class HashSet[K, Hasher = Hash[K], Cmp = Equals[K]] {
     }
 
     @inline
-    - func removeAt(key: K, index: u64) {
+    - func removeAt(index: u64) {
         var next = incrementWrap(_capacity, index);
         while (isBucketOccupied(next)) {
             const nextHash = _hashes.[next];
@@ -393,7 +392,7 @@ pub class HashSet[K, Hasher = Hash[K], Cmp = Equals[K]] {
         var found = false;
         while (isBucketOccupied(index)) {
             if (_hashes.[index] == hashCode && Cmp{}(&_data.[index].key, &key)) {
-                removeAt(&&key, index)
+                removeAt(index)
                 return true
             }
             index = incrementWrap(_capacity, index)

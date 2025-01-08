@@ -164,7 +164,7 @@ static void transformClosureToStructExpr(AstVisitor *visitor,
                                makeResolvedPath(ctx->pool,
                                                 &node->loc,
                                                 var->_namedNode.name,
-                                                flgMoved,
+                                                flgTemporary,
                                                 var,
                                                 NULL,
                                                 var->type),
@@ -215,60 +215,68 @@ static AstNode *makeClosureForwardFunction(AstVisitor *visitor, AstNode *node)
                                        param->type));
     }
 
+    AstNode *var = makeVarDecl(
+        ctx->pool,
+        builtinLoc(),
+        flgNone,
+        makeStringConcat(ctx->strings, S_self, "_"),
+        NULL,
+        makeTypedExpr(ctx->pool,
+                      &node->loc,
+                      flgNone,
+                      // self
+                      makeResolvedPath(ctx->pool,
+                                       &node->loc,
+                                       S_ptr,
+                                       flgNone,
+                                       params.first,
+                                       NULL,
+                                       params.first->type),
+                      // __Closure
+                      makeTypeReferenceNode(ctx->pool, node->type, &node->loc),
+                      NULL,
+                      node->type),
+        NULL,
+        node->type);
+    AstNode *call_ =
+        makeCallExpr(ctx->pool,
+                     &node->loc,
+                     // self_.op__call
+                     makeMemberExpr(ctx->pool,
+                                    &node->loc,
+                                    flgNone,
+                                    // (<&__Closure>self)
+                                    makeResolvedPath(ctx->pool,
+                                                     &node->loc,
+                                                     var->_name,
+                                                     flgNone,
+                                                     var,
+                                                     NULL,
+                                                     var->type),
+                                    // op__call
+                                    makeResolvedPath(ctx->pool,
+                                                     &node->loc,
+                                                     S_CallOverload,
+                                                     call->flags,
+                                                     call,
+                                                     NULL,
+                                                     call->type),
+                                    NULL,
+                                    call->type),
+                     argList.first,
+                     flgNone,
+                     NULL,
+                     ret);
+    var->next =
+        isVoidType(ret)
+            ? makeExprStmt(
+                  ctx->pool, builtinLoc(), flgNone, call_, NULL, call_->type)
+            : makeReturnAstNode(
+                  ctx->pool, builtinLoc(), flgNone, call_, NULL, call_->type);
+
     // func __Closure__fwd(self: &void, ...) : Ret =>
     //      (<&__Closure>self).op__call(...)
-    AstNode *body = // (<&__Closure>self).op__call(...)
-        makeExprStmt(
-            ctx->pool,
-            &node->loc,
-            flgNone,
-            // (<&__Closure>self).op__call(...)
-            makeCallExpr(
-                ctx->pool,
-                &node->loc,
-                // (<&__Closure>self).op__call
-                makeMemberExpr(
-                    ctx->pool,
-                    &node->loc,
-                    flgNone,
-                    // (<&__Closure>self)
-                    makeCastExpr(
-                        ctx->pool,
-                        &node->loc,
-                        flgNone,
-                        // self
-                        makeResolvedPath(ctx->pool,
-                                         &node->loc,
-                                         S_ptr,
-                                         flgNone,
-                                         params.first,
-                                         NULL,
-                                         params.first->type),
-                        // &__Closure
-                        makeTypeReferenceNode(
-                            ctx->pool,
-                            //                            makePointerType(ctx->types,
-                            //                            node->type, flgNone),
-                            node->type,
-                            &node->loc),
-                        NULL,
-                        makePointerType(ctx->types, node->type, flgNone)),
-                    // op__call
-                    makeResolvedPath(ctx->pool,
-                                     &node->loc,
-                                     S_CallOverload,
-                                     call->flags,
-                                     call,
-                                     NULL,
-                                     call->type),
-                    NULL,
-                    call->type),
-                argList.first,
-                flgNone,
-                NULL,
-                call->type->func.retType),
-            NULL,
-            NULL);
+    AstNode *body = makeBlockStmt(ctx->pool, &node->loc, var, NULL, NULL);
     AstNode *forward = makeFunctionDecl(
         ctx->pool,
         &node->loc,
@@ -277,9 +285,7 @@ static AstNode *makeClosureForwardFunction(AstVisitor *visitor, AstNode *node)
         params.first,
         // Ret
         makeTypeReferenceNode(ctx->pool, call->type->func.retType, &node->loc),
-        typeIs(ret, Void)
-            ? makeBlockStmt(ctx->pool, &node->loc, body, NULL, NULL)
-            : body,
+        body,
         flgNone,
         NULL,
         NULL);

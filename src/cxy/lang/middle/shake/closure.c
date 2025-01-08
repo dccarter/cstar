@@ -17,10 +17,10 @@ static AstNode *makeClosureForward(ShakeAstContext *ctx,
     AstNodeList args = {};
     insertAstNode(&params,
                   makeFunctionParam(ctx->pool,
-                                    &node->loc,
+                                    builtinLoc(),
                                     S_self,
                                     makeVoidPointerAstNode(
-                                        ctx->pool, &node->loc, flgNone, NULL),
+                                        ctx->pool, builtinLoc(), flgNone, NULL),
                                     NULL,
                                     flgNone,
                                     NULL));
@@ -36,44 +36,53 @@ static AstNode *makeClosureForward(ShakeAstContext *ctx,
                                              NULL,
                                              NULL));
     }
+    // var self_ = self !: Closure
+    AstNode *self = makeVarDecl(
+        ctx->pool,
+        builtinLoc(),
+        flgNone,
+        makeStringConcat(ctx->strings, S_self, "_"),
+        NULL,
+        makeTypedExpr(
+            ctx->pool,
+            builtinLoc(),
+            flgNone,
+            // self
+            makeResolvedIdentifier(
+                ctx->pool, builtinLoc(), S_self, 0, params.first, NULL, NULL),
+            // Closure
+            makeResolvedIdentifier(ctx->pool,
+                                   builtinLoc(),
+                                   structClosure->structDecl.name,
+                                   0,
+                                   structClosure,
+                                   NULL,
+                                   NULL),
+            NULL,
+            NULL),
+        NULL,
+        NULL);
 
-    // (self: &Closure).op__call(args)
+    // self_.op__call(args)
     AstNode *call = makeCallExpr(
         ctx->pool,
-        &node->loc,
+        builtinLoc(),
         // (self: &Closure).op_call
         makeMemberExpr(
             ctx->pool,
-            &node->loc,
+            builtinLoc(),
             flgNone,
             // (self: &Closure)
-            makeCastExpr(
-                ctx->pool,
-                &node->loc,
-                flgNone,
-                // self
-                makeResolvedIdentifier(
-                    ctx->pool, &node->loc, S_self, 0, params.first, NULL, NULL),
-                // &Closure
-                makePointerAstNode(
-                    ctx->pool,
-                    &node->loc,
-                    flgNone,
-                    // Closure
-                    makeResolvedIdentifier(ctx->pool,
-                                           &node->loc,
-                                           structClosure->structDecl.name,
-                                           0,
-                                           structClosure,
-                                           NULL,
-                                           NULL),
-                    NULL,
-                    NULL),
-                NULL,
-                NULL),
+            makeResolvedIdentifier(ctx->pool,
+                                   builtinLoc(),
+                                   self->structDecl.name,
+                                   0,
+                                   structClosure,
+                                   NULL,
+                                   NULL),
             // op_call
             makeResolvedIdentifier(
-                ctx->pool, &node->loc, S_CallOverload, 0, op, NULL, NULL),
+                ctx->pool, builtinLoc(), S_CallOverload, 0, op, NULL, NULL),
             NULL,
             NULL),
         // args
@@ -81,17 +90,19 @@ static AstNode *makeClosureForward(ShakeAstContext *ctx,
         flgNone,
         NULL,
         NULL);
+    self->next =
+        makeReturnAstNode(ctx->pool, builtinLoc(), flgNone, call, NULL, NULL);
 
     // @static func __fwd(self: &void, ...args) => (<&Closure>
     return makeFunctionDecl(
         ctx->pool,
-        &node->loc,
+        builtinLoc(),
         S___fwd,
         params.first,
         node->closureExpr.ret
             ? shallowCloneAstNode(ctx->pool, node->closureExpr.ret)
             : NULL,
-        makeExprStmt(ctx->pool, &node->loc, flgNone, call, NULL, NULL),
+        makeBlockStmt(ctx->pool, builtinLoc(), self, NULL, NULL),
         flgStatic,
         NULL,
         NULL);

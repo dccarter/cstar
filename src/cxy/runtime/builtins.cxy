@@ -1,21 +1,22 @@
 
 pub extern func strlen(s: string) : u64
-pub extern func sprintf(s: ^char, fmt: string, ...args: auto) : i64;
+pub extern func sprintf(s: ^char, fmt: string, ...args: auto) : i64
 pub extern func strcmp(s1: const string, s2: const string): i32
 pub extern func strncmp(s1: const string, s2: const string, len: u64): i32
 pub extern func strcasecmp(s1: const string, s2: const string): i32
 pub extern func strncasecmp(s1: const string, s2: const string, len: u64): i32
-pub extern func memmove(dst: ^void, src: ^const void, num: u64) : ^void;
-pub extern func memset(ptr: ^void, value: i32, num: u64) : ^void;
+pub extern func memmove(dst: ^void, src: ^const void, num: u64) : ^void
+pub extern func memset(ptr: ^void, value: i32, num: u64) : ^void
 pub extern func memcpy(dst: ^void, src: ^const void, n: u64): ^void
+pub extern func memcmp(lhs: ^const void, rhs: ^const void, n: u64): i32
 pub extern func malloc(s: u64): ^void
 pub extern func realloc(ptr: ^void, s: u64): ^void
 pub extern func free(ptr: ^void): void
 pub extern func abort(): void;
 pub extern func printf(s: string, ...args: auto): i32
 pub extern func write(fd: i32, buf: ^const void, len: u64) : i64
-pub extern func strtoll(str: ^const char, endptr: ^ ^const char, base: i32): i64;
-pub extern func strtod(str: ^const char, endptr: ^ ^const char): f64;
+pub extern func strtoll(str: ^const char, endptr: ^ ^const char, base: i32): i64
+pub extern func strtod(str: ^const char, endptr: ^ ^const char): f64
 pub extern func toupper(c: i32): i32
 
 macro alloca(T) =( mk_bc!(bfiAlloca!, #^void, T!) )
@@ -63,8 +64,7 @@ pub func __cxy_panic(file: string, line: u64, column: u64, msg: string) {
     var len = sprintf(buf, ":%u:%u\n", line, column);
     write(2, buf, len)
     #if (defined __DEBUG && defined TRACE_MEMORY) {
-        var loc: __SrcLoc;
-        (TRACE_MEMORY!)("flush", null, &loc)
+        (TRACE_MEMORY!)("flush", file, line, null)
     }
     abort()
 }
@@ -157,36 +157,31 @@ func __smart_ptr_drop(ptr: sptr) {
 
 #if (defined __DEBUG && defined TRACE_MEMORY) {
 
-pub struct __SrcLoc {
-    file: string
-    line: u64
+@[pure, linkage("External")]
+func __trace_memory_stdout(tag: string, path: string, line: u64, ptr: sptr) {
+    printf(" mem(%-5.5s: %p) @ %s:%llu\n", tag, ptr, path, line)
 }
 
-@[linkage("External")]
-func __trace_memory_stdout(tag: string, ptr: sptr, loc: &const __SrcLoc) {
-    printf(" mem(%-5.5s: %p) @ %s:%llu\n", tag, ptr, loc.file, loc.line)
-}
-
-pub extern func __trace_memory_custom(tag: string, ptr: sptr, loc: &const __SrcLoc) : void
+pub extern func __trace_memory_custom(tag: string, path: string, line: u64, ptr: sptr) : void
 
 @[pure, linkage("External")]
-func __smart_ptr_alloc_trace(size: u64, dctor: func(ptr: sptr) -> void, loc: __SrcLoc) {
+func __smart_ptr_alloc_trace(size: u64, dctor: func(ptr: sptr) -> void, path: string, line: u64) {
     var ptr = __smart_ptr_alloc(size, dctor);
-    (TRACE_MEMORY!)("alloc", ptr, &loc)
+    (TRACE_MEMORY!)("alloc", path, line, ptr)
     return ptr
 }
 
 @[pure, linkage("External")]
-func __smart_ptr_get_trace(ptr: sptr, loc: __SrcLoc) {
-    (TRACE_MEMORY!)("get", ptr, &loc)
+func __smart_ptr_get_trace(ptr: sptr, path: string, line: u64) {
+    (TRACE_MEMORY!)("get", path, line, ptr)
     return __smart_ptr_get(ptr)
 }
 
 @[pure, linkage("External")]
-func __smart_ptr_drop_trace(ptr: sptr, loc: __SrcLoc) {
-    (TRACE_MEMORY!)("drop", ptr, &loc)
+func __smart_ptr_drop_trace(ptr: sptr, path: string, line: u64) {
+    (TRACE_MEMORY!)("drop", path, line, ptr)
     if (__smart_ptr_drop(ptr))
-        (TRACE_MEMORY!)("freed", ptr, &loc)
+        (TRACE_MEMORY!)("freed", path, line, ptr)
 }
 
 }
@@ -207,38 +202,22 @@ pub struct __Optional[T] {
 
     @inline func `init`(value: T) { val = &&value; ok = true }
 
-    #if (T.isClass || T.hasReferenceMembers ) {
-
-        func `destructor`() {
-            if (ok) {
-                #if (T.isClass)
-                    #if (defined __DEBUG && defined TRACE_MEMORY)
-                        __smart_ptr_drop_trace(val !: sptr, __SrcLoc{file: file!, line: line!})
-                    else
-                        __smart_ptr_drop(val !: sptr)
-                else #if (T.isTuple)
-                    __tuple_dctor(&val)
-                else #if (T.isUnion)
-                    __union_dctor(&val)
-                else
-                    val.op__destructor()
-            }
+    func `destructor`() {
+        if (ok) {
+            #if (T.isClass || T.hasReferenceMembers)
+                delete val
+            else #if (has_member!(#T, "op__destructor", #func() -> void))
+                val.op__destructor()
         }
     }
 
-    #if (T.isClass || T.hasReferenceMembers ) {
-
-        @inline func `copy`() {
-            #if (T.isClass)
-                return This{ ok: ok, val: __smart_ptr_get(val !: sptr) !: T }
-            else #if (T.isTuple)
-                return This{  ok: ok, val: __tuple_copy(&val) }
-            else #if (T.isUnion)
-                return This{  ok: ok, val: __union_copy(&val) }
-            else
-                return This{ ok: ok, val: val.op__copy() }
-        }
-
+    @inline func `copy`() {
+        #if (T.isClass || T.hasReferenceMembers)
+            return This{ ok: ok, val: __copy!(val) }
+        else #if (has_member!(#T, "op__copy", #func() -> T))
+            return This{ ok: ok, val: val.op__copy() }
+        else
+            return This{ ok: ok, val: val }
     }
 
     @inline func `!!`() => ok
@@ -331,7 +310,7 @@ pub func hash_fnv1a_bytes(h: HashCode,
 }
 
 @[pure]
-pub func hash[T](val: &const T, init: HashCode = #{FNV_32_PRIME}) : HashCode {
+pub func hash[T](val: &const T, @unused init: HashCode = #{FNV_32_PRIME}) : HashCode {
     #if (#T == #string) {
         return hash_fnv1a_string(init, val)
     }
@@ -351,21 +330,21 @@ pub func hash[T](val: &const T, init: HashCode = #{FNV_32_PRIME}) : HashCode {
         return hash_fnv1a_uint64(init, <u64>val)
     }
     else #if (T.isTuple) {
-        var code = #{FNV_32_PRIME};
+        var code = init;
         #for (const i: 0..T.membersCount) {
             code = hash(val.#{i}, code)
         }
         return code
     }
     else #if (T.isArray || T.isSlice) {
-        var code = #{FNV_32_PRIME};
+        var code = init;
         for (const x: val) {
             code = hash(x, code)
         }
         return code
     }
     else #if (T.isUnion) {
-        var code = #{FNV_32_PRIME};
+        var code = init;
         match (val) {
             #for (const i: 0..#{T.membersCount}) {
                 case #{typeat!(T, i)} as y => {
@@ -386,13 +365,16 @@ pub func hash[T](val: &const T, init: HashCode = #{FNV_32_PRIME}) : HashCode {
     }
 }
 
-pub struct CString {
+pub struct __string {
     s: string = null;
     _size: u64 = 0;
 
+    @inline func `init`() {}
+
     @inline func `init`(s: string) {
         this.s = s
-        _size = strlen(s)
+        if ((s !: ^void) != null)
+            _size = strlen(s)
     }
 
     func `init`(s: string, size: u64) {
@@ -408,17 +390,24 @@ pub struct CString {
         else
             return 1
     }
+
     @inline const func `==`(other: &This) => compare(other) == 0
     @inline const func `!=`(other: &This) => compare(other) != 0
     @inline const func `<`(other: &This) => compare(other) < 0
     @inline const func `<=`(other: &This) => compare(other) <= 0
     @inline const func `>`(other: &This) => compare(other) > 0
     @inline const func `>=`(other: &This) => compare(other) >= 0
-    @inline const func `hash`() => hash_fnv1a_n_string(#{FNV_32_PRIME}, this.s, _size)
-    @inline const func size() => _size
-    @inline const func data() => s
-    @inline const func empty() => _size == 0
     @inline const func `[]`(idx: i64) => s.[idx]
+    @inline const func `hash`() => hash_fnv1a_n_string(#{FNV_32_PRIME}, this.s, _size)
+    @inline const func `copy`() { return This(s, _size) }
+
+    @inline const func size() => _size
+    @inline const func data() => s !: ^const char
+    @inline const func str() => s
+    @inline const func empty() => _size == 0
+    @inline const func isnt() {
+        return !empty() && s.[_size] == '\0':char
+    }
 
     const func substr(start: u64, count: i64 = -1) {
         assert!(start <= _size)
@@ -430,14 +419,20 @@ pub struct CString {
         return This(ptroff!(q + start) !: string, count)
     }
 
+    const func copyto(buf: ^char, size: u64) {
+        assert!(size > _size)
+        memcpy(buf !: ^void, s !: ^void, _size)
+        buf.[_size] = '\0':char
+    }
+
     const func toi[T](base: i32 = 0) {
-        require!(T.isInteger, "type '{t}' unsupported by `CString.toi`", #T)
-        var ep: ^const char;
+        require!(T.isInteger, "type '{t}' unsupported by `__string.toi`", #T)
+        var ep: ^const char = null;
         return <T>strtoll(s !: ^const char, ptrof ep, base);
     }
 
     const func tof[T]() {
-        require!(T.isFloat, "type '{t}' unsupported by `CString.tof`", #T)
+        require!(T.isFloat, "type '{t}' unsupported by `__string.tof`", #T)
         var ep: ^const char;
         return <T>strtod(s !: ^const char, ptrof ep);
     }
@@ -464,6 +459,49 @@ pub struct CString {
         }
         return None[u64]()
     }
+
+    const func endswith(suffix: This) {
+        if (suffix.size() > size())
+            return false;
+        return substr(size() - suffix.size()) == suffix
+    }
+
+    const func startswith(suffix: This) {
+        if (suffix.size() > size())
+            return false;
+        return substr(0:u64, <i64>suffix.size()) == suffix
+    }
+
+    const func find(part: This) : __Optional[u64] {
+        if (part.empty())
+            return empty()? None[u64]() : Some(_size - 1);
+        var i = _size;
+        var j = 0:u64;
+        var p = s !: ^const char;
+        while (i >= part._size) {
+            i--
+            if (memcmp(ptroff!(p + j) !: ^const void, part.s !: ^const void, part._size) == 0)
+                return Some(j)
+            j++
+        }
+        return None[u64]()
+    }
+
+    const func rfind(part: This) : __Optional[u64] {
+        if (_size >= part._size) {
+            if (part.empty())
+                return empty()? None[u64]() : Some(_size - 1);
+
+            var j = <i64>(_size - part._size);
+            var p = s !: ^const char;
+            while (j >= 0) {
+                if (memcmp(ptroff!(p + j) !: ^const void, part.s !: ^const void, part._size) == 0)
+                    return Some(<u64>j)
+                j--
+            }
+        }
+        return None[u64]()
+    }
 }
 
 #const CXY_STRING_BUILDER_DEFAULT_CAPACITY = 32:u64
@@ -483,7 +521,7 @@ pub class OutputStream {
     }
 
     @inline
-    func appendString(s: &const CString) : void {
+    func appendString(s: &const __string) : void {
         append(s.s !: ^const void, s.size())
     }
 
@@ -569,15 +607,22 @@ pub class OutputStream {
             appendBool(val)
         else #if (#U == #wchar || #U == #char)
              appendChar(val)
-         else #if(#U == CString)
+         else #if(#U == __string)
             appendString(val.s)
         else #if (U.isEnum) {
-             appendString(#{U.name})
-             appendChar('.')
              switch(val) {
                 #for (const V: U.members) {
-                    case U.#{mk_ident!(V.name)} =>
-                        appendString(#{V.name})
+                    case U.#{mk_ident!(V.name)} => {
+                        #const attr = V.attributes.["str"];
+                        #if (attr) {
+                            appendString(#{attr.[0]})
+                        }
+                        else {
+                            appendString(#{U.name})
+                            appendChar('.')
+                            appendString(#{V.name})
+                        }
+                    }
                 }
             }
         }
@@ -677,7 +722,7 @@ pub class String : OutputStream {
     }
 
     @inline
-    func `init`(str: CString) {
+    func `init`(str: __string) {
         super.appendString(&str)
     }
 
@@ -828,8 +873,14 @@ pub class String : OutputStream {
     @inline const func data() => _data
     @inline const func empty() => _size == 0
     @inline const func str() => _data !: string
-    @inline const func cstr() => CString(_data !: string, _size)
-    @inline const func substr(start: u64, count: i64 = -1) => cstr().substr(start, count)
+    @inline const func __str() => __string(_data !: string, _size)
+    @inline const func substr(start: u64, count: i64 = -1) => __str().substr(start, count)
+    @inline const func endswith(suffix: String) => __str().endswith(suffix.__str())
+    @inline const func endswith(suffix: __string) => __str().endswith(suffix)
+    @inline const func endswith(suffix: string) => __str().endswith(suffix)
+    @inline const func startswith(suffix: String) =>  __str().startswith(suffix.__str())
+    @inline const func startswith(suffix: __string) => __str().startswith(suffix)
+    @inline const func startswith(suffix: string) =>  __str().startswith(suffix)
 }
 
 pub class BufferedOutputStream: OutputStream {
@@ -840,7 +891,7 @@ pub class BufferedOutputStream: OutputStream {
     func `init`(capacity: u64 = 1024) {
         _capacity = capacity
         _size = 0
-        _buffer = (malloc(capacity) !: ^char)
+        _buffer = malloc(capacity) !: ^char
     }
 
     virtual func flush(str: ^const void, size: u64): void
@@ -945,17 +996,10 @@ func __tuple_dctor[T](tup: &T) {
     require!(T.isTuple, "expecting a tuple type, got `{t}`", #T)
     #for (const i : 0 .. T.membersCount) {
         #const M = typeat!(T, #{i});
-        #if (M.isClass)
-            #if (defined __DEBUG && defined TRACE_MEMORY)
-                __smart_ptr_drop_trace(tup.#{i} !: ^void, __SrcLoc{file: file!, line: line!})
-            else
-                __smart_ptr_drop(tup.#{i} !: ^void)
+        #if (M.isClass || M.hasReferenceMembers)
+                delete tup.#{i}
         else #if (has_member!(#M, "op__destructor", #func() -> void))
             tup.#{i}.op__destructor()
-        else #if (M.isTuple && M.hasReferenceMembers)
-            __tuple_dctor[#{M}](&tup.#{i})
-        else #if (M.isUnion && M.hasReferenceMembers)
-            __union_dctor[#{M}](&tup.#{i})
     }
 }
 
@@ -964,19 +1008,12 @@ func __union_dctor[T](obj: &T) {
     require!(T.isUnion, "expecting a tuple type, got `{t}`", #T)
     match (obj) {
         #for (const i: 0..#{T.membersCount}) {
-            case #{typeat!(T, i)} as &y => {
+            case #{typeat!(T, i)} as y => {
                 #const M = typeat!(T, i);
-                #if (M.isClass)
-                    #if (defined __DEBUG && defined TRACE_MEMORY)
-                        __smart_ptr_drop_trace(y !: ^void, __SrcLoc{file: file!, line: line!})
-                    else
-                        __smart_ptr_drop(y !: ^void)
+                #if (M.isClass || M.hasReferenceMembers)
+                    __forcedrop!(y)
                 else #if (has_member!(#M, "op__destructor", #func() -> void))
                     y.op__destructor()
-                else #if (M.isTuple && M.hasReferenceMembers)
-                    __tuple_dctor[#{M}](y)
-                else #if (M.isUnion && M.hasReferenceMembers)
-                    __union_dctor[#{M}](y)
             }
         }
     }
@@ -988,34 +1025,16 @@ func __tuple_copy[T](tup: &T) {
     #const nodes = mk_ast_list!();
     #for (const member: 0 .. T.membersCount) {
         #const M = typeat!(T, member);
-        #if (M.isClass) {
-            #if (defined __DEBUG && defined TRACE_MEMORY)
-                ast_list_add!(
-                    #{nodes},
-                    __smart_ptr_get_trace(tup.#{mk_integer!(member)} !: ^void, __SrcLoc{file: file!, line: line!}) !: M
-                )
-            else
-                ast_list_add!(
-                    #{nodes},
-                    __smart_ptr_get(tup.#{mk_integer!(member)} !: ^void) !: M
-                )
+        #if (M.isClass || M.hasReferenceMembers) {
+            ast_list_add!(
+                #{nodes},
+                __copy!(tup.#{mk_integer!(member)})
+            )
         }
         else #if (has_member!(#M, "op__copy", #func() -> M )) {
             ast_list_add!(
                 #{nodes},
                 tup.#{mk_integer!(member)}.op__copy()
-            )
-        }
-        else #if (M.isTuple && M.hasReferenceMembers) {
-            ast_list_add!(
-                #{nodes},
-                __tuple_copy(&tup.#{mk_integer!(member)})
-            )
-        }
-        else #if (M.isUnion && M.hasReferenceMembers) {
-            ast_list_add!(
-                #{nodes},
-                __union_copy(&tup.#{mk_integer!(member)})
             )
         }
         else {
@@ -1037,71 +1056,17 @@ func __union_copy[T](obj: &T) : T {
         #for (const member: 0 .. T.membersCount) {
             case #{typeat!(T, member)} as y => {
                 #const M = typeat!(T, member);
-                #if (M.isClass) {
-                    #if (defined __DEBUG && defined TRACE_MEMORY)
-                        return __smart_ptr_get_trace(y !: ^void, __SrcLoc{file: file!, line: line!}) !: M
-                    else
-                        return __smart_ptr_get(y !: ^void) !: M
+                #if (M.isClass || M.hasReferenceMembers ) {
+                    return <T>__copy!(y)
                 }
                 else #if (has_member!(#M, "op__copy", #func() -> M ))
-                    return y.op__copy()
-                else #if (M.isTuple && M.hasReferenceMembers)
-                    return __tuple_copy(y)
-                else #if (M.isUnion && M.hasReferenceMembers)
-                    return __union_copy(y)
+                    return <T> y.op__copy()
                 else
-                    return <#{typeat!(T, member)}>y
+                    return <T> obj
             }
         }
+        else => abort()
     }
-}
-
-pub func allocate[T](len: u32 = 0) {
-    #if (T.isClass) {
-        var obj = (__smart_ptr_alloc(sizeof!(#T), T.op__destructor_fwd) !: T);
-        // this will ensure that default values are assigned
-        init_defaults!(obj)
-        return obj
-    }
-    else {
-        var obj: ^T = null;
-        #if (T.hasReferenceMembers) {
-            obj = <^T> __smart_ptr_alloc(sizeof!(#T), T.op__destructor_fwd)
-        }
-        else {
-            obj = <^T> __smart_ptr_alloc(sizeof!(#T))
-        }
-
-        #if (T.isStruct)
-            // this will ensure that default values are assigned
-            init_defaults!(obj)
-
-        return obj
-    }
-}
-
-pub func __construct0[T](@transient ...args: auto) {
-    require!(T.isClass, "type '{t}' unsupported by `make`", #T)
-
-    var obj;
-    #if (has_member!(typeof!(T), "op__destructor_fwd", #func(_:^void) -> void))
-        obj = (__smart_ptr_alloc(sizeof!(#T), T.op__destructor_fwd) !: T);
-    else
-        obj = (__smart_ptr_alloc(sizeof!(#T), null) !: T);
-    // this will ensure that default values are assigned
-    init_defaults!(obj)
-    obj.op__init(...args)
-    return obj
-}
-
-pub func __construct1[T](@transient ...args: auto) {
-    require!(T.isStruct, "type '{t}' unsupported by `create`, only structs can be created", #T)
-
-    var obj: T;
-    // this will ensure that default values are assigned
-    init_defaults!(obj)
-    obj.op__init(...args)
-    return obj
 }
 
 macro stackAlloc(T, ...ARGS) =({
@@ -1111,8 +1076,8 @@ macro stackAlloc(T, ...ARGS) =({
     obj
 })
 
-pub var stdout: OutputStream = __construct0[FileOutputStream](1);
-pub var stderr: OutputStream = __construct0[FileOutputStream](2);
+pub var stdout: OutputStream = FileOutputStream(1);
+pub var stderr: OutputStream = FileOutputStream(2);
 
 @inline
 pub func print[T](data: &const T) {
@@ -1151,8 +1116,8 @@ pub struct EqualsCase {
     @inline
     const func `()`(lhs: &const String, rhs: &const String) =>
         strncasecmp(
-            lhs.data() !: string,
-            rhs.data() !: string,
+            lhs.str(),
+            rhs.str(),
             min(lhs.size(), rhs.size())) == 0
 
     @inline
@@ -1160,10 +1125,10 @@ pub struct EqualsCase {
         strcasecmp(lhs, rhs) == 0
 
     @inline
-    const func `()`(lhs: &const CString, rhs: &const CString) =>
+    const func `()`(lhs: &const __string, rhs: &const __string) =>
         strncasecmp(
-            lhs.data() !: string,
-            rhs.data() !: string,
+            lhs.str(),
+            rhs.str(),
             min(lhs.size(), rhs.size())) == 0
 }
 
@@ -1173,10 +1138,10 @@ pub struct HashCase {
         hash_fnv1a_string_n_igc(#{FNV_32_PRIME}, value.data(), value.size())
 
     @inline
-    const func `()`(value: &const CString) =>
+    const func `()`(value: &const __string) =>
         hash_fnv1a_string_n_igc(
             #{FNV_32_PRIME},
-            value.data() !: ^const char,
+            value.data(),
             value.size()
         )
 
@@ -1186,7 +1151,7 @@ pub struct HashCase {
 }
 
 @[inline]
-pub func update[Lhs, Rhs](lhs: &Lhs, rhs: Rhs) {
+pub func update[Lhs, Rhs](@unused lhs: &Lhs, @unused rhs: Rhs) {
     require!(Lhs.isClass || Lhs.isStruct, "lhs must be a class/struct type")
     require!(Rhs.isStruct, "rhs must be a struct type")
     #for (const M: Rhs.members) {

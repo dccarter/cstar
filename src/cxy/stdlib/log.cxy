@@ -33,9 +33,9 @@ struct Repeat {
 }
 
 struct FixedWidth {
-    - s: CString
+    - s: __string
     - count: u64
-    func `init`(s: CString, count: u64) {
+    func `init`(s: __string, count: u64) {
         this.s = s
         this.count = count
     }

@@ -212,7 +212,7 @@ pub struct Address {
     const func `!!`() => family() != AF_UNSPEC!
 
     const func `str`(os: &OutputStream) {
-        var buffer: [char, 46];
+        var buffer: [char, 46] = [];
         var rc = false;
         if (family() == AF_INET!) {
             var ipv4 = addr !: ^inet.sockaddr_in;
@@ -307,7 +307,7 @@ pub func getLocalAddress(name: string, port: u16, mode: IPVersion = IPVersion.An
 }
 
 pub async func getRemoteAddress(name: string, port: u16, mode: IPVersion = IPVersion.Any) {
-    var rc: i32;
+    var rc: i32 = 0;
     var addr = Address(name, port, mode);
     if(addr)
        return addr
@@ -332,10 +332,10 @@ pub async func getRemoteAddress(name: string, port: u16, mode: IPVersion = IPVer
         null,
         ptrof rc);
     assert!(resolver != null)
-    var ports: [char, 8];
+    var ports: [char, 8]  = [];
     sprintf(ports !: ^char, "%d", port)
 
-    var hints: netdb.addrinfo;
+    var hints = netdb.addrinfo{};
     memset(ptrof hints, 0, sizeof!(hints))
     hints.ai_family = PF_UNSPEC!;
 

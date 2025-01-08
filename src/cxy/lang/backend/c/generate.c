@@ -30,6 +30,8 @@ typedef struct CodegenContext {
     cstring loopUpdate;
     bool loopUpdateUsed;
     bool hasTestCases;
+    bool memTraceEnabled;
+    bool inLoop;
     struct {
         bool enabled;
         FilePos pos;
@@ -572,7 +574,8 @@ static void generateVariableName(FormatState *state, const AstNode *node)
 
 static void generateFunctionName(FormatState *state, const AstNode *node)
 {
-    if (!hasFlag(node, Extern)) {
+    bool isPure = hasFlag(node, Pure) && hasFlag(node, TopLevelDecl);
+    if (!hasFlags(node, flgExtern) && !isPure) {
         AstNode *parent = node->parentScope;
         if (nodeIs(parent, Program)) {
             generateModuleName(state, parent);
@@ -597,6 +600,23 @@ static void generateFunctionName(FormatState *state, const AstNode *node)
         format(state, "{s}", (FormatArg[]){{.s = node->_namedNode.name}});
 }
 
+static void generateBfiCallWithFunc(ConstAstVisitor *visitor,
+                                    const AstNode *func,
+                                    const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    generateFunctionName(getState(ctx), func);
+    if (isPointerOrReferenceType(node->type)) {
+        format(getState(ctx), "(", NULL);
+        astConstVisit(visitor, node);
+        format(getState(ctx), ")", NULL);
+    }
+    else {
+        format(getState(ctx), "(&(", NULL);
+        astConstVisit(visitor, node);
+        format(getState(ctx), "))", NULL);
+    }
+}
 static void generateEnumOptionName(CodegenContext *ctx,
                                    FormatState *state,
                                    const AstNode *node)
@@ -621,7 +641,7 @@ static void generateMainFunction(CodegenContext *ctx, const Type *type)
         if (typeIs(ret, Void))
             appendString(getState(ctx), "_main(args);");
         else
-            appendString(getState(ctx), "return _main(&args);");
+            appendString(getState(ctx), "return _main(args);");
     }
     else {
         if (typeIs(ret, Void))
@@ -728,9 +748,13 @@ static void visitIdentifier(ConstAstVisitor *visitor, const AstNode *node)
 static void visitArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    format(getState(ctx), "(", NULL);
-    generateTypeName(ctx, getState(ctx), node->type);
-    generateMany(visitor, node->arrayExpr.elements, "){{", ", ", "}");
+    const Type *type = resolveAndUnThisType(node->type->array.elementType);
+    if (!typeIs(type, Auto)) {
+        format(getState(ctx), "(", NULL);
+        generateTypeName(ctx, getState(ctx), node->type);
+        format(getState(ctx), ")", NULL);
+    }
+    generateMany(visitor, node->arrayExpr.elements, "{{", ", ", "}");
 }
 
 static void visitBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -810,7 +834,8 @@ static void visitCastExpr(ConstAstVisitor *visitor, const AstNode *node)
     }
 
     if (hasFlag(node, UnionCast) || typeIs(from, Union)) {
-        format(getState(ctx), "&", NULL);
+        if (isReferenceType(to) && !isClassType(stripReference(to)))
+            format(getState(ctx), "&", NULL);
         astConstVisit(visitor, expr);
         if (isPointerOrReferenceType(from))
             format(getState(ctx),
@@ -878,9 +903,14 @@ static void visitMemberExpr(ConstAstVisitor *visitor, const AstNode *node)
     }
 
     if (nodeIs(member, IntegerLit)) {
-        format(getState(ctx),
-               "_{u64}",
-               (FormatArg[]){{.u64 = member->intLiteral.uValue}});
+        if (isUnionType(stripPointerOrReferenceOnce(target->type, NULL))) {
+            format(getState(ctx), "tag", NULL);
+        }
+        else {
+            format(getState(ctx),
+                   "_{u64}",
+                   (FormatArg[]){{.u64 = member->intLiteral.uValue}});
+        }
     }
     else {
         astConstVisit(visitor, member);
@@ -926,7 +956,11 @@ static void visitStructExpr(ConstAstVisitor *visitor, const AstNode *node)
     format(getState(ctx), "(", NULL);
     generateTypeName(ctx, getState(ctx), node->type);
     format(getState(ctx), ")", NULL);
-    generateMany(visitor, node->structExpr.fields, "{{{>}\n", ",\n", "{<}\n}");
+    if (node->structExpr.fields)
+        generateMany(
+            visitor, node->structExpr.fields, "{{{>}\n", ",\n", "{<}\n}");
+    else
+        format(getState(ctx), "{{}", NULL);
 }
 
 static void visitTupleExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -958,6 +992,156 @@ static void visitUnionValue(ConstAstVisitor *visitor, const AstNode *node)
     format(getState(ctx), "}", NULL);
 }
 
+static void visitBackendBfiZeromem(ConstAstVisitor *visitor,
+                                   const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    const Type *type = node->type;
+    if (typeIs(type, Pointer)) {
+        type = type->pointer.pointed;
+        if (isClassType(type)) {
+            format(getState(ctx), "*(", NULL);
+            astConstVisit(visitor, node);
+            format(getState(ctx), ") = nullptr", NULL);
+        }
+        else {
+            format(getState(ctx), "memset(", NULL);
+            astConstVisit(visitor, node);
+            format(getState(ctx), ", 0, sizeof(", NULL);
+            generateTypeName(ctx, getState(ctx), type);
+            format(getState(ctx), "))", NULL);
+        }
+    }
+    else if (isClassType(type)) {
+        format(getState(ctx), "memset(", NULL);
+        astConstVisit(visitor, node);
+        format(getState(ctx), ", 0, sizeof(", NULL);
+        generateCustomTypeName(ctx, getState(ctx), type, "Class");
+        format(getState(ctx), "))", NULL);
+    }
+    else {
+        format(getState(ctx), "memset(&(", NULL);
+        astConstVisit(visitor, node);
+        format(getState(ctx), "), 0, sizeof(", NULL);
+        generateTypeName(ctx, getState(ctx), type);
+        format(getState(ctx), "))", NULL);
+    }
+}
+
+static void visitBackendBfiMemAlloc(ConstAstVisitor *visitor,
+                                    const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    const Type *type = node->type;
+    csAssert0(isClassType(type));
+    if (ctx->memTraceEnabled) {
+        format(getState(ctx), "__smart_ptr_alloc_trace(sizeof(", NULL);
+        generateCustomTypeName(ctx, getState(ctx), type, "Class");
+        format(getState(ctx), "), ", NULL);
+        astConstVisit(visitor, node->next);
+        format(getState(ctx),
+               ", \"{s}\", {u64})",
+               (FormatArg[]){{.s = node->loc.fileName},
+                             {.u64 = node->loc.begin.row}});
+    }
+    else {
+        format(getState(ctx), "__smart_ptr_alloc(sizeof(", NULL);
+        generateCustomTypeName(ctx, getState(ctx), type, "Class");
+        format(getState(ctx), "), ", NULL);
+        astConstVisit(visitor, node->next);
+        format(getState(ctx), ")", NULL);
+    }
+}
+
+static void visitBackendBfiCopy(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    const Type *type = stripReference(node->type);
+    if (isClassType(type)) {
+        if (ctx->memTraceEnabled) {
+            format(getState(ctx), "__smart_ptr_get_trace(", NULL);
+            astConstVisit(visitor, node);
+            format(getState(ctx),
+                   ", \"{s}\", {u64})",
+                   (FormatArg[]){{.s = node->loc.fileName},
+                                 {.u64 = node->loc.begin.row}});
+        }
+        else {
+            format(getState(ctx), "__smart_ptr_get(", NULL);
+            astConstVisit(visitor, node);
+            format(getState(ctx), ")", NULL);
+        }
+    }
+    else if (isTupleType(type)) {
+        const AstNode *func = type->tuple.copyFunc->func.decl;
+        csAssert0(func);
+        generateBfiCallWithFunc(visitor, func, node);
+    }
+    else if (isUnionType(type)) {
+        const AstNode *func = type->tUnion.copyFunc->func.decl;
+        csAssert0(func);
+        generateBfiCallWithFunc(visitor, func, node);
+    }
+    else if (isStructType(type)) {
+        const AstNode *func = findMemberDeclInType(type, S_CopyOverload);
+        csAssert0(func);
+        generateBfiCallWithFunc(visitor, func, node);
+    }
+    else {
+        astConstVisit(visitor, node);
+    }
+}
+
+static void visitBackendBfiDrop(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    AstNode *args = node->backendCallExpr.args;
+    const Type *type = unwrapType(stripReference(args->type), NULL);
+    const AstNode *dropFlags = node->backendCallExpr.dropFlags;
+    VariableState state = node->backendCallExpr.state;
+    if (dropFlags)
+        format(getState(ctx),
+               "__CXY_DROP_WITH_FLAGS({s}, ",
+               (FormatArg[]){{.s = dropFlags->_name}});
+
+    if (isClassType(type)) {
+        if (ctx->memTraceEnabled) {
+            format(getState(ctx), "__smart_ptr_drop_trace(", NULL);
+            astConstVisit(visitor, args);
+            format(getState(ctx),
+                   ", \"{s}\", {u64})",
+                   (FormatArg[]){{.s = args->loc.fileName},
+                                 {.u64 = args->loc.begin.row}});
+        }
+        else {
+            format(getState(ctx), "__smart_ptr_drop(", NULL);
+            astConstVisit(visitor, args);
+            format(getState(ctx), ")", NULL);
+        }
+    }
+    else if (isTupleType(type)) {
+        const AstNode *func = type->tuple.destructorFunc->func.decl;
+        csAssert0(func);
+        generateBfiCallWithFunc(visitor, func, args);
+    }
+    else if (isUnionType(type)) {
+        const AstNode *func = type->tUnion.destructorFunc->func.decl;
+        csAssert0(func);
+        generateBfiCallWithFunc(visitor, func, args);
+    }
+    else if (isStructType(type)) {
+        const AstNode *func = findMemberDeclInType(type, S_DestructorOverload);
+        csAssert0(func);
+        generateBfiCallWithFunc(visitor, func, args);
+    }
+    else {
+        unreachable();
+    }
+    if (dropFlags) {
+        format(getState(ctx), ")", NULL);
+    }
+}
+
 static void visitBackendCallExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -985,40 +1169,21 @@ static void visitBackendCallExpr(ConstAstVisitor *visitor, const AstNode *node)
         format(getState(ctx), "))", NULL);
         break;
     }
-    case bfiZeromem: {
-        const Type *type = node->backendCallExpr.args->type;
-        if (typeIs(type, Pointer)) {
-            type = type->pointer.pointed;
-            if (isClassType(type)) {
-                format(getState(ctx), "*(", NULL);
-                astConstVisit(visitor, node->backendCallExpr.args);
-                format(getState(ctx), ") = nullptr", NULL);
-            }
-            else if (isStructType(type)) {
-                format(getState(ctx), "*(", NULL);
-                astConstVisit(visitor, node->backendCallExpr.args);
-                format(getState(ctx), ") = (", NULL);
-                generateTypeName(ctx, getState(ctx), type);
-                format(getState(ctx), "){{}", NULL);
-            }
-            else {
-                format(getState(ctx), "memset(", NULL);
-                astConstVisit(visitor, node->backendCallExpr.args);
-                format(getState(ctx), ", 0, sizeof(", NULL);
-                generateTypeName(ctx, getState(ctx), type);
-                format(getState(ctx), "))", NULL);
-            }
-        }
-        else {
-            csAssert0(isClassType(type));
-            format(getState(ctx), "*(", NULL);
-            astConstVisit(visitor, node->backendCallExpr.args);
-            format(getState(ctx), ") = (", NULL);
-            generateCustomTypeName(ctx, getState(ctx), type, "Class");
-            format(getState(ctx), "){{}", NULL);
-        }
+    case bfiZeromem:
+        visitBackendBfiZeromem(visitor, node->backendCallExpr.args);
         break;
-    }
+    case bfiMemAlloc:
+        visitBackendBfiMemAlloc(visitor, node->backendCallExpr.args);
+        break;
+    case bfiCopy:
+        visitBackendBfiCopy(visitor, node->backendCallExpr.args);
+        break;
+    case bfiDrop:
+        visitBackendBfiDrop(visitor, node);
+        break;
+    default:
+        // csAssert(false, "Unsupported bfi");
+        break;
     }
 }
 
@@ -1101,6 +1266,48 @@ static void visitInlineAssembly(ConstAstVisitor *visitor, const AstNode *node)
     format(getState(ctx), ");\n", NULL);
 }
 
+static void visitBasicBlock(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    if (node->basicBlock.stmts.first) {
+        format(getState(ctx),
+               "{{{>}\n__bbCleanup{u64}:\n",
+               (FormatArg[]){{.u64 = node->basicBlock.index}});
+        astConstVisitManyNodes(visitor, node->basicBlock.stmts.first);
+        format(getState(ctx), "{<}\n}\n", NULL);
+    }
+    else {
+        format(getState(ctx),
+               "__bbCleanup{u64}:\n",
+               (FormatArg[]){{.u64 = node->basicBlock.index}});
+    }
+}
+
+static void visitBranch(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    const AstNode *target = node->branch.target;
+    csAssert0(nodeIs(target, BasicBlock));
+    if (node->branch.condition) {
+        cstring name = node->branch.condition->_name;
+        if (ctx->inLoop)
+            format(
+                getState(ctx),
+                "__CXY_LOOP_CLEANUP({s}, __bbCleanup{u64});",
+                (FormatArg[]){{.s = name}, {.u64 = target->basicBlock.index}});
+        else
+            format(
+                getState(ctx),
+                "__CXY_BLOCK_CLEANUP({s}, __bbCleanup{u64});",
+                (FormatArg[]){{.s = name}, {.u64 = target->basicBlock.index}});
+    }
+    else {
+        format(getState(ctx),
+               "goto __bbCleanup{u64}",
+               (FormatArg[]){{.u64 = target->basicBlock.index}});
+    }
+}
+
 static void visitReturnStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -1153,7 +1360,9 @@ static void visitWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     cstring previousUpdate = ctx->loopUpdate;
     bool previousUpdateUsed = ctx->loopUpdateUsed;
+    bool previousInLoop = ctx->inLoop;
     ctx->loopUpdateUsed = false;
+    ctx->inLoop = true;
     if (node->whileStmt.update)
         ctx->loopUpdate = makeAnonymousVariable(ctx->strings, "__update");
     else
@@ -1175,6 +1384,7 @@ static void visitWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
     EosNl(ctx, node);
     ctx->loopUpdate = previousUpdate;
     ctx->loopUpdateUsed = previousUpdateUsed;
+    ctx->inLoop = previousInLoop;
 }
 
 static void visitSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
@@ -1183,7 +1393,13 @@ static void visitSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
     format(getState(ctx), "switch (", NULL);
     astConstVisit(visitor, node->switchStmt.cond);
     format(getState(ctx), ") ", NULL);
-    generateMany(visitor, node->switchStmt.cases, "{{\n", "\n", "\n}");
+    generateMany(visitor, node->switchStmt.cases, "{{\n", "\n", NULL);
+    if (node->switchStmt.defaultCase == NULL) {
+        format(getState(ctx),
+               "\ndefault: {{ unreachable(\"unreachable\"); }\n",
+               NULL);
+    }
+    format(getState(ctx), "}\n", NULL);
     EosNl(ctx, node);
 }
 
@@ -1206,6 +1422,7 @@ static void visitCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     addDebugInfo(ctx, node);
+    const AstNode *body = node->caseStmt.body;
     if (node->caseStmt.match) {
         format(getState(ctx), "case ", NULL);
         if (nodeIs(node->parentScope, MatchStmt)) {
@@ -1225,9 +1442,14 @@ static void visitCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
     else {
         format(getState(ctx), "default: {{{>}\n", NULL);
     }
-    addDebugInfo(ctx, node->caseStmt.body);
-    astConstVisit(visitor, node->caseStmt.body);
-    format(getState(ctx), "\nbreak;{<}\n}", NULL);
+    addDebugInfo(ctx, body);
+    astConstVisit(visitor, body);
+    if (nodeIs(body, BlockStmt))
+        body = getLastAstNode(body->blockStmt.stmts);
+    if (!nodeIs(body, ReturnStmt))
+        format(getState(ctx), "\nbreak;{<}\n}", NULL);
+    else
+        format(getState(ctx), "{<}\n}", NULL);
 }
 
 static void visitContinueStmt(ConstAstVisitor *visitor, const AstNode *node)
@@ -1297,7 +1519,8 @@ static void visitExternDecl(ConstAstVisitor *visitor, const AstNode *node)
     if (decl->codegen)
         return;
     if (nodeIs(decl, FuncDecl)) {
-        decl->codegen = (void *)true;
+        if (hasFlag(decl, Extern))
+            decl->codegen = (void *)true;
         addDebugInfo(ctx, decl);
 
         if (hasFlag(decl, Extern))
@@ -1418,11 +1641,14 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
         .state = newFormatState("  ", true),
         .types = newFormatState("  ", true),
         .hasTestCases = driver->hasTestCases,
+        .memTraceEnabled = driver->options.withMemoryTrace,
         .debug = {.enabled = driver->options.debug, .pos = {}}};
     // clang-format off
     ConstAstVisitor visitor = makeConstAstVisitor(&context, {
         [astProgram] = visitProgram,
         [astAsm] = visitInlineAssembly,
+        [astBasicBlock] = visitBasicBlock,
+        [astBranch] = visitBranch,
         [astBackendCall] = visitBackendCallExpr,
         [astIdentifier] = visitIdentifier,
         [astIntegerLit] = visitIntegerLit,
@@ -1503,7 +1729,26 @@ static void generatedCodePrologue(FILE *f)
         "#pragma GCC diagnostic ignored \"-Wincompatible-pointer-types\"\n"
         "#else\n"
         "#error \"Unsupported compiler\"\n"
-        "#endif\n");
+        "#endif\n"
+        "\n"
+        "#if __has_attribute(__builtin_unreachable)\n"
+        "#define unreachable(...)\n"
+        "    do {\n"
+        "        assert(!\"Unreachable code reached\");\n"
+        "        __builtin_unreachable();\n"
+        "    } while (0)\n"
+        "#else\n"
+        "#define unreachable(...) abort();\n"
+        "#endif\n"
+        "\n"
+        "#define __CXY_LOOP_CLEANUP(FLAGS, LABEL) \\\n"
+        "   if ((FLAGS) == 1) goto LABEL; \\\n"
+        "   if ((FLAGS) == 2) { (FLAGS) = 0; break; }\n"
+        "\n"
+        "#define __CXY_BLOCK_CLEANUP(FLAGS, LABEL) \\\n"
+        "   if ((FLAGS) == 1) goto LABEL; \\\n"
+        "\n"
+        "#define __CXY_DROP_WITH_FLAGS(FLAGS, ...) if (FLAGS) __VA_ARGS__\n");
     appendCode(f, "\n");
 }
 

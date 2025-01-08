@@ -239,7 +239,7 @@ pub class TcpListener {
     }
 
     func accept(timeout: u64 = 0): TcpSocket? {
-        var addr: Address;
+        var addr = Address();
         while (this) {
             /* Try to get new connection (non-blocking). */
             var len = <u32> sizeof!(addr);
@@ -265,7 +265,7 @@ pub class TcpListener {
 
     func shutdown(how: i32 = <i32>SHUT_RDWR!): void {
         if (fd != -1) {
-            socket.shutdown(fd, <i32>SHUT_RD!)
+            socket.shutdown(fd, how)
             unistd.close(fd)
             fd = -1
         }
@@ -274,7 +274,7 @@ pub class TcpListener {
     func `deinit`() { close(); }
 }
 
-pub async func tcpConnect(addr: Address, deadline: i64 = 0): TcpSocket {
+pub async func tcpConnect(addr: Address, @unused deadline: i64 = 0): TcpSocket {
     /* Open a socket. */
     var fd = socket.socket(addr.family(), <i32>SOCK_STREAM!, 0);
     if (fd == -1)
@@ -295,7 +295,7 @@ pub async func tcpConnect(addr: Address, deadline: i64 = 0): TcpSocket {
             return null
         }
 
-        var err: i32;
+        var err: i32 = 0;
         var errSize = <u32>sizeof!(err);
         rc = socket.getsockopt(fd, SOL_SOCKET!, SO_ERROR!, ptrof err !: ^void, ptrof errSize)
         if (rc != 0) {

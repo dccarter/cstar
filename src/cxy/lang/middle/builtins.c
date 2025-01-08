@@ -91,7 +91,7 @@ bool isBuiltinString(const Type *type)
     static const Type *tString = NULL, *tCString = NULL;
     if (tString == NULL && isBuiltinsInitialized()) {
         tString = findBuiltinType(S_String);
-        tCString = findBuiltinType(S_CString);
+        tCString = findBuiltinType(S___string);
     }
     return tString == type || tCString == type;
 }

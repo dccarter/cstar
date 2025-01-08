@@ -314,8 +314,8 @@ static bool cmdParseCommandArguments(CmdParser *P,
             const char *eq = strchr(arg, '=');
             if (eq) {
                 val = eq + 1;
-                while (isspace(*--eq))
-                    ;
+                while (isspace(*eq))
+                    --eq;
                 len = eq - arg;
                 while (isspace(*val))
                     val++;

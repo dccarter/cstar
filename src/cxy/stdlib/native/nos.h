@@ -6,4 +6,5 @@
 struct stat;
 
 int fs_stat(const char *path, struct stat *st);
+int fs_lstat(const char *path, struct stat *st);
 int fs_fstat(int fd, struct stat *st);

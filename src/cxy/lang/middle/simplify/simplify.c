@@ -24,8 +24,8 @@ typedef struct SimplifyContext {
     N2eContext n2e;
     AstNodeList init;
     AstNodeList *startup;
+    AstNode *returnVar;
     bool traceMemory;
-    bool referencesDestructibleVars;
     union {
         struct {
             AstNode *currentFunction;
@@ -55,9 +55,14 @@ static bool nodeNeedsTemporaryVar(const AstNode *node)
 {
     if (nodeIs(node, PointerOf) || nodeIs(node, ReferenceOf))
         return nodeNeedsTemporaryVar(node->unaryExpr.operand);
-    else
-        return !nodeIsLeftValue(node) && !isLiteralExprExt(node) &&
-               !isSizeofExpr(node);
+
+    if (nodeIsLeftValue(node) || isLiteralExprExt(node) || isSizeofExpr(node))
+        return false;
+
+    if (nodeIs(node, UnaryExpr))
+        return node->unaryExpr.op == opMove &&
+               nodeNeedsTemporaryVar(node->unaryExpr.operand);
+    return true;
 }
 
 static bool isVirtualDispatch(const AstNode *target, const AstNode *member)
@@ -122,7 +127,7 @@ static void simplifyForRangeStmt(AstVisitor *visitor, AstNode *node)
 
     // var x = range.start
     var->varDecl.init = range->rangeExpr.start;
-
+    var->parentScope = body;
     // while (x < range.end) { ...; x += range.step; }
     var->next = makeWhileStmt(
         ctx->pool,
@@ -175,8 +180,9 @@ static void simplifyForRangeStmt(AstVisitor *visitor, AstNode *node)
                 range->type),
             NULL,
             range->type));
-
+    body->parentScope = var->next;
     node->tag = astBlockStmt;
+    node->flags = flgScoping;
     node->blockStmt.stmts = var;
     node->blockStmt.last = var->next;
     astVisit(visitor, node);
@@ -353,7 +359,27 @@ static void simplifyCastExpression(SimplifyContext *ctx,
         return;
 #endif
 
-    if (!typeIs(from, Union)) {
+    if (typeIs(from, Union)) {
+        u32 idx = findUnionTypeIndex(from, type);
+        if (idx == UINT32_MAX) {
+            logError(ctx->L,
+                     &node->loc,
+                     "cannot cast type {t} to union type {t}",
+                     (FormatArg[]){{.t = type}, {.t = from}});
+            return;
+        }
+
+        node->memberExpr.target = deepCloneAstNode(ctx->pool, node);
+        node->tag = astMemberExpr;
+        node->memberExpr.member =
+            makeIntegerLiteral(ctx->pool,
+                               &node->loc,
+                               idx,
+                               NULL,
+                               getPrimitiveType(ctx->types, prtU64));
+        node->type = type;
+    }
+    else {
         AstNode *expr = deepCloneAstNode(ctx->pool, node);
         if (typeIs(from, Array)) {
             node->tag = astTypedExpr;
@@ -575,6 +601,127 @@ static void visitProgram(AstVisitor *visitor, AstNode *node)
     }
 }
 
+static void visitCastExpr(AstVisitor *visitor, AstNode *node)
+{
+    SimplifyContext *ctx = getAstVisitorContext(visitor);
+    AstNode *expr = node->castExpr.expr, *to = node->castExpr.to;
+    astVisit(visitor, expr);
+
+    if (isUnionType(to->type)) {
+        const Type *type = stripReference(expr->type);
+        if (to->type == type) {
+            node->tag = astBackendCall;
+            node->backendCallExpr.func = bfiCopy;
+            node->backendCallExpr.args = expr;
+        }
+        else {
+            u32 idx = findUnionTypeIndex(to->type, type);
+            csAssert0(idx != UINT32_MAX);
+            node->tag = astUnionValueExpr;
+            node->unionValue.idx = idx;
+            node->unionValue.value = expr;
+        }
+    }
+    else if (isUnionType(expr->type) && !hasFlag(node, BitUnionCast)) {
+        AstNode *builtinAssert = findBuiltinDecl(S___cxy_assert);
+        csAssert0(builtinAssert);
+        u32 idx = findUnionTypeIndex(expr->type, stripReference(to->type));
+        csAssert0(idx != UINT32_MAX);
+        AstNodeList args = {};
+        insertAstNode(
+            &args,
+            makeBinaryExpr(
+                ctx->pool,
+                &expr->loc,
+                flgNone,
+                makeMemberExpr(ctx->pool,
+                               &expr->loc,
+                               flgNone,
+                               deepCloneAstNode(ctx->pool, expr),
+                               makeUnsignedIntegerLiteral(
+                                   ctx->pool,
+                                   &expr->loc,
+                                   0,
+                                   NULL,
+                                   getPrimitiveType(ctx->types, prtU64)),
+                               NULL,
+                               getPrimitiveType(ctx->types, prtU64)),
+                opEq,
+                makeUnsignedIntegerLiteral(
+                    ctx->pool,
+                    &expr->loc,
+                    idx,
+                    NULL,
+                    getPrimitiveType(ctx->types, prtU64)),
+                NULL,
+                getPrimitiveType(ctx->types, prtBool)));
+        insertAstNode(&args,
+                      makeStringLiteral(ctx->pool,
+                                        &expr->loc,
+                                        expr->loc.fileName,
+                                        NULL,
+                                        makeStringType(ctx->types)));
+        insertAstNode(
+            &args,
+            makeUnsignedIntegerLiteral(ctx->pool,
+                                       &expr->loc,
+                                       expr->loc.begin.row,
+                                       NULL,
+                                       getPrimitiveType(ctx->types, prtU64)));
+        insertAstNode(
+            &args,
+            makeUnsignedIntegerLiteral(ctx->pool,
+                                       &expr->loc,
+                                       expr->loc.begin.col,
+                                       NULL,
+                                       getPrimitiveType(ctx->types, prtU64)));
+
+        AstNode *assert = makeExprStmt(
+            ctx->pool,
+            &node->loc,
+            flgNone,
+            makeCallExpr(ctx->pool,
+                         &node->loc,
+                         makeResolvedIdentifier(ctx->pool,
+                                                &node->loc,
+                                                S___cxy_assert,
+                                                0,
+                                                builtinAssert,
+                                                NULL,
+                                                builtinAssert->type),
+                         args.first,
+                         node->flags,
+                         NULL,
+                         builtinAssert->type->func.retType),
+            NULL,
+            makeVoidType(ctx->types));
+        astModifierAdd(&ctx->block, assert);
+    }
+}
+
+static void visitIndexExpr(AstVisitor *visitor, AstNode *node)
+{
+    SimplifyContext *ctx = getAstVisitorContext(visitor);
+    AstNode *target = node->indexExpr.target, *index = node->indexExpr.index;
+    astVisit(visitor, target);
+    astVisit(visitor, index);
+    if (nodeNeedsTemporaryVar(index)) {
+        AstNode *var = makeVarDecl(ctx->pool,
+                                   &index->loc,
+                                   flgTemporary | (index->flags & flgConst),
+                                   makeAnonymousVariable(ctx->strings, "_idx"),
+                                   NULL,
+                                   deepCloneAstNode(ctx->pool, index),
+                                   NULL,
+                                   index->type);
+        index->tag = astIdentifier;
+        index->ident.value = var->_namedNode.name;
+        index->ident.resolvesTo = var;
+        index->flags |= flgMove;
+        astModifierAdd(&ctx->block, var);
+    }
+}
+
 static void visitCallExpr(AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
@@ -597,7 +744,7 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
             AstNode *var =
                 makeVarDecl(ctx->pool,
                             &arg->loc,
-                            flgMoved | (arg->flags & flgConst),
+                            flgTemporary | (arg->flags & flgConst),
                             makeAnonymousVariable(ctx->strings, "_a"),
                             NULL,
                             deepCloneAstNode(ctx->pool, arg),
@@ -681,17 +828,36 @@ static void visitIdentifier(AstVisitor *visitor, AstNode *node)
             node->ident.resolvesTo = f2e->target;
         }
     }
+}
 
-    node = node->ident.resolvesTo;
-    if (!nodeIs(node, VarDecl) && !nodeIs(node, FuncParamDecl))
-        return;
-    if (!isClassType(node->type) && !hasReferenceMembers(node->type))
-        return;
-    if (hasFlags(node,
-                 flgMoved | flgTemporary | flgReference | flgTopLevelDecl))
-        return;
+static void visitBinaryExpr(AstVisitor *visitor, AstNode *node)
+{
+    astVisitFallbackVisitAll(visitor, node);
+    if (node->binaryExpr.op == opIs) {
+        SimplifyContext *ctx = getAstVisitorContext(visitor);
+        AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;
+        const Type *type = stripPointerOrReferenceOnce(lhs->type, NULL);
+        csAssert0(isUnionType(type));
+        u32 idx = findUnionTypeIndex(type, rhs->type);
+        csAssert0(idx != UINT32_MAX);
+        // Convert to lhs.tag == idx
+        lhs->memberExpr.target = deepCloneAstNode(ctx->pool, lhs);
+        lhs->tag = astMemberExpr;
+        lhs->memberExpr.member =
+            makeIntegerLiteral(ctx->pool,
+                               &lhs->loc,
+                               0,
+                               NULL,
+                               getPrimitiveType(ctx->types, prtU64));
+        lhs->type = getPrimitiveType(ctx->types, prtU64);
 
-    ctx->referencesDestructibleVars = true;
+        rhs->tag = astIntegerLit;
+        rhs->intLiteral.isNegative = false;
+        rhs->intLiteral.uValue = idx;
+        rhs->type = getPrimitiveType(ctx->types, prtU64);
+
+        node->binaryExpr.op = opEq;
+    }
 }
 
 static void visitPathElement(AstVisitor *visitor, AstNode *node)
@@ -786,7 +952,7 @@ static void visitMemberExpr(AstVisitor *visitor, AstNode *node)
     if (nodeNeedsTemporaryVar(target) && !nodeIs(target, TypeRef)) {
         AstNode *var = makeVarDecl(ctx->pool,
                                    &target->loc,
-                                   flgMoved,
+                                   flgTemporary,
                                    makeAnonymousVariable(ctx->strings, "_m"),
                                    NULL,
                                    target,
@@ -811,7 +977,7 @@ static void visitReferenceOfExpr(AstVisitor *visitor, AstNode *node)
     if (nodeNeedsTemporaryVar(operand)) {
         AstNode *var = makeVarDecl(ctx->pool,
                                    &operand->loc,
-                                   flgMoved,
+                                   flgTemporary,
                                    makeAnonymousVariable(ctx->strings, "_r"),
                                    NULL,
                                    operand,
@@ -903,8 +1069,6 @@ static void visitBlockStmt(AstVisitor *visitor, AstNode *node)
                     &stmt->loc,
                     "removing this statement because it is redundant",
                     NULL);
-                //                astModifierRemoveCurrent(&ctx->block);
-                //                continue;
             }
         }
         last = stmt;
@@ -934,24 +1098,7 @@ void visitReturnStmt(AstVisitor *visitor, AstNode *node)
     AstNode *expr = node->returnStmt.expr;
     if (expr == NULL)
         return;
-    ctx->referencesDestructibleVars = false;
     astVisit(visitor, expr);
-    if (resolveIdentifier(expr) || !ctx->referencesDestructibleVars)
-        return;
-
-    AstNode *var = makeVarDecl(ctx->pool,
-                               &expr->loc,
-                               flgMoved,
-                               makeAnonymousVariable(ctx->strings, "_rt"),
-                               NULL,
-                               deepCloneAstNode(ctx->pool, expr),
-                               NULL,
-                               expr->type);
-    expr->tag = astIdentifier;
-    expr->ident.value = var->_namedNode.name;
-    expr->ident.resolvesTo = var;
-    expr->flags |= flgMove;
-    astModifierAdd(&ctx->block, var);
 }
 
 static void visitWhileStmt(AstVisitor *visitor, AstNode *node)
@@ -963,6 +1110,78 @@ static void visitWhileStmt(AstVisitor *visitor, AstNode *node)
         simplifyCondition(ctx, cond);
     }
     astVisitFallbackVisitAll(visitor, node);
+}
+
+void visitSwitchStmt(AstVisitor *visitor, AstNode *node)
+{
+    SimplifyContext *ctx = getAstVisitorContext(visitor);
+    AstNode *expr = node->matchStmt.expr, *esac = node->switchStmt.cases;
+    astVisit(visitor, expr);
+    for (; esac; esac = esac->next) {
+        AstNode *body = esac->caseStmt.body;
+        if (body && !nodeIs(body, BlockStmt)) {
+            esac->caseStmt.body = makeBlockStmt(
+                ctx->pool, &body->loc, body, NULL, makeVoidType(ctx->types));
+        }
+        astVisitFallbackVisitAll(visitor, esac);
+    }
+}
+
+void visitMatchStmt(AstVisitor *visitor, AstNode *node)
+{
+    SimplifyContext *ctx = getAstVisitorContext(visitor);
+    AstNode *expr = node->matchStmt.expr;
+    astVisit(visitor, expr);
+    AstNode *cond = deepCloneAstNode(ctx->pool, expr);
+    expr->memberExpr.target = deepCloneAstNode(ctx->pool, expr);
+    expr->tag = astMemberExpr;
+    expr->memberExpr.member = makeIntegerLiteral(
+        ctx->pool, &expr->loc, 0, NULL, getPrimitiveType(ctx->types, prtU64));
+    expr->type = getPrimitiveType(ctx->types, prtU64);
+
+    node->tag = astSwitchStmt;
+
+    for (AstNode *esac = node->matchStmt.cases; esac; esac = esac->next) {
+        AstNode *match = esac->caseStmt.match,
+                *variable = esac->caseStmt.variable,
+                *body = esac->caseStmt.body;
+        if (match) {
+            esac->caseStmt.match = makeIntegerLiteral(
+                ctx->pool, &match->loc, esac->caseStmt.idx, NULL, expr->type);
+            if (variable) {
+                variable->flags |= (cond->flags & flgConst) | flgTemporary;
+                variable->varDecl.init =
+                    makeCastExpr(ctx->pool,
+                                 &variable->loc,
+                                 flgUnionCast,
+                                 deepCloneAstNode(ctx->pool, cond),
+                                 makeTypeReferenceNode(
+                                     ctx->pool, variable->type, &variable->loc),
+                                 NULL,
+                                 cond->type);
+                variable->varDecl.init->castExpr.idx = esac->caseStmt.idx;
+                if (nodeIs(body, BlockStmt)) {
+                    variable->next = body->blockStmt.stmts;
+                    body->blockStmt.stmts = variable;
+                }
+                else {
+                    variable->next = body;
+                    esac->caseStmt.body =
+                        makeBlockStmt(ctx->pool,
+                                      &body->loc,
+                                      variable,
+                                      NULL,
+                                      makeVoidType(ctx->types));
+                }
+                esac->caseStmt.variable = NULL;
+            }
+        }
+        else if (!nodeIs(body, BlockStmt)) {
+            esac->caseStmt.body = makeBlockStmt(
+                ctx->pool, &body->loc, body, NULL, makeVoidType(ctx->types));
+        }
+        astVisit(visitor, esac);
+    }
 }
 
 static void visitFuncDecl(AstVisitor *visitor, AstNode *node)
@@ -1144,7 +1363,10 @@ static AstNode *simplifyCode(CompilerDriver *driver, AstNode *node)
         [astPath] = visitPathExpr,
         [astPathElem] = visitPathElement,
         [astIdentifier] = visitIdentifier,
+        [astBinaryExpr] = visitBinaryExpr,
+        [astIndexExpr] = visitIndexExpr,
         [astCallExpr] = visitCallExpr,
+        [astCastExpr] = visitCastExpr,
         [astStmtExpr] = visitStmtExpr,
         [astStructExpr] = visitStructExpr,
         [astMemberExpr] = visitMemberExpr,
@@ -1155,6 +1377,8 @@ static AstNode *simplifyCode(CompilerDriver *driver, AstNode *node)
         [astWhileStmt] = visitWhileStmt,
         [astIfStmt] = visitIfStmt,
         [astReturnStmt] = visitReturnStmt,
+        [astMatchStmt] = visitMatchStmt,
+        [astSwitchStmt] = visitSwitchStmt,
         [astStructDecl] = visitStructDecl,
         [astClassDecl] = visitStructDecl,
         [astFuncDecl] = visitFuncDecl,

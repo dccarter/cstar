@@ -103,18 +103,18 @@ const Type *matchOverloadedFunctionPerfectMatch(Log *L,
         u64 score = maxScore;
         bool compatible = true;
         for (u64 i = 0; i < argsCount; i++) {
-            const Type *paramType = type->func.params[i];
-            compatible = paramType == argTypes[i];
+            const Type *paramType = resolveAndUnThisType(type->func.params[i]),
+                       *argType = resolveAndUnThisType(argTypes[i]);
+            compatible = paramType == argType;
             if (compatible)
                 continue;
             if (!perfectMatch) {
-                compatible = isTypeAssignableFrom(paramType, argTypes[i]);
+                compatible = isTypeAssignableFrom(paramType, argType);
                 if (compatible) {
                     score--;
                     continue;
                 }
-                compatible =
-                    isExplicitConstructableFrom(L, paramType, argTypes[i]);
+                compatible = isExplicitConstructableFrom(L, paramType, argType);
                 if (compatible) {
                     score--;
                     continue;
@@ -149,12 +149,12 @@ const Type *matchOverloadedFunctionPerfectMatch(Log *L,
                               .paramsCount = argsCount,
                               .retType = &tAuto}};
 
-        logError(
-            L,
-            loc,
-            "incompatible function reference ({u64} functions declared did "
-            "not match function with signature {t})",
-            (FormatArg[]){{.u64 = declarations}, {.t = &type}});
+        logError(L,
+                 loc,
+                 "incompatible function reference `{s}`({u64} functions "
+                 "declared did not match function with signature {t})",
+                 (FormatArg[]){
+                     {.s = type.name}, {.u64 = declarations}, {.t = &type}});
 
         decl = decls;
         while (decl) {

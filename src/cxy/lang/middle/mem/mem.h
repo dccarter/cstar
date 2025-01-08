@@ -13,45 +13,47 @@
 extern "C" {
 #endif
 
-typedef struct VariableTrace {
-    AstNode *variable;
-    const BlockScope *scope;
-} VariableTrace;
-
-typedef struct MemoryManagementContext {
-    Log *L;
-    MemPool *pool;
-    StrPool *strings;
-    TypeTable *types;
-    AstNode *program;
+typedef struct MemoryManagementContext
+{
+    Log* L;
+    MemPool* pool;
+    StrPool* strings;
+    TypeTable* types;
+    AstNode* program;
     BlockScopeContainer bsc;
     N2eContext n2e;
     bool traceMemory;
     bool localVarsInReturn;
+    bool returnInBranches;
     AstModifier root;
-    union {
-        struct {
+
+    union
+    {
+        struct
+        {
             AstModifier block;
-            AstNode *current;
-            AstNode *func;
+            AstNode* current;
+            AstNode* func;
             bool inConditionalBlock;
         };
-        struct {
+
+        struct
+        {
             AstModifier block;
-            AstNode *current;
-            AstNode *func;
+            AstNode* current;
+            AstNode* func;
             bool inConditionalBlock;
         } stack;
     };
 } MMContext;
 
-void checkReferenceVariables(MMContext *context, AstNode *node);
-void manageMemory(MMContext *context, AstNode *node);
-void withSavedStack(Visitor func, AstVisitor *visitor, AstNode *node);
+void checkReferenceVariables(MMContext* context, AstNode* node);
+void manageMemory(MMContext* context, AstNode* node);
+void withSavedStack(Visitor func, AstVisitor* visitor, AstNode* node);
 
-const AstNode *resolveCallExpr(const AstNode *node);
-const AstNode *getCallExprCalleeFunc(const AstNode *node);
-bool isTransientCallExpr(const AstNode *node);
+const AstNode* resolveCallExpr(const AstNode* node);
+const AstNode* getCallExprCalleeFunc(const AstNode* node);
+bool isTransientCallExpr(const AstNode* node);
 
 #ifdef __cplusplus
 }

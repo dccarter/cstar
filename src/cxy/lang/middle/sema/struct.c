@@ -394,20 +394,25 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
         return;
     }
 
+    bool isExtern = hasFlag(striped, Extern);
     for (u64 i = 0; i < striped->tStruct.members->count; i++) {
         const AstNode *targetField = striped->tStruct.members->members[i].decl;
         if (initialized[i] || !nodeIs(targetField, FieldDecl))
             continue;
 
         if (targetField->structField.value == NULL) {
-            logError(
-                ctx->L,
-                &node->loc,
-                "initializer expression missing struct required member '{s}'",
-                (FormatArg[]){{.s = targetField->structField.name}});
-            logNote(
-                ctx->L, &targetField->loc, "struct field declared here", NULL);
-            node->type = ERROR_TYPE(ctx);
+            if (!isExtern) {
+                logError(ctx->L,
+                         &node->loc,
+                         "initializer expression missing struct required "
+                         "member '{s}'",
+                         (FormatArg[]){{.s = targetField->structField.name}});
+                logNote(ctx->L,
+                        &targetField->loc,
+                        "struct field declared here",
+                        NULL);
+                node->type = ERROR_TYPE(ctx);
+            }
             continue;
         }
         AstNode *temp = makeAstNode(

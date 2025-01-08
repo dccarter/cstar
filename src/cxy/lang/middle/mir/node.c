@@ -645,7 +645,7 @@ static void visitMemberExpr(AstVisitor *visitor, AstNode *node)
     AstToMirContext *ctx = getAstVisitorContext(visitor);
     AstNode *target = node->memberExpr.target,
             *member = node->memberExpr.member;
-    if (nodeIsMemberFunctionReference(node)) {
+    if (nodeIsMemberFunctionReference(node) || nodeIsModuleFunctionRef(node)) {
         AstNode *decl = member->ident.resolvesTo;
         csAssert0(decl && decl->mir);
         astToMirRet(makeMirLoadOp(
@@ -872,7 +872,7 @@ static void visitBlockStmt(AstVisitor *visitor, AstNode *node)
         if (!hasFlag(node, BlockReturns) || stmt->next)
             last = convertAstToMir(visitor, stmt);
         else
-            last = convertAstToMir(visitor, stmt->exprStmt.expr);
+            last = convertAstToMir(visitor, stmt);
     }
     astToMirRet(last);
 }

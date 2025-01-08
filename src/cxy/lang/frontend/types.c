@@ -669,6 +669,16 @@ bool isVoidPointer(const Type *type)
     return typeIs(type, Pointer) && typeIs(type->pointer.pointed, Void);
 }
 
+bool isVoidType(const Type *type)
+{
+    type = resolveType(type);
+
+    if (typeIs(type, Wrapped))
+        return isVoidType(type->wrapped.target);
+
+    return typeIs(type, Void);
+}
+
 bool isClassType(const Type *type)
 {
     type = unwrapType(resolveType(type), NULL);

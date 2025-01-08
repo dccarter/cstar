@@ -1,14 +1,28 @@
-import { FileServer } from "stdlib/fserver.cxy"
-import { Server } from "stdlib/http.cxy"
+//import "stdlib/path.cxy"
 
-func main(args: [string]) {
-     var server = Server[()]();
-     var fs = FileServer(&server);
-     server.start()
+struct User {
+    - name: String;
+    - age = 35:i32;
+    func `init`(@unused name: String) {
+        this.name = &&name
+    }
 }
 
+func say(user: User) {
+    return user.name
+}
 
-// hello
-// h e a p
-//       t
-//   a d
+func say2(user: &User) {
+    var name = user.name;
+    return name
+}
+
+func  say3(name: String) {
+    return name
+}
+
+func get[T: StringLike](s: T) {
+}
+
+func main(args: [string]) {
+}

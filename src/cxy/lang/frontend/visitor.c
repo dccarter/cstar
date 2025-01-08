@@ -345,12 +345,16 @@ void astConstVisit(ConstAstVisitor *visitor, const AstNode *node)
 
 void astVisitFallbackVisitAll(AstVisitor *visitor, AstNode *node)
 {
+    if (node == NULL)
+        return;
     AST_VISIT_ALL_NODES(ast)
 }
 
 void astConstVisitFallbackVisitAll(ConstAstVisitor *visitor,
                                    const AstNode *node)
 {
+    if (node == NULL)
+        return;
     AST_VISIT_ALL_NODES(astConst)
 }
 
@@ -411,9 +415,43 @@ void astModifierAdd(AstModifier *ctx, AstNode *node)
 
 void astModifierAddAsNext(AstModifier *ctx, AstNode *node)
 {
-    csAssert0(ctx->current);
-    getLastAstNode(node)->next = ctx->current->next;
-    ctx->current->next = node;
+    if (ctx->current) {
+        getLastAstNode(node)->next = ctx->current->next;
+        ctx->current->next = node;
+    }
+    else if (nodeIs(ctx->parent, Program)) {
+        csAssert0(ctx->parent->program.decls == NULL);
+        ctx->parent->program.decls = node;
+        ctx->current = node;
+    }
+    else if (nodeIs(ctx->parent, BlockStmt)) {
+        csAssert0(ctx->parent->blockStmt.stmts == NULL);
+        ctx->parent->blockStmt.stmts = node;
+        ctx->current = node;
+    }
+    else {
+        unreachable();
+    }
+}
+
+void astModifierAddAsLast(AstModifier *ctx, AstNode *node)
+{
+    if (ctx->current) {
+        getLastAstNode(ctx->current)->next = node;
+    }
+    else if (nodeIs(ctx->parent, Program)) {
+        csAssert0(ctx->parent->program.decls == NULL);
+        ctx->parent->program.decls = node;
+        ctx->current = node;
+    }
+    else if (nodeIs(ctx->parent, BlockStmt)) {
+        csAssert0(ctx->parent->blockStmt.stmts == NULL);
+        ctx->parent->blockStmt.stmts = node;
+        ctx->current = node;
+    }
+    else {
+        unreachable();
+    }
 }
 
 void astModifierAddHead(AstModifier *ctx, AstNode *node)

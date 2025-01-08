@@ -15,7 +15,8 @@ extern "C" {
     f(UnusedVariable,    1)             \
     f(RedundantStmt,     2)             \
     f(CMacroRedefine,    3)             \
-    f(CUnsupportedField, 4)
+    f(CUnsupportedField, 4)             \
+    f(MaybeUninitialized,5)
 
 // clang-format on
 
@@ -28,12 +29,19 @@ enum {
 #define wrnNone (0ull)
 #define wrnAll (~(0ull) >> 1)
 #define wrn_Error (1ull << 63)
+#define wrnDefault                                                             \
+    wrnAll & ~(BIT(wrnMissingStage) | BIT(wrnCMacroRedefine) |                 \
+               BIT(wrnMaybeUninitialized))
 
 typedef u64 WarningId;
 
 /*
- * The log object is used to report messages from various passes of the
- * compiler. It also caches what files, to print error diagnostics
+ * The log object is used to
+ * report messages from
+ * various passes of the
+ * compiler. It also caches
+ * what files, to print
+ * error diagnostics
  * efficiently.
  */
 typedef struct {

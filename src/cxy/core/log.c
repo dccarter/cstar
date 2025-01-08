@@ -33,12 +33,11 @@ static bool compareWarningIds(const void *left, const void *right)
 static void registerWarnings(HashTable *warnings)
 {
 #define f(name, IDX)                                                           \
-    insertInHashTable(                                                         \
-        warnings,                                                              \
-        &(Warning) { #name, strlen(#name), (u64)1 << IDX },                    \
-        hashStr(hashInit(), #name),                                            \
-        sizeof(Warning),                                                       \
-        compareWarningIds);
+    insertInHashTable(warnings,                                                \
+                      &(Warning){#name, strlen(#name), (u64)1 << IDX},         \
+                      hashStr(hashInit(), #name),                              \
+                      sizeof(Warning),                                         \
+                      compareWarningIds);
     CXY_COMPILER_WARNINGS(f)
 #undef f
     insertInHashTable(warnings,
@@ -109,8 +108,7 @@ Log newLog(DiagnosticHandler handler, void *ctx)
                   .handler = handler,
                   .handlerCtx = ctx,
                   .maxErrors = SIZE_MAX,
-                  .enabledWarnings.num = wrnAll & ~(BIT(wrnMissingStage) |
-                                                    BIT(wrnCMacroRedefine))};
+                  .enabledWarnings.num = wrnDefault};
     if (handler == printDiagnosticToConsole) {
         L.handlerCtx = NULL;
         L.handler = NULL;

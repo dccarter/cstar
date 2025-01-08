@@ -1,0 +1,34 @@
+import { FileServer } from "stdlib/fserver.cxy"
+import { Config, Server, Request, Response, Status } from "stdlib/http.cxy"
+import { Address } from "stdlib/net.cxy"
+
+import "stdlib/log.cxy"
+
+class Log {
+    @static
+    - LOG_TAG = "MW_LOG";
+
+    func `init`(){}
+
+    func before(@unused req: &const Request, @unused resp: &Response) {
+        DBG!( "Before >>>" << req.method() << " " << req.path() )
+    }
+
+    func after(@unused req: &const Request, @unused resp: &Response) {
+        DBG!( "<<< After " << req.method() << " " << req.path() )
+    }
+}
+
+func main() {
+     var server = Server[(Log)](Config{address: Address("0.0.0.0", 8081)});
+     @unused var fs = FileServer(&server);
+
+     var api = Server[()]();
+     api("/hello", (@unused req: &const Request, resp: &Response) => {
+         resp.body() << "Hello, World!"
+     })
+
+
+     async { api.start() }
+     server.start()
+}

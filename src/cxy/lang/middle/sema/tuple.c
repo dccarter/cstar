@@ -26,12 +26,11 @@ static const Type *implementTupleOverload(AstVisitor *visitor,
     return checkType(visitor, &path);
 }
 
-static void implementTupleTypeCopyAndDestructor(AstVisitor *visitor,
-                                                AstNode *node)
+void implementTupleTypeCopyAndDestructor(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     bool hasCopy = node->type->tuple.copyFunc != NULL;
-    if (!isBuiltinsInitialized() || !hasReferenceMembers(node->type) || hasCopy)
+    if (!isBuiltinsInitialized() || hasCopy || !hasReferenceMembers(node->type))
         return;
 
     const Type *func =

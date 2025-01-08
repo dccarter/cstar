@@ -627,15 +627,16 @@ AstNode *createClassOrStructBuiltins(MemPool *pool, AstNode *node)
 
     if (!hasMember(node, S_DestructorOverload)) {
         insertAstNode(&funcs,
-                      makeOperatorOverload(pool,
-                                           &loc,
-                                           opDestructorOverload,
-                                           NULL,
-                                           NULL,
-                                           NULL,
-                                           flgPublic,
-                                           NULL,
-                                           NULL));
+                      makeOperatorOverload(
+                          pool,
+                          &loc,
+                          opDestructorOverload,
+                          NULL,
+                          makeVoidAstNode(pool, &loc, flgNone, NULL, NULL),
+                          NULL,
+                          flgPublic,
+                          NULL,
+                          NULL));
     }
 
     csAssert0(!hasMember(node, S_DestructorFwd));

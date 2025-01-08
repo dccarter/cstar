@@ -14,6 +14,8 @@
 
 #include "core/alloc.h"
 
+#include "v2/mem.h"
+
 const AstNode *getCallExprCalleeFunc(const AstNode *node)
 {
     const AstNode *caller = resolveCallExpr(node);
@@ -55,15 +57,11 @@ AstNode *memoryManageAst(CompilerDriver *driver, AstNode *node)
     if (!isBuiltinsInitialized())
         return node;
 
-    checkReferenceVariables(&context, node);
+    manageMemoryV2(driver, node);
     if (hasErrors(driver->L))
         return NULL;
 
-    manageMemory(&context, node);
-    if (hasErrors(driver->L))
-        return NULL;
-
-    node = simplifyDeferStatements(driver, node);
+    memoryFinalize(driver, node);
     if (hasErrors(driver->L))
         return NULL;
 
