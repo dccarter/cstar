@@ -6,9 +6,4 @@ func main(args: [string]) {
      var fs = FileServer(&server);
      server.start()
 }
-
-
-// hello
-// h e a p
-//       t
-//   a d
+   
