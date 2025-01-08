@@ -31,6 +31,7 @@ typedef struct CodegenContext {
     bool loopUpdateUsed;
     bool hasTestCases;
     bool memTraceEnabled;
+    bool inLoop;
     struct {
         bool enabled;
         FilePos pos;
@@ -640,7 +641,7 @@ static void generateMainFunction(CodegenContext *ctx, const Type *type)
         if (typeIs(ret, Void))
             appendString(getState(ctx), "_main(args);");
         else
-            appendString(getState(ctx), "return _main(&args);");
+            appendString(getState(ctx), "return _main(args);");
     }
     else {
         if (typeIs(ret, Void))
@@ -747,9 +748,13 @@ static void visitIdentifier(ConstAstVisitor *visitor, const AstNode *node)
 static void visitArrayExpr(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    format(getState(ctx), "(", NULL);
-    generateTypeName(ctx, getState(ctx), node->type);
-    generateMany(visitor, node->arrayExpr.elements, "){{", ", ", "}");
+    const Type *type = resolveAndUnThisType(node->type->array.elementType);
+    if (!typeIs(type, Auto)) {
+        format(getState(ctx), "(", NULL);
+        generateTypeName(ctx, getState(ctx), node->type);
+        format(getState(ctx), ")", NULL);
+    }
+    generateMany(visitor, node->arrayExpr.elements, "{{", ", ", "}");
 }
 
 static void visitBinaryExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -1090,39 +1095,50 @@ static void visitBackendBfiCopy(ConstAstVisitor *visitor, const AstNode *node)
 static void visitBackendBfiDrop(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    const Type *type = stripReference(node->type);
+    AstNode *args = node->backendCallExpr.args;
+    const Type *type = unwrapType(stripReference(args->type), NULL);
+    const AstNode *dropFlags = node->backendCallExpr.dropFlags;
+    VariableState state = node->backendCallExpr.state;
+    if (dropFlags)
+        format(getState(ctx),
+               "__CXY_DROP_WITH_FLAGS({s}, ",
+               (FormatArg[]){{.s = dropFlags->_name}});
+
     if (isClassType(type)) {
         if (ctx->memTraceEnabled) {
             format(getState(ctx), "__smart_ptr_drop_trace(", NULL);
-            astConstVisit(visitor, node);
+            astConstVisit(visitor, args);
             format(getState(ctx),
                    ", \"{s}\", {u64})",
-                   (FormatArg[]){{.s = node->loc.fileName},
-                                 {.u64 = node->loc.begin.row}});
+                   (FormatArg[]){{.s = args->loc.fileName},
+                                 {.u64 = args->loc.begin.row}});
         }
         else {
             format(getState(ctx), "__smart_ptr_drop(", NULL);
-            astConstVisit(visitor, node);
+            astConstVisit(visitor, args);
             format(getState(ctx), ")", NULL);
         }
     }
     else if (isTupleType(type)) {
         const AstNode *func = type->tuple.destructorFunc->func.decl;
         csAssert0(func);
-        generateBfiCallWithFunc(visitor, func, node);
+        generateBfiCallWithFunc(visitor, func, args);
     }
     else if (isUnionType(type)) {
         const AstNode *func = type->tUnion.destructorFunc->func.decl;
         csAssert0(func);
-        generateBfiCallWithFunc(visitor, func, node);
+        generateBfiCallWithFunc(visitor, func, args);
     }
     else if (isStructType(type)) {
         const AstNode *func = findMemberDeclInType(type, S_DestructorOverload);
         csAssert0(func);
-        generateBfiCallWithFunc(visitor, func, node);
+        generateBfiCallWithFunc(visitor, func, args);
     }
     else {
         unreachable();
+    }
+    if (dropFlags) {
+        format(getState(ctx), ")", NULL);
     }
 }
 
@@ -1163,7 +1179,7 @@ static void visitBackendCallExpr(ConstAstVisitor *visitor, const AstNode *node)
         visitBackendBfiCopy(visitor, node->backendCallExpr.args);
         break;
     case bfiDrop:
-        visitBackendBfiDrop(visitor, node->backendCallExpr.args);
+        visitBackendBfiDrop(visitor, node);
         break;
     default:
         // csAssert(false, "Unsupported bfi");
@@ -1250,6 +1266,48 @@ static void visitInlineAssembly(ConstAstVisitor *visitor, const AstNode *node)
     format(getState(ctx), ");\n", NULL);
 }
 
+static void visitBasicBlock(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    if (node->basicBlock.stmts.first) {
+        format(getState(ctx),
+               "{{{>}\n__bbCleanup{u64}:\n",
+               (FormatArg[]){{.u64 = node->basicBlock.index}});
+        astConstVisitManyNodes(visitor, node->basicBlock.stmts.first);
+        format(getState(ctx), "{<}\n}\n", NULL);
+    }
+    else {
+        format(getState(ctx),
+               "__bbCleanup{u64}:\n",
+               (FormatArg[]){{.u64 = node->basicBlock.index}});
+    }
+}
+
+static void visitBranch(ConstAstVisitor *visitor, const AstNode *node)
+{
+    CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    const AstNode *target = node->branch.target;
+    csAssert0(nodeIs(target, BasicBlock));
+    if (node->branch.condition) {
+        cstring name = node->branch.condition->_name;
+        if (ctx->inLoop)
+            format(
+                getState(ctx),
+                "__CXY_LOOP_CLEANUP({s}, __bbCleanup{u64});",
+                (FormatArg[]){{.s = name}, {.u64 = target->basicBlock.index}});
+        else
+            format(
+                getState(ctx),
+                "__CXY_BLOCK_CLEANUP({s}, __bbCleanup{u64});",
+                (FormatArg[]){{.s = name}, {.u64 = target->basicBlock.index}});
+    }
+    else {
+        format(getState(ctx),
+               "goto __bbCleanup{u64}",
+               (FormatArg[]){{.u64 = target->basicBlock.index}});
+    }
+}
+
 static void visitReturnStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
@@ -1302,7 +1360,9 @@ static void visitWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     cstring previousUpdate = ctx->loopUpdate;
     bool previousUpdateUsed = ctx->loopUpdateUsed;
+    bool previousInLoop = ctx->inLoop;
     ctx->loopUpdateUsed = false;
+    ctx->inLoop = true;
     if (node->whileStmt.update)
         ctx->loopUpdate = makeAnonymousVariable(ctx->strings, "__update");
     else
@@ -1324,6 +1384,7 @@ static void visitWhileStmt(ConstAstVisitor *visitor, const AstNode *node)
     EosNl(ctx, node);
     ctx->loopUpdate = previousUpdate;
     ctx->loopUpdateUsed = previousUpdateUsed;
+    ctx->inLoop = previousInLoop;
 }
 
 static void visitSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
@@ -1335,7 +1396,7 @@ static void visitSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
     generateMany(visitor, node->switchStmt.cases, "{{\n", "\n", NULL);
     if (node->switchStmt.defaultCase == NULL) {
         format(getState(ctx),
-               "default: {{ unreachable(\"unreachable\"); }\n",
+               "\ndefault: {{ unreachable(\"unreachable\"); }\n",
                NULL);
     }
     format(getState(ctx), "}\n", NULL);
@@ -1586,6 +1647,8 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
     ConstAstVisitor visitor = makeConstAstVisitor(&context, {
         [astProgram] = visitProgram,
         [astAsm] = visitInlineAssembly,
+        [astBasicBlock] = visitBasicBlock,
+        [astBranch] = visitBranch,
         [astBackendCall] = visitBackendCallExpr,
         [astIdentifier] = visitIdentifier,
         [astIntegerLit] = visitIntegerLit,
@@ -1676,7 +1739,16 @@ static void generatedCodePrologue(FILE *f)
         "    } while (0)\n"
         "#else\n"
         "#define unreachable(...) abort();\n"
-        "#endif\n");
+        "#endif\n"
+        "\n"
+        "#define __CXY_LOOP_CLEANUP(FLAGS, LABEL) \\\n"
+        "   if ((FLAGS) == 1) goto LABEL; \\\n"
+        "   if ((FLAGS) == 2) { (FLAGS) = 0; break; }\n"
+        "\n"
+        "#define __CXY_BLOCK_CLEANUP(FLAGS, LABEL) \\\n"
+        "   if ((FLAGS) == 1) goto LABEL; \\\n"
+        "\n"
+        "#define __CXY_DROP_WITH_FLAGS(FLAGS, ...) if (FLAGS) __VA_ARGS__\n");
     appendCode(f, "\n");
 }
 

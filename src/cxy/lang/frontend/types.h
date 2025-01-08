@@ -49,7 +49,7 @@ extern "C" {
     FLOAT_TYPE_LIST(f)
 
 typedef enum {
-#define f(name, ...) prt##name,
+#define f(name, ...) prt## name,
     PRIM_TYPE_LIST(f)
 #undef f
     prtCOUNT
@@ -264,11 +264,13 @@ typedef struct Type {
         struct {
             TypeMembersContainer *members;
             AstNode *decl;
+            const Type *initializer;
         } tStruct;
 
         struct {
             TypeMembersContainer *members;
             AstNode *decl;
+            const Type *initializer;
             TypeInheritance *inheritance;
         } tClass;
 
@@ -346,6 +348,8 @@ bool isPointerOrReferenceType(const Type *type);
 bool isReferable(const Type *type);
 
 bool isVoidPointer(const Type *type);
+
+bool isVoidType(const Type *type);
 
 bool isClassType(const Type *type);
 

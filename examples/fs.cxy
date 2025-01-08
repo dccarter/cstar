@@ -6,26 +6,25 @@ import "stdlib/log.cxy"
 
 class Log {
     @static
-    LOG_TAG = "MW_LOG";
+    - LOG_TAG = "MW_LOG";
 
     func `init`(){}
 
-    func before(req: &const Request, resp: &Response) {
-        DBG!( req.method() << " " << req.path() )
-        resp.end(Status.BAD_REQUEST)
+    func before(@unused req: &const Request, @unused resp: &Response) {
+        DBG!( "Before >>>" << req.method() << " " << req.path() )
     }
 
-    func after(req: &const Request, resp: &Response) {
-        DBG!( req.method() << " " << req.path() )
+    func after(@unused req: &const Request, @unused resp: &Response) {
+        DBG!( "<<< After " << req.method() << " " << req.path() )
     }
 }
 
-func main(args: [string]) {
-     var server = Server[(Log)]();
-     var fs = FileServer(&server)
+func main() {
+     var server = Server[(Log)](Config{address: Address("0.0.0.0", 8081)});
+     @unused var fs = FileServer(&server);
 
-     var api = Server[()](Config{address: Address("0.0.0.0", 8081)});
-     api("/hello", (req: &const Request, resp: &Response) => {
+     var api = Server[()]();
+     api("/hello", (@unused req: &const Request, resp: &Response) => {
          resp.body() << "Hello, World!"
      })
 

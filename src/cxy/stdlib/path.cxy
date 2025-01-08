@@ -1,0 +1,252 @@
+module path
+
+import { Stat, stat, fstat, lstat } from "stdlib/os.cxy"
+
+import "unistd.h" as unistd
+import "stdlib.h" as stdlib
+import "pwd.h" as pwd
+
+#if (defined UNIX) {
+    macro DIR_SEPARATOR "/"
+}
+else {
+    macro DIR_SEPARATOR "\\"
+}
+
+pub struct Path {
+    - path: String = null;
+
+    @inline
+    func `init`() {
+    }
+
+    @inline
+    func `init`(s: string) {
+        this.path = String(s)
+    }
+
+    @inline
+    func `init`(s: String) {
+        this.path = &&s
+    }
+
+    @inline
+    func `init`(s: __string) {
+        this.path = String(&&s)
+    }
+
+    const func `/`(suffix: __string) {
+        var res = String(path.str());
+        if (res.endswith(DIR_SEPARATOR!))
+            res << suffix
+        else
+            res << DIR_SEPARATOR! << suffix
+
+        return Path(&&res)
+    }
+
+    @inline
+    const func `/`(suffix: string) => op__div(__string(suffix))
+
+    @inline
+    const func `/`(suffix: String) => op__div(suffix.__str())
+
+    @inline
+    const func `!!`() => !path.empty()
+
+    @inline
+    const func `==`(other: &const This) => path == &other.path
+
+    @inline
+    const func `!=`(other: &const This) => !(path == &other.path)
+
+    @inline
+    const func `hash`() => path.op__hash()
+
+    @inline
+    const func `str`(os: &OutputStream) {
+        os << path
+    }
+
+    @inline
+    const func str() => path.str()
+
+    @inline
+    const func __str() => path.__str()
+
+    @inline
+    const func exists() {
+        return unistd.access(path.str() !: ^const char, F_OK!) == 0:i32
+    }
+
+    @inline
+    const func isFile() {
+
+    }
+
+    @inline
+    const func isDir() {
+
+    }
+}
+
+pub type PathLike = string | __string | String | Path
+
+func cast[T](path: &PathLike): T {
+    #if (#T == #__string) {
+        match (path) {
+            case string as s => return __string(s)
+            case __string as s => return __copy!(s)
+            case String as s => return s.__str()
+            case Path as &p => return p.__str()
+        }
+    }
+    else #if (#T == #String) {
+        var str = String();
+        str << path
+    }
+    else #if (#T == #Path) {
+        match (path) {
+            case string as s => return <T> Path(s)
+            case __string as s => return <T> Path(__copy!(s))
+            case String as s => return <T> Path(__copy!(s))
+            case Path as p => return __copy!(p)
+        }
+    }
+    else {
+        require!(#T == #string, "expecting type to be a string {t} {t}", #T, #__string)
+        match (path) {
+            case string as s => return <T> s
+            case __string as s => return <T> s.str()
+            case String as s => return <T> s.str()
+            case Path as p => return <T> p.str()
+        }
+    }
+}
+
+pub func cwd(): Path {
+    var buffer: [char, 1024] = [];
+    var str = unistd.getcwd(buffer !: ^char, sizeof!(buffer));
+    if (str != null)
+        return Path(str !: string);
+    return Path()
+}
+
+pub func homedir() {
+    var dir = stdlib.getenv("HOME" !: ^const char);
+    if (dir ==  null) {
+        dir = pwd.getpwuid(unistd.getuid()).pw_dir
+    }
+    return Path(dir !: string)
+}
+
+pub func expand(path: PathLike) {
+    var spath = cast[__string](&path);
+    var ppath = cast[Path](&path);
+    if (!spath.startswith("~"))
+        return &&ppath
+
+    var home = homedir();
+    if (!home)
+        return &&ppath
+
+    var i = 0;
+    while (spath.[i] == '~':char || spath.[i] == '/':char) i++;
+    spath = spath.substr(i)
+    if (spath.empty())
+        return home
+    return home / spath
+}
+
+@inline
+pub func current() => Path( file! )
+
+@inline
+func withNullTermination[T](s: &const __string, fn: func(p: ^const char) -> T ) {
+    if (s.isnt()) {
+        var p: [char, 1024] = [];
+        s.copyto(p, sizeof!(p))
+        return fn(p !: ^const char)
+    }
+    else {
+        return fn(s.data())
+    }
+}
+
+pub func exists(path: PathLike) {
+    var spath = cast[__string](&path);
+    if (spath.empty())
+        return false
+
+    return withNullTermination[bool](&spath, (p: ^const char) => unistd.access(p, F_OK!) == 0:i32)
+}
+
+pub func isfile(path: PathLike) {
+    var spath = cast[__string](&path);
+    if (spath.empty())
+        return false
+
+    return withNullTermination[bool](&spath, (p: ^const char) => {
+        var s = Stat{};
+        if (stat(p !: string, ptrof s) != 0)
+            return false
+
+        if ((s.st_mode & S_IFMT!) == S_IFREG!)
+            return true
+
+        if ((s.st_mode & S_IFMT!) == S_IFLNK!) {
+            if (lstat(p !: string, ptrof s) != 0)
+                return false
+
+            return (s.st_mode & S_IFMT!) == S_IFREG!
+        }
+        return false
+    })
+}
+
+pub func isdir(path: PathLike) {
+    var spath = cast[__string](&path);
+    if (spath.empty())
+        return false
+
+    return withNullTermination[bool](&spath, (p: ^const char) => {
+        var s = Stat{};
+        if (stat(p !: string, ptrof s) != 0)
+            return false
+
+        if ((s.st_mode & S_IFMT!) == S_IFDIR!)
+            return true
+
+        if ((s.st_mode & S_IFMT!) == S_IFLNK!) {
+            if (lstat(p !: string, ptrof s) != 0)
+                return false
+
+            return (s.st_mode & S_IFMT!) == S_IFDIR!
+        }
+        return false
+    })
+}
+
+pub func islink(path: PathLike) {
+    var spath = cast[__string](&path);
+    if (spath.empty())
+        return false
+
+    return withNullTermination[bool](&spath, (p: ^const char) => {
+        var s = Stat{};
+        if (stat(p !: string, ptrof s) != 0)
+            return false
+
+        return (s.st_mode & S_IFMT!) == S_IFLNK!
+    })
+}
+
+pub func dirname(path: PathLike) : PathLike {
+    var spath = cast[__string](&path);
+    var sep = spath.rfind(DIR_SEPARATOR!);
+    if (sep) {
+        spath = spath.substr(0, <i64>*sep)
+        return Path(spath)
+    }
+    return path
+}

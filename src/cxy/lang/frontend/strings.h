@@ -40,7 +40,7 @@ extern "C" {
     f(__Optional)               \
     f(Slice)                    \
     f(String)                   \
-    f(CString)                  \
+    f(__string)                  \
     f(Iterator)                 \
     ff(_assert, "assert")       \
     f(base_of)                  \
@@ -65,6 +65,7 @@ extern "C" {
     f(None)                     \
     f(Some)                     \
     f(unchecked)                \
+    f(unused)                   \
     f(_Variadic)                \
     f(consistent)               \
     f(final)                    \
@@ -92,6 +93,7 @@ extern "C" {
     f(section)                  \
     f(packed)                   \
     f(__init)                   \
+    f(__defaults_init)          \
     f(__startup)                \
     f(__name)                   \
     f(__construct0)             \

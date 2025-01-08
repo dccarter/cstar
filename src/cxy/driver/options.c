@@ -308,7 +308,7 @@ static void initializeOptions(StrPool *strings, Options *options)
     }
 #else
     FormatState state = newFormatState(NULL, true);
-    exec("clang -E -v -x c++ /dev/null 2>&1 | grep -e \"^ /\" | cut -d \" \" "
+    exec("clang -E -v -x c /dev/null 2>&1 | grep -e \"^ /\" | cut -d \" \" "
          "-f 2 | xargs realpath",
          &state);
     char *includeDirs = formatStateToString(&state);
@@ -330,6 +330,7 @@ static void initializeOptions(StrPool *strings, Options *options)
     freeFormatState(&state);
 #ifdef __APPLE__
     pushOnDynArray(&options->defines, &(CompilerDefine){"MACOS", "1"});
+    pushOnDynArray(&options->defines, &(CompilerDefine){"UNIX", "1"});
 #else
     pushStringOnDynArray(&options->cDefines, "-D_XOPEN_SOURCE=1");
     pushStringOnDynArray(&options->cDefines, "-D_DEFAULT_SOURCE");

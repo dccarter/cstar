@@ -94,6 +94,9 @@ bool checkMemberFunctions(AstVisitor *visitor,
                           NamedTypeMember *members);
 
 void implementClassOrStructBuiltins(AstVisitor *visitor, AstNode *node);
+AstNode *implementDefaultInitializer(AstVisitor *visitor,
+                                     AstNode *node,
+                                     bool isVirtual);
 u64 removeClassOrStructBuiltins(AstNode *node);
 
 void checkBaseDecl(AstVisitor *visitor, AstNode *node);
@@ -145,6 +148,8 @@ AstNode *inheritanceBuildVTable(TypingContext *ctx, AstNode *node);
 
 const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node);
 AstNode *transformClosureArgument(AstVisitor *visitor, AstNode *node);
+
+void implementTupleTypeCopyAndDestructor(AstVisitor *visitor, AstNode *node);
 
 const Type *matchOverloadedFunctionPerfectMatch(Log *L,
                                                 const Type *callee,

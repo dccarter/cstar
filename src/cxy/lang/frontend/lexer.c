@@ -285,10 +285,12 @@ Token advanceLexer(Lexer *lexer)
     while (true) {
         bool parsingStringLiteral = false;
         FilePos begin = lexer->buffer->filePos;
+        LexerBuffer *buffer = NULL;
         if (lexer->flags & lxEnterStringExpr) {
             lexer->flags &= ~lxEnterStringExpr;
             lexer->flags |= lxContinueStringExpr;
             skipChar(lexer);
+            buffer = lexer->buffer;
             goto lexerLexString;
         }
 
@@ -301,7 +303,7 @@ Token advanceLexer(Lexer *lexer)
         }
         if (isEofReached(lexer))
             return makeToken(lexer, &begin, tokEoF);
-        LexerBuffer *buffer = lexer->buffer;
+        buffer = lexer->buffer;
 
         if (acceptChar(lexer, '('))
             return makeToken(lexer, &begin, tokLParen);

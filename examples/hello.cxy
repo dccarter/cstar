@@ -1,41 +1,28 @@
-import { Vector } from "stdlib/vector.cxy"
+//import "stdlib/path.cxy"
 
-struct Flag {
-    short: char
-    name: string
-    desc: string = ""
-    required = false
-}
-
-struct Str : Flag {
-    value: string = null
-}
-
-struct Int: Flag {
-    value: i64 = 0
-}
-
-struct Float: Flag {
-    value: f64 = 0
-}
-
-type Option = Flag | Str | Int | Float
-
-struct Command {
-    name: string
-    desc: string
-    options: [Option];
-}
-
-func main() {
-    Command{
-        name: "build",
-        desc: "Builds the application",
-        options: [
-            Int{
-                short: 'h',
-                name: "help"
-            }
-        ]
+struct User {
+    - name: String;
+    - age = 35:i32;
+    func `init`(@unused name: String) {
+        this.name = &&name
     }
+}
+
+func say(user: User) {
+    return user.name
+}
+
+func say2(user: &User) {
+    var name = user.name;
+    return name
+}
+
+func  say3(name: String) {
+    return name
+}
+
+func get[T: StringLike](s: T) {
+}
+
+func main(args: [string]) {
 }

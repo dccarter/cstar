@@ -549,7 +549,7 @@ static void visitVarDecl(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    if (!hasFlags(node, flgReturned | flgMoved)) {
+    if (!hasFlags(node, flgReturned)) {
         addDeferredDestruct(ctx, node);
         if (init) {
             astVisit(visitor, node->varDecl.init);
@@ -733,7 +733,7 @@ static void visitIdentifier(AstVisitor *visitor, AstNode *node)
             ctx->localVarsInReturn || resolved->_namedNode.name != S_this;
     else
         ctx->localVarsInReturn =
-            ctx->localVarsInReturn || nodeIs(resolved, Identifier);
+            ctx->localVarsInReturn || nodeIs(resolved, VarDecl);
 }
 
 void manageMemory(MMContext *context, AstNode *node)
@@ -761,7 +761,6 @@ void manageMemory(MMContext *context, AstNode *node)
     }, .fallback = astVisitFallbackVisitAll, .dispatch = withSavedStack);
     // clang-format on
 
-    blockScopeContainerInit(&context->bsc, sizeof(VariableTrace));
     n2eInit(&context->n2e, context->pool);
     astVisit(&visitor, node);
     n2eDeinit(&context->n2e);

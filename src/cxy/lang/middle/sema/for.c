@@ -150,9 +150,16 @@ static void transformForCustomRange(AstVisitor *visitor,
         ctx->pool,
         &range->loc,
         flgNone,
-        makeAnonymousVariable(ctx->strings, "tmpLoop"),
+        makeAnonymousVariable(ctx->strings, "__tmpLoop"),
         makeTypeReferenceNode(ctx->pool, iterator->func.retType, &range->loc),
-        NULL,
+        makeStructExpr(ctx->pool,
+                       builtinLoc(),
+                       flgNone,
+                       makeTypeReferenceNode(
+                           ctx->pool, iterator->func.retType, &range->loc),
+                       NULL,
+                       NULL,
+                       iterator->func.retType),
         NULL,
         iterator->func.retType);
     addBlockLevelDeclaration(ctx, loopVar);

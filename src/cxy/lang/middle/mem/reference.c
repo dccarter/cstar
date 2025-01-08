@@ -230,7 +230,6 @@ void checkReferenceVariables(MMContext *context, AstNode *node)
     }, .fallback = astVisitFallbackVisitAll, .dispatch = withSavedStack);
     // clang-format on
 
-    blockScopeContainerInit(&context->bsc, sizeof(VariableTrace));
     astVisit(&visitor, node);
     blockScopeContainerDeinit(&context->bsc);
 }

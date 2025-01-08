@@ -168,14 +168,14 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
     if ((opKind == optComparison || opKind == optEquality) &&
         typeIs(unwrapType(left, NULL), String)) {
         lhs = node->binaryExpr.lhs;
-        AstNode *cStringDecl = findBuiltinDecl(S_CString);
+        AstNode *cStringDecl = findBuiltinDecl(S___string);
         node->binaryExpr.lhs = makeStructExpr(
             ctx->pool,
             &lhs->loc,
             flgNone,
             makeResolvedPath(ctx->pool,
                              &lhs->loc,
-                             S_CString,
+                             S___string,
                              flgNone,
                              cStringDecl,
                              NULL,

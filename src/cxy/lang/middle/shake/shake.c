@@ -779,14 +779,19 @@ static void shakeStringExpr(AstVisitor *visitor, AstNode *node)
             part = part->next;
             continue;
         }
-
-        sb = makeBinaryExpr(
-            ctx->pool, &node->loc, flgNone, sb, opShl, part, NULL, NULL);
+        sb = makeBinaryExpr(ctx->pool,
+                            locExtend(&node->loc, &part->loc),
+                            flgNone,
+                            sb,
+                            opShl,
+                            part,
+                            NULL,
+                            NULL);
         part = part->next;
         sb->binaryExpr.rhs->next = NULL;
     }
 
-    var->next = sb;
+    var->next = makeExprStmt(ctx->pool, &node->loc, flgNone, sb, NULL, NULL);
     astModifierAdd(&ctx->block, var);
 
     node->tag = astPath;

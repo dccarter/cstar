@@ -180,7 +180,7 @@ class CoroutineScheduler {
     }
 
     @[static]
-    func eventLoopCallback(loop: ^ae.aeEventLoop, fd: i32, arg: ^void, mask: i32) {
+    func eventLoopCallback(loop: ^ae.aeEventLoop, @unused fd: i32, arg: ^void, mask: i32) {
         // resume the coroutine waiting for the event
         var scheduler = &(loop.context !: This);
         var cr = arg !: ^Coroutine;
@@ -236,7 +236,7 @@ class CoroutineScheduler {
         suspend()
     }
 
-    func prologue(name: string, file: string, line: u64) {
+    func prologue(name: string, @unused file: string, @unused line: u64) {
         var stack = allocStack();
         var cr = ptroff!((stack !: ^Coroutine) + (-1));
         cr.link = null
@@ -305,10 +305,6 @@ class CoroutineScheduler {
             assert!(status != .AE_ERR)
             suspend()
         }
-    }
-
-    const func `str`(os: &OutputStream) {
-        // os << "CoroutineScheduler<" << (this !: ^void) << ">";
     }
 
     func `deinit`() {

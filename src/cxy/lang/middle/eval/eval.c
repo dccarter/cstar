@@ -90,6 +90,11 @@ bool comptimeCompareTypes(const AstNode *lhs, const AstNode *rhs)
         return lhs->funcDecl.name == rhs->funcDecl.name;
     case astTypeRef:
         return lhs->type == rhs->type;
+    case astRef:
+        lhs = lhs->reference.target;
+        return nodeIs(rhs, Ref)
+                   ? comptimeCompareTypes(lhs, rhs->reference.target)
+                   : comptimeCompareTypes(lhs, rhs);
     default:
         return false;
     }

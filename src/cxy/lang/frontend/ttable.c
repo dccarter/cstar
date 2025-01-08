@@ -1364,7 +1364,10 @@ bool isIntegerTypeInRange(const Type *type, i64 min, i64 max)
 {
     csAssert0(min <= max);
     const IntMinMax minMax = getIntegerTypeMinMax(type);
-    return min <= (i64)minMax.s && max >= minMax.f;
+    if (isSignedType(type))
+        return min <= (i64)minMax.s && max >= minMax.f;
+    else
+        return (u64)min <= minMax.s && max >= minMax.f;
 }
 
 int findTypeInArray(const Type **types, u64 count, const Type *type)

@@ -2,6 +2,8 @@ module vector
 
 macro DEFAULT_VECTOR_CAPACITY <u64>16
 
+
+
 pub class Vector[T] {
     - _data: ^T
     - _size: u64
@@ -138,7 +140,7 @@ pub class Vector[T] {
     #if (!(T.isTuple || T.isUnion || T.isUnresolved) ) {
         const func indexOf(elem: T) : u64? {
             for (var i: 0.._size) {
-                if (elem == _data.[i])
+                if (elem == &_data.[i])
                     return (<u64> i)
             }
             return null

@@ -47,7 +47,7 @@ static AstNode *transformRValueToLValue(AstVisitor *visitor, AstNode *node)
     cstring tmpSymbol = makeAnonymousVariable(ctx->strings, "_rv");
     AstNode *tmpVar = makeVarDecl(ctx->pool,
                                   &node->loc,
-                                  (node->flags & flgConst) | flgMoved,
+                                  (node->flags & flgConst) | flgTemporary,
                                   tmpSymbol,
                                   NULL,
                                   node,
@@ -82,20 +82,6 @@ static AstNode *createStructInitialize(TypingContext *ctx,
                                        const Type *type,
                                        const FileLoc *loc)
 {
-
-    return makeVarDecl(ctx->pool,
-                       loc,
-                       flgReference,
-                       makeAnonymousVariable(ctx->strings, "__obj"),
-                       makeTypeReferenceNode(ctx->pool, type, loc),
-                       NULL,
-                       NULL,
-                       type);
-}
-
-static AstNode *createObjectDefaultInitializer(TypingContext *ctx, AstNode *obj)
-{
-    const Type *type = obj->type;
     AstNode *decl = getTypeDecl(type);
     AstNodeList init = {};
     for (AstNode *member = decl->structDecl.members; member;
@@ -103,41 +89,31 @@ static AstNode *createObjectDefaultInitializer(TypingContext *ctx, AstNode *obj)
         if (nodeIs(member, FieldDecl) && member->structField.value)
             insertAstNode(
                 &init,
-                makeExprStmt(
+                makeFieldExpr(
                     ctx->pool,
                     &member->loc,
-                    flgNone,
-                    makeAssignExpr(
-                        ctx->pool,
-                        &member->loc,
-                        member->flags,
-                        makePathWithElements(ctx->pool,
-                                             &obj->loc,
-                                             flgNone,
-                                             makeResolvedPathElement(
-                                                 ctx->pool,
-                                                 &obj->loc,
-                                                 obj->varDecl.name,
-                                                 flgNone,
-                                                 obj,
-                                                 makeResolvedPathElement(
-                                                     ctx->pool,
-                                                     &member->loc,
-                                                     member->structField.name,
-                                                     member->flags,
-                                                     member,
-                                                     NULL,
-                                                     member->type),
-                                                 obj->type),
-                                             NULL),
-                        opAssign,
-                        deepCloneAstNode(ctx->pool, member->structField.value),
-                        NULL,
-                        member->type),
-                    NULL,
+                    member->structField.name,
+                    member->flags,
+                    deepCloneAstNode(ctx->pool, member->structField.value),
+                    member,
                     NULL));
     }
-    return init.first;
+
+    return makeVarDecl(
+        ctx->pool,
+        loc,
+        flgReference | flgTemporary,
+        makeAnonymousVariable(ctx->strings, "__obj"),
+        NULL,
+        makeStructExpr(ctx->pool,
+                       loc,
+                       flgNone,
+                       makeTypeReferenceNode(ctx->pool, type, loc),
+                       init.first,
+                       NULL,
+                       type),
+        NULL,
+        type);
 }
 
 static AstNode *createCallObjectInit(TypingContext *ctx,
@@ -162,9 +138,43 @@ static AstNode *createCallObjectInit(TypingContext *ctx,
                 obj,
                 makeResolvedPathElement(
                     ctx->pool, loc, S_InitOverload, flgNone, init, NULL, NULL),
-                obj->type),
+                NULL),
             NULL),
         args,
+        flgNone,
+        NULL,
+        NULL);
+}
+
+static AstNode *createCallDefaultInitializer(TypingContext *ctx,
+                                             AstNode *obj,
+                                             const FileLoc *loc)
+{
+    AstNode *init = findMemberDeclInType(obj->type, S___defaults_init);
+    if (init == NULL)
+        return NULL;
+    return makeCallExpr(
+        ctx->pool,
+        loc,
+        makePathWithElements(
+            ctx->pool,
+            loc,
+            flgNone,
+            makeResolvedPathElement(ctx->pool,
+                                    loc,
+                                    obj->_namedNode.name,
+                                    flgNone,
+                                    obj,
+                                    makeResolvedPathElement(ctx->pool,
+                                                            loc,
+                                                            S___defaults_init,
+                                                            flgNone,
+                                                            init,
+                                                            NULL,
+                                                            NULL),
+                                    obj->type),
+            NULL),
+        NULL,
         flgNone,
         NULL,
         NULL);
@@ -269,12 +279,19 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
                                        makeVoidType(ctx->types)),
                                    NULL,
                                    makeVoidType(ctx->types)));
+        AstNode *defualtInit =
+            createCallDefaultInitializer(ctx, var, &node->loc);
+        if (defualtInit != NULL) {
+            insertAstNode(
+                &stmts,
+                makeExprStmt(
+                    ctx->pool, &var->loc, flgNone, defualtInit, NULL, NULL));
+        }
     }
     else {
         var = insertAstNode(&stmts,
                             createStructInitialize(ctx, target, &node->loc));
     }
-    insertAstNode(&stmts, createObjectDefaultInitializer(ctx, var));
     insertAstNode(&stmts,
                   makeExprStmt(ctx->pool,
                                &var->loc,
@@ -289,7 +306,7 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
                                makeResolvedPath(ctx->pool,
                                                 &node->loc,
                                                 var->_namedNode.name,
-                                                flgMoved,
+                                                flgTemporary,
                                                 var,
                                                 NULL,
                                                 NULL),
@@ -452,4 +469,72 @@ AstNode *transformToUnionValue(TypingContext *ctx,
             ctx->pool, &right->loc, right->flags, right, idx, NULL, lhs);
     }
     return right;
+}
+
+AstNode *implementDefaultInitializer(AstVisitor *visitor,
+                                     AstNode *node,
+                                     bool isVirtual)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    AstNode *member = node->classDecl.members, *last = member;
+    AstNodeList initializers = {NULL};
+
+    for (; member; member = member->next) {
+        if (nodeIs(member, FieldDecl) && member->structField.value != NULL) {
+            insertAstNode(
+                &initializers,
+                makeExprStmt(
+                    ctx->pool,
+                    &member->loc,
+                    flgMember,
+                    makeAssignExpr(ctx->pool,
+                                   &member->loc,
+                                   flgNone,
+                                   makeResolvedPath(ctx->pool,
+                                                    &member->loc,
+                                                    member->structField.name,
+                                                    flgAddThis,
+                                                    member,
+                                                    NULL,
+                                                    NULL),
+                                   opAssign,
+                                   member->structField.value,
+                                   NULL,
+                                   NULL),
+                    NULL,
+                    NULL));
+            member->structField.value = NULL;
+        }
+        last = member;
+    }
+
+    if (!isVirtual && initializers.first == NULL)
+        return NULL;
+
+    csAssert0(last);
+    AstNode *func = makeFunctionDecl(
+        ctx->pool,
+        builtinLoc(),
+        S___defaults_init,
+        NULL,
+        makeVoidAstNode(ctx->pool, builtinLoc(), flgNone, NULL, NULL),
+        makeBlockStmt(ctx->pool, builtinLoc(), initializers.first, NULL, NULL),
+        flgMember,
+        NULL,
+        NULL);
+    func->funcDecl.this_ = makeFunctionParam(ctx->pool,
+                                             builtinLoc(),
+                                             S_this,
+                                             NULL,
+                                             NULL,
+                                             node->flags & flgConst,
+                                             NULL);
+    func->parentScope = node;
+    last->next = func;
+    const Type *type = checkFunctionSignature(visitor, func);
+    if (typeIs(type, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return NULL;
+    }
+    return func;
 }
