@@ -12,17 +12,7 @@ func say(user: User) {
     return user.name
 }
 
-func say2(user: &User) {
-    var name = user.name;
-    return name
-}
-
-func  say3(name: String) {
-    return name
-}
-
-func get[T: StringLike](s: T) {
-}
-
 func main(args: [string]) {
+    var user = User("Carter");
+    var x = stackAlloc!(String, "Carter");
 }

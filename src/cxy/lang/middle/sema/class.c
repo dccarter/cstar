@@ -309,7 +309,7 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
         goto checkClassMembersError;
 
     if (!referenceMembers) {
-        membersCount -= removeClassOrStructBuiltins(node);
+        membersCount -= removeClassOrStructBuiltins(node, members);
     }
 
     ((Type *)this)->_this.that = makeClassType(ctx->types,

@@ -97,7 +97,7 @@ void implementClassOrStructBuiltins(AstVisitor *visitor, AstNode *node);
 AstNode *implementDefaultInitializer(AstVisitor *visitor,
                                      AstNode *node,
                                      bool isVirtual);
-u64 removeClassOrStructBuiltins(AstNode *node);
+u64 removeClassOrStructBuiltins(AstNode *node, NamedTypeMember *members);
 
 void checkBaseDecl(AstVisitor *visitor, AstNode *node);
 void checkImplements(AstVisitor *visitor,

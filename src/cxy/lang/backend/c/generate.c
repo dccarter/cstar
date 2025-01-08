@@ -1587,15 +1587,23 @@ static void visitFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
         generateMainFunction(ctx, node->type);
 }
 
-static void generateTestMainFunction(CodegenContext *ctx, cstring testFile)
+static void generateTestMainFunction(CodegenContext *ctx,
+                                     cstring testFile,
+                                     cstring moduleName)
 {
     csAssert0(ctx->backend->testMode);
+    char testsVariable[1024] = {0};
+    sprintf(testsVariable,
+            "%s%sallTestCases",
+            moduleName ?: "",
+            moduleName ? "_" : "");
+
     if (ctx->hasTestCases) {
-        format(
-            getState(ctx),
-            "typedef struct {{ __typeof(allTestCases[0]) *data; uint64_t len; }"
-            " __TestCases;\n",
-            NULL);
+        format(getState(ctx),
+               "typedef struct {{ __typeof({s}[0]) *data; uint64_t "
+               "len; }"
+               " __TestCases;\n",
+               (FormatArg[]){{.s = testsVariable}});
     }
     format(getState(ctx),
            "int main(int argc, char *argv[]) {{{>}\n"
@@ -1604,10 +1612,12 @@ static void generateTestMainFunction(CodegenContext *ctx, cstring testFile)
            (FormatArg[]){{.s = testFile}});
     if (ctx->hasTestCases) {
         format(getState(ctx),
-               ".data = allTestCases, .len = "
-               "sizeof(allTestCases)/sizeof(allTestCases[0])});\n"
+               ".data = {s}, .len = "
+               "sizeof({s})/sizeof({s}[0])});\n"
                "{<}\n}\n",
-               NULL);
+               (FormatArg[]){{.s = testsVariable},
+                             {.s = testsVariable},
+                             {.s = testsVariable}});
     }
     else {
         format(getState(ctx),
@@ -1625,10 +1635,11 @@ static void visitProgram(ConstAstVisitor *visitor, const AstNode *node)
            (FormatArg[]){{.s = node->loc.fileName ?: "builtins.cxy"}});
 
     generateMany(visitor, node->program.decls, NULL, NULL, NULL);
-
+    cstring moduleName =
+        node->program.module ? node->program.module->moduleDecl.name : NULL;
     if (ctx->backend->testMode && isBuiltinsInitialized() &&
         !hasFlag(node, ImportedModule))
-        generateTestMainFunction(ctx, node->loc.fileName);
+        generateTestMainFunction(ctx, node->loc.fileName, moduleName);
 }
 
 AstNode *generateCode(CompilerDriver *driver, AstNode *node)

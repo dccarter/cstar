@@ -481,7 +481,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
             goto checkStructMembersError;
     }
     else {
-        membersCount -= removeClassOrStructBuiltins(node);
+        membersCount -= removeClassOrStructBuiltins(node, members);
     }
 
     ctx->currentStruct = node;

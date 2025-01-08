@@ -646,7 +646,7 @@ void implementClassOrStructBuiltins(AstVisitor *visitor, AstNode *node)
     }
 }
 
-u64 removeClassOrStructBuiltins(AstNode *node)
+u64 removeClassOrStructBuiltins(AstNode *node, NamedTypeMember *nms)
 {
     AstNodeList members = {};
     u64 count = 0, total = 0;
@@ -675,6 +675,7 @@ u64 removeClassOrStructBuiltins(AstNode *node)
             }
         }
         insertAstNode(&members, member);
+        nms[count] = nms[total - 1];
         count++;
     }
 

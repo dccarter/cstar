@@ -173,11 +173,9 @@ set(CXY_MIDDLE_SOURCES
 
         src/cxy/lang/middle/lower/lower.c
 
+        src/cxy/lang/middle/mem/finalize.c
         src/cxy/lang/middle/mem/manage.c
         src/cxy/lang/middle/mem/mem.c
-        src/cxy/lang/middle/mem/v2/mem.c
-        src/cxy/lang/middle/mem/v2/finalize.c
-        src/cxy/lang/middle/mem/reference.c
 
         src/cxy/lang/middle/mir/context.c
         src/cxy/lang/middle/mir/node.c

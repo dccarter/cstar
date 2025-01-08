@@ -1070,6 +1070,7 @@ func __union_copy[T](obj: &T) : T {
 }
 
 macro stackAlloc(T, ...ARGS) =({
+    require!(T!.isClass, "Type '{t}' must be a class type", #T!)
     var obj = mk_bc!(bfiAlloca!, #&T!, T!);
     init_defaults!(obj)
     obj.op__init(ARGS!);

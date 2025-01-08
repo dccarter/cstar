@@ -846,7 +846,7 @@ static bool buildTestsVariable(ShakeAstContext *ctx, AstNode *program)
     getLastAstNode(program->program.decls)->next = makeVarDecl(
         ctx->pool,
         builtinLoc(),
-        flgTestContext,
+        flgTestContext | flgTopLevelDecl,
         S_allTestCases,
         NULL,
         makeArrayExpr(

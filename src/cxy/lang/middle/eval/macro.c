@@ -737,50 +737,36 @@ static AstNode *makeInitializeDefaults(AstVisitor *visitor,
     const Type *type = args->type ?: evalType(ctx, args);
     csAssert0(type);
     const Type *raw = stripAll(type);
-    AstNode *decl = getTypeDecl(raw);
-    AstNodeList init = {NULL};
-    for (AstNode *member = decl->structDecl.members; member;
-         member = member->next) {
-        if (nodeIs(member, FieldDecl) && member->structField.value)
-            insertAstNode(
-                &init,
-                makeExprStmt(
-                    ctx->pool,
-                    &member->loc,
-                    flgNone,
-                    makeAssignExpr(
-                        ctx->pool,
-                        &member->loc,
-                        member->flags,
-                        makeMemberExpr(
-                            ctx->pool,
-                            &member->loc,
-                            type->flags,
-                            deepCloneAstNode(ctx->pool, args),
-                            makeResolvedIdentifier(ctx->pool,
-                                                   &member->loc,
-                                                   member->structField.name,
-                                                   0,
-                                                   member,
-                                                   NULL,
-                                                   member->type),
-                            NULL,
-                            member->type),
-                        opAssign,
-                        deepCloneAstNode(ctx->pool, member->structField.value),
-                        NULL,
-                        member->type),
-                    NULL,
-                    makeVoidType(ctx->types)));
-    }
-
-    clearAstBody(args);
-    if (init.first) {
-        args->tag = astBlockStmt;
-        args->blockStmt.stmts = init.first;
+    AstNode *init = findMemberDeclInType(raw, S___defaults_init);
+    if (init == NULL) {
+        args->tag = astNoop;
     }
     else {
-        args->tag = astNoop;
+        return makeExprStmt(
+            ctx->pool,
+            &args->loc,
+            flgNone,
+            makeCallExpr(ctx->pool,
+                         &args->loc,
+                         makeMemberExpr(ctx->pool,
+                                        &args->loc,
+                                        flgNone,
+                                        args,
+                                        makeResolvedIdentifier(ctx->pool,
+                                                               &node->loc,
+                                                               init->_name,
+                                                               0,
+                                                               init,
+                                                               NULL,
+                                                               init->type),
+                                        NULL,
+                                        init->type),
+                         NULL,
+                         flgNone,
+                         NULL,
+                         makeVoidType(ctx->types)),
+            NULL,
+            makeVoidType(ctx->types));
     }
     return args;
 }

@@ -29,12 +29,11 @@ static bool compareStages(const void *left, const void *right)
 static void registerStages(HashTable *stages)
 {
 #define f(name, ...)                                                           \
-    insertInHashTable(                                                         \
-        stages,                                                                \
-        &(Stage) { #name, strlen(#name), ccs##name },                          \
-        hashStr(hashInit(), #name),                                            \
-        sizeof(Stage),                                                         \
-        compareStages);
+    insertInHashTable(stages,                                                  \
+                      &(Stage){#name, strlen(#name), ccs##name},               \
+                      hashStr(hashInit(), #name),                              \
+                      sizeof(Stage),                                           \
+                      compareStages);
     CXY_COMPILER_STAGES(f)
 #undef f
 }
@@ -389,7 +388,7 @@ static CompilerStageExecutor compilerStageExecutors[ccsCOUNT] = {
     [ccsBind] = executeBindAst,
     [ccsTypeCheck] = executeTypeCheckAst,
     [ccsSimplify] = executeSimplify,
-    [ccsLower] = executeLower,
+    //[ccsLower] = executeLower,
     [ccsMemoryMgmt] = executeMemoryManagement,
     [ccsCodegen] = executeGenerateCode,
     // TODO causing issues

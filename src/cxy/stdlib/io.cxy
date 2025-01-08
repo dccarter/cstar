@@ -79,7 +79,7 @@ struct Style {
     - _faded = false
 
     const func `str`(os: &OutputStream) {
-        var tmp: [i8, 64];
+        var tmp: [i8, 64] = [];
         var mos = stackAlloc!(#MemoryOutputStream, tmp, 64);
         mos << "\x1B["
         if (color != 0) {
