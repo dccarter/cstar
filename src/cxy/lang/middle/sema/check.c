@@ -35,6 +35,39 @@ static AstNode *makeSpreadVariable(TypingContext *ctx, AstNode *expr)
                        expr->type);
 }
 
+static AstNode *makeVoidReturnValue(TypingContext *ctx, const Type *type)
+{
+    const Type *voidType = getResultTargetType(type);
+    AstNode *value =
+        makeStructExpr(ctx->pool,
+                       builtinLoc(),
+                       flgNone,
+                       makeTypeReferenceNode(ctx->pool, voidType, builtinLoc()),
+                       NULL,
+                       NULL,
+                       voidType);
+    return makeUnionValueExpr(
+        ctx->pool, builtinLoc(), flgNone, value, 0, NULL, type);
+}
+
+static void reportUnreachable(TypingContext *ctx, AstNode *node)
+{
+    AstNode *tmp = node->next;
+    node->next = NULL;
+    csAssert0(tmp);
+    logWarning(ctx->L,
+               locExtend(&tmp->loc, &getLastAstNode(tmp)->loc),
+               "ignoring unreachable code",
+               NULL);
+}
+
+static inline bool hasUnreachable(TypingContext *ctx, AstNode *node)
+{
+    return ctx->returnState && node->next &&
+           (nodeIs(node, ReturnStmt) || nodeIs(node, BlockStmt) ||
+            nodeIs(node, ExprStmt));
+}
+
 static void checkTypeRef(AstVisitor *visitor, AstNode *node)
 {
     attr(unused) TypingContext *ctx = getAstVisitorContext(visitor);
@@ -120,12 +153,34 @@ static void checkBlockStmt(AstVisitor *visitor, AstNode *node)
 
         if (hasFlag(node, BlockReturns))
             node->type = type;
+
+        if (hasUnreachable(ctx, stmt))
+            break;
     }
+
+    if (stmt && ctx->returnState)
+        reportUnreachable(ctx, stmt);
 
     ctx->block = block;
 
     if (node->type == NULL)
         node->type = makeVoidType(ctx->types);
+
+    AstNode *parent = node->parentScope;
+    if (!nodeIs(parent, FuncDecl))
+        return;
+    const Type *type = parent->type->func.retType;
+    if (isVoidResultType(type) && !ctx->returnState) {
+        AstNode *ret = getLastAstNode(node->blockStmt.stmts)->next =
+            makeReturnAstNode(ctx->pool,
+                              builtinLoc(),
+                              flgNone,
+                              makeVoidReturnValue(ctx, type),
+                              NULL,
+                              type);
+        ret->returnStmt.isRaise = true;
+        ctx->returnState = false;
+    }
 }
 
 static void checkReturnStmt(AstVisitor *visitor, AstNode *node)
@@ -137,14 +192,30 @@ static void checkReturnStmt(AstVisitor *visitor, AstNode *node)
 
     const Type *expr_ =
         expr ? checkType(visitor, expr) : makeVoidType(ctx->types);
-
+    ctx->returnState = true;
     if (typeIs(expr_, Error)) {
         node->type = expr_;
         return;
     }
 
+    if (!exceptionVerifyRaiseExpr(ctx, ret, node))
+        return;
+
     if (ret) {
         const Type *retType = resolveAndUnThisType(ret->type);
+        if (expr == NULL && isVoidResultType(retType)) {
+            expr_ = getResultTargetType(retType);
+            expr = makeStructExpr(
+                ctx->pool,
+                &node->loc,
+                flgNone,
+                makeTypeReferenceNode(ctx->pool, expr_, &node->loc),
+                NULL,
+                NULL,
+                expr_);
+            node->returnStmt.expr = expr;
+        }
+
         if (!isTypeAssignableFrom(ret->type, expr_)) {
             logError(ctx->L,
                      &node->loc,
@@ -251,7 +322,11 @@ static void checkWhileStmt(AstVisitor *visitor, AstNode *node)
         return;
     }
 
+    bool currentReturnState = ctx->returnState;
+    ctx->returnState = false;
     const Type *body_ = checkType(visitor, body);
+    ctx->returnState = currentReturnState;
+
     if (typeIs(body_, Error)) {
         node->type = ERROR_TYPE(ctx);
         return;
@@ -675,6 +750,7 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astFuncType] = checkFunctionType,
         [astArrayType] = checkArrayType,
         [astOptionalType] = checkOptionalType,
+        [astResultType] = checkResultType,
         [astDefine] = checkDefine,
         [astIdentifier] = checkIdentifier,
         [astPath] = checkPath,
@@ -691,6 +767,7 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astStructDecl] = checkStructDecl,
         [astClassDecl] = checkClassDecl,
         [astInterfaceDecl] = checkInterfaceDecl,
+        [astException] = checkExceptionDecl,
         [astImportDecl] = astVisitSkip,
         [astReturnStmt] = checkReturnStmt,
         [astBlockStmt] = checkBlockStmt,

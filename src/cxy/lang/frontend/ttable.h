@@ -215,6 +215,10 @@ const Type *makeGenericType(TypeTable *table, AstNode *decl);
 
 const Type *makeWrappedType(TypeTable *table, const Type *target, u64 flags);
 
+const Type *makeResultType(TypeTable *table, const Type *target);
+
+const Type *makeExceptionType(TypeTable *table, AstNode *decl);
+
 const Type *unwrapType(const Type *type, u64 *flags);
 
 const Type *flattenWrappedType(const Type *type, u64 *flags);
@@ -232,8 +236,6 @@ void enumerateTypeTable(TypeTable *table,
                         bool(with)(void *, const void *));
 
 const Type *promoteType(TypeTable *table, const Type *left, const Type *right);
-
-const Type *getBuiltinOptionalType(Log *L);
 
 const Type *findMemberInType(const Type *type, cstring name);
 

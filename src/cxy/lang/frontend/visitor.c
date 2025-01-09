@@ -50,6 +50,9 @@
         MODE##VisitManyNodes(visitor, node->inlineAssembly.clobbers);          \
         MODE##VisitManyNodes(visitor, node->inlineAssembly.flags);             \
         break;                                                                 \
+    case astException:                                                         \
+        MODE##VisitManyNodes(visitor, node->exception.params);                 \
+        break;                                                                 \
     case astProgram:                                                           \
         MODE##VisitManyNodes(visitor, node->program.top);                      \
         MODE##VisitManyNodes(visitor, node->program.decls);                    \
@@ -87,6 +90,9 @@
         break;                                                                 \
     case astReferenceType:                                                     \
         MODE##Visit(visitor, node->referenceType.referred);                    \
+        break;                                                                 \
+    case astResultType:                                                        \
+        MODE##Visit(visitor, node->resultType.target);                         \
         break;                                                                 \
     case astStringExpr:                                                        \
         MODE##VisitManyNodes(visitor, node->stringExpr.parts);                 \

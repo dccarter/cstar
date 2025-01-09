@@ -305,6 +305,13 @@ static inline u64 timespecToMilliseconds(struct timespec *ts)
     return ts->tv_sec * 1000 + ts->tv_nsec / 1000000;
 }
 
+typedef enum { triYes, triNo, triMaybe } TriState;
+
+static inline TriState triState(TriState lhs, TriState rhs)
+{
+    return lhs != rhs ? triMaybe : lhs;
+}
+
 #ifdef __cplusplus
 }
 #endif

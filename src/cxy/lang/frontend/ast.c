@@ -1925,6 +1925,7 @@ cstring getNamedNodeName(const AstNode *member)
     case astEnumDecl:
     case astAttr:
     case astAnnotation:
+    case astFuncParamDecl:
         return member->_name;
     default:
         return NULL;
@@ -2509,6 +2510,8 @@ const char *getDeclarationName(const AstNode *node)
         return node->varDecl.name;
     case astFuncParamDecl:
         return node->funcParam.name;
+    case astException:
+        return node->exception.name;
     default:
         csAssert(false, "%s is not a declaration", getAstNodeName(node));
     }
@@ -2702,6 +2705,8 @@ AstNode *findInAstNode(AstNode *node, cstring name)
         return findMemberByName(node->unionDecl.members, name);
     case astEnumDecl:
         return findMemberByName(node->enumDecl.options, name);
+    case astException:
+        return findMemberByName(node->exception.params, name);
     default:
         unreachable("NOT SUPPORTED");
     }

@@ -94,10 +94,13 @@ extern "C" {
     f(Type, "type")                 \
     f(Native, "native")             \
     f(Extern, "extern")             \
+    f(Exception, "exception")       \
     f(Struct, "struct")             \
     f(Enum, "enum")                 \
     f(Pub, "pub")                   \
     f(Opaque, "opaque")             \
+    f(Catch,  "catch")              \
+    f(Raise,  "raise")              \
     f(Async,  "async")              \
     f(Ptrof,   "ptrof")             \
     f(Await,  "await")              \
@@ -149,7 +152,7 @@ extern "C" {
 
 typedef enum {
     tokInvalid,
-#define f(name, ...) tok##name,
+#define f(name, ...) tok## name,
     TOKEN_LIST(f)
 #undef f
     tokAssignEqual = tokAssign

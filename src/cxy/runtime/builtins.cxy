@@ -22,6 +22,59 @@ pub extern func toupper(c: i32): i32
 macro alloca(T) =( mk_bc!(bfiAlloca!, #^void, T!) )
 macro zero(V) { mk_bc!(bfiZeromem!, #void, V!) }
 
+struct CallTrace {
+    mod: string
+    cls: string
+    fun: string
+    line: u64
+}
+
+struct StackTrace {
+    - calls: ^CallTrace = null;
+    - size = 0:u64;
+    - capacity = 0:u64;
+
+    - func grow() {
+        if (size >= capacity) {
+            if (capacity == 0)
+                capacity = 8
+            else
+                capacity <<= 1
+            calls = realloc( calls !: ^void, capacity ) !: ^CallTrace
+        }
+    }
+
+    func `init`() {
+        grow()
+    }
+
+    func push(mod: string, cls: string, fun: string, line: u64) {
+        grow()
+        calls.[size] = CallTrace{mod: mod, cls: cls, fun: fun, line: line }
+    }
+
+    func `deinit`() {
+        if (calls != null) {
+            free(calls !: ^void)
+            calls = null
+            capacity = 0
+            size = 0
+        }
+    }
+}
+
+pub class Exception {
+    stackTrace: StackTrace
+
+    func `init`() {
+        stackTrace = StackTrace();
+    }
+
+    virtual func what(): string
+}
+
+pub struct Void{}
+
 func __cxy_assert_abort(file: string, line: u64, column: u64) {
     var buf: [char, 64];
     write(2, "assertion failed: ", 18)
@@ -1057,15 +1110,15 @@ func __union_copy[T](obj: &T) : T {
             case #{typeat!(T, member)} as y => {
                 #const M = typeat!(T, member);
                 #if (M.isClass || M.hasReferenceMembers ) {
-                    return <T>__copy!(y)
+                    return __copy!(y)
                 }
-                else #if (has_member!(#M, "op__copy", #func() -> M ))
-                    return <T> y.op__copy()
+                else #if (has_member!(#M, "op__copy", #func() -> M )) {
+                    return y.op__copy()
+                }
                 else
-                    return <T> obj
+                    return <M>y
             }
         }
-        else => abort()
     }
 }
 

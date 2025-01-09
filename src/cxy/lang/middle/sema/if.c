@@ -42,6 +42,8 @@ void checkIfStmt(AstVisitor *visitor, AstNode *node)
         return;
     }
 
+    bool currentReturnState = ctx->returnState;
+    ctx->returnState = false;
     const Type *then_ = checkType(visitor, then);
     if (typeIs(then_, Error)) {
         node->type = ERROR_TYPE(ctx);
@@ -49,11 +51,16 @@ void checkIfStmt(AstVisitor *visitor, AstNode *node)
     }
 
     if (otherwise == NULL) {
+        ctx->returnState = ctx->returnState && currentReturnState;
         node->type = then_;
         return;
     }
 
+    bool thenReturnState = ctx->returnState;
+    ctx->returnState = false;
     const Type *otherwise_ = checkType(visitor, otherwise);
+    ctx->returnState = thenReturnState && ctx->returnState;
+
     if (typeIs(otherwise_, Error)) {
         node->type = ERROR_TYPE(ctx);
         return;

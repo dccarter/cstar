@@ -155,6 +155,10 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
         return isTypeAssignableFrom(to->pointer.pointed, from->pointer.pointed);
     }
 
+    if (typeIs(from, Result) && !typeIs(to, Result)) {
+        from = from->result.target;
+    }
+
     switch (to->tag) {
     case typAuto:
         return !typeIs(from, Error);
@@ -292,6 +296,14 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
     case typInterface:
         return (typeIs(from, Struct) || typeIs(from, Class)) &&
                implementsInterface(from, to);
+    case typException:
+        return typeIs(from, Exception) || isVoidPointer(from);
+    case typResult:
+        if (typeIs(from, Exception))
+            return true;
+        if (typeIs(from, Result))
+            return isTypeAssignableFrom(to->result.target, from->result.target);
+        return isTypeCastAssignable(to->result.target, from);
     default:
         return false;
     }
@@ -362,8 +374,7 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
     case typThis:
         if (isClassType(unwrappedFrom) && isVoidPointer(unwrappedTo))
             return true;
-        else
-            return isTypeAssignableFrom(to, from);
+        return isTypeAssignableFrom(to, from);
     case typUnion:
         return findUnionTypeIndex(from,
                                   typeIs(to, Pointer) ? to->pointer.pointed
@@ -734,6 +745,37 @@ bool isConstType(const Type *type)
     return flags & flgConst;
 }
 
+bool isBaseExceptionType(const Type *type)
+{
+    return typeIs(type, Class) && type->name == S_Exception && type->ns == NULL;
+}
+
+bool isExceptionType(const Type *type)
+{
+    type = resolveAndUnThisType(type);
+    if (!isClassType(type) || type->tClass.inheritance == NULL)
+        return false;
+    type = type->tClass.inheritance->base;
+    return type && isBaseExceptionType(type);
+}
+
+bool isResultType(const Type *type)
+{
+    type = resolveUnThisUnwrapType(type);
+    if (!typeIs(type, Union) || type->tUnion.count != 2)
+        return false;
+    return isBaseExceptionType(type->tUnion.members[1].type);
+}
+
+bool isVoidResultType(const Type *type)
+{
+    type = resolveUnThisUnwrapType(type);
+    if (!isResultType(type))
+        return false;
+    type = type->tUnion.members[0].type;
+    return typeIs(type, Struct) && type->name == S_Void && type->ns == NULL;
+}
+
 bool typeIsBaseOf(const Type *base, const Type *type)
 {
     const Type *it = resolveAndUnThisType(type);
@@ -934,6 +976,15 @@ void printType_(FormatState *state, const Type *type, bool keyword)
         printType_(state, &tmp, keyword);
         break;
     }
+    case typException:
+        if (keyword)
+            printKeyword(state, "exception");
+        format(state, " {s}", (FormatArg[]){{.s = type->name}});
+        break;
+    case typResult:
+        printType_(state, type->result.target, keyword);
+        format(state, "!", NULL);
+        break;
     default:
         unreachable("TODO");
     }
@@ -1181,6 +1232,14 @@ const Type *getSliceTargetType(const Type *type)
     const Type *target = type->tStruct.members->members[0].type;
     csAssert0(typeIs(target, Pointer));
     return target->pointer.pointed;
+}
+
+const Type *getResultTargetType(const Type *type)
+{
+    if (type == NULL || !isResultType(type))
+        return NULL;
+    type = resolveUnThisUnwrapType(type);
+    return type->tUnion.members[0].type;
 }
 
 u32 findUnionTypeIndex(const Type *tagged, const Type *type)

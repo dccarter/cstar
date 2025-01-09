@@ -8,11 +8,16 @@ struct User {
     }
 }
 
-func say(user: User) {
-    return user.name
+exception IOError(msg: String = String("Input/Output error")) => msg.str()
+class Hello { func `init`(){} }
+
+func say(x: i32): !void {
+    if (x == 0) {
+        raise IOError()
+    }
+    return;
+    println( "Hello World" )
 }
 
-func main(args: [string]) {
-    var user = User("Carter");
-    var x = stackAlloc!(String, "Carter");
+func main() {
 }

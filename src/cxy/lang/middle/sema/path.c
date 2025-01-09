@@ -95,6 +95,10 @@ const Type *checkMember(AstVisitor *visitor, const Type *parent, AstNode *node)
         decl = resolveMember(ctx, parent, node, &flags, name);
         resolved = decl ? decl->type : NULL;
         break;
+    case typException:
+        decl = findInAstNode(parent->exception.decl, name);
+        resolved = decl ? decl->type : NULL;
+        break;
     default:
         logError(ctx->L,
                  &node->loc,

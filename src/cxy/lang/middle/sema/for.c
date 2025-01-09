@@ -435,5 +435,8 @@ void checkForStmt(AstVisitor *visitor, AstNode *node)
         return;
     }
 
+    bool currentReturnState = ctx->returnState;
+    ctx->returnState = false;
     node->type = checkType(visitor, node->forStmt.body);
+    ctx->returnState = currentReturnState;
 }

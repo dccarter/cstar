@@ -23,6 +23,8 @@ typedef struct {
     TypeTable *types;
     AstVisitor *evaluator;
     bool traceMemory;
+    bool returnState;
+
     struct {
         AstNode *program;
         AstNode *previous;
@@ -92,6 +94,10 @@ bool checkTypeImplementsAllMembers(TypingContext *ctx, AstNode *node);
 bool checkMemberFunctions(AstVisitor *visitor,
                           AstNode *node,
                           NamedTypeMember *members);
+
+bool exceptionVerifyRaiseExpr(TypingContext *ctx,
+                              const AstNode *ret,
+                              AstNode *node);
 
 void implementClassOrStructBuiltins(AstVisitor *visitor, AstNode *node);
 AstNode *implementDefaultInitializer(AstVisitor *visitor,
@@ -194,6 +200,7 @@ void checkEnumDecl(AstVisitor *visitor, AstNode *node);
 void checkTypeDecl(AstVisitor *visitor, AstNode *node);
 void checkUnionDecl(AstVisitor *visitor, AstNode *node);
 void checkGenericDecl(AstVisitor *visitor, AstNode *node);
+void checkExceptionDecl(AstVisitor *visitor, AstNode *node);
 
 void checkBinaryExpr(AstVisitor *visitor, AstNode *node);
 void checkUnaryExpr(AstVisitor *visitor, AstNode *node);
@@ -226,6 +233,7 @@ void checkBuiltinType(AstVisitor *visitor, AstNode *node);
 void checkOptionalType(AstVisitor *visitor, AstNode *node);
 void checkPointerType(AstVisitor *visitor, AstNode *node);
 void checkReferenceType(AstVisitor *visitor, AstNode *node);
+void checkResultType(AstVisitor *visitor, AstNode *node);
 
 #ifdef __cplusplus
 }

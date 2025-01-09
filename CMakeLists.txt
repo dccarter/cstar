@@ -123,6 +123,7 @@ set(CXY_MIDDLE_SOURCES
         src/cxy/lang/middle/sema/closure.c
         src/cxy/lang/middle/sema/defaults.c
         src/cxy/lang/middle/sema/enum.c
+        src/cxy/lang/middle/sema/exception.c
         src/cxy/lang/middle/sema/for.c
         src/cxy/lang/middle/sema/function.c
         src/cxy/lang/middle/sema/generics.c
