@@ -479,6 +479,13 @@ static void evalRangeOperation(EvalContext *ctx, AstNode *node)
     node->tag = astError;
 }
 
+static void evalCatchOperation(EvalContext *ctx, AstNode *node)
+{
+    logError(ctx->L, &node->loc, "`catch` is unsupported at comp-time", NULL);
+
+    node->tag = astError;
+}
+
 void evalBinaryExpr(AstVisitor *visitor, AstNode *node)
 {
     EvalContext *ctx = getAstVisitorContext(visitor);

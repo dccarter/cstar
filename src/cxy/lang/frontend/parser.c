@@ -806,7 +806,12 @@ static AstNode *binary(Parser *P,
             break;
 
         advance(P);
-        AstNode *rhs = binary(P, NULL, nextPrecedence, parsePrimary);
+        AstNode *rhs;
+        if (op == opCatch && match(P, tokDiscard)) {
+            rhs = newAstNode(P, previous(P), &(AstNode){.tag = astBlockStmt});
+        }
+        else
+            rhs = binary(P, NULL, nextPrecedence, parsePrimary);
         lhs = newAstNode_(
             P,
             &lhs->loc,
@@ -967,6 +972,31 @@ static AstNode *range(Parser *P)
                                                 .down = down}});
 }
 
+static AstNode *funcReturnType(Parser *P)
+{
+    Token start = *current(P);
+    match(P, tokLNot);
+    AstNode *ret = parseType(P);
+    if (start.tag == tokLNot) {
+        ret->next = newAstNode(
+            P,
+            &start,
+            &(AstNode){
+                .tag = astPath,
+                .path = {.elements = newAstNode(
+                             P,
+                             &start,
+                             &(AstNode){.tag = astPathElem,
+                                        .pathElement.name = S_Exception})}});
+        ret = newAstNode(
+            P,
+            &start,
+            &(AstNode){.tag = astUnionDecl,
+                       .unionDecl = {.members = ret, .isResult = true}});
+    }
+    return ret;
+}
+
 static AstNode *closure(Parser *P)
 {
     AstNode *ret = NULL, *body = NULL;
@@ -976,11 +1006,13 @@ static AstNode *closure(Parser *P)
     consume0(P, tokRParen);
 
     if (match(P, tokColon)) {
-        ret = parseType(P);
+        ret = funcReturnType(P);
     }
     consume0(P, tokFatArrow);
-
-    body = expression(P, true);
+    if (check(P, tokLBrace))
+        body = block(P);
+    else
+        body = expression(P, true);
     return newAstNode(
         P,
         &tok,
@@ -1122,7 +1154,7 @@ static AstNode *parseFuncType(Parser *P)
     consume0(P, tokRParen);
 
     consume0(P, tokThinArrow);
-    ret = parseType(P);
+    ret = funcReturnType(P);
 
     AstNode *func =
         newAstNode(P,
@@ -2095,26 +2127,7 @@ static AstNode *funcDecl(Parser *P, u64 flags)
     consume0(P, tokRParen);
 
     if (match(P, tokColon)) {
-        Token start = *current(P);
-        match(P, tokLNot);
-        ret = parseType(P);
-        if (start.tag == tokLNot) {
-            ret->next = newAstNode(
-                P,
-                &start,
-                &(AstNode){.tag = astPath,
-                           .path = {.elements = newAstNode(
-                                        P,
-                                        &start,
-                                        &(AstNode){.tag = astPathElem,
-                                                   .pathElement.name =
-                                                       S_Exception})}});
-            ret = newAstNode(
-                P,
-                &start,
-                &(AstNode){.tag = astUnionDecl,
-                           .unionDecl = {.members = ret, .isResult = true}});
-        }
+        ret = funcReturnType(P);
     }
     else if (Extern)
         reportUnexpectedToken(P,
@@ -2394,6 +2407,17 @@ static AstNode *returnStatement(Parser *P)
         &(AstNode){.tag = astReturnStmt, .returnStmt = {.expr = expr}});
 }
 
+static AstNode *yieldStatement(Parser *P)
+{
+    AstNode *expr = NULL;
+    Token tok = *consume0(P, tokYield);
+    expr = expression(P, true);
+    match(P, tokSemicolon);
+
+    return newAstNode(
+        P, &tok, &(AstNode){.tag = astYieldStmt, .yieldStmt = {.expr = expr}});
+}
+
 static AstNode *continueStatement(Parser *P)
 {
     Token tok = *current(P);
@@ -2446,6 +2470,9 @@ static AstNode *statement(Parser *P, bool exprOnly)
         break;
     case tokReturn:
         stmt = returnStatement(P);
+        break;
+    case tokYield:
+        stmt = yieldStatement(P);
         break;
     case tokBreak:
     case tokContinue:

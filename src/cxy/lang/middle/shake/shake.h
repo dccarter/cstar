@@ -19,12 +19,25 @@ typedef struct {
     AstModifier block;
     AstModifier root;
     u64 lastTestId;
+    bool exceptionTrace;
     union {
         struct {
             bool inClassOrStruct;
+            AstNode *catchLhs;
+            AstNode *catchRhs;
+            cstring fun;
+            cstring cls;
+            cstring mod;
+            cstring path;
         };
         struct {
             bool inClassOrStruct;
+            AstNode *catchLhs;
+            AstNode *catchRhs;
+            cstring fun;
+            cstring cls;
+            cstring mod;
+            cstring path;
         } stack;
     };
 } ShakeAstContext;

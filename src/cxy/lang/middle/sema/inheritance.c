@@ -47,7 +47,7 @@ static AstNode *makeVTableVariable(TypingContext *ctx,
                        vTableType->type),
         NULL,
         vTableType->type);
-    addTopLevelDeclaration(ctx, vTable);
+    astModifierAdd(&ctx->root, vTable);
     return vTable;
 }
 
@@ -213,7 +213,7 @@ AstNode *inheritanceBuildVTableType(AstVisitor *visitor, AstNode *node)
     node->type = checkType(visitor, vTableType);
     if (typeIs(node->type, Error))
         return NULL;
-    addTopLevelDeclaration(ctx, vTableType);
+    astModifierAdd(&ctx->root, vTableType);
 
     AstNode *vTable = makeVTableVariable(ctx, node, vTableType, init.first);
     AstNode *member = makeVTableMember(ctx, node, vTable);

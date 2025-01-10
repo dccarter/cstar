@@ -17,6 +17,7 @@ typedef enum {
     optEquality,
     optTypeEquality,
     optRange,
+    optCatch,
 } BinaryOperatorKind;
 
 static BinaryOperatorKind getBinaryOperatorKind(Operator op)
@@ -41,6 +42,8 @@ static BinaryOperatorKind getBinaryOperatorKind(Operator op)
 #undef f
     case opRange:
         return optRange;
+    case opCatch:
+        return optCatch;
     default:
         unreachable("");
     }
@@ -160,6 +163,7 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;
+    ctx->explicitCatch = node->binaryExpr.op == opCatch;
     const Type *left = checkType(visitor, lhs), *left_ = stripAll(left);
 
     Operator op = node->binaryExpr.op;
@@ -201,7 +205,15 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
     }
 
     node->binaryExpr.rhs->parentScope = node;
+
+    __typeof(ctx->catcher) catcher = ctx->catcher, newCatcher = {};
+    ctx->catcher.expr = lhs;
+    ctx->catcher.block = rhs;
+    ctx->catcher.variable = NULL;
+    ctx->catcher.ex = NULL;
     const Type *right = checkType(visitor, node->binaryExpr.rhs);
+    newCatcher = ctx->catcher;
+    ctx->catcher = catcher;
 
     if (typeIs(right, Error)) {
         node->type = ERROR_TYPE(ctx);
@@ -224,6 +236,11 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
             node->tag = astBoolLit;
             node->boolLiteral.value = compareTypes(left, right);
         }
+        return;
+    }
+
+    if (opKind == optCatch) {
+        checkCatchBinaryOperator(visitor, node, &newCatcher);
         return;
     }
 
@@ -264,7 +281,6 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
                      "type '{t}'",
                      (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
             node->type = ERROR_TYPE(ctx);
-            return;
         }
         break;
 
@@ -277,7 +293,6 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
                      "type '{t}'",
                      (FormatArg[]){{.s = getBinaryOpString(op)}, {.t = type}});
             node->type = ERROR_TYPE(ctx);
-            return;
         }
         break;
 

@@ -1205,7 +1205,7 @@ const EnumOptionDecl *findEnumOption(const Type *type, cstring option)
 bool isTruthyType(const Type *type)
 {
     return isIntegralType(type) || isFloatType(type) || typeIs(type, Pointer) ||
-           typeIs(type, Optional) ||
+           typeIs(type, Optional) || typeIs(type, String) ||
            (isClassOrStructType(type) &&
             findStructMemberType(type, S_Truthy) != NULL);
 }

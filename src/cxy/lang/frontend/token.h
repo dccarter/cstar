@@ -87,6 +87,7 @@ extern "C" {
     f(While, "while")               \
     f(Break, "break")               \
     f(Return, "return")             \
+    f(Yield,  "yield")              \
     f(Continue, "continue")         \
     f(Func, "func")                 \
     f(Var, "var")                   \
@@ -105,6 +106,7 @@ extern "C" {
     f(Ptrof,   "ptrof")             \
     f(Await,  "await")              \
     f(Delete, "delete")             \
+    f(Discard, "discard")           \
     f(Switch, "switch")             \
     f(Case, "case")                 \
     f(Default, "default")           \

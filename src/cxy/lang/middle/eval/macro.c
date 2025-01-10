@@ -249,6 +249,55 @@ static AstNode *makeForceDropNode(AstVisitor *visitor,
         ctx->pool, &node->loc, flgForced, bfiDrop, args, type);
 }
 
+static AstNode *makeExNode(AstVisitor *visitor,
+                           attr(unused) const AstNode *node,
+                           attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    TypingContext *typer = getAstVisitorContext(ctx->typer);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 0))
+        return NULL;
+    if (typer->catcher.block == NULL) {
+        logError(ctx->L,
+                 &node->loc,
+                 "`ex!` macro only allowed in catch blocks",
+                 NULL);
+        return NULL;
+    }
+
+    if (typer->catcher.result == NULL) {
+        AstNode *lhs = typer->catcher.expr;
+        const Type *type = resolveUnThisUnwrapType(lhs->type);
+        typer->catcher.result = makeVarDecl(
+            ctx->pool,
+            &node->loc,
+            flgNone,
+            makeAnonymousVariable(ctx->strings, "_res"),
+            NULL,
+            isVoidResultType(type) ? lhs : shallowCloneAstNode(ctx->pool, lhs),
+            NULL,
+            type);
+        AstNode *ex = makeCastResultTo(typer, typer->catcher.result, true);
+        typer->catcher.ex =
+            makeVarDecl(ctx->pool,
+                        builtinLoc(),
+                        flgNone,
+                        makeAnonymousVariable(ctx->strings, "_ex"),
+                        NULL,
+                        ex,
+                        NULL,
+                        ex->type);
+    }
+
+    return makeResolvedPath(ctx->pool,
+                            &node->loc,
+                            typer->catcher.ex->_name,
+                            flgNone,
+                            typer->catcher.ex,
+                            NULL,
+                            typer->catcher.ex->type);
+}
+
 static AstNode *makeHasMemberNode(AstVisitor *visitor,
                                   attr(unused) const AstNode *node,
                                   attr(unused) AstNode *args)
@@ -1384,6 +1433,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "data", makeDataNode},
     {.name = "destructor", makeDestructorNode},
     {.name = "error", makeAstLogErrorNode},
+    {.name = "ex", makeExNode},
     {.name = "file", makeFilenameNode},
     {.name = "has_member", makeHasMemberNode},
     {.name = "indexof", makeIndexOfNode},

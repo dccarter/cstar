@@ -22,27 +22,24 @@ typedef struct {
     StrPool *strings;
     TypeTable *types;
     AstVisitor *evaluator;
+    AstModifier root;
+    AstModifier blockModifier;
     bool traceMemory;
     bool returnState;
-
-    struct {
-        AstNode *program;
-        AstNode *previous;
-        AstNode *current;
-    } root;
-
-    struct {
-        AstNode *self;
-        AstNode *previous;
-        AstNode *current;
-    } block;
+    bool exceptionTrace;
 
     union {
         struct {
             AstNode *currentCall;
             AstNode *currentStruct;
             AstNode *currentClass;
+            AstNode *currentFunction;
+            cstring fun;
+            cstring cls;
+            cstring mod;
+            cstring path;
             bool shallow;
+            bool explicitCatch;
         } stack;
 
         struct {
@@ -50,14 +47,24 @@ typedef struct {
             AstNode *currentStruct;
             AstNode *currentClass;
             AstNode *currentFunction;
+            cstring fun;
+            cstring cls;
+            cstring mod;
+            cstring path;
+
             bool shallow;
+            bool explicitCatch;
         };
     };
-} TypingContext;
 
-void addTopLevelDeclaration(TypingContext *ctx, AstNode *node);
-void addTopLevelDeclarationAsNext(TypingContext *ctx, AstNode *node);
-void addBlockLevelDeclaration(TypingContext *ctx, AstNode *node);
+    struct ExceptionCather {
+        AstNode *result;
+        AstNode *ex;
+        AstNode *variable;
+        AstNode *block;
+        AstNode *expr;
+    } catcher;
+} TypingContext;
 
 const FileLoc *manyNodesLoc_(FileLoc *dst, AstNode *nodes);
 #define manyNodesLoc(nodes) manyNodesLoc_(&(FileLoc){}, (nodes))
@@ -99,6 +106,8 @@ bool exceptionVerifyRaiseExpr(TypingContext *ctx,
                               const AstNode *ret,
                               AstNode *node);
 
+AstNode *makeCastResultTo(TypingContext *ctx, AstNode *var, bool except);
+
 void implementClassOrStructBuiltins(AstVisitor *visitor, AstNode *node);
 AstNode *implementDefaultInitializer(AstVisitor *visitor,
                                      AstNode *node,
@@ -110,6 +119,11 @@ void checkImplements(AstVisitor *visitor,
                      AstNode *node,
                      const Type **implements,
                      u64 count);
+void checkCatchBinaryOperator(AstVisitor *visitor,
+                              AstNode *node,
+                              struct ExceptionCather *catcher);
+
+void checkCallExceptionBubbleUp(AstVisitor *visitor, AstNode *node);
 
 AstNode *makeDropReferenceCall(TypingContext *ctx,
                                AstNode *member,

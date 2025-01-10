@@ -231,7 +231,7 @@ class CoroutineScheduler {
         ready.push(cr)
     }
 
-    func yield() {
+    func yld() {
         resume(running, 0)
         suspend()
     }
@@ -314,7 +314,7 @@ class CoroutineScheduler {
 // @global installs the variable into the global scope
 @[thread, __override_builtin("__scheduler"), linkage("External")]
 var __cxy_coro_scheduler = CoroutineScheduler();
-macro yield() __scheduler.yield()
+macro yld() __scheduler.yld()
 macro running() __scheduler.running
 macro setname(NAME) { __scheduler.running.name = NAME! }
 

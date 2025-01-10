@@ -182,7 +182,7 @@ static bool checkAnonymousStructExpr(AstVisitor *visitor, AstNode *node)
         }
         insertAstNode(&members, builtins);
         decl->structDecl.members = members.first;
-        decl->parentScope = ctx->root.program;
+        decl->parentScope = ctx->root.parent;
 
         type = checkType(visitor, decl);
         if (typeIs(type, Error)) {
@@ -190,7 +190,7 @@ static bool checkAnonymousStructExpr(AstVisitor *visitor, AstNode *node)
             return false;
         }
 
-        addTopLevelDeclaration(ctx, decl);
+        astModifierAdd(&ctx->root, decl);
     }
     else if (typeIs(type, Error)) {
         return false;

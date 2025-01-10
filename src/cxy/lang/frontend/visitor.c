@@ -242,6 +242,9 @@
     case astReturnStmt:                                                        \
         MODE##Visit(visitor, node->returnStmt.expr);                           \
         break;                                                                 \
+    case astYieldStmt:                                                         \
+        MODE##Visit(visitor, node->yieldStmt.expr);                            \
+        break;                                                                 \
     case astBlockStmt:                                                         \
         MODE##VisitManyNodes(visitor, node->blockStmt.stmts);                  \
         break;                                                                 \

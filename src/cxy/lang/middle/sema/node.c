@@ -54,7 +54,7 @@ static AstNode *transformRValueToLValue(AstVisitor *visitor, AstNode *node)
                                   NULL,
                                   node->type);
     astVisit(visitor, node);
-    addBlockLevelDeclaration(ctx, tmpVar);
+    astModifierAdd(&ctx->blockModifier, tmpVar);
 
     return makeResolvedPath(ctx->pool,
                             &node->loc,

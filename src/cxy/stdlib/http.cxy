@@ -35,46 +35,46 @@ pub enum Method : u32 {
 }
 
 pub enum Status : i32 {
-    CONTINUE			        = 100,
-    SWITCHING_PROTOCOLS		    = 101,
-    OK				            = 200,
-    CREATED			            = 201,
-    ACCEPTED			        = 202,
-    NON_AUTHORITATIVE		    = 203,
-    NO_CONTENT			        = 204,
-    RESET_CONTENT		        = 205,
-    PARTIAL_CONTENT		        = 206,
-    MULTIPLE_CHOICES		    = 300,
-    MOVED_PERMANENTLY		    = 301,
-    FOUND			            = 302,
-    SEE_OTHER			        = 303,
-    NOT_MODIFIED		        = 304,
-    USE_PROXY			        = 305,
-    TEMPORARY_REDIRECT		    = 307,
-    BAD_REQUEST			        = 400,
-    UNAUTHORIZED		        = 401,
-    PAYMENT_REQUIRED		    = 402,
-    FORBIDDEN			        = 403,
-    NOT_FOUND			        = 404,
-    METHOD_NOT_ALLOWED		    = 405,
-    NOT_ACCEPTABLE		        = 406,
-    PROXY_AUTH_REQUIRED		    = 407,
-    REQUEST_TIMEOUT		        = 408,
-    CONFLICT			        = 409,
-    GONE			            = 410,
-    LENGTH_REQUIRED		        = 411,
-    PRECONDITION_FAILED		    = 412,
-    REQUEST_ENTITY_TOO_LARGE	= 413,
-    REQUEST_URI_TOO_LARGE	    = 414,
-    UNSUPPORTED_MEDIA_TYPE	    = 415,
-    REQUEST_RANGE_INVALID	    = 416,
-    EXPECTATION_FAILED		    = 417,
-    INTERNAL_ERROR		        = 500,
-    NOT_IMPLEMENTED		        = 501,
-    BAD_GATEWAY			        = 502,
-    SERVICE_UNAVAILABLE	    	= 503,
-    GATEWAY_TIMEOUT		        = 504,
-    BAD_VERSION			        = 505
+    Continue                    = 100,
+    SwitchingProtocols          = 101,
+    Ok                          = 200,
+    Create                      = 201,
+    Accepted                    = 202,
+    NonAuthoritative            = 203,
+    NoContent                   = 204,
+    ResetContent                = 205,
+    PartialContent              = 206,
+    MultipleChoices             = 300,
+    MovedPermanently            = 301,
+    Found                       = 302,
+    SeeOther                    = 303,
+    NotModified                 = 304,
+    UseProxy                    = 305,
+    TemporaryRedirect           = 307,
+    BadRequest                  = 400,
+    Unauthorized                = 401,
+    PaymentRequired             = 402,
+    Forbidden                   = 403,
+    NotFound                    = 404,
+    MethodNotAllowed            = 405,
+    NotAcceptable               = 406,
+    ProxyAuthRequired           = 407,
+    RequestTimeout              = 408,
+    Conflict                    = 409,
+    Gone                        = 410,
+    LengthRequired              = 411,
+    PreconditionFailed          = 412,
+    RequestEntityTooLarge       = 413,
+    RequestUriTooLarge          = 414,
+    UnsupportedMediaType        = 415,
+    RequestRangeInvalid         = 416,
+    ExpectationFailed           = 417,
+    InternalError               = 500,
+    NotImplement                = 501,
+    BadGateway                  = 502,
+    ServiceUnavailable          = 503,
+    GatewayTimeout              = 504,
+    BadVersion                  = 505
 }
 
 @inline
@@ -112,85 +112,85 @@ pub func methodFromString(method: __string) {
 
 pub func statusText(status: Status) {
     switch (status) {
-        case .CONTINUE =>
+        case. Continue =>
             return "HTTP/1.1 100 Continue"
-        case .SWITCHING_PROTOCOLS =>
+        case. SwitchingProtocols =>
             return "HTTP/1.1 101 Switching Protocols"
-        case .OK =>
+        case. Ok =>
             return "HTTP/1.1 200 OK"
-        case .CREATED =>
+        case. Create =>
             return "HTTP/1.1 201 Created"
-        case .ACCEPTED =>
+        case. Accepted =>
             return "HTTP/1.1 202 Accepted"
-        case .NON_AUTHORITATIVE =>
+        case. NonAuthoritative =>
             return "HTTP/1.1 203 Non-Authoritative Information"
-        case .NO_CONTENT =>
+        case. NoContent =>
             return "HTTP/1.1 204 No Content"
-        case .RESET_CONTENT =>
+        case. ResetContent =>
             return "HTTP/1.1 205 Reset Content"
-        case .PARTIAL_CONTENT =>
+        case. PartialContent =>
             return "HTTP/1.1 206 Partial Content"
-        case .MULTIPLE_CHOICES =>
+        case. MultipleChoices =>
             return "HTTP/1.1 300 Multiple Choices"
-        case .MOVED_PERMANENTLY =>
+        case. MovedPermanently =>
             return "HTTP/1.1 301 Moved Permanently"
-        case .FOUND =>
+        case. Found =>
             return "HTTP/1.1 302 Found"
-        case .SEE_OTHER =>
+        case. SeeOther =>
             return "HTTP/1.1 303 See Other"
-        case .NOT_MODIFIED =>
+        case. NotModified =>
             return "HTTP/1.1 304 Not Modified"
-        case .USE_PROXY =>
+        case. UseProxy =>
             return "HTTP/1.1 305 Use Proxy"
-        case .TEMPORARY_REDIRECT =>
+        case. TemporaryRedirect =>
             return "HTTP/1.1 307 Temporary Redirect"
-        case .BAD_REQUEST =>
+        case. BadRequest =>
             return "HTTP/1.1 400 Bad Request"
-        case .UNAUTHORIZED =>
+        case. Unauthorized =>
             return "HTTP/1.1 401 Unauthorized"
-        case .PAYMENT_REQUIRED =>
+        case. PaymentRequired =>
             return "HTTP/1.1 402 Payment Required"
-        case .FORBIDDEN =>
+        case. Forbidden =>
             return "HTTP/1.1 403 Forbidden"
-        case .NOT_FOUND =>
+        case. NotFound =>
             return "HTTP/1.1 404 Not Found"
-        case .METHOD_NOT_ALLOWED =>
+        case. MethodNotAllowed =>
             return "HTTP/1.1 405 Method Not Allowed"
-        case .NOT_ACCEPTABLE =>
+        case. NotAcceptable =>
             return "HTTP/1.1 406 Not Acceptable"
-        case .PROXY_AUTH_REQUIRED =>
+        case. ProxyAuthRequired =>
             return "HTTP/1.1 407 Proxy Authentication Required"
-        case .REQUEST_TIMEOUT =>
+        case. RequestTimeout =>
             return "HTTP/1.1 408 Request Time-out"
-        case .CONFLICT =>
+        case. Conflict =>
             return "HTTP/1.1 409 Conflict"
-        case .GONE =>
+        case. Gone =>
             return "HTTP/1.1 410 Gone"
-        case .LENGTH_REQUIRED =>
+        case. LengthRequired =>
             return "HTTP/1.1 411 Length Required"
-        case .PRECONDITION_FAILED =>
+        case. PreconditionFailed =>
             return "HTTP/1.1 412 Precondition Failed"
-        case .REQUEST_ENTITY_TOO_LARGE =>
+        case. RequestEntityTooLarge =>
             return "HTTP/1.1 413 Request Entity Too Large"
-        case .REQUEST_URI_TOO_LARGE =>
+        case. RequestUriTooLarge =>
             return "HTTP/1.1 414 Request-URI Too Large"
-        case .UNSUPPORTED_MEDIA_TYPE =>
+        case. UnsupportedMediaType =>
             return "HTTP/1.1 415 Unsupported Media Type"
-        case .REQUEST_RANGE_INVALID =>
+        case. RequestRangeInvalid =>
             return "HTTP/1.1 416 Requested range not satisfiable"
-        case .EXPECTATION_FAILED =>
+        case. ExpectationFailed =>
             return "HTTP/1.1 417 Expectation Failed"
-        case .INTERNAL_ERROR =>
+        case. InternalError =>
             return "HTTP/1.1 500 Internal Server Error"
-        case .NOT_IMPLEMENTED =>
+        case. NotImplement =>
             return "HTTP/1.1 501 Not Implemented"
-        case .BAD_GATEWAY =>
+        case. BadGateway =>
             return "HTTP/1.1 502 Bad Gateway"
-        case .SERVICE_UNAVAILABLE =>
+        case. ServiceUnavailable =>
             return "HTTP/1.1 503 Service Unavailable"
-        case .GATEWAY_TIMEOUT =>
+        case. GatewayTimeout =>
             return "HTTP/1.1 504 Gateway Time-out"
-        case .BAD_VERSION =>
+        case. BadVersion =>
             return "HTTP/1.1 505 HTTP Version not supported"
         default =>
             return "HTTP/1.1 500  "
@@ -228,7 +228,7 @@ pub var SERVER_S = String("Server");
 pub var CONNECTION_S = String("Connection");
 
 pub class Response {
-    - _status: Status = .OK;
+    - _status: Status = .Ok;
     - _headers = HeaderMap();
     - _body = String();
 
@@ -244,9 +244,9 @@ pub class Response {
     @[prop, inline]
     const func size() => _body.size()
 
-    const func ok() => _status == .OK
+    const func ok() => _status == .Ok
 
-    func end(status: Status = .OK) {
+    func end(status: Status = .Ok) {
         _status = status
     }
 
@@ -300,14 +300,14 @@ pub class Request {
         if (parsed < 0) {
             // failed to parse request
             TRC!("parse failed: " << parsed << '/' << len)
-            return Status.BAD_REQUEST
+            return Status.BadRequest
         }
 
         var parsedMethod = methodFromString(__string(method !: string, methodLen));
         if (parsedMethod.0 == .Unknown) {
             // Invalid request method
             TRC!("bad request: invalid request method " << __string(method !: string, methodLen))
-            return Status.BAD_REQUEST
+            return Status.BadRequest
         }
         _method = parsedMethod.0
         _minorVersion = minorVersion
@@ -340,7 +340,7 @@ pub class Request {
         if (remaining == _contentLength)
             _body = String(ptroff!(buf + parsed), remaining)
 
-        return Status.OK
+        return Status.Ok
     }
 
     @inline
@@ -472,7 +472,7 @@ class Router {
         var found = routes.find(path.str(), path.size());
         if (!found) {
             TRC!("route: " << path)
-            resp.end(Status.NOT_FOUND)
+            resp.end(Status.NotFound)
             return;
         }
 
@@ -501,14 +501,14 @@ class Router {
         var found = routes.find(path.str(), path.size());
         if (!found) {
             TRC!("not found: " << req.path())
-            resp.end(Status.NOT_FOUND)
+            resp.end(Status.NotFound)
             return null;
         }
 
         var consumed, route = found.move();
         if (!route.isMethodSupported(req.method())) {
             TRC!("not found: unsupported method '" << req.method() << "'")
-            resp.end(Status.NOT_FOUND)
+            resp.end(Status.NotFound)
             return null;
         }
 
@@ -552,7 +552,7 @@ class Router {
         for (var i: 0..params.size()) {
             if (p.[idx++] != '/':char) {
                 TRC!("bad request: route missing parameters")
-                return Status.BAD_REQUEST
+                return Status.BadRequest
             }
             var j = idx;
             while (p.[j] != '\0':char && p.[j] != '/':char && p.[j] != '?':char)
@@ -564,7 +564,7 @@ class Router {
 
         if (p.[idx] != '\0':char && p.[idx] != '?':char) {
             TRC!("bad request: too many path params: " << path)
-            return Status.BAD_REQUEST
+            return Status.BadRequest
         }
 
         return idx
@@ -617,7 +617,7 @@ pub class Connection[Middlewares] {
         var route = (*router).find(&req, &resp);
 
         if (!route) {
-            resp.end(Status.NOT_FOUND)
+            resp.end(Status.NotFound)
             sendResponse()
             return;
         }
@@ -648,7 +648,7 @@ pub class Connection[Middlewares] {
             var len = *received;
             if (len > 0) {
                 var status = req.feed(buf, *received);
-                if (status != .OK)
+                if (status != .Ok)
                     resp.end(status)
                 return true
             }
@@ -661,7 +661,7 @@ pub class Connection[Middlewares] {
         var sos = BufferedSocketOutputStream(sock);
         var line0 = __string(statusText(resp.status()));
         sos << line0 << "\r\n"
-        if (resp.status() != .OK && resp.body().empty()) {
+        if (resp.status() != .Ok && resp.body().empty()) {
             resp.body() << line0.substr(9)
         }
 
@@ -799,7 +799,7 @@ pub class Cors {
                 var corsMethod = methodFromString(method.__str());
                 if (corsMethod.0 == .Unknown) {
                     TRC!("bad request: unknown method " << method )
-                    res.end(Status.BAD_REQUEST)
+                    res.end(Status.BadRequest)
                     return
                 }
 

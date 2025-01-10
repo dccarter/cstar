@@ -49,6 +49,7 @@ struct StrPool;
     f(ContinueStmt)                         \
     f(DeferStmt)                            \
     f(ReturnStmt)                           \
+    f(YieldStmt)                            \
     f(BlockStmt)                            \
     f(IfStmt)                               \
     f(ForStmt)                              \
@@ -130,7 +131,6 @@ struct StrPool;
     f(AsmOperand)           \
     f(NodeArray)            \
     f(Exception)            \
-    f(Catch)                \
     CXY_LANG_AST_EXP_TAGS(f)    \
     CXY_LANG_AST_STMT_TAGS(f)   \
     CXY_LANG_AST_DECL_TAGS(f)   \
@@ -337,12 +337,6 @@ struct AstNode {
             AstNode *params;
             AstNode *body;
         } exception;
-
-        struct {
-            AstNode *expr;
-            AstNode *var;
-            AstNode *body;
-        } catchStmt;
 
         struct {
             cstring value;
@@ -710,6 +704,10 @@ struct AstNode {
             AstNode *expr;
             bool isRaise;
         } returnStmt;
+
+        struct {
+            AstNode *expr;
+        } yieldStmt;
 
         struct {
             cstring name;
@@ -1163,6 +1161,14 @@ AstNode *makeWhileStmt(MemPool *pool,
                        AstNode *next,
                        AstNode *update);
 
+AstNode *makeIfStmt(MemPool *pool,
+                    const FileLoc *loc,
+                    u64 flags,
+                    AstNode *condition,
+                    AstNode *then,
+                    AstNode *otherwise,
+                    AstNode *next);
+
 AstNode *makeFunctionDecl(MemPool *pool,
                           const FileLoc *loc,
                           cstring name,
@@ -1346,6 +1352,13 @@ AstNode *makeReturnAstNode(MemPool *pool,
                            AstNode *expr,
                            AstNode *next,
                            const Type *type);
+
+AstNode *makeYieldAstNode(MemPool *pool,
+                          const FileLoc *loc,
+                          u64 flags,
+                          AstNode *expr,
+                          AstNode *next,
+                          const Type *type);
 
 AstNode *makeBranchAstNode(MemPool *pool,
                            const FileLoc *loc,

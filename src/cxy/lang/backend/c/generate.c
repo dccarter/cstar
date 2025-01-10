@@ -707,26 +707,48 @@ static void generateEnumOptionName(CodegenContext *ctx,
 
 static void generateMainFunction(CodegenContext *ctx, const Type *type)
 {
+#define NewLine() format(getState(ctx), "\n", NULL)
     const Type *ret = type->func.retType;
-    generateTypeName(ctx, getState(ctx), ret);
-    format(getState(ctx), " main(int argc, char *argv[]) {{{>}\n", NULL);
-    if (type->func.paramsCount) {
-        const Type *param = type->func.params[0];
-        generateTypeName(ctx, getState(ctx), param);
-        format(
-            getState(ctx), " args = {{ .data = argv, .len = argc };\n", NULL);
-        if (typeIs(ret, Void))
-            appendString(getState(ctx), "_main(args);");
-        else
-            appendString(getState(ctx), "return _main(args);");
+    if (isResultType(ret)) {
+        const Type *dctor = ret->tUnion.destructorFunc;
+        csAssert0(dctor);
+        format(getState(ctx), "#define __MAIN_RAISED_TYPE__ ", NULL);
+        generateTypeName(ctx, getState(ctx), ret);
+        NewLine();
+        format(getState(ctx), "#define __MAIN_RAISED_TYPE_DCTOR__ ", NULL);
+        generateFunctionName(getState(ctx), dctor->func.decl);
+        NewLine();
+        if (isVoidResultType(ret)) {
+            const Type *target =
+                isResultType(ret) ? getResultTargetType(ret) : ret;
+            format(getState(ctx), "#define __MAIN_RETURN_TYPE__ ", NULL);
+            generateTypeName(ctx, getState(ctx), target);
+            NewLine();
+            format(getState(ctx), "#define __MAIN_RETURNS__\n", NULL);
+        }
+        else {
+            format(getState(ctx), "#define __MAIN_RETURN_TYPE__ void\n", NULL);
+        }
     }
     else {
-        if (typeIs(ret, Void))
-            appendString(getState(ctx), "_main();");
-        else
-            appendString(getState(ctx), "return _main();");
+        if (!isVoidType(ret)) {
+            format(getState(ctx), "#define __MAIN_RETURNS__\n", NULL);
+            format(getState(ctx), "#define __MAIN_RETURN_TYPE__ ", NULL);
+            generateTypeName(ctx, getState(ctx), ret);
+            NewLine();
+        }
+        else {
+            format(getState(ctx), "#define __MAIN_RETURN_TYPE__ void\n", NULL);
+        }
     }
-    format(getState(ctx), "{<}\n}\n", NULL);
+    if (type->func.paramsCount) {
+        const Type *param = type->func.params[0];
+        format(getState(ctx), "#define __MAIN_PARAM_TYPE__ ", NULL);
+        generateTypeName(ctx, getState(ctx), param);
+        NewLine();
+    }
+    NewLine();
+#undef NewLine
 }
 
 static inline bool isImportDeclReference(const AstNode *node)
@@ -1852,6 +1874,39 @@ static void generatedCodePrologue(FILE *f)
 static void generateCodeEpilogue(FILE *f)
 {
     appendCode(f,
+               "#ifdef __MAIN_RETURN_TYPE__\n"
+               "__MAIN_RETURN_TYPE__ main(int argc, char *argv[]) {\n"
+               "#ifdef __MAIN_PARAM_TYPE__\n"
+               "    __MAIN_PARAM_TYPE__ args = args = {{ .data = argv, .len = "
+               "argc }};\n"
+               "#define __MAIN_ARGS__ args\n"
+               "#else\n"
+               "#define __MAIN_ARGS__\n"
+               "#endif\n"
+               "\n"
+               "#ifdef __MAIN_RAISED_TYPE__\n"
+               "    __MAIN_RAISED_TYPE__ ex = _main(__MAIN_ARGS__);\n"
+               "    if (ex.tag == 1) {\n"
+               "         panicUnhandledException(ex._1);\n"
+               "         unreachable();\n"
+               "    }\n"
+               "#ifdef __MAIN_RETURNS__\n"
+               "    __MAIN_RETURN_TYPE__ ret = ex._0;\n"
+               "    __MAIN_RAISED_TYPE_DCTOR__(&ex);\n"
+               "    return ret;\n"
+               "#else\n"
+               "     __MAIN_RAISED_TYPE_DCTOR__(&ex);\n"
+               "#endif\n"
+               "#else\n"
+               "#ifdef __MAIN_RETURNS__\n"
+               "      return _main(__MAIN_ARGS__);\n"
+               "#else\n"
+               "      _main(__MAIN_ARGS__);\n"
+               "#endif\n"
+               "#endif\n"
+               "}\n"
+               "\n"
+               "#endif\n"
                "#if defined(__GNUC__)\n"
                "#pragma GCC diagnostic pop\n"
                "#elif defined(__clang__)\n"

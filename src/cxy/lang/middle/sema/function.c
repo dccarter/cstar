@@ -379,10 +379,16 @@ const Type *checkFunctionBody(AstVisitor *visitor, AstNode *node)
 
     const Type *type = node->type;
     const Type *ret_ = type->func.retType;
-    bool currentReturnState = ctx->returnState;
+    bool currentReturnState = ctx->returnState,
+         currentExplicitCatch = ctx->explicitCatch;
     ctx->returnState = false;
+    ctx->explicitCatch = false;
+    ctx->currentFunction = node;
+    ctx->fun = getDeclarationName(node);
+
     const Type *body_ = checkType(visitor, body);
     ctx->returnState = currentReturnState;
+    ctx->explicitCatch = currentExplicitCatch;
 
     if (typeIs(body_, Error))
         return node->type = ERROR_TYPE(ctx);
@@ -456,7 +462,7 @@ void checkFunctionDecl(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     if (node->funcDecl.name == S_main) {
         node->flags |= flgMain;
-        ctx->root.program->flags |= flgExecutable;
+        ctx->root.parent->flags |= flgExecutable;
     }
 
     const Type *type = checkFunctionSignature(visitor, node);

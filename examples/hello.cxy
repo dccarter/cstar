@@ -1,23 +1,22 @@
 //import "stdlib/path.cxy"
 
+
+exception AgeError(msg: String) => msg.str()
+
 struct User {
     - name: String;
-    - age = 35:i32;
+    - age = 16:i32;
     func `init`(@unused name: String) {
         this.name = &&name
     }
-}
 
-exception IOError(msg: String = String("Input/Output error")) => msg.str()
-class Hello { func `init`(){} }
-
-func say(x: i32): !void {
-    if (x == 0) {
-        raise IOError()
+    func drink() : !void {
+        if (age < 21)
+            raise AgeError(f"${name} is under age")
     }
-    return;
-    println( "Hello World" )
 }
 
-func main() {
+func main(): !void {
+    var user = User("Carter");
+    user.drink()
 }

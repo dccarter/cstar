@@ -275,6 +275,7 @@ static AstNode *makeExceptionAssignMember(ShakeAstContext *ctx, AstNode *param)
 }
 
 static AstNode *makeExceptionInit(ShakeAstContext *ctx,
+                                  cstring name,
                                   AstNode *params,
                                   AstNode *assigns)
 {
@@ -289,7 +290,7 @@ static AstNode *makeExceptionInit(ShakeAstContext *ctx,
                 ctx->pool,
                 builtinLoc(),
                 makePath(ctx->pool, builtinLoc(), S_super, flgNone, NULL),
-                NULL,
+                makeStringLiteral(ctx->pool, builtinLoc(), name, NULL, NULL),
                 flgNone,
                 NULL,
                 NULL),
@@ -311,7 +312,57 @@ static AstNode *makeExceptionInit(ShakeAstContext *ctx,
     return func;
 }
 
-void shakeVariableDecl(AstVisitor *visitor, AstNode *node)
+static inline AstNode *makeStringLitOrNull(ShakeAstContext *ctx,
+                                           cstring str,
+                                           AstNode *next)
+{
+    return str ? makeStringLiteral(ctx->pool, builtinLoc(), str, next, NULL)
+               : makeNullLiteral(ctx->pool, builtinLoc(), next, NULL);
+}
+
+static inline AstNode *makeExceptionPush(ShakeAstContext *ctx, AstNode *expr)
+{
+    AstNode *args = makeStringLitOrNull(
+        ctx,
+        ctx->mod,
+        makeStringLitOrNull(
+            ctx,
+            ctx->cls,
+            makeStringLitOrNull(ctx,
+                                ctx->fun,
+                                makeStringLitOrNull(ctx,
+                                                    ctx->path,
+                                                    makeUnsignedIntegerLiteral(
+                                                        ctx->pool,
+                                                        builtinLoc(),
+                                                        expr->loc.begin.row,
+                                                        NULL,
+                                                        NULL)))));
+
+    return makeExprStmt(
+        ctx->pool,
+        builtinLoc(),
+        flgNone,
+        makeCallExpr(
+            ctx->pool,
+            builtinLoc(),
+            makeMemberExpr(
+                ctx->pool,
+                builtinLoc(),
+                flgNone,
+                expr,
+                makeIdentifier(ctx->pool, builtinLoc(), S_push, 0, NULL, NULL),
+                NULL,
+                NULL),
+            args,
+            flgNone,
+            NULL,
+            NULL),
+        NULL,
+        NULL);
+}
+
+static void shakeVariableDecl(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
 
@@ -380,7 +431,7 @@ void shakeVariableDecl(AstVisitor *visitor, AstNode *node)
     }
 }
 
-void shakeIfStmt(AstVisitor *visitor, AstNode *node)
+static void shakeIfStmt(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
     AstNode *cond = node->ifStmt.cond;
@@ -425,7 +476,7 @@ void shakeIfStmt(AstVisitor *visitor, AstNode *node)
     }
 }
 
-void shakeWhileStmt(AstVisitor *visitor, AstNode *node)
+static void shakeWhileStmt(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
     AstNode *cond = node->whileStmt.cond;
@@ -467,7 +518,7 @@ void shakeWhileStmt(AstVisitor *visitor, AstNode *node)
     astVisit(visitor, node->whileStmt.body);
 }
 
-void shakeFuncDecl(AstVisitor *visitor, AstNode *node)
+static void shakeFuncDecl(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
     u16 required = 0, total = 0;
@@ -476,6 +527,7 @@ void shakeFuncDecl(AstVisitor *visitor, AstNode *node)
 
     bool isStrOverload = node->funcDecl.operatorOverload == opStringOverload;
     bool hasDefaultParams = false, isVariadic = false;
+    ctx->fun = getDeclarationName(node);
 
     AstNode *params = node->funcDecl.signature->params, *param = params;
     for (; param; param = param->next) {
@@ -552,7 +604,7 @@ void shakeFuncDecl(AstVisitor *visitor, AstNode *node)
     }
 }
 
-void shakeUnionDecl(AstVisitor *visitor, AstNode *node)
+static void shakeUnionDecl(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
     AstNode *member = node->unionDecl.members;
@@ -566,14 +618,14 @@ void shakeUnionDecl(AstVisitor *visitor, AstNode *node)
     }
 }
 
-void shakeCallExpr(AstVisitor *visitor, AstNode *node)
+static void shakeCallExpr(AstVisitor *visitor, AstNode *node)
 {
     if (findAttribute(node, S_sync))
         node->flags |= flgSyncCall;
     astVisitFallbackVisitAll(visitor, node);
 }
 
-void shakeGroupExpr(AstVisitor *visitor, AstNode *node)
+static void shakeGroupExpr(AstVisitor *visitor, AstNode *node)
 {
     AstNode *expr = node->groupExpr.expr;
     if (nodeIs(expr, BlockStmt)) {
@@ -585,7 +637,27 @@ void shakeGroupExpr(AstVisitor *visitor, AstNode *node)
     astVisitFallbackVisitAll(visitor, node);
 }
 
-void shakeExprStmt(AstVisitor *visitor, AstNode *node)
+static void shakeBinaryExpr(AstVisitor *visitor, AstNode *node)
+{
+    ShakeAstContext *ctx = getAstVisitorContext(visitor);
+    if (node->binaryExpr.op == opCatch) {
+        AstNode *expr = node->binaryExpr.rhs;
+        if (!nodeIs(expr, BlockStmt)) {
+            node->binaryExpr.rhs = makeBlockStmt(
+                ctx->pool,
+                &expr->loc,
+                makeYieldAstNode(
+                    ctx->pool, &expr->loc, flgNone, expr, NULL, NULL),
+                NULL,
+                NULL);
+        }
+        ctx->catchRhs = node->binaryExpr.rhs;
+        ctx->catchLhs = node->binaryExpr.lhs;
+    }
+    astVisitFallbackVisitAll(visitor, node);
+}
+
+static void shakeExprStmt(AstVisitor *visitor, AstNode *node)
 {
     if (nodeIs(node->exprStmt.expr, CallExpr) && findAttribute(node, S_sync)) {
         node->exprStmt.expr->flags |= flgSyncCall;
@@ -593,7 +665,7 @@ void shakeExprStmt(AstVisitor *visitor, AstNode *node)
     astVisitFallbackVisitAll(visitor, node);
 }
 
-void shakeMatchStmt(AstVisitor *visitor, AstNode *node)
+static void shakeMatchStmt(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
     AstNode *expr = node->matchStmt.expr;
@@ -616,26 +688,73 @@ void shakeMatchStmt(AstVisitor *visitor, AstNode *node)
     astVisitManyNodes(visitor, node->matchStmt.cases);
 }
 
-void shakeReturnStmt(AstVisitor *visitor, AstNode *node)
+static void shakeReturnStmt(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
     AstNode *expr = node->returnStmt.expr;
     if (!node->returnStmt.isRaise)
         return;
-
     if (expr == NULL) {
-        // TODO: If in catch, bubble up the exception
-        csAssert0(false);
+        if (ctx->exceptionTrace) {
+            astModifierAdd(
+                &ctx->block,
+                makeExceptionPush(
+                    ctx,
+                    makeMacroCallAstNode(
+                        ctx->pool,
+                        &node->loc,
+                        flgNone,
+                        makeIdentifier(
+                            ctx->pool, &node->loc, S_ex, 0, NULL, NULL),
+                        NULL,
+                        NULL)));
+        }
+
+        expr = makeUnaryExpr(
+            ctx->pool,
+            &node->loc,
+            flgNone,
+            true,
+            opMove,
+            makeMacroCallAstNode(
+                ctx->pool,
+                &node->loc,
+                flgNone,
+                makeIdentifier(ctx->pool, &node->loc, S_ex, 0, NULL, NULL),
+                NULL,
+                NULL),
+            NULL,
+            NULL);
     }
     else {
+        astVisit(visitor, expr);
         expr = makeCastExpr(
             ctx->pool,
-            builtinLoc(),
+            &expr->loc,
             flgNone,
             expr,
             makePath(ctx->pool, &expr->loc, S_Exception, flgNone, NULL),
             NULL,
             NULL);
+        if (ctx->exceptionTrace) {
+            AstNode *var =
+                makeVarDecl(ctx->pool,
+                            &expr->loc,
+                            flgNone,
+                            makeAnonymousVariable(ctx->strings, "_ex"),
+                            NULL,
+                            expr,
+                            NULL,
+                            NULL);
+            astModifierAdd(&ctx->block, var);
+            astModifierAdd(
+                &ctx->block,
+                makeExceptionPush(
+                    ctx,
+                    makePath(
+                        ctx->pool, &expr->loc, var->_name, flgNone, NULL)));
+            expr = makePath(ctx->pool, &expr->loc, var->_name, flgNone, NULL);
+        }
     }
     node->returnStmt.expr = expr;
 }
@@ -823,7 +942,8 @@ static void shakeExceptionDecl(AstVisitor *visitor, AstNode *node)
     }
 
     // func `init`() {}
-    insertAstNode(&members, makeExceptionInit(ctx, params, assigns.first));
+    insertAstNode(&members,
+                  makeExceptionInit(ctx, node->_name, params, assigns.first));
 
     if (!nodeIs(body, BlockStmt)) {
         body = makeBlockStmt(
@@ -975,6 +1095,7 @@ static void shakeStringExpr(AstVisitor *visitor, AstNode *node)
 static void shakeClassOrStructDecl(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
+    ctx->cls = getDeclarationName(node);
     astVisitFallbackVisitAll(visitor, node);
     AstNode *builtins = createClassOrStructBuiltins(ctx->pool, node);
     if (node->structDecl.members) {
@@ -1032,7 +1153,15 @@ static bool buildTestsVariable(ShakeAstContext *ctx, AstNode *program)
 AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
 {
     ShakeAstContext context = {
-        .L = driver->L, .pool = driver->pool, .strings = driver->strings};
+        .L = driver->L,
+        .pool = driver->pool,
+        .strings = driver->strings,
+        .exceptionTrace =
+            driver->options.debug || driver->options.optimizationLevel != O3,
+        .path = node->loc.fileName,
+        .mod =
+            node->program.module ? node->program.module->moduleDecl.name : NULL,
+    };
 
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context, {
@@ -1051,6 +1180,7 @@ AstNode *shakeAstNode(CompilerDriver *driver, AstNode *node)
         [astClosureExpr] = shakeClosureExpr,
         [astCallExpr] = shakeCallExpr,
         [astGroupExpr] = shakeGroupExpr,
+        [astBinaryExpr] = shakeBinaryExpr,
         [astExprStmt] = shakeExprStmt,
         [astMatchStmt] = shakeMatchStmt,
         [astReturnStmt] = shakeReturnStmt,

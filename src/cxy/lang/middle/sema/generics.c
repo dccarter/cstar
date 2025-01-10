@@ -433,7 +433,7 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
         substitute->flags |= flgVisited;
     }
 
-    addTopLevelDeclaration(ctx, substitute);
+    astModifierAdd(&ctx->root, substitute);
 
     if (nodeIs(node, PathElem)) {
         node->pathElement.resolvesTo = substitute;

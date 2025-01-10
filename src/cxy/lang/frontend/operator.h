@@ -38,11 +38,12 @@ extern "C" {
     f(Leq, 5, LessEqual,    "<=", "leq")
 
 #define AST_LOGIC_EXPR_LIST(f)                \
-    f(LAnd, 10, LAnd, "&&", "land")             \
-    f(LOr,  11, LOr,  "||", "lor")
+    f(LAnd, 11, LAnd, "&&", "land")             \
+    f(LOr,  12, LOr,  "||", "lor")
 
 #define AST_BINARY_EXPR_LIST(f)           \
     f(Range, 13,DotDot, "..", "range")    \
+    f(Catch, 10,Catch,  "catch", "catch") \
     AST_ARITH_EXPR_LIST(f)                \
     AST_BIT_EXPR_LIST(f)                  \
     AST_SHIFT_EXPR_LIST(f)                \
@@ -94,16 +95,16 @@ extern "C" {
 
 typedef enum {
     opInvalid,
-#define f(name, ...) op##name,
+#define f(name, ...) op## name,
     AST_BINARY_EXPR_LIST(f)
     AST_UNARY_EXPR_LIST(f)
 #undef f
-#define f(name, ...) op##name##Equal,
+#define f(name, ...) op## name## Equal,
     opAssign,
     AST_ASSIGN_EXPR_LIST(f)
 #undef f
 
-#define f(name, ...) op##name,
+#define f(name, ...) op## name,
     AST_OVERLOAD_ONLY_OPS(f)
 #undef f
     opTruthy
