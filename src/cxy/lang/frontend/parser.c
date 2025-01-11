@@ -18,6 +18,7 @@
 
 #include "../operations.h"
 
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -209,6 +210,34 @@ static void parserWarnThrow(Parser *parser,
     advance(parser);
     logWarning(parser->L, loc, msg, args);
     E4C_THROW_CTX(ParserException, "", parser);
+}
+
+static inline bool isEndOfStmt(Parser *P)
+{
+    switch (current(P)->tag) {
+    case tokEoF:
+    case tokSemicolon:
+    case tokAsync:
+    case tokVar:
+    case tokWhile:
+    case tokFor:
+    case tokLBrace:
+    case tokRBrace:
+    case tokConst:
+    case tokIf:
+    case tokElse:
+    case tokSwitch:
+    case tokMatch:
+    case tokBreak:
+    case tokContinue:
+    case tokDefer:
+    case tokReturn:
+    case tokDelete:
+    case tokRaise:
+        return true;
+    default:
+        return false;
+    }
 }
 
 static inline Token advanceLexer_(Parser *P)
@@ -777,7 +806,12 @@ static AstNode *binary(Parser *P,
             break;
 
         advance(P);
-        AstNode *rhs = binary(P, NULL, nextPrecedence, parsePrimary);
+        AstNode *rhs;
+        if (op == opCatch && match(P, tokDiscard)) {
+            rhs = newAstNode(P, previous(P), &(AstNode){.tag = astBlockStmt});
+        }
+        else
+            rhs = binary(P, NULL, nextPrecedence, parsePrimary);
         lhs = newAstNode_(
             P,
             &lhs->loc,
@@ -938,6 +972,31 @@ static AstNode *range(Parser *P)
                                                 .down = down}});
 }
 
+static AstNode *funcReturnType(Parser *P)
+{
+    Token start = *current(P);
+    match(P, tokLNot);
+    AstNode *ret = parseType(P);
+    if (start.tag == tokLNot) {
+        ret->next = newAstNode(
+            P,
+            &start,
+            &(AstNode){
+                .tag = astPath,
+                .path = {.elements = newAstNode(
+                             P,
+                             &start,
+                             &(AstNode){.tag = astPathElem,
+                                        .pathElement.name = S_Exception})}});
+        ret = newAstNode(
+            P,
+            &start,
+            &(AstNode){.tag = astUnionDecl,
+                       .unionDecl = {.members = ret, .isResult = true}});
+    }
+    return ret;
+}
+
 static AstNode *closure(Parser *P)
 {
     AstNode *ret = NULL, *body = NULL;
@@ -947,11 +1006,13 @@ static AstNode *closure(Parser *P)
     consume0(P, tokRParen);
 
     if (match(P, tokColon)) {
-        ret = parseType(P);
+        ret = funcReturnType(P);
     }
     consume0(P, tokFatArrow);
-
-    body = expression(P, true);
+    if (check(P, tokLBrace))
+        body = block(P);
+    else
+        body = expression(P, true);
     return newAstNode(
         P,
         &tok,
@@ -1093,7 +1154,7 @@ static AstNode *parseFuncType(Parser *P)
     consume0(P, tokRParen);
 
     consume0(P, tokThinArrow);
-    ret = parseType(P);
+    ret = funcReturnType(P);
 
     AstNode *func =
         newAstNode(P,
@@ -1323,6 +1384,21 @@ static AstNode *assembly(Parser *P)
                                                     .inputs = inputs,
                                                     .clobbers = clobbers,
                                                     .flags = flags}});
+}
+
+static AstNode *raiseStmt(Parser *P)
+{
+    Token tok = *consume0(P, tokRaise);
+    AstNode *expr = NULL;
+    if (!isEndOfStmt(P))
+        expr = expression(P, false);
+    else
+        match(P, tokSemicolon);
+    return newAstNode(
+        P,
+        &tok,
+        &(AstNode){.tag = astReturnStmt,
+                   .returnStmt = {.expr = expr, .isRaise = true}});
 }
 
 static AstNode *array(Parser *P)
@@ -1900,6 +1976,31 @@ static AstNode *testDecl(Parser *P)
     }
 }
 
+static AstNode *exceptionDecl(Parser *P)
+{
+    AstNode *params = NULL, *body = NULL;
+    Token tok = *current(P);
+    consume0(P, tokException);
+    Token name = *consume0(P, tokIdent);
+
+    if (match(P, tokLParen)) {
+        params = parseMany(P, tokRParen, tokComma, functionParam);
+        consume0(P, tokRParen);
+    }
+    if (match(P, tokFatArrow)) {
+        body = expression(P, true);
+    }
+    else
+        body = block(P);
+    return newAstNode(
+        P,
+        &tok,
+        &(AstNode){.tag = astException,
+                   .exception = {.name = getTokenString(P, &name, false),
+                                 .params = params,
+                                 .body = body}});
+}
+
 typedef CxyPair(Operator, cstring) OperatorOverload;
 
 static OperatorOverload operatorOverload(Parser *P)
@@ -2025,8 +2126,9 @@ static AstNode *funcDecl(Parser *P, u64 flags)
     params = parseMany(P, tokRParen, tokComma, functionParam);
     consume0(P, tokRParen);
 
-    if (match(P, tokColon))
-        ret = parseType(P);
+    if (match(P, tokColon)) {
+        ret = funcReturnType(P);
+    }
     else if (Extern)
         reportUnexpectedToken(P,
                               "colon before function declaration return type");
@@ -2294,18 +2396,7 @@ static AstNode *returnStatement(Parser *P)
 {
     AstNode *expr = NULL;
     Token tok = *consume0(P, tokReturn);
-    if (!check(P,
-               tokSemicolon,
-               tokLBrace,
-               tokRBrace,
-               tokFor,
-               tokWhile,
-               tokMatch,
-               tokSwitch,
-               tokCase,
-               tokVar,
-               tokFunc,
-               tokDelete)) {
+    if (!isEndOfStmt(P)) {
         expr = expression(P, true);
     }
     match(P, tokSemicolon);
@@ -2314,6 +2405,17 @@ static AstNode *returnStatement(Parser *P)
         P,
         &tok,
         &(AstNode){.tag = astReturnStmt, .returnStmt = {.expr = expr}});
+}
+
+static AstNode *yieldStatement(Parser *P)
+{
+    AstNode *expr = NULL;
+    Token tok = *consume0(P, tokYield);
+    expr = expression(P, true);
+    match(P, tokSemicolon);
+
+    return newAstNode(
+        P, &tok, &(AstNode){.tag = astYieldStmt, .yieldStmt = {.expr = expr}});
 }
 
 static AstNode *continueStatement(Parser *P)
@@ -2369,6 +2471,9 @@ static AstNode *statement(Parser *P, bool exprOnly)
     case tokReturn:
         stmt = returnStatement(P);
         break;
+    case tokYield:
+        stmt = yieldStatement(P);
+        break;
     case tokBreak:
     case tokContinue:
         stmt = continueStatement(P);
@@ -2385,6 +2490,9 @@ static AstNode *statement(Parser *P, bool exprOnly)
         break;
     case tokAsm:
         stmt = assembly(P);
+        break;
+    case tokRaise:
+        stmt = raiseStmt(P);
         break;
     default: {
         AstNode *expr = expression(P, false);
@@ -2509,11 +2617,11 @@ static AstNode *parseStructField(Parser *P, bool isPrivate)
         consume0(P, tokColon);
         bits = consume0(P, tokIntLiteral)->uVal;
         if (bits == 0 || bits > 64) {
-            logError(
-                P->L,
-                &previous(P)->fileLoc,
-                "struct bit size of {u32} out of range, valid range is 1-64 ",
-                (FormatArg[]){{.u32 = bits}});
+            logError(P->L,
+                     &previous(P)->fileLoc,
+                     "struct bit size of {u32} out of range, valid range "
+                     "is 1-64 ",
+                     (FormatArg[]){{.u32 = bits}});
         }
     }
 
@@ -2976,6 +3084,7 @@ static AstNode *declaration(Parser *P)
         case tokMacro:
         case tokClass:
         case tokTest:
+        case tokException:
             parserError(P,
                         &current(P)->fileLoc,
                         "declaration cannot be marked as extern",
@@ -3036,6 +3145,9 @@ static AstNode *declaration(Parser *P)
         break;
     case tokTest:
         decl = testDecl(P);
+        break;
+    case tokException:
+        decl = exceptionDecl(P);
         break;
     case tokExtern:
         parserError(P,

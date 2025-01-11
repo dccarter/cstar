@@ -168,6 +168,7 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
     ctx->currentCall = node;
     AstNode *callee = node->callExpr.callee;
     u64 flags = getCalleeContextFlags(callee);
+    bool explicitCatch = ctx->explicitCatch;
 
     const Type *callee_ = checkType(visitor, callee);
 
@@ -319,5 +320,9 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
 
         if (typeIs(node->type, Error))
             return;
+    }
+
+    if (!typeIs(node->type, Error) && !explicitCatch) {
+        checkCallExceptionBubbleUp(visitor, node);
     }
 }

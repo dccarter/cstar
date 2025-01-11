@@ -105,7 +105,7 @@ pub class FileServer {
             if (!idx) {
                 var aliasedPath = this.redirects.[path];
                 if (!aliasedPath) {
-                    resp.end(Status.NOT_FOUND)
+                    resp.end(Status.NotFound)
                     return
                 }
                 idx =  path.rIndexOf('.':char);
@@ -220,14 +220,14 @@ pub class FileServer {
         var mime = mimeTypes.[ext];
         if (!mime) {
             TRC!("extension type " << ext << " not supported")
-            return Status.NOT_FOUND
+            return Status.NotFound
         }
 
         var mm = *mime;
         var sf = loadFile(path);
         if (!sf) {
             TRC!("requested static resource (" << path << ") does not exist");
-            return Status.NOT_FOUND
+            return Status.NotFound
         }
 
         var cf = *sf;
@@ -238,7 +238,7 @@ pub class FileServer {
                 const ifMod = Time((*cc).str());
                 if (ifMod.timestamp() >= cf.lastMod) {
                     // file was not modified
-                    return Status.NOT_MODIFIED
+                    return Status.NotModified
                 }
             }
 
@@ -266,14 +266,14 @@ pub class FileServer {
                 // prepare the Response
                 return prepareResponse(req, resp, s.1, s.0);
             }
-            else => return Status.INTERNAL_ERROR
+            else => return Status.InternalError
         }
     }
 
     func head(req: &const Request, resp: &Response, path: String, ext: String) {
         match (requestPrologue(req, resp, path, ext)) {
             case Status as s => return s
-            else => return Status.OK
+            else => return Status.Ok
         }
     }
 
@@ -285,7 +285,7 @@ pub class FileServer {
         }
         else {
             resp.body() << __string(cf.data !: string, cf.len);
-            return Status.OK
+            return Status.Ok
         }
     }
 
@@ -318,7 +318,7 @@ pub class FileServer {
             // build partial content chunk
             if (start > end || start >= cf.len || end > cf.len) {
                 TRC!("requested range is out of bounds")
-                return Status.REQUEST_RANGE_INVALID
+                return Status.RequestRangeInvalid
             }
             ranges.push((start, end))
 
@@ -336,13 +336,13 @@ pub class FileServer {
             var header = String();
             header << "bytes " << rng.0 << '-' << rng.1 << '/' << cf.len
             resp.header("Content-Range", &&header)
-            return Status.PARTIAL_CONTENT
+            return Status.PartialContent
         }
         else if (ranges.size() != 0) {
             // multiple ranges specified, not supported for now
-            return Status.NOT_ACCEPTABLE
+            return Status.NotAcceptable
         }
-        return Status.OK
+        return Status.Ok
     }
 
     func cacheControl(

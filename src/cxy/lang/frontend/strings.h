@@ -92,6 +92,11 @@ extern "C" {
     f(linkage)                  \
     f(section)                  \
     f(packed)                   \
+    f(Exception)                \
+    f(Void)                     \
+    f(what)                     \
+    f(push)                     \
+    f(ex)                       \
     f(__init)                   \
     f(__defaults_init)          \
     f(__startup)                \

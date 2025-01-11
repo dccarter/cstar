@@ -326,7 +326,7 @@ AstNode *findEnclosingFunctionOrClosure(Env *env, Log *L, const FileLoc *loc)
                               "function",
                               astClosureExpr,
                               astFuncDecl,
-                              astError,
+                              astException,
                               loc);
 }
 

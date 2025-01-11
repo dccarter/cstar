@@ -84,7 +84,7 @@ static const Type *createStructForClosure(AstVisitor *visitor, AstNode *node)
     if (typeIs(type, Error))
         return type;
 
-    addTopLevelDeclaration(ctx, closure);
+    astModifierAdd(&ctx->root, closure);
     return type;
 }
 
@@ -294,7 +294,7 @@ static AstNode *makeClosureForwardFunction(AstVisitor *visitor, AstNode *node)
     if (typeIs(type, Error))
         return NULL;
 
-    addTopLevelDeclaration(ctx, forward);
+    astModifierAdd(&ctx->root, forward);
     node->structDecl.closureForward = forward;
     return forward;
 }

@@ -233,35 +233,45 @@ void bindPath(AstVisitor *visitor, AstNode *node)
         else {
             AstNode *func =
                 findEnclosingFunction(ctx->env, NULL, keyword, NULL);
-            if (func == NULL || func->funcDecl.this_ == NULL) {
-                logError(ctx->L,
-                         &base->loc,
-                         "'{s}' keyword must be used inside a member function",
-                         (FormatArg[]){{.s = keyword}});
-                return;
+            if (keyword == S_this && nodeIs(func->parentScope, Exception)) {
+                base->pathElement.resolvesTo =
+                    findSymbol(ctx->env, ctx->L, S_this, &base->loc);
             }
-
-            base->pathElement.resolvesTo = func->funcDecl.this_;
-            base->flags |= (func->flags & flgConst);
-            AstNode *resolved = captureSymbol(
-                ctx, ctx->currentClosure, node, base->pathElement.resolvesTo);
-            if (resolved) {
-                base->pathElement.resolvesTo = resolved;
-                base->flags |= flgAddThis;
-            }
-
-            if (keyword == S_super) {
-                AstNode *parent =
-                    findEnclosingClassOrStruct(ctx->env, NULL, keyword, NULL);
-                if (parent->classDecl.base == NULL) {
-                    logError(ctx->L,
-                             &base->loc,
-                             "keyword 'super' can only be used within a class "
-                             "which extends a base class",
-                             NULL);
+            else {
+                if (func == NULL || func->funcDecl.this_ == NULL) {
+                    logError(
+                        ctx->L,
+                        &base->loc,
+                        "'{s}' keyword must be used inside a member function",
+                        (FormatArg[]){{.s = keyword}});
                     return;
                 }
-                base->flags |= flgMember;
+
+                base->pathElement.resolvesTo = func->funcDecl.this_;
+                base->flags |= (func->flags & flgConst);
+                AstNode *resolved = captureSymbol(ctx,
+                                                  ctx->currentClosure,
+                                                  node,
+                                                  base->pathElement.resolvesTo);
+                if (resolved) {
+                    base->pathElement.resolvesTo = resolved;
+                    base->flags |= flgAddThis;
+                }
+
+                if (keyword == S_super) {
+                    AstNode *parent = findEnclosingClassOrStruct(
+                        ctx->env, NULL, keyword, NULL);
+                    if (parent->classDecl.base == NULL) {
+                        logError(
+                            ctx->L,
+                            &base->loc,
+                            "keyword 'super' can only be used within a class "
+                            "which extends a base class",
+                            NULL);
+                        return;
+                    }
+                    base->flags |= flgMember;
+                }
             }
         }
     }
@@ -517,6 +527,15 @@ void bindInterfaceDecl(AstVisitor *visitor, AstNode *node)
     popScope(ctx->env);
 }
 
+void bindExceptionDecl(AstVisitor *visitor, AstNode *node)
+{
+    BindContext *ctx = getAstVisitorContext(visitor);
+    pushScope(ctx->env, node);
+    astVisitManyNodes(visitor, node->exception.params);
+    astVisit(visitor, node->exception.body);
+    popScope(ctx->env);
+}
+
 void bindIfStmt(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
@@ -729,6 +748,7 @@ void bindAstPhase2(CompilerDriver *driver, Env *env, AstNode *node)
         [astStructDecl] = bindStructDecl,
         [astClassDecl] = bindClassDecl,
         [astInterfaceDecl] = bindInterfaceDecl,
+        [astException] = bindExceptionDecl,
         [astIfStmt] = bindIfStmt,
         [astClosureExpr] = bindClosureExpr,
         [astDeferStmt] = bindDeferStmt,

@@ -225,19 +225,24 @@ void checkSwitchStmt(AstVisitor *visitor, AstNode *node)
 
     AstNode *case_ = node->switchStmt.cases;
     // On the first pass we just check types
+    bool returnState = false, currentReturnState = ctx->returnState;
     for (; case_; case_ = case_->next) {
         case_->parentScope = node;
+        ctx->returnState = false;
         if (hasFlag(case_, Comptime)) {
             if (!evaluate(ctx->evaluator, case_)) {
                 node->type = ERROR_TYPE(ctx);
+                returnState = returnState && ctx->returnState;
                 continue;
             }
         }
         const Type *type = case_->type ?: checkType(visitor, case_);
+        returnState = returnState && ctx->returnState;
         if (typeIs(type, Error)) {
             node->type = ERROR_TYPE(ctx);
         }
     }
+    ctx->returnState = returnState;
     if (typeIs(node->type, Error))
         return;
 

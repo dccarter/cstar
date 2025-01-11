@@ -120,6 +120,12 @@ static HashCode hashType(HashCode hash, const Type *type)
         hash =
             hashTypes(hash, type->applied.args, type->applied.totalArgsCount);
         break;
+    case typException:
+        hash = hashPtr(hash, type->exception.decl);
+        break;
+    case typResult:
+        hash = hashType(hash, type->result.target);
+        break;
     default:
         csAssert0("invalid type");
     }
@@ -297,6 +303,10 @@ bool compareTypes(const Type *lhs, const Type *rhs)
         return (left->name == right->name) && (left->ns == right->ns);
     case typInfo:
         return compareTypes(left->info.target, right->info.target);
+    case typException:
+        return left->exception.decl == right->exception.decl;
+    case typResult:
+        return compareTypes(left->result.target, right->result.target);
     default:
         unreachable("invalid type");
     }
@@ -949,6 +959,21 @@ const Type *makeWrappedType(TypeTable *table, const Type *target, u64 flags)
 
     target = flattenWrappedType(target, &flags);
     Type type = {.tag = typWrapped, .flags = flags, .wrapped.target = target};
+    return getOrInsertType(table, &type).s;
+}
+
+const Type *makeResultType(TypeTable *table, const Type *target)
+{
+    Type type = {.tag = typResult, .result.target = target};
+    return getOrInsertType(table, &type).s;
+}
+
+const Type *makeExceptionType(TypeTable *table, AstNode *decl)
+{
+    Type type = make(Type,
+                     .tag = typException,
+                     .name = getDeclarationName(decl),
+                     .exception = {.decl = decl});
     return getOrInsertType(table, &type).s;
 }
 

@@ -70,7 +70,7 @@ void transformArrayExprToSlice(AstVisitor *visitor,
             expr_,
             NULL,
             expr->type);
-        addBlockLevelDeclaration(ctx, variable);
+        astModifierAdd(&ctx->blockModifier, variable);
         expr_ = makeResolvedIdentifier(ctx->pool,
                                        &expr->loc,
                                        variable->varDecl.name,

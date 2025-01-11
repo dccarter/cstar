@@ -87,6 +87,7 @@ extern "C" {
     f(While, "while")               \
     f(Break, "break")               \
     f(Return, "return")             \
+    f(Yield,  "yield")              \
     f(Continue, "continue")         \
     f(Func, "func")                 \
     f(Var, "var")                   \
@@ -94,14 +95,18 @@ extern "C" {
     f(Type, "type")                 \
     f(Native, "native")             \
     f(Extern, "extern")             \
+    f(Exception, "exception")       \
     f(Struct, "struct")             \
     f(Enum, "enum")                 \
     f(Pub, "pub")                   \
     f(Opaque, "opaque")             \
+    f(Catch,  "catch")              \
+    f(Raise,  "raise")              \
     f(Async,  "async")              \
     f(Ptrof,   "ptrof")             \
     f(Await,  "await")              \
     f(Delete, "delete")             \
+    f(Discard, "discard")           \
     f(Switch, "switch")             \
     f(Case, "case")                 \
     f(Default, "default")           \
@@ -149,7 +154,7 @@ extern "C" {
 
 typedef enum {
     tokInvalid,
-#define f(name, ...) tok##name,
+#define f(name, ...) tok## name,
     TOKEN_LIST(f)
 #undef f
     tokAssignEqual = tokAssign

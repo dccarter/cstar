@@ -85,7 +85,9 @@ typedef enum {
     typInterface,
     typGeneric,
     typApplied,
-    typWrapped
+    typWrapped,
+    typException,
+    typResult,
 } TTag;
 
 typedef struct Type Type;
@@ -293,6 +295,14 @@ typedef struct Type {
             const Type *from;
             AstNode *decl;
         } applied;
+
+        struct {
+            AstNode *decl;
+        } exception;
+
+        struct {
+            const Type *target;
+        } result;
     };
 } Type;
 
@@ -364,6 +374,14 @@ bool isTupleType(const Type *type);
 bool isUnionType(const Type *type);
 
 bool isConstType(const Type *type);
+
+bool isResultType(const Type *type);
+
+bool isExceptionType(const Type *type);
+
+bool isBaseExceptionType(const Type *type);
+
+bool isVoidResultType(const Type *type);
 
 bool typeIsBaseOf(const Type *base, const Type *type);
 
@@ -525,6 +543,8 @@ const Type *getOptionalType();
 const Type *getOptionalTargetType(const Type *type);
 
 const Type *getSliceTargetType(const Type *type);
+
+const Type *getResultTargetType(const Type *type);
 
 u32 findUnionTypeIndex(const Type *tagged, const Type *type);
 

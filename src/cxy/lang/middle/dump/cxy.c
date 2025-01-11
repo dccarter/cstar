@@ -846,6 +846,16 @@ static void dumpReturnStmt(ConstAstVisitor *visitor, const AstNode *node)
     }
 }
 
+static void dumpYieldStmt(ConstAstVisitor *visitor, const AstNode *node)
+{
+    DumpContext *ctx = getConstAstVisitorContext(visitor);
+    printKeyword(ctx->state, "yield");
+    if (node->yieldStmt.expr) {
+        AddSpace();
+        astConstVisit(visitor, node->yieldStmt.expr);
+    }
+}
+
 static void dumpCaseStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
     DumpContext *ctx = getConstAstVisitorContext(visitor);
@@ -1132,6 +1142,29 @@ static void dumpClassDecl(ConstAstVisitor *visitor, const AstNode *node)
     dumpClassDeclWithParams(visitor, node, NULL);
 }
 
+static void dumpExceptionDecl(ConstAstVisitor *visitor, const AstNode *node)
+{
+    DumpContext *ctx = getConstAstVisitorContext(visitor);
+    if (hasFlag(node, Public)) {
+        printKeyword(ctx->state, "pub");
+        AddSpace();
+    }
+
+    printKeyword(ctx->state, "class");
+    AddSpace();
+    format(ctx->state, "{s}", (FormatArg[]){{.s = node->exception.name}});
+
+    dumpManyAstNodesEnclosed(visitor, node->exception.params, "(", ", ", ") ");
+
+    if (!nodeIs(node->exception.body, BlockStmt)) {
+        format(ctx->state, " => ", NULL);
+        astConstVisit(visitor, node->exception.body);
+    }
+    else
+        astConstVisit(visitor, node->exception.body);
+    AddNewLine();
+}
+
 static void dumpGenericDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     const AstNode *decl = node->genericDecl.decl;
@@ -1284,6 +1317,7 @@ AstNode *dumpCxySource(CompilerDriver *driver, AstNode *node, FILE *file)
         [astBreakStmt] = dumpBreakStmt,
         [astContinueStmt] = dumpContinueStmt,
         [astReturnStmt] = dumpReturnStmt,
+        [astYieldStmt] = dumpYieldStmt,
         [astCaseStmt] = dumpCaseStmt,
         [astSwitchStmt] = dumpSwitchStmt,
         [astMatchStmt] = dumpMatchStmt,
@@ -1292,6 +1326,7 @@ AstNode *dumpCxySource(CompilerDriver *driver, AstNode *node, FILE *file)
         [astFieldDecl] = dumpStructField,
         [astStructDecl] = dumpStructDecl,
         [astClassDecl] = dumpClassDecl,
+        [astException] = dumpExceptionDecl,
         [astModuleDecl] = dumpModuleDecl,
         [astImportDecl] = dumpImportDecl,
         [astFuncDecl] = dumpFuncDecl,

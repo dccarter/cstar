@@ -245,9 +245,10 @@ static void evalRangeOperation(PreprocessorContext *ctx, AstNode *node)
         node->rangeExpr.start = lhs;
         node->rangeExpr.end = rhs;
         node->rangeExpr.step = NULL;
-        return;
     }
 }
+
+static void evalCatchOperation(PreprocessorContext *ctx, AstNode *node) {}
 
 void preprocessorEvalBinaryExpr(PreprocessorContext *ctx, AstNode *node)
 {

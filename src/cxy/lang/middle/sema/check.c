@@ -35,6 +35,39 @@ static AstNode *makeSpreadVariable(TypingContext *ctx, AstNode *expr)
                        expr->type);
 }
 
+static AstNode *makeVoidReturnValue(TypingContext *ctx, const Type *type)
+{
+    const Type *voidType = getResultTargetType(type);
+    AstNode *value =
+        makeStructExpr(ctx->pool,
+                       builtinLoc(),
+                       flgNone,
+                       makeTypeReferenceNode(ctx->pool, voidType, builtinLoc()),
+                       NULL,
+                       NULL,
+                       voidType);
+    return makeUnionValueExpr(
+        ctx->pool, builtinLoc(), flgNone, value, 0, NULL, type);
+}
+
+static void reportUnreachable(TypingContext *ctx, AstNode *node)
+{
+    AstNode *tmp = node->next;
+    node->next = NULL;
+    csAssert0(tmp);
+    logWarning(ctx->L,
+               locExtend(&tmp->loc, &getLastAstNode(tmp)->loc),
+               "ignoring unreachable code",
+               NULL);
+}
+
+static inline bool hasUnreachable(TypingContext *ctx, AstNode *node)
+{
+    return ctx->returnState && node->next &&
+           (nodeIs(node, ReturnStmt) || nodeIs(node, BlockStmt) ||
+            nodeIs(node, ExprStmt));
+}
+
 static void checkTypeRef(AstVisitor *visitor, AstNode *node)
 {
     attr(unused) TypingContext *ctx = getAstVisitorContext(visitor);
@@ -80,23 +113,21 @@ static void checkBlockStmt(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *stmts = node->blockStmt.stmts, *stmt = stmts;
-
-    __typeof(ctx->block) block = ctx->block;
-    ctx->block.current = NULL;
-    ctx->block.self = node;
+    __typeof(ctx->blockModifier) block = ctx->blockModifier;
+    astModifierInit(&ctx->blockModifier, node);
     for (; stmt; stmt = stmt->next) {
-        ctx->block.previous = ctx->block.current;
-        ctx->block.current = stmt;
+        astModifierNext(&ctx->blockModifier, stmt);
         const Type *type = checkType(visitor, stmt);
         if (typeIs(type, Error)) {
             node->type = ERROR_TYPE(ctx);
-            ctx->block = block;
-            return;
+            goto restoreBlock;
         }
 
         if (nodeIs(stmt, ReturnStmt)) {
-            if (node->type && !typeIs(node->type, Void) &&
-                !isTypeAssignableFrom(node->type, type)) {
+            bool isIncompatible = node->type && !typeIs(node->type, Void) &&
+                                  ctx->catcher.block == NULL &&
+                                  !isTypeAssignableFrom(node->type, type);
+            if (isIncompatible) {
                 logError(ctx->L,
                          &stmt->loc,
                          "inconsistent return types within "
@@ -104,10 +135,9 @@ static void checkBlockStmt(AstVisitor *visitor, AstNode *node)
                          "expecting '{t}'",
                          (FormatArg[]){{.t = type}, {.t = node->type}});
                 node->type = ERROR_TYPE(ctx);
-                ctx->block = block;
-                return;
+                goto restoreBlock;
             }
-            node->type = type;
+
             if (!node->blockStmt.returned && node->next) {
                 logWarning(
                     ctx->L,
@@ -120,12 +150,34 @@ static void checkBlockStmt(AstVisitor *visitor, AstNode *node)
 
         if (hasFlag(node, BlockReturns))
             node->type = type;
+
+        if (hasUnreachable(ctx, stmt))
+            break;
     }
 
-    ctx->block = block;
+    if (stmt && ctx->returnState)
+        reportUnreachable(ctx, stmt);
 
     if (node->type == NULL)
         node->type = makeVoidType(ctx->types);
+
+    AstNode *parent = node->parentScope;
+    if (!nodeIs(parent, FuncDecl))
+        goto restoreBlock;
+    const Type *type = parent->type->func.retType;
+    if (isVoidResultType(type) && !ctx->returnState) {
+        AstNode *ret = getLastAstNode(node->blockStmt.stmts)->next =
+            makeReturnAstNode(ctx->pool,
+                              builtinLoc(),
+                              flgNone,
+                              makeVoidReturnValue(ctx, type),
+                              NULL,
+                              type);
+        ret->returnStmt.isRaise = true;
+        ctx->returnState = false;
+    }
+restoreBlock:
+    ctx->blockModifier = block;
 }
 
 static void checkReturnStmt(AstVisitor *visitor, AstNode *node)
@@ -137,14 +189,30 @@ static void checkReturnStmt(AstVisitor *visitor, AstNode *node)
 
     const Type *expr_ =
         expr ? checkType(visitor, expr) : makeVoidType(ctx->types);
-
+    ctx->returnState = ctx->returnState || !node->returnStmt.isRaise;
     if (typeIs(expr_, Error)) {
         node->type = expr_;
         return;
     }
 
+    if (!exceptionVerifyRaiseExpr(ctx, ret, node))
+        return;
+
     if (ret) {
         const Type *retType = resolveAndUnThisType(ret->type);
+        if (expr == NULL && isVoidResultType(retType)) {
+            expr_ = getResultTargetType(retType);
+            expr = makeStructExpr(
+                ctx->pool,
+                &node->loc,
+                flgNone,
+                makeTypeReferenceNode(ctx->pool, expr_, &node->loc),
+                NULL,
+                NULL,
+                expr_);
+            node->returnStmt.expr = expr;
+        }
+
         if (!isTypeAssignableFrom(ret->type, expr_)) {
             logError(ctx->L,
                      &node->loc,
@@ -193,6 +261,88 @@ static void checkReturnStmt(AstVisitor *visitor, AstNode *node)
         else
             func->closureExpr.ret = ret;
     }
+}
+
+static void checkYieldStmt(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    AstNode *block = ctx->catcher.block, *lhs = ctx->catcher.expr,
+            *expr = node->yieldStmt.expr;
+    csAssert0(block);
+    if (isVoidResultType(lhs->type)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "yield statement not allowed in catch for expressions that "
+                 "return void",
+                 NULL);
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    const Type *type = checkType(visitor, expr);
+    if (typeIs(type, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+    node->type = type;
+
+    const Type *target = getResultTargetType(lhs->type);
+    if (block->type == NULL) {
+        if (!isTypeAssignableFrom(lhs->type, type)) {
+            logError(ctx->L,
+                     &node->loc,
+                     "catch yield value '{t}' not assignable to expression "
+                     "type '{t}'",
+                     (FormatArg[]){{.t = type}, {.t = target}});
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
+        block->type = type;
+        node->type = type;
+    }
+    else if (typeIs(block->type, Error)) {
+        return;
+    }
+
+    if (!isTypeCastAssignable(block->type, type)) {
+        logError(ctx->L,
+                 &node->loc,
+                 "inconsistent yield type, expecting `{t}` (deduced from first "
+                 "yield expression) got `t`",
+                 (FormatArg[]){{.t = block->type}, {.t = type}});
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    if (ctx->catcher.variable == NULL) {
+        ctx->catcher.variable =
+            makeVarDecl(ctx->pool,
+                        &node->loc,
+                        flgTemporary,
+                        makeAnonymousVariable(ctx->strings, "_Tres"),
+                        makeTypeReferenceNode(ctx->pool, target, &node->loc),
+                        NULL,
+                        NULL,
+                        target);
+    }
+    node->tag = astExprStmt;
+    clearAstBody(node);
+    node->exprStmt.expr =
+        makeAssignExpr(ctx->pool,
+                       &node->loc,
+                       flgNone,
+                       makeResolvedPath(ctx->pool,
+                                        &node->loc,
+                                        ctx->catcher.variable->_name,
+                                        flgNone,
+                                        ctx->catcher.variable,
+                                        NULL,
+                                        target),
+                       opAssign,
+                       expr,
+                       NULL,
+                       target);
+    node->type = target;
 }
 
 static void checkDeferStmt(AstVisitor *visitor, AstNode *node)
@@ -251,7 +401,11 @@ static void checkWhileStmt(AstVisitor *visitor, AstNode *node)
         return;
     }
 
+    bool currentReturnState = ctx->returnState;
+    ctx->returnState = false;
     const Type *body_ = checkType(visitor, body);
+    ctx->returnState = currentReturnState;
+
     if (typeIs(body_, Error)) {
         node->type = ERROR_TYPE(ctx);
         return;
@@ -384,11 +538,12 @@ static void checkSpreadExpr(AstVisitor *visitor, AstNode *node)
     it->next = node->next;
     *node = *parts;
     if (variable != expr)
-        addBlockLevelDeclaration(ctx, variable);
+        astModifierAdd(&ctx->blockModifier, variable);
 }
 
 static void checkExprStmt(AstVisitor *visitor, AstNode *node)
 {
+    node->exprStmt.expr->parentScope = node;
     node->type = checkType(visitor, node->exprStmt.expr);
 }
 
@@ -428,14 +583,13 @@ static void checkProgram(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *decl = node->program.decls;
-    ctx->root.program = node;
+    astModifierInit(&ctx->root, node);
     astVisit(visitor, node->program.module);
     astVisitManyNodes(visitor, node->program.top);
 
     bool isBuiltinModule = hasFlag(node, BuiltinsModule);
     for (; decl; decl = decl->next) {
-        ctx->root.previous = ctx->root.current;
-        ctx->root.current = decl;
+        astModifierNext(&ctx->root, decl);
         decl->flags |= (isBuiltinModule ? flgBuiltin : flgNone);
         astVisit(visitor, decl);
         if (decl->tag == astBlockStmt) {
@@ -604,38 +758,6 @@ const FileLoc *lastNodeLoc_(FileLoc *dst, AstNode *nodes)
     return dst;
 }
 
-void addTopLevelDeclaration(TypingContext *ctx, AstNode *node)
-{
-    csAssert0(ctx->root.current);
-
-    node->next = ctx->root.current;
-    if (ctx->root.previous)
-        ctx->root.previous->next = node;
-    else
-        ctx->root.program->program.decls = node;
-    ctx->root.previous = node;
-}
-
-void addTopLevelDeclarationAsNext(TypingContext *ctx, AstNode *node)
-{
-    csAssert0(ctx->root.current);
-    node->next = ctx->root.current->next;
-    ctx->root.current->next = node;
-}
-
-void addBlockLevelDeclaration(TypingContext *ctx, AstNode *node)
-{
-    csAssert0(ctx->block.current);
-    AstNode *last = getLastAstNode(node);
-    last->next = ctx->block.current;
-    if (ctx->block.previous)
-        ctx->block.previous->next = node;
-    else
-        ctx->block.self->blockStmt.stmts = node;
-
-    ctx->block.previous = last;
-}
-
 const Type *checkMaybeComptime(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
@@ -648,12 +770,19 @@ const Type *checkMaybeComptime(AstVisitor *visitor, AstNode *node)
 
 AstNode *checkAst(CompilerDriver *driver, AstNode *node)
 {
+    cstring ns =
+        node->program.module ? node->program.module->moduleDecl.name : NULL;
     TypingContext context = {.L = driver->L,
                              .pool = driver->pool,
                              .strings = driver->strings,
                              .types = driver->types,
                              .traceMemory = driver->options.withMemoryTrace &
-                                            isBuiltinsInitialized()};
+                                            isBuiltinsInitialized(),
+                             .exceptionTrace =
+                                 driver->options.debug ||
+                                 driver->options.optimizationLevel != O3,
+                             .path = node->loc.fileName,
+                             .mod = ns};
 
     // clang-format off
     AstVisitor visitor = makeAstVisitor(&context, {
@@ -675,6 +804,7 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astFuncType] = checkFunctionType,
         [astArrayType] = checkArrayType,
         [astOptionalType] = checkOptionalType,
+        [astResultType] = checkResultType,
         [astDefine] = checkDefine,
         [astIdentifier] = checkIdentifier,
         [astPath] = checkPath,
@@ -691,8 +821,10 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astStructDecl] = checkStructDecl,
         [astClassDecl] = checkClassDecl,
         [astInterfaceDecl] = checkInterfaceDecl,
+        [astException] = checkExceptionDecl,
         [astImportDecl] = astVisitSkip,
         [astReturnStmt] = checkReturnStmt,
+        [astYieldStmt] = checkYieldStmt,
         [astBlockStmt] = checkBlockStmt,
         [astDeferStmt] = checkDeferStmt,
         [astBreakStmt] = checkBreakOrContinueStmt,
@@ -739,8 +871,7 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
     initEvalVisitor(&evaluator, &evalContext);
     context.evaluator = &evaluator;
 
-    context.types->currentNamespace =
-        node->program.module ? node->program.module->moduleDecl.name : NULL;
+    context.types->currentNamespace = ns;
 
     astVisit(&visitor, node);
 

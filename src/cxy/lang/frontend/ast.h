@@ -49,6 +49,7 @@ struct StrPool;
     f(ContinueStmt)                         \
     f(DeferStmt)                            \
     f(ReturnStmt)                           \
+    f(YieldStmt)                            \
     f(BlockStmt)                            \
     f(IfStmt)                               \
     f(ForStmt)                              \
@@ -118,6 +119,7 @@ struct StrPool;
     f(FuncType)             \
     f(PrimitiveType)        \
     f(OptionalType)         \
+    f(ResultType)           \
     f(Literals)             \
     f(NullLit)              \
     f(BoolLit)              \
@@ -128,6 +130,7 @@ struct StrPool;
     f(Asm)                  \
     f(AsmOperand)           \
     f(NodeArray)            \
+    f(Exception)            \
     CXY_LANG_AST_EXP_TAGS(f)    \
     CXY_LANG_AST_STMT_TAGS(f)   \
     CXY_LANG_AST_DECL_TAGS(f)   \
@@ -330,6 +333,12 @@ struct AstNode {
         } symbol;
 
         struct {
+            cstring name;
+            AstNode *params;
+            AstNode *body;
+        } exception;
+
+        struct {
             cstring value;
             cstring alias;
             AstNode *resolvesTo;
@@ -408,6 +417,10 @@ struct AstNode {
         struct {
             AstNode *referred;
         } referenceType;
+
+        struct {
+            AstNode *target;
+        } resultType;
 
         struct {
             u64 len;
@@ -537,6 +550,7 @@ struct AstNode {
             AstNode *members;
             AstNode *typeParams;
             SortedNodes *sortedMembers;
+            bool isResult;
         } unionDecl;
 
         struct {
@@ -688,7 +702,12 @@ struct AstNode {
         struct {
             AstNode *func;
             AstNode *expr;
+            bool isRaise;
         } returnStmt;
+
+        struct {
+            AstNode *expr;
+        } yieldStmt;
 
         struct {
             cstring name;
@@ -1142,6 +1161,14 @@ AstNode *makeWhileStmt(MemPool *pool,
                        AstNode *next,
                        AstNode *update);
 
+AstNode *makeIfStmt(MemPool *pool,
+                    const FileLoc *loc,
+                    u64 flags,
+                    AstNode *condition,
+                    AstNode *then,
+                    AstNode *otherwise,
+                    AstNode *next);
+
 AstNode *makeFunctionDecl(MemPool *pool,
                           const FileLoc *loc,
                           cstring name,
@@ -1325,6 +1352,13 @@ AstNode *makeReturnAstNode(MemPool *pool,
                            AstNode *expr,
                            AstNode *next,
                            const Type *type);
+
+AstNode *makeYieldAstNode(MemPool *pool,
+                          const FileLoc *loc,
+                          u64 flags,
+                          AstNode *expr,
+                          AstNode *next,
+                          const Type *type);
 
 AstNode *makeBranchAstNode(MemPool *pool,
                            const FileLoc *loc,

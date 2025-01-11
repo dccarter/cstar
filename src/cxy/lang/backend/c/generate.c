@@ -256,6 +256,36 @@ static void generateStructType(CodegenContext *ctx, const Type *type)
     format(typeState(ctx), "{<}\n};\n\n", NULL);
 }
 
+static void generateExceptionType(CodegenContext *ctx, const Type *type)
+{
+    format(typeState(ctx), "typedef struct ", NULL);
+    generateCustomTypeName(ctx, typeState(ctx), type, "Exception");
+    if (hasFlag(type, Extern))
+        format(typeState(ctx), " _", NULL);
+    else
+        format(typeState(ctx), " ", NULL);
+    generateCustomTypeName(ctx, typeState(ctx), type, "Exception");
+    format(typeState(ctx), ";\n", NULL);
+    ((Type *)type)->generating = true;
+    const AstNode *member = type->exception.decl->exception.params;
+    for (; member; member = member->next) {
+        if (!member->type->generated)
+            generateType(ctx, member->type);
+    }
+    ((Type *)type)->generating = false;
+
+    format(typeState(ctx), "struct ", NULL);
+    generateCustomTypeName(ctx, typeState(ctx), type, "Struct");
+    format(typeState(ctx), " {{{>}", NULL);
+    member = type->exception.decl->exception.params;
+    for (; member; member = member->next) {
+        format(typeState(ctx), "\n", NULL);
+        generateTypeName(ctx, typeState(ctx), member->type);
+        format(typeState(ctx), " {s};", (FormatArg[]){{.s = member->_name}});
+    }
+    format(typeState(ctx), "{<}\n};\n\n", NULL);
+}
+
 static void generateUnionType(CodegenContext *ctx, const Type *type)
 {
     if (!type->generating) {
@@ -290,7 +320,40 @@ static void generateUnionType(CodegenContext *ctx, const Type *type)
         generateTypeName(ctx, typeState(ctx), member);
         format(typeState(ctx), " _{u64};", (FormatArg[]){{.u64 = i}});
     }
-    format(typeState(ctx), "{<}\n};\n", NULL);
+    format(typeState(ctx), "{<}\n};", NULL);
+    format(typeState(ctx), "{<}\n};\n\n", NULL);
+}
+
+static void generateResultType(CodegenContext *ctx, const Type *type)
+{
+    if (!type->generating) {
+        format(typeState(ctx), "typedef struct ", NULL);
+        generateCustomTypeName(ctx, typeState(ctx), type, "Result");
+        format(typeState(ctx), " ", NULL);
+        generateCustomTypeName(ctx, typeState(ctx), type, "Result");
+        format(typeState(ctx), ";\n", NULL);
+    }
+
+    ((Type *)type)->generating = true;
+    if (!type->result.target->generated)
+        generateType(ctx, type->result.target);
+    ((Type *)type)->generating = false;
+
+    format(typeState(ctx), "struct ", NULL);
+    generateStructAttributes(ctx, type);
+    generateCustomTypeName(ctx, typeState(ctx), type, "Result");
+    format(typeState(ctx), "{{{>}\n", NULL);
+    format(typeState(ctx), "uint32_t tag;\n", NULL);
+    format(typeState(ctx), "union {{{>}", NULL);
+    format(typeState(ctx), "\n", NULL);
+
+    if (!isVoidType(type->result.target)) {
+        generateTypeName(ctx, typeState(ctx), type->result.target);
+        format(typeState(ctx), " _0;\n", NULL);
+    }
+    format(typeState(ctx), "void *_1;", NULL);
+
+    format(typeState(ctx), "{<}\n};", NULL);
     format(typeState(ctx), "{<}\n};\n\n", NULL);
 }
 
@@ -370,11 +433,17 @@ static void generateType(CodegenContext *ctx, const Type *type)
     case typStruct:
         generateStructType(ctx, type);
         break;
+    case typException:
+        generateExceptionType(ctx, type);
+        break;
     case typTuple:
         generateTupleType(ctx, type);
         break;
     case typUnion:
         generateUnionType(ctx, type);
+        break;
+    case typResult:
+        generateResultType(ctx, type);
         break;
     case typUntaggedUnion:
         generateUntaggedUnionType(ctx, type);
@@ -403,7 +472,6 @@ static void generateType(CodegenContext *ctx, const Type *type)
     case typReference:
         generateType(ctx, type->reference.referred);
         break;
-
     default:
         break;
     }
@@ -501,6 +569,15 @@ static void generateTypeName(CodegenContext *ctx,
         format(state, "struct ", NULL);
         generateCustomTypeName(ctx, state, type, "Class");
         format(state, " *", NULL);
+        break;
+    case typException:
+        format(state, "struct ", NULL);
+        generateCustomTypeName(ctx, state, type, "Exception");
+        format(state, " *", NULL);
+        break;
+    case typResult:
+        format(state, "struct ", NULL);
+        generateCustomTypeName(ctx, state, type, "Result");
         break;
     case typEnum:
         generateCustomTypeName(ctx, state, type, "Enum");
@@ -630,26 +707,48 @@ static void generateEnumOptionName(CodegenContext *ctx,
 
 static void generateMainFunction(CodegenContext *ctx, const Type *type)
 {
+#define NewLine() format(getState(ctx), "\n", NULL)
     const Type *ret = type->func.retType;
-    generateTypeName(ctx, getState(ctx), ret);
-    format(getState(ctx), " main(int argc, char *argv[]) {{{>}\n", NULL);
-    if (type->func.paramsCount) {
-        const Type *param = type->func.params[0];
-        generateTypeName(ctx, getState(ctx), param);
-        format(
-            getState(ctx), " args = {{ .data = argv, .len = argc };\n", NULL);
-        if (typeIs(ret, Void))
-            appendString(getState(ctx), "_main(args);");
-        else
-            appendString(getState(ctx), "return _main(args);");
+    if (isResultType(ret)) {
+        const Type *dctor = ret->tUnion.destructorFunc;
+        csAssert0(dctor);
+        format(getState(ctx), "#define __MAIN_RAISED_TYPE__ ", NULL);
+        generateTypeName(ctx, getState(ctx), ret);
+        NewLine();
+        format(getState(ctx), "#define __MAIN_RAISED_TYPE_DCTOR__ ", NULL);
+        generateFunctionName(getState(ctx), dctor->func.decl);
+        NewLine();
+        if (isVoidResultType(ret)) {
+            const Type *target =
+                isResultType(ret) ? getResultTargetType(ret) : ret;
+            format(getState(ctx), "#define __MAIN_RETURN_TYPE__ ", NULL);
+            generateTypeName(ctx, getState(ctx), target);
+            NewLine();
+            format(getState(ctx), "#define __MAIN_RETURNS__\n", NULL);
+        }
+        else {
+            format(getState(ctx), "#define __MAIN_RETURN_TYPE__ void\n", NULL);
+        }
     }
     else {
-        if (typeIs(ret, Void))
-            appendString(getState(ctx), "_main();");
-        else
-            appendString(getState(ctx), "return _main();");
+        if (!isVoidType(ret)) {
+            format(getState(ctx), "#define __MAIN_RETURNS__\n", NULL);
+            format(getState(ctx), "#define __MAIN_RETURN_TYPE__ ", NULL);
+            generateTypeName(ctx, getState(ctx), ret);
+            NewLine();
+        }
+        else {
+            format(getState(ctx), "#define __MAIN_RETURN_TYPE__ void\n", NULL);
+        }
     }
-    format(getState(ctx), "{<}\n}\n", NULL);
+    if (type->func.paramsCount) {
+        const Type *param = type->func.params[0];
+        format(getState(ctx), "#define __MAIN_PARAM_TYPE__ ", NULL);
+        generateTypeName(ctx, getState(ctx), param);
+        NewLine();
+    }
+    NewLine();
+#undef NewLine
 }
 
 static inline bool isImportDeclReference(const AstNode *node)
@@ -845,6 +944,14 @@ static void visitCastExpr(ConstAstVisitor *visitor, const AstNode *node)
             format(getState(ctx),
                    "._{i64}",
                    (FormatArg[]){{.i64 = node->castExpr.idx}});
+        return;
+    }
+
+    if (isReferenceType(from) && !isReferenceType(to) &&
+        !isClassReferenceType(from)) {
+        format(getState(ctx), "*(", NULL);
+        astConstVisit(visitor, expr);
+        format(getState(ctx), ")", NULL);
         return;
     }
 
@@ -1709,7 +1816,8 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
         [astTypeDecl] = astConstVisitSkip,
         [astGenericDecl] = astConstVisitSkip,
         [astImportDecl] = astConstVisitSkip,
-        [astMacroDecl] = astConstVisitSkip
+        [astMacroDecl] = astConstVisitSkip,
+        [astException] = astConstVisitSkip,
     }, .fallback = astConstVisitFallbackVisitAll);
     // clang-format on
 
@@ -1766,6 +1874,39 @@ static void generatedCodePrologue(FILE *f)
 static void generateCodeEpilogue(FILE *f)
 {
     appendCode(f,
+               "#ifdef __MAIN_RETURN_TYPE__\n"
+               "__MAIN_RETURN_TYPE__ main(int argc, char *argv[]) {\n"
+               "#ifdef __MAIN_PARAM_TYPE__\n"
+               "    __MAIN_PARAM_TYPE__ args = args = {{ .data = argv, .len = "
+               "argc }};\n"
+               "#define __MAIN_ARGS__ args\n"
+               "#else\n"
+               "#define __MAIN_ARGS__\n"
+               "#endif\n"
+               "\n"
+               "#ifdef __MAIN_RAISED_TYPE__\n"
+               "    __MAIN_RAISED_TYPE__ ex = _main(__MAIN_ARGS__);\n"
+               "    if (ex.tag == 1) {\n"
+               "         panicUnhandledException(ex._1);\n"
+               "         unreachable();\n"
+               "    }\n"
+               "#ifdef __MAIN_RETURNS__\n"
+               "    __MAIN_RETURN_TYPE__ ret = ex._0;\n"
+               "    __MAIN_RAISED_TYPE_DCTOR__(&ex);\n"
+               "    return ret;\n"
+               "#else\n"
+               "     __MAIN_RAISED_TYPE_DCTOR__(&ex);\n"
+               "#endif\n"
+               "#else\n"
+               "#ifdef __MAIN_RETURNS__\n"
+               "      return _main(__MAIN_ARGS__);\n"
+               "#else\n"
+               "      _main(__MAIN_ARGS__);\n"
+               "#endif\n"
+               "#endif\n"
+               "}\n"
+               "\n"
+               "#endif\n"
                "#if defined(__GNUC__)\n"
                "#pragma GCC diagnostic pop\n"
                "#elif defined(__clang__)\n"

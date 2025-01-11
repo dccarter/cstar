@@ -117,6 +117,7 @@ AstNode *bindAstPhase1(CompilerDriver *driver, Env *env, AstNode *node)
         [astStructDecl] = bindDeclaration,
         [astClassDecl] = bindDeclaration,
         [astInterfaceDecl] = bindDeclaration,
+        [astException] = bindDeclaration,
         [astVarDecl] = bindVariableDecl
     }, .fallback = astVisitFallbackVisitAll);
     // clang-format on

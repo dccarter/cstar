@@ -121,7 +121,7 @@ static void transformForCustomRange(AstVisitor *visitor,
         ctx->pool,
         &range->loc,
         range->flags & ~(flgConst | flgTopLevelDecl),
-        makeAnonymousVariable(ctx->strings, "range"),
+        makeAnonymousVariable(ctx->strings, "_rg"),
         NULL,
         makeCallExpr(ctx->pool,
                      &range->loc,
@@ -144,13 +144,13 @@ static void transformForCustomRange(AstVisitor *visitor,
                      rangeOperator->func.retType),
         NULL,
         rangeOperator->func.retType);
-    addBlockLevelDeclaration(ctx, rangeOperatorVar);
+    astModifierAdd(&ctx->blockModifier, rangeOperatorVar);
 
     AstNode *loopVar = makeVarDecl(
         ctx->pool,
         &range->loc,
         flgNone,
-        makeAnonymousVariable(ctx->strings, "__tmpLoop"),
+        makeAnonymousVariable(ctx->strings, "_it"),
         makeTypeReferenceNode(ctx->pool, iterator->func.retType, &range->loc),
         makeStructExpr(ctx->pool,
                        builtinLoc(),
@@ -162,7 +162,7 @@ static void transformForCustomRange(AstVisitor *visitor,
                        iterator->func.retType),
         NULL,
         iterator->func.retType);
-    addBlockLevelDeclaration(ctx, loopVar);
+    astModifierAdd(&ctx->blockModifier, loopVar);
 
     AstNode *callIterator =
         makeCallExpr(ctx->pool,
@@ -435,5 +435,8 @@ void checkForStmt(AstVisitor *visitor, AstNode *node)
         return;
     }
 
+    bool currentReturnState = ctx->returnState;
+    ctx->returnState = false;
     node->type = checkType(visitor, node->forStmt.body);
+    ctx->returnState = currentReturnState;
 }

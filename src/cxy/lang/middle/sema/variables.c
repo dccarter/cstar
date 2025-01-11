@@ -38,7 +38,7 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
             return;
         }
 
-        addBlockLevelDeclaration(ctx, newVar);
+        astModifierAdd(&ctx->blockModifier, newVar);
         node->varDecl.init = makeSliceConstructor(ctx, type_, newVar);
         type_ = checkType(visitor, node);
         if (typeIs(type_, Error))

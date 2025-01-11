@@ -235,3 +235,33 @@ void checkReferenceType(AstVisitor *visitor, AstNode *node)
     else
         node->type = referred;
 }
+
+void checkExceptionDecl(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    AstNode *param = node->exception.params;
+    for (; param; param = param->next) {
+        const Type *type = checkType(visitor, param);
+        if (typeIs(type, Error)) {
+            node->type = ERROR_TYPE(ctx);
+        }
+    }
+    if (typeIs(node->type, Error))
+        return;
+    node->type = makeExceptionType(ctx->types, node);
+    const Type *type = checkType(visitor, node->exception.body);
+    if (typeIs(type, Error)) {
+        node->type = ERROR_TYPE(ctx);
+    }
+}
+
+void checkResultType(AstVisitor *visitor, AstNode *node)
+{
+    TypingContext *ctx = getAstVisitorContext(visitor);
+    const Type *target = checkType(visitor, node->resultType.target);
+    if (typeIs(target, Error)) {
+        node->type = ERROR_TYPE(ctx);
+        return;
+    }
+    node->type = makeResultType(ctx->types, target);
+}

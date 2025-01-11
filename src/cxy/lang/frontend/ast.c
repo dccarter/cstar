@@ -640,7 +640,7 @@ AstNode *makeUnionValueExpr(MemPool *pool,
                             AstNode *next,
                             const Type *type)
 {
-    csAssert0(typeIs(type, Union));
+    csAssert0(!type || typeIs(type, Union));
     return makeAstNode(pool,
                        loc,
                        &(AstNode){.tag = astUnionValueExpr,
@@ -980,6 +980,24 @@ AstNode *makeWhileStmt(MemPool *pool,
             .type = body ? body->type : NULL,
             .next = next,
             .whileStmt = {.cond = condition, .body = body, .update = update}});
+}
+
+AstNode *makeIfStmt(MemPool *pool,
+                    const FileLoc *loc,
+                    u64 flags,
+                    AstNode *condition,
+                    AstNode *then,
+                    AstNode *otherwise,
+                    AstNode *next)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astIfStmt,
+                                  .type = then ? then->type : NULL,
+                                  .next = next,
+                                  .ifStmt = {.cond = condition,
+                                             .body = then,
+                                             .otherwise = otherwise}});
 }
 
 AstNode *makeFunctionDecl(MemPool *pool,
@@ -1424,6 +1442,22 @@ AstNode *makeReturnAstNode(MemPool *pool,
                                   .next = next,
                                   .type = type,
                                   .returnStmt = {.expr = expr}});
+}
+
+AstNode *makeYieldAstNode(MemPool *pool,
+                          const FileLoc *loc,
+                          u64 flags,
+                          AstNode *expr,
+                          AstNode *next,
+                          const Type *type)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astYieldStmt,
+                                  .flags = flags,
+                                  .next = next,
+                                  .type = type,
+                                  .yieldStmt = {.expr = expr}});
 }
 
 AstNode *makeBranchIfAstNode(MemPool *pool,
@@ -1925,6 +1959,7 @@ cstring getNamedNodeName(const AstNode *member)
     case astEnumDecl:
     case astAttr:
     case astAnnotation:
+    case astFuncParamDecl:
         return member->_name;
     default:
         return NULL;
@@ -2509,6 +2544,8 @@ const char *getDeclarationName(const AstNode *node)
         return node->varDecl.name;
     case astFuncParamDecl:
         return node->funcParam.name;
+    case astException:
+        return node->exception.name;
     default:
         csAssert(false, "%s is not a declaration", getAstNodeName(node));
     }
@@ -2702,6 +2739,8 @@ AstNode *findInAstNode(AstNode *node, cstring name)
         return findMemberByName(node->unionDecl.members, name);
     case astEnumDecl:
         return findMemberByName(node->enumDecl.options, name);
+    case astException:
+        return findMemberByName(node->exception.params, name);
     default:
         unreachable("NOT SUPPORTED");
     }

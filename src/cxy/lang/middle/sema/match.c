@@ -89,18 +89,23 @@ void checkMatchStmt(AstVisitor *visitor, AstNode *node)
 
     // On the first pass we just check types
     AstNode *case_ = cases;
+    bool returnState = false, currentReturnState = ctx->returnState;
     for (; case_; case_ = case_->next) {
+        ctx->returnState = false;
         if (hasFlag(case_, Comptime)) {
             if (!evaluate(ctx->evaluator, case_)) {
                 node->type = ERROR_TYPE(ctx);
+                returnState = ctx->returnState && returnState;
                 continue;
             }
         }
         const Type *type = case_->type ?: checkType(visitor, case_);
+        returnState = ctx->returnState && returnState;
         if (typeIs(type, Error)) {
             node->type = ERROR_TYPE(ctx);
         }
     }
+    ctx->returnState = returnState || currentReturnState;
     if (typeIs(node->type, Error))
         return;
 
