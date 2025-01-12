@@ -168,36 +168,36 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
 
     Operator op = node->binaryExpr.op;
     BinaryOperatorKind opKind = getBinaryOperatorKind(op);
+    bool isNullEquality = opKind == optEquality && nodeIs(rhs, NullLit);
 
     if ((opKind == optComparison || opKind == optEquality) &&
-        typeIs(unwrapType(left, NULL), String)) {
+        typeIs(unwrapType(left, NULL), String) && !isNullEquality) {
         lhs = node->binaryExpr.lhs;
         AstNode *cStringDecl = findBuiltinDecl(S___string);
-        node->binaryExpr.lhs = makeStructExpr(
-            ctx->pool,
-            &lhs->loc,
-            flgNone,
-            makeResolvedPath(ctx->pool,
-                             &lhs->loc,
-                             S___string,
-                             flgNone,
-                             cStringDecl,
-                             NULL,
-                             cStringDecl->type),
-            makeFieldExpr(ctx->pool, &lhs->loc, S_s, flgNone, lhs, NULL, NULL),
-            NULL,
-            cStringDecl->type);
+        node->binaryExpr.lhs = makeCallExpr(ctx->pool,
+                                            &lhs->loc,
+                                            makeResolvedPath(ctx->pool,
+                                                             &lhs->loc,
+                                                             S___string,
+                                                             flgNone,
+                                                             cStringDecl,
+                                                             NULL,
+                                                             cStringDecl->type),
+                                            lhs,
+                                            flgNone,
+                                            NULL,
+                                            NULL);
         left_ = stripAll(checkType(visitor, node->binaryExpr.lhs));
     }
 
     if (typeIs(left_, Struct) && !hasFlag(left_->tStruct.decl, Extern)) {
-        if (!nodeIs(rhs, NullLit) || !isPointerType(left)) {
+        if (!isNullEquality || !isPointerType(left)) {
             checkBinaryOperatorOverload(visitor, node);
             return;
         }
     }
 
-    if (typeIs(left_, Class) && !nodeIs(rhs, NullLit)) {
+    if (typeIs(left_, Class) && !isNullEquality) {
         if (checkClassBinaryOperatorOverload(visitor, node))
             return;
         if (typeIs(node->type, Error))
@@ -217,6 +217,11 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
 
     if (typeIs(right, Error)) {
         node->type = ERROR_TYPE(ctx);
+        return;
+    }
+
+    if (isNullEquality) {
+        node->type = getPrimitiveType(ctx->types, prtBool);
         return;
     }
 
@@ -252,7 +257,10 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
                  "binary operation '{s}' between type '{t}' and '{t}' is not "
                  "supported",
                  (FormatArg[]){
-                     {.s = getBinaryOpString(op)}, {.t = left}, {.t = right}});
+                     {.s = getBinaryOpString(op)},
+                     {.t = left},
+                     {.t = right ?: makeErrorType(ctx->types)},
+                 });
         node->type = ERROR_TYPE(ctx);
         return;
     }

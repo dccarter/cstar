@@ -465,7 +465,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
 
     if (typeIs(node->type, Error))
         goto checkStructMembersError;
-
+    bool retype = false;
     ((Type *)this)->_this.that =
         makeStructType(ctx->types,
                        getDeclarationName(node),
@@ -481,11 +481,13 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
             goto checkStructMembersError;
     }
     else {
-        membersCount -= removeClassOrStructBuiltins(node, members);
+        u64 removedCount = removeClassOrStructBuiltins(node, members);
+        retype = removedCount > 0;
+        membersCount -= removedCount;
     }
 
     ctx->currentStruct = node;
-    if (checkMemberFunctions(visitor, node, members)) {
+    if (checkMemberFunctions(visitor, node, members) || retype) {
         node->type = replaceStructType(
             ctx->types,
             this->_this.that,

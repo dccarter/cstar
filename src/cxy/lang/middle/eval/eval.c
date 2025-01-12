@@ -254,6 +254,41 @@ void evalAssignExpr(AstVisitor *visitor, AstNode *node)
     *resolved->varDecl.init = binary;
 }
 
+void evalRangeExpr(AstVisitor *visitor, AstNode *node)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    AstNode *start = node->rangeExpr.start, *end = node->rangeExpr.end,
+            *step = node->rangeExpr.step;
+    AstNode *next = node->next, *parentScope = node->parentScope;
+    if (!evaluate(visitor, start)) {
+        node->tag = astError;
+        return;
+    }
+
+    if (!evaluate(visitor, end)) {
+        node->tag = astError;
+        return;
+    }
+
+    if (step && !evaluate(visitor, step)) {
+        node->tag = astError;
+        return;
+    }
+
+    if (!nodeIs(start, IntegerLit) || !nodeIs(end, IntegerLit) ||
+        (step && nodeIs(step, IntegerLit))) {
+        logError(
+            ctx->L,
+            &node->loc,
+            "unsupported comp-time operation '..', range start and stop must "
+            "be compile time expressions",
+            NULL);
+    }
+
+    node->next = next;
+    node->parentScope = parentScope;
+}
+
 void evalArrayExpr(AstVisitor *visitor, AstNode *node)
 {
     AstNode *arg = node->arrayExpr.elements;
@@ -318,6 +353,7 @@ void initEvalVisitor(AstVisitor *visitor, EvalContext *ctx)
         [astTupleExpr] = evalTupleExpr,
         [astBinaryExpr] = evalBinaryExpr,
         [astAssignExpr] = evalAssignExpr,
+        [astRangeExpr] = evalRangeExpr,
         [astUnaryExpr] = evalUnaryExpr,
         [astIndexExpr] = evalIndexExpr,
         [astMemberExpr] = evalMemberExpr,

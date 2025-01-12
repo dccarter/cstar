@@ -262,11 +262,9 @@ void evalForStmt(AstVisitor *visitor, AstNode *node)
         break;
     }
 
-    if (nodes.first == NULL) {
-        node->tag = astNoop;
-    }
-    else {
+    if (nodes.first != NULL) {
         nodes.last->next = node->next;
-        *node = *nodes.first;
+        node->next = nodes.first;
     }
+    node->tag = astNoop;
 }

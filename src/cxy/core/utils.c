@@ -99,6 +99,15 @@ size_t convertEscapeSeq(const char *ptr, size_t n, u32 *res)
         case '$':
             *res = '$';
             return 2;
+        case '"':
+            *res = '"';
+            return 2;
+        case '\'':
+            *res = '\'';
+            return 2;
+        case '\\':
+            *res = '\\';
+            return 2;
         case 'x':
             if (n <= 2)
                 return 0;

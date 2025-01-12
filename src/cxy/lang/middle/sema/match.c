@@ -90,16 +90,24 @@ void checkMatchStmt(AstVisitor *visitor, AstNode *node)
     // On the first pass we just check types
     AstNode *case_ = cases;
     bool returnState = false, currentReturnState = ctx->returnState;
-    for (; case_; case_ = case_->next) {
+    AstNodeList casesList = {};
+    for (; case_;) {
         ctx->returnState = false;
         if (hasFlag(case_, Comptime)) {
             if (!evaluate(ctx->evaluator, case_)) {
                 node->type = ERROR_TYPE(ctx);
                 returnState = ctx->returnState && returnState;
+                case_ = case_->next;
                 continue;
             }
         }
-        const Type *type = case_->type ?: checkType(visitor, case_);
+        AstNode *tmp = case_;
+        case_ = case_->next;
+        tmp->next = NULL;
+        if (isNoopNodeAfterEval(tmp))
+            continue;
+        insertAstNode(&casesList, tmp);
+        const Type *type = tmp->type ?: checkType(visitor, tmp);
         returnState = ctx->returnState && returnState;
         if (typeIs(type, Error)) {
             node->type = ERROR_TYPE(ctx);
@@ -109,6 +117,7 @@ void checkMatchStmt(AstVisitor *visitor, AstNode *node)
     if (typeIs(node->type, Error))
         return;
 
+    node->matchStmt.cases = casesList.first;
     // verify correctness of the match statement
     cases = node->matchStmt.cases, case_ = cases;
     AstNode *it = NULL;

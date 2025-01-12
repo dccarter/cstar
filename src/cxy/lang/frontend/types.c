@@ -382,8 +382,7 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
     case typReference:
         if (isReferenceType(unwrappedTo))
             return isTypeAssignableFrom(to, from);
-        else
-            return isTypeAssignableFrom(to, from->reference.referred);
+        return isTypeAssignableFrom(unwrappedTo, from->reference.referred);
     case typClass:
         if (isVoidPointer(unwrappedTo))
             return true;

@@ -132,6 +132,8 @@ void checkCastExpr(AstVisitor *visitor, AstNode *node)
     }
 
     castLiteral(ctx, node);
+    if (isReferenceType(expr))
+        expr = stripReference(expr);
     if (!hasFlag(target, Optional) || hasFlag(expr, Optional))
         return;
 
