@@ -102,7 +102,7 @@ void checkMatchStmt(AstVisitor *visitor, AstNode *node)
             }
         }
         AstNode *tmp = case_;
-        case_ = cases->next;
+        case_ = case_->next;
         tmp->next = NULL;
         if (isNoopNodeAfterEval(tmp))
             continue;

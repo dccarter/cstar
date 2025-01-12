@@ -194,7 +194,7 @@ pub class JSONParser {
 
     func expectInteger[T](): !T {
         require!(T.isInteger, "expecting integer type, got '{t}", #T)
-        return expectFloat[f64]() as i32
+        return expectFloat[f64]() as T
     }
 
     func peekChar(): char {

@@ -161,14 +161,16 @@ pub class Vector[T] {
         }
     }
 
-    func fromJSON(p: &json.JSONParser): !void {
-        p.expectChar('[')
-        while (p.peekChar() != ']':char) {
-            var tmp = json.parse[T](p);
-            push(&&tmp)
-            p.consumeChar(',')
+    #if (!T.isString || T.isClass) {
+        func fromJSON(p: &json.JSONParser): !void {
+            p.expectChar('[')
+            while (p.peekChar() != ']':char) {
+                var tmp = json.parse[T](p);
+                push(&&tmp)
+                p.consumeChar(',')
+            }
+            p.expectChar(']')
         }
-        p.expectChar(']')
     }
 
     @inline const func capacity() => _capacity
