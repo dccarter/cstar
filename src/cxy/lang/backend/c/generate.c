@@ -718,7 +718,7 @@ static void generateMainFunction(CodegenContext *ctx, const Type *type)
         format(getState(ctx), "#define __MAIN_RAISED_TYPE_DCTOR__ ", NULL);
         generateFunctionName(getState(ctx), dctor->func.decl);
         NewLine();
-        if (isVoidResultType(ret)) {
+        if (!isVoidResultType(ret)) {
             const Type *target =
                 isResultType(ret) ? getResultTargetType(ret) : ret;
             format(getState(ctx), "#define __MAIN_RETURN_TYPE__ ", NULL);
@@ -927,6 +927,13 @@ static void visitCastExpr(ConstAstVisitor *visitor, const AstNode *node)
     const Type *from = unwrapType(expr->type, NULL);
     const Type *to = unThisType(resolveType(node->castExpr.to->type));
 
+    if (nodeIs(expr, NullLit) && !isClassType(node->type)) {
+        format(getState(ctx), "(", NULL);
+        generateTypeName(ctx, getState(ctx), to);
+        format(getState(ctx), ") {{}", NULL);
+        return;
+    }
+
     if (to == unThisType(from)) {
         astConstVisit(visitor, expr);
         return;
@@ -1054,7 +1061,12 @@ static void visitFieldExpr(ConstAstVisitor *visitor, const AstNode *node)
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
     format(
         getState(ctx), ".{s} = ", (FormatArg[]){{.s = node->fieldExpr.name}});
-    astConstVisit(visitor, node->fieldExpr.value);
+    bool nullInit = nodeIs(node->fieldExpr.value, NullLit) &&
+                    (isTupleType(node->type) || isUnionType(node->type));
+    if (nullInit)
+        format(getState(ctx), " {{}", NULL);
+    else
+        astConstVisit(visitor, node->fieldExpr.value);
 }
 
 static void visitStructExpr(ConstAstVisitor *visitor, const AstNode *node)
@@ -1596,8 +1608,13 @@ static void visitVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
     format(getState(ctx), " ", NULL);
     generateVariableName(getState(ctx), node);
     if (node->varDecl.init) {
+        bool nullInit = nodeIs(node->varDecl.init, NullLit) &&
+                        (isTupleType(node->type) || isUnionType(node->type));
         format(getState(ctx), " = ", NULL);
-        astConstVisit(visitor, node->varDecl.init);
+        if (nullInit)
+            format(getState(ctx), " {{}", NULL);
+        else
+            astConstVisit(visitor, node->varDecl.init);
     }
     else {
         format(getState(ctx), " = {{}", NULL);

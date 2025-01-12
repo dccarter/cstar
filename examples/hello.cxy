@@ -1,22 +1,19 @@
-//import "stdlib/path.cxy"
+import { JSONParser, parse } from "stdlib/json.cxy"
+import { Vector } from "stdlib/vector.cxy"
 
-
-exception AgeError(msg: String) => msg.str()
-
+@[json]
 struct User {
-    - name: String;
-    - age = 16:i32;
-    func `init`(@unused name: String) {
-        this.name = &&name
-    }
+    age = 30:i32;
+    name: String = null;
+    stats = Vector[i32]();
 
-    func drink() : !void {
-        if (age < 21)
-            raise AgeError(f"${name} is under age")
+    const func `str`(os: &OutputStream) {
+         os << "User{name: " << name << ", age: " << age << ", stats: " << stats << "}"
     }
 }
 
 func main(): !void {
-    var user = User("Carter");
-    user.drink()
+    var parser = JSONParser("{\"age\": 35, \"name\": \"Carter\", \"stats\": [ 10, 20, 30 ] }");
+    var x = parse[User](&parser);
+    stdout << x
 }

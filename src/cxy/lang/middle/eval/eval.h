@@ -49,6 +49,7 @@ void evalIndexExpr(AstVisitor *visitor, AstNode *node);
 void evalTupleExpr(AstVisitor *visitor, AstNode *node);
 void evalArrayExpr(AstVisitor *visitor, AstNode *node);
 void evalBinaryExpr(AstVisitor *visitor, AstNode *node);
+void evalRangeExpr(AstVisitor *visitor, AstNode *node);
 void evalUnaryExpr(AstVisitor *visitor, AstNode *node);
 void evalAssignExpr(AstVisitor *visitor, AstNode *node);
 void evalEnumDecl(AstVisitor *visitor, AstNode *node);

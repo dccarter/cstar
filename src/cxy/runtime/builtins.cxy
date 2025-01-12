@@ -19,6 +19,13 @@ pub extern func write(fd: i32, buf: ^const void, len: u64) : i64
 pub extern func strtoll(str: ^const char, endptr: ^ ^const char, base: i32): i64
 pub extern func strtod(str: ^const char, endptr: ^ ^const char): f64
 pub extern func toupper(c: i32): i32
+pub extern func isspace(c: i32): i32
+pub extern func isdigit(c: i32): i32
+pub extern func isalpha(c: i32): i32
+
+macro isSpace(X) =(isspace(<i32>X!) != 0)
+macro isDigit(X) =(isdigit(<i32>X!) != 0)
+macro isAlpha(X) =(isalpha(<i32>X!) != 0)
 
 macro alloca(T) =( mk_bc!(bfiAlloca!, #^void, T!) )
 macro zero(V) { mk_bc!(bfiZeromem!, #void, V!) }
@@ -434,7 +441,7 @@ pub struct __string {
 
     const func tof[T]() {
         require!(T.isFloat, "type '{t}' unsupported by `__string.tof`", #T)
-        var ep: ^const char;
+        var ep: ^const char = null;
         return <T>strtod(s !: ^const char, ptrof ep);
     }
 
@@ -696,10 +703,10 @@ pub class String : OutputStream {
     - _data: ^char = null;
 
     - func grow(growSize: u64) {
-        const newSize = _size + growSize;
+        const newSize = max(_size + growSize, 16:u64);
         if (this._data == null) {
-            this._data = <^char> malloc(growSize + 1)
-            this._capacity = growSize
+            this._data = <^char> malloc(newSize + 1)
+            this._capacity = newSize
         }
         else if (this._capacity < newSize) {
             while (this._capacity < newSize) {

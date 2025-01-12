@@ -453,8 +453,10 @@ static void shakeIfStmt(AstVisitor *visitor, AstNode *node)
                            .blockStmt = {.stmts = node->ifStmt.body}});
         }
     }
+    else {
+        astVisit(visitor, cond);
+    }
 
-    astVisit(visitor, node->ifStmt.body);
     if (!nodeIs(node->ifStmt.body, BlockStmt)) {
         node->ifStmt.body =
             makeAstNode(ctx->pool,
@@ -462,10 +464,10 @@ static void shakeIfStmt(AstVisitor *visitor, AstNode *node)
                         &(AstNode){.tag = astBlockStmt,
                                    .blockStmt = {.stmts = node->ifStmt.body}});
     }
+    astVisit(visitor, node->ifStmt.body);
 
     if (node->ifStmt.otherwise) {
         AstNode *otherwise = node->ifStmt.otherwise;
-        astVisit(visitor, otherwise);
         if (!nodeIs(otherwise, BlockStmt) && !nodeIs(otherwise, IfStmt)) {
             node->ifStmt.otherwise =
                 makeAstNode(ctx->pool,
@@ -473,6 +475,7 @@ static void shakeIfStmt(AstVisitor *visitor, AstNode *node)
                             &(AstNode){.tag = astBlockStmt,
                                        .blockStmt = {.stmts = otherwise}});
         }
+        astVisit(visitor, otherwise);
     }
 }
 

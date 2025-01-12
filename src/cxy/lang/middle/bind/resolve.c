@@ -691,6 +691,8 @@ void bindMemberExpr(AstVisitor *visitor, AstNode *node)
     astVisit(visitor, node->memberExpr.target);
     if (hasFlag(member, Comptime))
         astVisit(visitor, member);
+    else
+        astVisitFallbackVisitAll(visitor, member);
 }
 
 void bindProgram(AstVisitor *visitor, AstNode *node)

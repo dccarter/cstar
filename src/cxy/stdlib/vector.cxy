@@ -1,5 +1,7 @@
 module vector
 
+import "stdlib/json.cxy"
+
 macro DEFAULT_VECTOR_CAPACITY <u64>16
 
 
@@ -157,6 +159,16 @@ pub class Vector[T] {
             }
             sb << ']'
         }
+    }
+
+    func fromJSON(p: &json.JSONParser): !void {
+        p.expectChar('[')
+        while (p.peekChar() != ']':char) {
+            var tmp = json.parse[T](p);
+            push(&&tmp)
+            p.consumeChar(',')
+        }
+        p.expectChar(']')
     }
 
     @inline const func capacity() => _capacity

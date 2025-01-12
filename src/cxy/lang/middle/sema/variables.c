@@ -71,13 +71,17 @@ void checkVarDecl(AstVisitor *visitor, AstNode *node)
         }
     }
     else if (!isTypeAssignableFrom(unThisType(type_), init_)) {
-        logError(ctx->L,
-                 &node->loc,
-                 "variable initializer of type '{t}' is not assignable to "
-                 "variable type '{t}'",
-                 (FormatArg[]){{.t = init_}, {.t = type_}});
-        node->type = ERROR_TYPE(ctx);
-        return;
+        bool allow =
+            nodeIs(init, NullLit) && (isTupleType(type_) || isUnionType(type_));
+        if (!allow) {
+            logError(ctx->L,
+                     &node->loc,
+                     "variable initializer of type '{t}' is not assignable to "
+                     "variable type '{t}'",
+                     (FormatArg[]){{.t = init_}, {.t = type_}});
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
     }
 
     node->type = typeIs(type_, Auto) ? init_ : type_;

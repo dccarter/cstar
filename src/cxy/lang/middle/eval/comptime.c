@@ -328,6 +328,33 @@ static AstNode *getStripedType(EvalContext *ctx,
     return makeTypeReferenceNode(ctx->pool, type, loc);
 }
 
+static AstNode *getTargetType(EvalContext *ctx,
+                              const FileLoc *loc,
+                              AstNode *node,
+                              attr(unused) AstNode *args)
+{
+    const Type *type =
+        resolveUnThisUnwrapType(node->type ?: evalType(ctx, node));
+    switch (type->tag) {
+    case typStruct:
+        if (typeIs(type, Struct) && hasFlag(type, Optional)) {
+            type = getOptionalTargetType(type);
+            break;
+        }
+        return NULL;
+    case typUnion:
+        if (isResultType(type)) {
+            type = getResultTargetType(type);
+            break;
+        }
+        return NULL;
+    default:
+        return NULL;
+    }
+
+    return makeTypeReferenceNode(ctx->pool, type, loc);
+}
+
 static AstNode *makePointedTypeAstNode(EvalContext *ctx,
                                        const FileLoc *loc,
                                        AstNode *node,
@@ -738,6 +765,7 @@ static void initDefaultMembers(EvalContext *ctx)
     ADD_MEMBER("elementType", getElementType);
     ADD_MEMBER("pointedType", makePointedTypeAstNode);
     ADD_MEMBER("strippedType", getStripedType);
+    ADD_MEMBER("targetType", getTargetType);
     ADD_MEMBER("callable", getCallableType);
     ADD_MEMBER("returnType", getReturnType);
     ADD_MEMBER("params", getParams);

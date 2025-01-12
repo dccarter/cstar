@@ -182,10 +182,15 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
     callee_ = flattenWrappedType(callee_, &flags);
     const Type *rawType = stripPointerOrReferenceOnce(callee_, NULL);
     if (isClassOrStructType(rawType)) {
-        AstNode *symbol = nodeIs(callee, Path)
-                              ? resolveAstNode(resolvePath(callee))
-                          : nodeIs(callee, TypeRef) ? getTypeDecl(rawType)
-                                                    : NULL;
+        AstNode *symbol = NULL;
+        if (nodeIs(callee, Path)) {
+            symbol = resolveAstNode(resolvePath(callee));
+            if (nodeIs(symbol, GenericParam))
+                symbol = getTypeDecl(rawType);
+        }
+        else if (nodeIs(callee, TypeRef)) {
+            symbol = getTypeDecl(rawType);
+        }
 
         if (isClassOrStructAstNode(symbol)) {
             if (hasFlag(symbol, Abstract)) {

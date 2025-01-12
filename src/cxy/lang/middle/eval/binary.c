@@ -70,8 +70,13 @@ void evalStringConcatenation(EvalContext *ctx,
 
 bool verifyBinaryExprOperand(EvalContext *ctx, AstNode *node)
 {
+    Operator op = node->binaryExpr.op;
     AstNode *lhs = node->binaryExpr.lhs;
     AstNode *rhs = node->binaryExpr.rhs;
+
+    if (op == opLAnd || op == opLOr)
+        return true;
+
     if (!isSupportedBinaryOperand(lhs) || !isSupportedBinaryOperand(rhs)) {
         logError(ctx->L,
                  &lhs->loc,
@@ -327,9 +332,13 @@ static void evalLAndOperation(EvalContext *ctx, AstNode *node)
         return;
     }
 
+    f64 lValue = isSupportedBinaryOperand(lhs) ? nodeGetNumericLiteral(lhs)
+                                               : !nodeIs(lhs, NullLit);
+    f64 rValue = isSupportedBinaryOperand(rhs) ? nodeGetNumericLiteral(rhs)
+                                               : !nodeIs(rhs, NullLit);
+
     node->tag = astBoolLit;
-    node->boolLiteral.value =
-        nodeGetNumericLiteral(lhs) && nodeGetNumericLiteral(rhs);
+    node->boolLiteral.value = lValue && rValue;
 }
 
 static void evalLOrOperation(EvalContext *ctx, AstNode *node)
@@ -345,9 +354,13 @@ static void evalLOrOperation(EvalContext *ctx, AstNode *node)
         return;
     }
 
+    f64 lValue = isSupportedBinaryOperand(lhs) ? nodeGetNumericLiteral(lhs)
+                                               : !nodeIs(lhs, NullLit);
+    f64 rValue = isSupportedBinaryOperand(rhs) ? nodeGetNumericLiteral(rhs)
+                                               : !nodeIs(rhs, NullLit);
+
     node->tag = astBoolLit;
-    node->boolLiteral.value =
-        nodeGetNumericLiteral(lhs) || nodeGetNumericLiteral(rhs);
+    node->boolLiteral.value = lValue || rValue;
 }
 
 static bool checkComparisonOperation(EvalContext *ctx, AstNode *node)
