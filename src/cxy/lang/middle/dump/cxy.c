@@ -1023,6 +1023,23 @@ static void dumpFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
     dumpFuncDeclWithParams(visitor, node, NULL);
 }
 
+static void dumpClosureExpr(ConstAstVisitor *visitor, const AstNode *node)
+{
+    DumpContext *ctx = getConstAstVisitorContext(visitor);
+    ctx->currentFunction = node;
+    if (hasFlag(node, Async)) {
+        printKeyword(ctx->state, "async");
+        AddSpace();
+    }
+    dumpManyAstNodesEnclosed(visitor, node->closureExpr.params, "(", ", ", ")");
+    if (node->closureExpr.ret) {
+        format(ctx->state, ": ", NULL);
+        astConstVisit(visitor, node->closureExpr.ret);
+    }
+    format(ctx->state, " => ", NULL);
+    astConstVisit(visitor, node->closureExpr.body);
+}
+
 static void dumpExternDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     AstNode func = *(node->externDecl.func);
@@ -1330,6 +1347,7 @@ AstNode *dumpCxySource(CompilerDriver *driver, AstNode *node, FILE *file)
         [astModuleDecl] = dumpModuleDecl,
         [astImportDecl] = dumpImportDecl,
         [astFuncDecl] = dumpFuncDecl,
+        [astClosureExpr] = dumpClosureExpr,
         [astExternDecl] = dumpExternDecl,
         [astGenericDecl] = dumpGenericDecl,
         }, .dispatch = dispatch);

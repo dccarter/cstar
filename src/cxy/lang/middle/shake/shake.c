@@ -171,6 +171,14 @@ static bool validateOperatorOverloadArguments(ShakeAstContext *ctx,
         return reportIfUnexpectedNumberOfParameters(
             ctx, &node->loc, "deinit", count, 0);
 
+    case opDestructorOverload:
+        return reportIfUnexpectedNumberOfParameters(
+            ctx, &node->loc, "destructor", count, 0);
+
+    case opDestructorFwd:
+        return reportIfUnexpectedNumberOfParameters(
+            ctx, &node->loc, "destructor_fwd", count, 1);
+
     case opCallOverload:
     case opInitOverload:
         return true;
@@ -695,8 +703,10 @@ static void shakeReturnStmt(AstVisitor *visitor, AstNode *node)
 {
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
     AstNode *expr = node->returnStmt.expr;
+    astVisit(visitor, expr);
     if (!node->returnStmt.isRaise)
         return;
+
     if (expr == NULL) {
         if (ctx->exceptionTrace) {
             astModifierAdd(
@@ -730,7 +740,6 @@ static void shakeReturnStmt(AstVisitor *visitor, AstNode *node)
             NULL);
     }
     else {
-        astVisit(visitor, expr);
         expr = makeCastExpr(
             ctx->pool,
             &expr->loc,
@@ -756,7 +765,16 @@ static void shakeReturnStmt(AstVisitor *visitor, AstNode *node)
                     ctx,
                     makePath(
                         ctx->pool, &expr->loc, var->_name, flgNone, NULL)));
-            expr = makePath(ctx->pool, &expr->loc, var->_name, flgNone, NULL);
+
+            expr = makeUnaryExpr(
+                ctx->pool,
+                &expr->loc,
+                flgNone,
+                true,
+                opMove,
+                makePath(ctx->pool, &expr->loc, var->_name, flgNone, NULL),
+                NULL,
+                NULL);
         }
     }
     node->returnStmt.expr = expr;

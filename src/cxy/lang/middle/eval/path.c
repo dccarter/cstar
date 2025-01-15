@@ -118,6 +118,10 @@ void evalPathEpilogue(AstVisitor *visitor,
             node->flags = type->flags;
             node->type = type;
             break;
+        case typError:
+            node->tag = astError;
+            node->type = type;
+            return;
         default:
             csAssert0(false);
         }

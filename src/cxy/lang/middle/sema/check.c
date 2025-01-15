@@ -68,6 +68,16 @@ static inline bool hasUnreachable(TypingContext *ctx, AstNode *node)
             nodeIs(node, ExprStmt));
 }
 
+static const Type *getNodeReturnType(AstNode *node)
+{
+    if (nodeIs(node, FuncDecl) && node->type)
+        return node->type->func.retType;
+
+    if (nodeIs(node, ClosureExpr) && node->closureExpr.ret)
+        return node->closureExpr.ret->type;
+    return NULL;
+}
+
 static void checkTypeRef(AstVisitor *visitor, AstNode *node)
 {
     attr(unused) TypingContext *ctx = getAstVisitorContext(visitor);
@@ -162,17 +172,20 @@ static void checkBlockStmt(AstVisitor *visitor, AstNode *node)
         node->type = makeVoidType(ctx->types);
 
     AstNode *parent = node->parentScope;
-    if (!nodeIs(parent, FuncDecl))
-        goto restoreBlock;
-    const Type *type = parent->type->func.retType;
-    if (isVoidResultType(type) && !ctx->returnState) {
-        AstNode *ret = getLastAstNode(node->blockStmt.stmts)->next =
-            makeReturnAstNode(ctx->pool,
-                              builtinLoc(),
-                              flgNone,
-                              makeVoidReturnValue(ctx, type),
-                              NULL,
-                              type);
+    const Type *type = getNodeReturnType(parent);
+    if (type && isVoidResultType(type) && !ctx->returnState) {
+        AstNode *ret = makeReturnAstNode(ctx->pool,
+                                         builtinLoc(),
+                                         flgNone,
+                                         makeVoidReturnValue(ctx, type),
+                                         NULL,
+                                         type);
+        if (node->blockStmt.stmts) {
+            getLastAstNode(node->blockStmt.stmts)->next = ret;
+        }
+        else {
+            node->blockStmt.stmts = ret;
+        }
         ret->returnStmt.isRaise = true;
         ctx->returnState = false;
     }
@@ -366,7 +379,8 @@ static void checkBreakOrContinueStmt(AstVisitor *visitor, AstNode *node)
 static void checkWhileStmt(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    AstNode *cond = node->whileStmt.cond, *body = node->whileStmt.body;
+    AstNode *cond = node->whileStmt.cond, *body = node->whileStmt.body,
+            *update = node->whileStmt.update;
 
     const Type *cond_ = checkType(visitor, cond);
     if (typeIs(cond_, Error)) {
@@ -412,6 +426,12 @@ static void checkWhileStmt(AstVisitor *visitor, AstNode *node)
     }
 
     node->type = body_;
+    if (update) {
+        body_ = checkType(visitor, update);
+        if (typeIs(body_, Error)) {
+            node->type = ERROR_TYPE(ctx);
+        }
+    }
 }
 
 static void checkStringExpr(AstVisitor *visitor, AstNode *node)
@@ -451,8 +471,15 @@ static void checkSpreadExpr(AstVisitor *visitor, AstNode *node)
         getLastAstNode(expr->tupleExpr.elements)->next = node->next;
         *node = *expr->tupleExpr.elements;
         if (isMove) {
-            for (expr = node; expr; expr = expr->next)
-                expr->flags |= flgMove;
+            for (expr = node; expr; expr = expr->next) {
+                if (nodeIsLeftValue(expr)) {
+                    AstNode *move = shallowCloneAstNode(ctx->pool, expr);
+                    expr->tag = astUnaryExpr;
+                    expr->unaryExpr.isPrefix = true;
+                    expr->unaryExpr.op = opMove;
+                    expr->unaryExpr.operand = move;
+                }
+            }
         }
         return;
     }
@@ -463,14 +490,36 @@ static void checkSpreadExpr(AstVisitor *visitor, AstNode *node)
         return;
     }
 
+    if (isVoidType(type)) {
+        node->tag = astNoop;
+        node->type = type;
+        return;
+    }
+
     if (hasFlag(expr, Variadic)) {
         expr->type = type;
         csAssert0(nodeIs(expr, Path));
         AstNode *param = getResolvedPath(expr);
         csAssert0(nodeIs(param, FuncParamDecl));
         if (param->next == NULL) {
-            replaceAstNode(node, expr);
+            if (isMove) {
+                node->unaryExpr.operand = expr;
+                node->tag = astUnaryExpr;
+                node->unaryExpr.op = opMove;
+                node->unaryExpr.isPrefix = true;
+                node->type = type;
+            }
+            else {
+                replaceAstNode(node, expr);
+            }
             return;
+        }
+
+        if (isMove) {
+            expr->unaryExpr.operand = shallowCloneAstNode(ctx->pool, expr);
+            expr->tag = astUnaryExpr;
+            expr->unaryExpr.op = opMove;
+            expr->unaryExpr.isPrefix = true;
         }
 
         param = param->next;
@@ -483,6 +532,16 @@ static void checkSpreadExpr(AstVisitor *visitor, AstNode *node)
                                          param,
                                          NULL,
                                          param->type);
+            if (isMove) {
+                arg->next = makeUnaryExpr(ctx->pool,
+                                          &param->loc,
+                                          flgNone,
+                                          true,
+                                          opMove,
+                                          arg->next,
+                                          NULL,
+                                          param->type);
+            }
             arg = arg->next;
             param = param->next;
         }

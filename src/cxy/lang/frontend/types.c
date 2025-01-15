@@ -1245,6 +1245,7 @@ u32 findUnionTypeIndex(const Type *tagged, const Type *type)
 {
     if (!typeIs(tagged, Union))
         return UINT32_MAX;
+    type = resolveUnThisUnwrapType(type);
     for (u32 i = 0; i < tagged->tUnion.count; i++) {
         if (resolveAndUnThisType(tagged->tUnion.members[i].type) == type)
             return i;
@@ -1262,6 +1263,19 @@ bool hasReferenceMembers(const Type *type)
     }
 
     return isTupleType(type) && hasFlag(type, ReferenceMembers);
+}
+
+bool isDestructible(const Type *type)
+{
+    if (hasFlags(type, flgReferenceMembers | flgImplementsDeinit))
+        return true;
+    if (isClassOrStructType(type)) {
+        AstNode *decl = getTypeDecl(type);
+        return hasFlags(decl, flgReferenceMembers | flgImplementsDeinit);
+    }
+
+    return isTupleType(type) &&
+           hasFlags(type, flgReferenceMembers | flgImplementsDeinit);
 }
 
 void pushThisReference(const Type *this, AstNode *node)

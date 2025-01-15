@@ -64,35 +64,33 @@ static void checkFunctionCallEpilogue(AstVisitor *visitor,
     AstNode *callee = node->callExpr.callee, *args = node->callExpr.args;
     const Type *callee_ = NULL;
 
-    AstNode *arg = args, *prev = NULL;
-    for (u64 i = 0; arg; arg = arg->next, i++) {
-        const Type *type = arg->type ?: checkType(visitor, arg);
+    AstNode *arg = args;
+    AstNodeList newArgs = {};
+    for (; arg;) {
+        AstNode *tmp = arg;
+        arg = arg->next;
+        tmp->next = NULL;
+        const Type *type = tmp->type ?: checkType(visitor, tmp);
         if (typeIs(type, Error)) {
             node->type = ERROR_TYPE(ctx);
-            prev = arg;
             continue;
         }
+        if (nodeIs(tmp, Noop))
+            continue;
 
         if (hasFlag(type, Closure)) {
-            arg = transformClosureArgument(visitor, arg);
-            if (prev == NULL)
-                node->callExpr.args = arg;
-            else
-                prev->next = arg;
-            prev = arg;
-
-            if (typeIs(arg->type, Error)) {
+            tmp = transformClosureArgument(visitor, tmp);
+            if (typeIs(tmp->type, Error)) {
                 node->type = ERROR_TYPE(ctx);
                 continue;
             }
         }
-        prev = arg;
+        insertAstNode(&newArgs, tmp);
     }
     if (typeIs(node->type, Error))
         return;
 
-    if (nodeIs(node->callExpr.args, Noop))
-        node->callExpr.args = args->next;
+    node->callExpr.args = newArgs.first;
     args = node->callExpr.args;
     u64 argsCount = countAstNodes(args);
     const Type **argTypes = mallocOrDie(sizeof(Type *) * argsCount);
@@ -227,6 +225,11 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
                 NULL,
                 overload);
             node->callExpr.callee = callee;
+            if (typeIs(callee_, Generic)) {
+                callee->type = NULL;
+                astVisit(visitor, node);
+                return;
+            }
         }
     }
     else if (typeIs(rawType, Tuple) && hasFlag(rawType, FuncTypeParam)) {

@@ -498,6 +498,7 @@ struct AstNode {
             FunctionSignature *signature;
             AstNode *opaqueParams;
             AstNode *this_;
+            AstNode *initCover;
             union {
                 AstNode *body;
                 AstNode *definition;

@@ -121,24 +121,38 @@ static void evalClassMembers(AstVisitor *visitor, AstNode *node)
 static bool preCheckClassMembers(AstNode *node, NamedTypeMember *members)
 {
     AstNode *member = node->classDecl.members;
-    bool referenceMembers = false;
+    bool hasMemBuiltins = false;
     for (u64 i = hasFlag(node, Virtual); member; member = member->next, i++) {
         if (nodeIs(member, FieldDecl)) {
             members[i] = (NamedTypeMember){.name = member->structField.name,
                                            .type = member->type,
                                            .decl = member};
             member->structField.index = i;
-            referenceMembers = referenceMembers || isClassType(member->type) ||
-                               hasReferenceMembers(member->type);
+            hasMemBuiltins = hasMemBuiltins || isClassType(member->type) ||
+                             isDestructible(member->type);
         }
         else {
             members[i] = (NamedTypeMember){.name = getDeclarationName(member),
                                            .type = member->type,
                                            .decl = member};
+            if (nodeIs(member, FuncDecl)) {
+                switch (member->funcDecl.operatorOverload) {
+                case opDeinitOverload:
+                    node->flags |= flgImplementsDeinit;
+                    // fallthrough
+                case opDestructorOverload:
+                case opDestructorFwd:
+                    hasMemBuiltins =
+                        hasMemBuiltins || member->funcDecl.body != NULL;
+                    break;
+                default:
+                    break;
+                }
+            }
         }
     }
 
-    return referenceMembers;
+    return hasMemBuiltins;
 }
 
 static void patchDefaultInitializer(TypingContext *ctx,
@@ -165,9 +179,12 @@ static void patchDefaultInitializer(TypingContext *ctx,
                                     value,
                                     NULL,
                                     vTableMember->type),
-                     init->funcDecl.body->blockStmt.stmts,
+                     NULL,
                      vTableMember->type);
-    init->funcDecl.body->blockStmt.stmts = stmt;
+    if (init->funcDecl.body->blockStmt.stmts)
+        getLastAstNode(init->funcDecl.body->blockStmt.stmts)->next = stmt;
+    else
+        init->funcDecl.body->blockStmt.stmts = stmt;
 }
 
 AstNode *makeAllocateCall(TypingContext *ctx, AstNode *node)
@@ -204,7 +221,7 @@ AstNode *makeDropReferenceCall(TypingContext *ctx,
                                const FileLoc *loc)
 {
     const Type *type = member->type;
-    csAssert0(typeIs(type, Class));
+    csAssert0(isClassType(type));
     return makeExprStmt(
         ctx->pool,
         loc,
@@ -252,6 +269,7 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     const Type **implements = NULL, *baseType = NULL;
     AstNode *base = node->classDecl.base, *vTableMember = NULL;
+    ctx->cls = getDeclarationName(node);
     if (node->type)
         return;
 
@@ -302,13 +320,13 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
         membersCount--;
     }
     ctx->currentClass = node;
-    bool referenceMembers = preCheckClassMembers(node, members);
+    bool hasMemBuiltins = preCheckClassMembers(node, members);
     ctx->currentClass = NULL;
 
     if (typeIs(node->type, Error))
         goto checkClassMembersError;
 
-    if (!referenceMembers) {
+    if (!hasMemBuiltins) {
         membersCount -= removeClassOrStructBuiltins(node, members);
     }
 
@@ -323,7 +341,7 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
                                                node->flags & flgTypeApplicable);
     node->type = this;
 
-    if (referenceMembers) {
+    if (hasMemBuiltins) {
         implementClassOrStructBuiltins(visitor, node);
         if (typeIs(node->type, Error))
             goto checkClassMembersError;

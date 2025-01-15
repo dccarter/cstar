@@ -160,7 +160,7 @@ static bool nodeNeedsMemMgmt(const AstNode *node)
         hasFlag(type, Extern)) {
         return false;
     }
-    return isClassType(type) || hasReferenceMembers(type);
+    return isClassType(type) || isDestructible(type);
 }
 
 static bool vtIsUpdatedInChildScopeLoop(MemContext *ctx,
@@ -690,6 +690,11 @@ static void visitBlockStmt(AstVisitor *visitor, AstNode *node)
         else {
             astVisit(visitor, stmt);
         }
+    }
+
+    if (nodeIs(parent, WhileStmt) && parent->whileStmt.update) {
+        // Visit update within this blocks context
+        astVisit(visitor, parent->whileStmt.update);
     }
 
     // Block cleanup

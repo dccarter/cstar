@@ -613,7 +613,8 @@ bool cmdParseEnumValue(CmdParser *P,
         size++;
 
     for (u64 i = 0; i < len; i++) {
-        if (strncmp(str, enums[i].str, size) == 0) {
+        if (strlen(enums[i].str) == size &&
+            strncmp(str, enums[i].str, size) == 0) {
             dst->state = cmdNumber;
             dst->num = enums[i].value;
             return true;

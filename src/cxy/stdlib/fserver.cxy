@@ -60,7 +60,7 @@ struct CachedFile {
         lastAccess = 0
     }
 
-    func `destructor`() {
+    func `deinit`() {
         clear()
     }
 }

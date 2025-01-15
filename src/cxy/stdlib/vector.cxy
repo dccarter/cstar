@@ -94,8 +94,10 @@ pub class Vector[T] {
     func `..`() {
         var i : i64 = 0;
         return () : (T, i64)? => {
-            if (i < _size)
-                return (_data.[i], i++)
+            if (i < _size) {
+                var tmp = (_data.[i], i++);
+                return &&tmp
+            }
             else
                 return null
         }
@@ -161,7 +163,7 @@ pub class Vector[T] {
         }
     }
 
-    #if (!T.isString || T.isClass) {
+    #if (!(T.isStruct || T.isClass) || (T.isString && T.isClass) || has_member!(#T, "fromJSON", #const func(_: &json.JSONParser) -> !void)) {
         func fromJSON(p: &json.JSONParser): !void {
             p.expectChar('[')
             while (p.peekChar() != ']':char) {

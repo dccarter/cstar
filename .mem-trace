@@ -1,3 +1,43 @@
- mem(alloc: 0x600002f30010) @ __builtins.cxy:1013
- mem(alloc: 0x600002f30030) @ __builtins.cxy:1014
- mem(alloc: 0x600002d30010) @ /Users/dccarter/projects/cxy/examples/hello.cxy:89
+ mem(alloc: 0x600003080010) @ __builtins.cxy:943
+ mem(alloc: 0x600003080030) @ __builtins.cxy:943
+ mem(alloc: 0x600001b88010) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/args.cxy:279
+ mem(alloc: 0x600003e80010) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/hash.cxy:116
+ mem(alloc: 0x600003e80040) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/hash.cxy:116
+ mem(alloc: 0x600003e80070) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/hash.cxy:221
+ mem(drop : 0x600003e80070) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/args.cxy:48
+ mem(freed: 0x600003e80070) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/args.cxy:48
+ mem(alloc: 0x600003e80070) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/args.cxy:297
+ mem(alloc: 0x600001e8c090) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/args.cxy:240
+ mem(alloc: 0x600003e800a0) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/hash.cxy:116
+ mem(alloc: 0x600003e800d0) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/hash.cxy:116
+ mem(alloc: 0x600003e80100) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/vector.cxy:32
+ mem(alloc: 0x600003e80130) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/vector.cxy:32
+ mem(alloc: 0x600003e80160) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/hash.cxy:221
+ mem(alloc: 0x600003e80190) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/hash.cxy:221
+ mem(drop : 0x600003e80190) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/args.cxy:48
+ mem(freed: 0x600003e80190) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/args.cxy:48
+ mem(drop : 0x600003e80160) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/args.cxy:349
+ mem(freed: 0x600003e80160) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/args.cxy:349
+ mem(alloc: 0x600000288010) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/args.cxy:257
+ mem(alloc: 0x600003e80160) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/hash.cxy:116
+ mem(alloc: 0x600003e80190) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/hash.cxy:116
+ mem(alloc: 0x600003e801c0) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/vector.cxy:32
+ mem(alloc: 0x600003e801f0) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/vector.cxy:32
+ mem(alloc: 0x600003e80220) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/hash.cxy:221
+ mem(alloc: 0x600003e80250) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/hash.cxy:221
+ mem(drop : 0x600003e80250) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/args.cxy:48
+ mem(freed: 0x600003e80250) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/args.cxy:48
+ mem(drop : 0x600003e80220) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/args.cxy:349
+ mem(freed: 0x600003e80220) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/args.cxy:349
+ mem(alloc: 0x600001b88080) @ /Users/dccarter/projects/cxy/examples/hello.cxy:5
+ mem(alloc: 0x600003e80220) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/hash.cxy:116
+ mem(alloc: 0x600003e80250) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/hash.cxy:116
+ mem(alloc: 0x600003e80280) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/vector.cxy:32
+ mem(alloc: 0x600003e802b0) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/vector.cxy:32
+ mem(alloc: 0x600003e802e0) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/hash.cxy:221
+ mem(drop : 0x600003e802e0) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/args.cxy:48
+ mem(freed: 0x600003e802e0) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/args.cxy:48
+ mem(alloc: 0x600003e802e0) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/hash.cxy:221
+ mem(alloc: 0x600003e80310) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/hash.cxy:221
+ mem(drop : 0x600003e80310) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/args.cxy:48
+ mem(freed: 0x600003e80310) @ /Users/dccarter/projects/cxy/src/cxy/stdlib/args.cxy:48

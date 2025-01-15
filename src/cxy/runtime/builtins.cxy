@@ -127,7 +127,7 @@ func __smart_ptr_alloc(size: u64, dctor: func(ptr: sptr) -> void = null) {
 }
 
 @[pure, linkage("External"), noinline, optimize(0)]
-func __smart_ptr_get(ptr: sptr) : sptr {
+pub func __smart_ptr_get(ptr: sptr) : sptr {
     if (ptr == null)
         return null
 
@@ -140,7 +140,7 @@ func __smart_ptr_get(ptr: sptr) : sptr {
 }
 
 @[pure, linkage("External"), noinline, optimize(0)]
-func __smart_ptr_drop(ptr: sptr) {
+pub func __smart_ptr_drop(ptr: sptr) {
     if (ptr == null)
         return false
 
@@ -163,7 +163,7 @@ func __smart_ptr_drop(ptr: sptr) {
     return false
 }
 
-#if (defined __DEBUG && defined TRACE_MEMORY) {
+#if (defined TRACE_MEMORY) {
 
 @[pure, linkage("External")]
 func __trace_memory_stdout(tag: string, path: string, line: u64, ptr: sptr) {
@@ -180,13 +180,13 @@ func __smart_ptr_alloc_trace(size: u64, dctor: func(ptr: sptr) -> void, path: st
 }
 
 @[pure, linkage("External")]
-func __smart_ptr_get_trace(ptr: sptr, path: string, line: u64) {
+pub func __smart_ptr_get_trace(ptr: sptr, path: string, line: u64) {
     (TRACE_MEMORY!)("get", path, line, ptr)
     return __smart_ptr_get(ptr)
 }
 
 @[pure, linkage("External")]
-func __smart_ptr_drop_trace(ptr: sptr, path: string, line: u64) {
+pub func __smart_ptr_drop_trace(ptr: sptr, path: string, line: u64) {
     (TRACE_MEMORY!)("drop", path, line, ptr)
     if (__smart_ptr_drop(ptr))
         (TRACE_MEMORY!)("freed", path, line, ptr)
@@ -212,7 +212,7 @@ pub struct __Optional[T] {
 
     func `destructor`() {
         if (ok) {
-            #if (T.isClass || T.hasReferenceMembers)
+            #if (T.isClass || T.isDestructible)
                 delete val
             else #if (has_member!(#T, "op__destructor", #func() -> void))
                 val.op__destructor()
@@ -220,7 +220,7 @@ pub struct __Optional[T] {
     }
 
     @inline func `copy`() {
-        #if (T.isClass || T.hasReferenceMembers)
+        #if (T.isClass || T.isDestructible)
             return This{ ok: ok, val: __copy!(val) }
         else #if (has_member!(#T, "op__copy", #func() -> T))
             return This{ ok: ok, val: val.op__copy() }
@@ -735,13 +735,13 @@ pub class String : OutputStream {
     }
 
     @inline
-    func `deinit`() {
+    func `destructor`() {
         clear()
     }
 
     @static
     func `destructor_fwd`(ptr: ^void) {
-        (ptr !: This).op__deinit()
+        (ptr !: This).op__destructor()
     }
 
     func clear() : void {
@@ -921,7 +921,8 @@ pub class BufferedOutputStream: OutputStream {
         }
     }
 
-    func `deinit`() {
+    @inline
+    func `destructor`() {
         if (_buffer) {
             if (_size > 0)
                 flush(_buffer, _size)
@@ -929,6 +930,11 @@ pub class BufferedOutputStream: OutputStream {
             _buffer = null
             _size = 0
         }
+    }
+
+    @static
+    func `destructor_fwd`(ptr: ^void) {
+        (ptr !: This).op__destructor()
     }
 }
 
@@ -981,6 +987,20 @@ pub struct Slice[T] {
         }
     }
 
+    @inline
+    func size() => len
+
+    @inline
+    func view(start: u64, count: i64 = -1) {
+        assert!(start <= len)
+        if (count == -1)
+            count = <i64>(len - start);
+        else
+            assert!(count >= 0 && count <= (len - start))
+
+        return This(ptroff!(data + start), count)
+    }
+
     #if (!T.isUnresolved) {
         const func `str`(sb: OutputStream) {
             sb.appendChar('[')
@@ -1004,7 +1024,7 @@ func __tuple_dctor[T](tup: &T) {
     require!(T.isTuple, "expecting a tuple type, got `{t}`", #T)
     #for (const i : 0 .. T.membersCount) {
         #const M = typeat!(T, #{i});
-        #if (M.isClass || M.hasReferenceMembers)
+        #if (M.isClass || M.isDestructible)
                 delete tup.#{i}
         else #if (has_member!(#M, "op__destructor", #func() -> void))
             tup.#{i}.op__destructor()
@@ -1018,7 +1038,7 @@ func __union_dctor[T](obj: &T) {
         #for (const i: 0..#{T.membersCount}) {
             case #{typeat!(T, i)} as y => {
                 #const M = typeat!(T, i);
-                #if (M.isClass || M.hasReferenceMembers)
+                #if (M.isClass || M.isDestructible)
                     __forcedrop!(y)
                 else #if (has_member!(#M, "op__destructor", #func() -> void))
                     y.op__destructor()
@@ -1033,7 +1053,7 @@ func __tuple_copy[T](tup: &T) {
     #const nodes = mk_ast_list!();
     #for (const member: 0 .. T.membersCount) {
         #const M = typeat!(T, member);
-        #if (M.isClass || M.hasReferenceMembers) {
+        #if (M.isClass || M.isDestructible) {
             ast_list_add!(
                 #{nodes},
                 __copy!(tup.#{mk_integer!(member)})
@@ -1064,7 +1084,7 @@ func __union_copy[T](obj: &T) : T {
         #for (const member: 0 .. T.membersCount) {
             case #{typeat!(T, member)} as y => {
                 #const M = typeat!(T, member);
-                #if (M.isClass || M.hasReferenceMembers ) {
+                #if (M.isClass || M.isDestructible ) {
                     return __copy!(y)
                 }
                 else #if (has_member!(#M, "op__copy", #func() -> M )) {
@@ -1228,7 +1248,7 @@ struct StackTrace {
         }
     }
 
-    func `deinit`() {
+    func `destructor`() {
         if (calls != null) {
             free(calls !: ^void)
             calls = null
@@ -1257,14 +1277,72 @@ pub class Exception {
     const func `str`(os: &OutputStream) {
         os << name << "(\"" << what() << "\") at:" << stackTrace << "\n"
     }
+
+    @inline func `deinit`() {
+        stackTrace.op__destructor()
+    }
+
+    @inline func `destructor`() {
+        op__deinit()
+    }
 }
 
 pub struct Void{}
 
+pub struct Repeat {
+    - c: char
+    - count: u64
+    func `init`(c: char, count: u64) { this.c = c; this.count = count }
+
+    @inline
+    const func `str`(os: &OutputStream) {
+        for (const i: 0..count)
+            os << c
+    }
+}
+
 @[pure, inline]
-pub func panicUnhandledException(ex: &Exception) {
+pub func panicUnhandledException(ex: Exception) {
     stderr << ex << "\n"
+    __smart_ptr_drop(ex)
     abort()
+}
+
+pub struct Lambda[Fun] {
+    require!(Fun.isFunction, "type '{t}' must be a func type param", Fun)
+    lambda: lambda_of!(Fun)
+
+    func `init`(fun: Fun) {
+        this.lambda = fun
+    }
+
+    func `()`(...params: auto) {
+        #if (Fun.hasVoidReturnType)
+            lambda(...&&params)
+        else
+            return lambda(...&&params)
+    }
+
+    func `destructor`() {
+        if (lambda.0) {
+            #if (defined __DEBUG && defined TRACE_MEMORY)
+                __smart_ptr_drop_trace(lambda.0, file!, line!)
+            else
+                __smart_ptr_drop(lambda.0)
+            lambda.0 = null
+        }
+    }
+
+    func `copy`() {
+        if (lambda.0) {
+            #if (defined __DEBUG && defined TRACE_MEMORY)
+                __smart_ptr_get_trace(lambda.0, file!, line!)
+            else
+                __smart_ptr_get(lambda.0)
+            return This{lambda: lambda}
+        }
+        return This{lambda: lambda}
+    }
 }
 
 #if (defined __CXY_TEST__) {

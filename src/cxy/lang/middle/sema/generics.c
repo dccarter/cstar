@@ -238,6 +238,7 @@ static void removeEmptyVariadicFunctionParameter(AstNode *node)
         prev->next = NULL;
     }
     else {
+        node->funcDecl.this_->next = NULL;
         node->funcDecl.signature->params = NULL;
     }
 }

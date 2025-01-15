@@ -206,13 +206,20 @@ static AstNode *makeClosureForwardFunction(AstVisitor *visitor, AstNode *node)
     for (; param; param = param->next) {
         insertAstNode(&params, shallowCloneAstNode(ctx->pool, param));
         insertAstNode(&argList,
-                      makeResolvedPath(ctx->pool,
-                                       &param->loc,
-                                       param->funcParam.name,
-                                       param->flags,
-                                       params.last,
-                                       NULL,
-                                       param->type));
+                      makeUnaryExpr(ctx->pool,
+                                    &param->loc,
+                                    flgNone,
+                                    true,
+                                    opMove,
+                                    makeResolvedPath(ctx->pool,
+                                                     &param->loc,
+                                                     param->funcParam.name,
+                                                     param->flags,
+                                                     params.last,
+                                                     NULL,
+                                                     param->type),
+                                    NULL,
+                                    param->type));
     }
 
     AstNode *var = makeVarDecl(
@@ -397,13 +404,21 @@ void checkClosureExpr(AstVisitor *visitor, AstNode *node)
         return;
     }
 
+    bool currentReturnState = ctx->returnState,
+         currentExplicitCatch = ctx->explicitCatch;
+    ctx->returnState = false;
+    ctx->explicitCatch = false;
     const Type *body_ = checkType(visitor, body);
+    ctx->returnState = currentReturnState;
+    ctx->explicitCatch = currentExplicitCatch;
     if (typeIs(body_, Error)) {
         node->type = ERROR_TYPE(ctx);
         return;
     }
 
     type = createStructForClosure(visitor, node);
+    ctx->returnState = currentReturnState;
+    ctx->explicitCatch = currentExplicitCatch;
     if (typeIs(type, Error)) {
         node->type = ERROR_TYPE(ctx);
         return;

@@ -51,7 +51,7 @@ static void bindInheritBaseFields(AstVisitor *visitor, AstNode *node)
 static inline bool shouldCaptureSymbol(const AstNode *closure,
                                        const AstNode *symbol)
 {
-    return closure &&
+    return closure && !hasFlag(symbol, TopLevelDecl) &&
            (nodeIs(symbol, VarDecl) || nodeIs(symbol, FuncParamDecl) ||
             nodeIs(symbol, FieldDecl));
 }

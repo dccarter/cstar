@@ -18,6 +18,6 @@ func main(args: [string]) {
     var m, n: i32
     var a, _, b = (20, ' ', true)
     var d, e = (20, ' ', true)
-    var f, g = ()()
+    var f, g = (() => (20, 20))()
   }
 }

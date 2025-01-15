@@ -113,14 +113,25 @@ static AstNode *makeReturnExceptionBlock(TypingContext *ctx,
     }
     insertAstNode(
         &stmts,
-        makeReturnAstNode(
-            ctx->pool,
-            &var->loc,
-            flgNone,
-            makeUnionValueExpr(
-                ctx->pool, builtinLoc(), flgNone, expr, 1, NULL, type),
-            NULL,
-            type));
+        makeReturnAstNode(ctx->pool,
+                          &var->loc,
+                          flgNone,
+                          makeUnionValueExpr(ctx->pool,
+                                             builtinLoc(),
+                                             flgNone,
+                                             makeUnaryExpr(ctx->pool,
+                                                           &var->loc,
+                                                           flgNone,
+                                                           true,
+                                                           opMove,
+                                                           expr,
+                                                           NULL,
+                                                           expr->type),
+                                             1,
+                                             NULL,
+                                             type),
+                          NULL,
+                          type));
 
     return makeBlockStmt(
         ctx->pool, &var->loc, stmts.first, NULL, makeVoidType(ctx->types));

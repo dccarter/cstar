@@ -59,7 +59,7 @@ void checkIndexExpr(AstVisitor *visitor, AstNode *node)
     }
 
     node->flags |= node->indexExpr.target->flags;
-    const Type *unwrapped = stripReference(unwrapType(target, NULL)),
+    const Type *unwrapped = stripReference(resolveUnThisUnwrapType(target)),
                *stripped = stripAll(target);
     if (typeIs(stripped, Array)) {
         if (!isIntegerType(index)) {

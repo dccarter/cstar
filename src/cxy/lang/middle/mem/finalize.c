@@ -90,7 +90,8 @@ static void visitBackendCallExpr(AstVisitor *visitor, AstNode *node)
     MemFinalizeContext *ctx = getAstVisitorContext(visitor);
     AstNode *args = node->backendCallExpr.args;
     csAssert0(args);
-    const Type *type = stripPointerOrReference(args->type);
+    const Type *type =
+        resolveUnThisUnwrapType(stripPointerOrReference(args->type));
     AstNode *func = NULL, *var = NULL;
     switch (node->backendCallExpr.func) {
     case bfiCopy:

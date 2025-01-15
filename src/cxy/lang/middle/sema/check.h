@@ -168,6 +168,9 @@ AstNode *inheritanceBuildVTable(TypingContext *ctx, AstNode *node);
 
 const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node);
 AstNode *transformClosureArgument(AstVisitor *visitor, AstNode *node);
+const Type *transformToInitCoverCallExpr(AstVisitor *visitor,
+                                         AstNode *node,
+                                         const Type *target);
 
 void implementTupleTypeCopyAndDestructor(AstVisitor *visitor, AstNode *node);
 

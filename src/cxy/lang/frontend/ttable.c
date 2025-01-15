@@ -112,6 +112,7 @@ static HashCode hashType(HashCode hash, const Type *type)
         break;
     case typGeneric:
         hash = hashUint64(hash, type->generic.paramsCount);
+        hash = hashPtr(hash, type->generic.decl);
         if (type->name)
             hash = hashStr(hash, type->name);
         break;
@@ -298,9 +299,11 @@ bool compareTypes(const Type *lhs, const Type *rhs)
         if (typeIs(right, This))
             return compareTypes(left, right->_this.that);
     case typEnum:
-    case typGeneric:
     case typInterface:
         return (left->name == right->name) && (left->ns == right->ns);
+    case typGeneric:
+        return (left->name == right->name) && (left->ns == right->ns) &&
+               (left->generic.decl == right->generic.decl);
     case typInfo:
         return compareTypes(left->info.target, right->info.target);
     case typException:

@@ -1,0 +1,12 @@
+
+task!("hello", (@unused ctx: &Context): !void => {
+    // build main.cxy application named app
+    cxy(cxy, "main", "main.cxy" )
+})
+
+task!("run", (@unused ctx: &Context): !void => {
+    // build main.cxy application named app
+    system("./main")
+})
+
+defaults!("hello", "run")

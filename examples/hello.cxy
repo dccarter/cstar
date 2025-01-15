@@ -1,19 +1,4 @@
-import { JSONParser, parse } from "stdlib/json.cxy"
-import { Vector } from "stdlib/vector.cxy"
+@__cc "../src/cxy/stdlib/native/memtrace.c"
 
-@[json]
-struct User {
-    age = 30:i32;
-    name: String = null;
-    stats = Vector[i32]();
-
-    const func `str`(os: &OutputStream) {
-         os << "User{name: " << name << ", age: " << age << ", stats: " << stats << "}"
-    }
-}
-
-func main(): !void {
-    var parser = JSONParser("{\"age\": 35, \"name\": \"Carter\", \"stats\": [ 10, 20, 30 ] }");
-    var x = parse[User](&parser);
-    stdout << x
+func main(args: [string]): !void {
 }
