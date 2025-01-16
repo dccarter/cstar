@@ -1,5 +1,21 @@
+# CLI Arguments
+
+`cxy` stdlib comes with a simple CLI arguments parser (see `stdlib/args.cxy`)
+
+### Usage
+
+1. Import the types needed to construct a parser, commands and flags
+2. Create some commands that will be used by the application
+3. Create an application that will parse and invoke the requested command
+4. Add global flags and commands to the application
+5. Parse the command line arguments
+
+### Example
+
+Following example show how to craft an app that parses command line arguments.
+
+```c
 import { App, Command, command, Param } from "stdlib/args.cxy"
-@__cc "../src/cxy/stdlib/native/memtrace.c"
 
 class RateCommand: Command {
    func `init`() {
@@ -31,8 +47,6 @@ class RejectCommand: Command {
         return 0
     }
 }
-
-macro hello(value, body) println(value!, body!)
 
 func main(args: [string]): !void {
     // Create application instance
@@ -66,8 +80,46 @@ func main(args: [string]): !void {
 
     // Parse the command line arguments
     app.parse(args)
-
-    :hello 10 {
-    }
 }
+```
 
+### Example Output
+
+1. Show application help
+   ```
+   # Show help
+   > app help
+   rater v1.0.0
+   Application used to test stdlib/args.cxy
+   
+   Usage:  rater [command]
+   
+   Available Commands:
+     rate    Send a rating to cxy
+     help    Show application or command help
+     reject  Why would want to reject
+     version Show application version
+   
+   Flags:
+       -h, --help            Show application or current command help
+           --location        The location where the user is location
+       -u, --user (required) The username of the person providing the comment
+   
+   Use "rater [command] --help" for more information about a command
+   ```
+2. Show help specific to a command
+   ```
+   # Show rate help ( or `app rate --help`)
+   > app help rate
+   Usage:
+     rater rate [flags]
+   
+   Flags:
+       -s, --stars (required) The number of stars you are rating cxy
+           --comment          The rating comment
+   
+   Global Flags:
+       -h, --help            Show application or current command help
+           --location        The location where the user is location
+       -u, --user (required) The username of the person providing the comment
+   ```

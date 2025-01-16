@@ -40,17 +40,6 @@ static void evaluateStructMembers(AstVisitor *visitor, AstNode *node)
         const Type *type = NULL;
         if (nodeIs(member, FuncDecl)) {
             type = member->type ?: checkFunctionSignature(visitor, member);
-            if (isBuiltinsInitialized() &&
-                member->funcDecl.operatorOverload == opDeinitOverload) //
-            {
-                logError(ctx->L,
-                         &member->loc,
-                         "struct should not implement `deinit` operator, "
-                         "structs are value types",
-                         NULL);
-                node->type = ERROR_TYPE(ctx);
-                continue;
-            }
         }
         else {
             type = checkType(visitor, member);
@@ -71,25 +60,39 @@ static void evaluateStructMembers(AstVisitor *visitor, AstNode *node)
 static bool preCheckStructMembers(AstNode *node, NamedTypeMember *members)
 {
     AstNode *member = node->structDecl.members;
-    bool referenceMembers = false;
+    bool hasMemBuiltins = false;
     for (u64 i = 0; member; member = member->next, i++) {
         if (nodeIs(member, FieldDecl)) {
             members[i] = (NamedTypeMember){.name = member->structField.name,
                                            .type = member->type,
                                            .decl = member};
             member->structField.index = i;
-            referenceMembers = referenceMembers || isClassType(member->type) ||
-                               hasReferenceMembers(member->type);
+            hasMemBuiltins = hasMemBuiltins || isClassType(member->type) ||
+                             isDestructible(member->type);
         }
         else {
             members[i] = (NamedTypeMember){.name = getDeclarationName(member),
                                            .type = member->type,
                                            .decl = member};
-
-            node->flags |= member->flags & (flgAbstract | flgVirtual);
+            if (nodeIs(member, FuncDecl)) {
+                switch (member->funcDecl.operatorOverload) {
+                case opDeinitOverload:
+                    // fallthrough
+                case opDestructorOverload:
+                    if (member->funcDecl.body != NULL)
+                        node->flags |= flgImplementsDeinit;
+                    // fallthrough
+                case opDestructorFwd:
+                    hasMemBuiltins =
+                        hasMemBuiltins || member->funcDecl.body != NULL;
+                    break;
+                default:
+                    break;
+                }
+            }
         }
     }
-    return referenceMembers;
+    return hasMemBuiltins;
 }
 
 static const Type *findCompatibleAnonymousType(AstVisitor *visitor,
@@ -443,7 +446,7 @@ void checkStructExpr(AstVisitor *visitor, AstNode *node)
 void checkStructDecl(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-
+    ctx->cls = getDeclarationName(node);
     node->structDecl.thisType =
         node->structDecl.thisType
             ?: makeThisType(ctx->types, node->structDecl.name, flgNone);
@@ -460,7 +463,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
         mallocOrDie(sizeof(NamedTypeMember) * membersCount);
 
     ctx->currentStruct = node;
-    bool referenceMembers = preCheckStructMembers(node, members);
+    bool hasMemBuiltins = preCheckStructMembers(node, members);
     ctx->currentStruct = NULL;
 
     if (typeIs(node->type, Error))
@@ -475,7 +478,7 @@ void checkStructDecl(AstVisitor *visitor, AstNode *node)
                        node->flags & (flgTypeApplicable | flgReferenceMembers));
     node->type = this;
 
-    if (referenceMembers) {
+    if (hasMemBuiltins) {
         implementClassOrStructBuiltins(visitor, node);
         if (typeIs(node->type, Error))
             goto checkStructMembersError;

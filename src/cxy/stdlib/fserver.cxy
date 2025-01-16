@@ -60,7 +60,7 @@ struct CachedFile {
         lastAccess = 0
     }
 
-    func `destructor`() {
+    func `deinit`() {
         clear()
     }
 }
@@ -362,7 +362,7 @@ pub class FileServer {
         }
     }
 
-    func loadFile(rel: String) : __Optional[&CachedFile] {
+    func loadFile(rel: String) : Optional[&CachedFile] {
         var it = cachedFiles.[rel];
         if (!it) {
             var pathOpt = fileExists(&rel);

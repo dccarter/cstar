@@ -1175,7 +1175,7 @@ static void visitBackendBfiMemAlloc(ConstAstVisitor *visitor,
 static void visitBackendBfiCopy(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    const Type *type = stripReference(node->type);
+    const Type *type = resolveUnThisUnwrapType(stripReference(node->type));
     if (isClassType(type)) {
         if (ctx->memTraceEnabled) {
             format(getState(ctx), "__smart_ptr_get_trace(", NULL);
@@ -1677,8 +1677,7 @@ static void visitFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
         if (hasFlag(node, Constructor))
             format(getState(ctx), "__attribute__((constructor))\n", NULL);
         if (findAttribute(node, S_inline))
-            format(
-                getState(ctx), "__attribute__((always_inline)) inline", NULL);
+            format(getState(ctx), "__attribute__((always_inline))", NULL);
         else if (findAttribute(node, S_noinline))
             format(getState(ctx), "__attribute__((noinline))", NULL);
         const AstNode *opt = findAttribute(node, S_optimize);
@@ -1732,7 +1731,7 @@ static void generateTestMainFunction(CodegenContext *ctx,
     format(getState(ctx),
            "int main(int argc, char *argv[]) {{{>}\n"
            "return builtins_runTests((SliceI_sE){{.data = argv, .len = argc}, "
-           "\"{s}\", (SliceI_TsFZ__OptionalI_Tsu64u64_E___E){{",
+           "\"{s}\", (SliceI_TsFZOptionalI_Tsu64u64_E___E){{",
            (FormatArg[]){{.s = testFile}});
     if (ctx->hasTestCases) {
         format(getState(ctx),
@@ -1894,8 +1893,7 @@ static void generateCodeEpilogue(FILE *f)
                "#ifdef __MAIN_RETURN_TYPE__\n"
                "__MAIN_RETURN_TYPE__ main(int argc, char *argv[]) {\n"
                "#ifdef __MAIN_PARAM_TYPE__\n"
-               "    __MAIN_PARAM_TYPE__ args = args = {{ .data = argv, .len = "
-               "argc }};\n"
+               "    __MAIN_PARAM_TYPE__ args = { .data = argv, .len = argc };\n"
                "#define __MAIN_ARGS__ args\n"
                "#else\n"
                "#define __MAIN_ARGS__\n"

@@ -164,6 +164,7 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
     TypingContext *ctx = getAstVisitorContext(visitor);
     AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;
     ctx->explicitCatch = node->binaryExpr.op == opCatch;
+    bool currentReturnState = ctx->returnState;
     const Type *left = checkType(visitor, lhs), *left_ = stripAll(left);
 
     Operator op = node->binaryExpr.op;
@@ -246,6 +247,7 @@ void checkBinaryExpr(AstVisitor *visitor, AstNode *node)
 
     if (opKind == optCatch) {
         checkCatchBinaryOperator(visitor, node, &newCatcher);
+        ctx->returnState = currentReturnState;
         return;
     }
 

@@ -11,13 +11,19 @@ func closureArg2(fn: func(msg: string) -> void) {
 }
 
 func main(args: [string]) {
-  const one = 
+  const one = () => 1
   one()
-  ()("User")
+  ((name: string) => {
+    return "Hello ${name}"
+  })("User")
   var x = 100
   var b = "Hello"
-  ()()
-  const f = 
-  closureArg0()
-  closureArg2()
+  (() => "${b} -> ${x}")()
+  const f = () => {
+    const g = () => "${b} -> ${x}"
+  }
+  closureArg0(() => { }
+  )
+  closureArg2((msg: string) => { }
+  )
 }

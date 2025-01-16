@@ -387,6 +387,8 @@ bool typeIsBaseOf(const Type *base, const Type *type);
 
 bool hasReferenceMembers(const Type *type);
 
+bool isDestructible(const Type *type);
+
 static inline bool isClassOrStructType(const Type *type)
 {
     return isClassType(type) || isStructType(type);

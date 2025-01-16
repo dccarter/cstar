@@ -1,0 +1,457 @@
+module args
+
+import { Vector } from "stdlib/vector.cxy"
+import { HashMap } from "stdlib/hash.cxy"
+
+macro NOSF '\0':char
+
+exception ParserError(msg: String) => msg != null? msg.str() : ""
+
+pub struct Param {
+    name: __string
+    desc: __string
+    sf = NOSF!;
+    required = false;
+    option = true;
+    def = __string();
+    isGlobal = false;
+
+    const func show(os: &OutputStream, longestParam: u64) {
+        var remaining = longestParam - name.size();
+        os << "    "
+        if (sf != NOSF!) {
+            os << '-' << sf
+               << ", "
+        } else {
+            os << "    "
+        }
+
+        os << "--" <<  name
+        if (required) {
+            os << " (required)"
+            remaining -= 11
+        }
+        os << Repeat(' ', remaining) << " " << desc
+            << "\n"
+    }
+
+    @inline
+    const func `str`(os: &OutputStream) {
+        os << name
+    }
+}
+
+struct ParamContainer {
+    params = HashMap[__string, Param]();
+
+    func findParamByFlag(flag: char): Optional[&Param] {
+        for (const _, param: params) {
+            if (param.sf != NOSF! && param.sf == flag)
+                return &param
+        }
+        return null
+    }
+
+    @inline
+    func findByName(name: __string) => params.[name]
+
+    func addParam(param: Param): !void {
+        if (params.[param.name])
+            raise ParserError(f"argument '${param.name}' already exists")
+        if (param.sf != NOSF! && !!findParamByFlag(param.sf))
+            raise ParserError(f"argument with short format '${param.sf}' already exists")
+
+        params.[param.name] = &&param
+    }
+
+    @inline
+    const func empty() => params.empty()
+}
+
+pub class Command {
+    name: __string
+    desc: __string
+    longestParam = 0:u64;
+    interactive = false;
+    hasLocalFlags = false;
+    params = ParamContainer{};
+    parsed = HashMap[__string, __string]();
+    positionals = Vector[__string]();
+    rest = Vector[__string]();
+
+    func `init`(name: __string, desc: __string) {
+        this.name = name
+        this.desc = desc
+    }
+
+    virtual func run(): i32
+
+    func parse(args: [string]): !void {
+        var i = 0;
+        while (i < args.size()) {
+            var full = args.[i++];
+            var arg = __string(full);
+            if (arg.[0] != '-':char) {
+                positionals.push(arg)
+                continue
+            }
+            var val = __string();
+            var idx = arg.indexOf('=':char);
+            if (idx) {
+                var index = *idx;
+                val = arg.substr(index + 1)
+                arg = arg.substr(0, <i64>index)
+            }
+
+            var paramOpt = None[&Param]();
+            if (arg.[1] == '-':char) {
+                // skip the --
+                arg = arg.substr(2)
+                if (arg.empty()) {
+                    // rest of arguments
+                    if (val.empty()) {
+                        populateRest(args, i + 1)
+                        break
+                    }
+                    raise ParserError(f"invalid command line argument '${full}'")
+                }
+                paramOpt = params.findByName(arg)
+            }
+            else {
+                arg = arg.substr(1)
+                if (arg.empty())
+                    raise ParserError(f"invalid command line argument '${full}'")
+                if (arg.size() > 1)
+                    parseMultipleOptions(arg)
+                paramOpt = params.findParamByFlag(arg.[<i64>(arg.size() - 1)])
+            }
+
+            if (!paramOpt)
+                raise ParserError(f"option '${full}' is not supported by command '${name}'")
+
+            const param = *paramOpt;
+            if (param.option) {
+                if (!val.empty())
+                    raise ParserError(f"value given to an option argument '${name}'")
+            }
+            else if (val.empty()) {
+                if (i >= args.size() || args.[i].[0] == '-':char)
+                    raise ParserError(f"argument '${arg}' is missing a value")
+                val = __string(args.[i++])
+            }
+            addParsed(param.name, val)
+        }
+        validateParams()
+    }
+
+    @inline
+    func addParam(param: Param): !void {
+        hasLocalFlags = hasLocalFlags || !param.isGlobal
+        if (param.option && !param.def.empty())
+            param.option = false
+        if (!param.option && !param.required && param.def.empty())
+            param.required = true
+        params.addParam(param)
+        var len = param.name.size();
+        if (param.required)
+            len += 11
+        longestParam = max(longestParam, len)
+    }
+
+    func showHelp(app: __string, os: &OutputStream, isHelp: bool) {
+        if (isHelp) {
+            os << desc << "\n\n"
+        }
+
+        os << "Usage:\n"
+        os << "  " << app << ' ' << name
+        if (hasLocalFlags) {
+            os << " [flags]\n"
+               << "\n"
+               << "Flags:\n"
+
+            for (const _, param: params.params) {
+                if (param.isGlobal)
+                    continue
+
+                param.show(os, longestParam)
+            }
+        }
+        else {
+            // append new line
+            os << '\n'
+        }
+    }
+
+    @inline
+    const func `str`(@unused os: &OutputStream) {}
+
+    const func argument(name: __string) => parsed.[name]
+
+    - func validateParams(): !void {
+        for (const _, param: params.params) {
+            if (param.option)
+                continue
+            if (!parsed.[param.name]) {
+                if (param.def.empty())
+                    raise ParserError(f"missing required argument '${param.name}'")
+                else
+                    parsed.[param.name] = param.def
+            }
+        }
+    }
+
+    - func parseMultipleOptions(opts: __string): !void {
+        for (const i: 0..opts.size()-1) {
+            var paramOpt = params.findParamByFlag(opts.[i]);
+            if (!paramOpt)
+                raise ParserError(
+                    f"option '${opts.[i]}' specified in '${opts}' not supported by command '${name}'"
+                )
+            const param = *paramOpt;
+            if (!param.option)
+                raise ParserError(
+                    f"argument '${name}' passed in multi short options '${opts}' requires a value"
+                )
+            addParsed(param.name, __string())
+        }
+    }
+
+    @inline
+    - func populateRest(args: [string], idx: u64): void {
+        for (const i: idx..args.size()) {
+            rest.push(args.[i])
+        }
+    }
+
+    @inline
+    - func addParsed(arg: __string, val: __string): !void {
+        if (parsed.[arg])
+            raise ParserError(f"duplicate argument '${arg}' specified")
+        parsed.[arg] = val
+    }
+}
+
+pub func command[T](...params: Param): !T {
+    var cmd = T();
+    #for (const param: params) {
+        cmd.addParam(#{param})
+    }
+    return &&cmd
+}
+
+class HelpCommand : Command {
+    showHelp: Lambda[func(_: __string) -> i32];
+    func `init`(showHelp: func(_: __string) -> i32) {
+        super("help", "Show application or command help")
+        this.showHelp =  Lambda[func(_: __string) -> i32](showHelp)
+    }
+
+    func run(): i32 {
+        if (!positionals.empty())
+            return showHelp(positionals.[0])
+        else
+            return showHelp(__string())
+    }
+}
+
+class VersionCommand : Command {
+    appName: __string
+    appVersion: __string
+
+    func `init`(appName: __string, appVersion: __string) {
+        super("version", "Show application version")
+        this.appName = appName
+        this.appVersion = appVersion
+    }
+
+    func run(): i32 {
+        stdout << appName << " v" << appVersion
+        return 0
+    }
+}
+
+pub class App {
+    name: __string
+    version: __string
+    desc: __string
+    defaultCmd: __string
+    longestParam = 0:u64;
+    longestCmd = 0:u64;
+    params = ParamContainer{};
+    commands = HashMap[__string, Command]();
+
+    func `init`(
+        name: __string,
+        version: __string,
+        desc: __string,
+        defaultCmd: __string
+    ) {
+        this.name = name
+        this.version = version
+        this.desc = desc
+        this.defaultCmd = defaultCmd
+
+        addParam(Param{
+            name: "help".s,
+            sf: 'h',
+            desc: "Show application or current command help".s
+        }) catch discard
+
+        addCommand(
+            HelpCommand((name: __string): i32 => {
+                if (!name.empty()) {
+                    // an error occurred with the help command
+                    var cmdOpt = commands.[name];
+                    if (!cmdOpt) {
+                        var msg = f"command '${name}' passed to help does not exist";
+                        this.showCommandHelp(&stderr, *commands.["help"], msg.str())
+                        return -1
+                    }
+                    this.showCommandHelp(&stdout, *cmdOpt, null)
+                }
+                else {
+                    this.showHelp(&stdout, null)
+                }
+                return 0
+            })
+        ) catch discard
+
+        addCommand(VersionCommand(name, version)) catch discard
+    }
+
+    func `()`(...args: auto): !void {
+        #const hasCommand = false;
+        #for (const arg: args) {
+            #const M = typeof!(#{arg});
+            #if (#M == #Param) {
+                require!(
+                    !#{hasCommand}, "all global arguments must be added before commands"
+                )
+                addParam(&& #{arg})
+            }
+            else #if (is_base_of!(#Command, #M)) {
+                #{hasCommand = true}
+                addCommand(&& #{arg})
+            }
+            else {
+                error!("type '{t}' must implement args::Command", #M)
+            }
+        }
+    }
+
+    @inline
+    func addParam(param: Param): !void {
+        param.isGlobal = true
+        if (param.option && !param.def.empty())
+            param.option = false
+        if (!param.option && !param.required && param.def.empty())
+            param.required = true
+        params.addParam(param)
+        var len = param.name.size();
+        if (param.required)
+            len += 11
+        longestParam = max(longestParam, len)
+    }
+
+    func addCommand(cmd: Command): !void {
+        if (commands.[cmd.name])
+            raise ParserError("command with name '${cmd.name}' already added")
+        longestCmd = max(longestCmd, cmd.name.size())
+        for (const _, param: params.params) {
+            cmd.addParam(param)
+        }
+        commands.[cmd.name] = &&cmd
+    }
+
+    func parse(args: [string]): i32 {
+        var name = defaultCmd;
+        if (args.size() > 1 && args.[1].[0] != '-':char ) {
+           name = __string(args.[1])
+           args = args.view(2)
+        }
+        else
+            args = args.view(1)
+
+        if (!commands.[name]) {
+            showHelp(&stderr, f"specified default command '${defaultCmd}' is not a valid command" )
+            return -1
+        }
+
+        var cmdOpt = commands.[name];
+        if (!cmdOpt){
+            showHelp(&stderr, f"command '{name}' not found")
+            return -1
+        }
+        var cmd = *cmdOpt;
+        cmd.parse(args) catch {
+            showCommandHelp(&stderr, cmd, ex!.what())
+            return -1
+        }
+
+        if (cmd.parsed.["help"]) {
+            showCommandHelp(&stdout, cmd)
+            return 0
+        }
+
+        return cmd.run()
+    }
+
+    func showHelp(os: &OutputStream, msg: String = null): void {
+        if (msg != null) {
+            os << msg << '\n';
+        }
+        else {
+            os << name << " v" << version
+               << "\n"
+               << desc
+               << "\n"
+        }
+        os << '\n';
+
+        os << "Usage:  " << name << " [command]\n"
+           << '\n'
+
+        // append commands help
+        if (!commands.empty()) {
+            os << "Available Commands:\n"
+            for (const _, cmd: commands) {
+                var remaining = longestCmd - cmd.name.size();
+                os << "  " << cmd.name << ' '
+                if (cmd.interactive) {
+                    os << "(interactive) "
+                    remaining -= 14
+                }
+                if (remaining > 0)
+                    os << Repeat(' ', remaining)
+                os << cmd.desc << '\n'
+            }
+            os << "\n"
+        }
+
+        // append global arguments
+        if (!params.empty()) {
+            os << "Flags:\n"
+            for (const _, param: params.params) {
+                param.show(os, longestParam)
+            }
+        }
+        os << '\n'
+           << "Use \"" << name
+           << " [command] --help\" for more information about a command"
+           << "\n";
+    }
+
+    func showCommandHelp(os: &OutputStream, cmd: &Command, err: string = null): void {
+        if (err != null)
+            os << "error: " << err << "\n"
+        cmd.showHelp(name, os, err != null)
+        // append global arguments
+        if (!params.empty()) {
+            os << "\nGlobal Flags:\n"
+            for (const _, param: params.params) {
+                param.show(os, longestParam)
+            }
+        }
+    }
+}

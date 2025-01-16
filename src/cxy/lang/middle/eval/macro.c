@@ -1362,6 +1362,47 @@ static AstNode *makeBaseOfNode(AstVisitor *visitor,
     return args;
 }
 
+static AstNode *makeIsBaseOfNode(AstVisitor *visitor,
+                                 const AstNode *node,
+                                 AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 2))
+        return NULL;
+
+    const Type *base = args->type ?: evalType(ctx, args);
+    const Type *type = args->next->type ?: evalType(ctx, args->next);
+
+    if (typeIs(base, Error) || typeIs(type, Error))
+        return NULL;
+
+    if (!typeIs(base, Info) && !hasFlag(args, Typeinfo)) {
+        logError(ctx->L,
+                 &args->loc,
+                 "invalid `is_base_of!` macro 'base' argument, expecting a "
+                 "type info object",
+                 NULL);
+        return NULL;
+    }
+    if (!typeIs(type, Info) && !hasFlag(args->next, Typeinfo)) {
+        logError(ctx->L,
+                 &args->next->loc,
+                 "invalid `is_base_of!` macro 'type' argument, expecting a "
+                 "type info object",
+                 NULL);
+        return NULL;
+    }
+    base = resolveUnThisUnwrapType(base);
+    type = resolveUnThisUnwrapType(type);
+    const Type *impl = getTypeBase(type);
+    args->tag = astBoolLit;
+    args->next = NULL;
+    args->type = getPrimitiveType(ctx->types, prtBool);
+    clearAstBody(args);
+    args->boolLiteral.value = impl && impl == base;
+    return args;
+}
+
 static AstNode *makePointerOfNode(AstVisitor *visitor,
                                   const AstNode *node,
                                   AstNode *args)
@@ -1439,6 +1480,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "indexof", makeIndexOfNode},
     {.name = "info", makeAstLogNoteNode},
     {.name = "init_defaults", makeInitializeDefaults},
+    {.name = "is_base_of", makeIsBaseOfNode},
     {.name = "lambda_of", makeLambdaOfAstNode},
     {.name = "len", makeLenNode},
     {.name = "line", makeLineNumberNode},

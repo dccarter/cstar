@@ -30,7 +30,7 @@ void implementTupleTypeCopyAndDestructor(AstVisitor *visitor, AstNode *node)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     bool hasCopy = node->type->tuple.copyFunc != NULL;
-    if (!isBuiltinsInitialized() || hasCopy || !hasReferenceMembers(node->type))
+    if (!isBuiltinsInitialized() || hasCopy || !isDestructible(node->type))
         return;
 
     const Type *func =

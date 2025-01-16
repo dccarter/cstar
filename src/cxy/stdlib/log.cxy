@@ -15,18 +15,6 @@ enum Level {
     ERROR
 }
 
-struct Repeat {
-    - c: char
-    - count: u64
-    func `init`(c: char, count: u64) { this.c = c; this.count = count }
-
-    @inline
-    const func `str`(os: &OutputStream) {
-        for (const i: 0..count)
-            os << c
-    }
-}
-
 struct FixedWidth {
     - s: __string
     - count: u64

@@ -1110,6 +1110,7 @@ static void visitWhileStmt(AstVisitor *visitor, AstNode *node)
         simplifyCondition(ctx, cond);
     }
     astVisitFallbackVisitAll(visitor, node);
+    astVisit(visitor, node->whileStmt.update);
 }
 
 void visitSwitchStmt(AstVisitor *visitor, AstNode *node)
@@ -1189,9 +1190,16 @@ static void visitFuncDecl(AstVisitor *visitor, AstNode *node)
     SimplifyContext *ctx = getAstVisitorContext(visitor);
     ctx->currentFunction = node;
     n2eAddNodeToExternDecl(&ctx->n2e, node, node);
+    AstNode *param = node->funcDecl.signature->params;
     if (node->funcDecl.this_) {
         node->funcDecl.signature->params = node->funcDecl.this_;
     }
+
+    for (; param; param = param->next) {
+        if (isVoidType(param->type))
+            param->next = NULL;
+    }
+
     AstNode *body = node->funcDecl.body;
     if (nodeIs(body, ExprStmt)) {
         AstNode *ret = makeReturnAstNode(ctx->pool,

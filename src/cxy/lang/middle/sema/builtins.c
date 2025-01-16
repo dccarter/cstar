@@ -318,13 +318,11 @@ static void implementDestructorFunction(AstVisitor *visitor,
             if (callDctor)
                 insertAstNode(&stmts, callDctor);
         }
-
-        AstNode *callDeinit =
-            implementCallClassDeinit(ctx, node, &destructor->loc);
-        if (callDeinit) {
-            node->flags |= flgImplementsDeinit;
-            insertAstNode(&stmts, callDeinit);
-        }
+    }
+    AstNode *callDeinit = implementCallClassDeinit(ctx, node, &destructor->loc);
+    if (callDeinit) {
+        node->flags |= flgImplementsDeinit;
+        insertAstNode(&stmts, callDeinit);
     }
 
     for (; member; member = member->next) {
@@ -333,13 +331,13 @@ static void implementDestructorFunction(AstVisitor *visitor,
 
         const Type *type = member->type;
         AstNode *call = NULL;
-        if (isStructType(type) && hasReferenceMembers(type)) {
+        if (isStructType(type) && isDestructible(type)) {
             const NamedTypeMember *destructor_ =
                 findStructMember(type, S_DestructorOverload);
             csAssert0(destructor_);
             call = implementCallStructDestructor(ctx, member, &destructor->loc);
         }
-        else if (isTupleType(type) && hasReferenceMembers(type)) {
+        else if (isTupleType(type) && isDestructible(type)) {
             call = implementCallTupleDestructor(ctx, member, &destructor->loc);
         }
         else if (isClassType(type)) {
@@ -376,14 +374,13 @@ static void implementDestructorForwardFunction(AstVisitor *visitor,
                                                AstNode *fwd)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    csAssert0(nodeIs(node, StructDecl) || nodeIs(node, ClassDecl));
+    csAssert0(nodeIs(node, ClassDecl));
     csAssert0(nodeIs(fwd, FuncDecl) && fwd->funcDecl.name == S_DestructorFwd &&
               fwd->funcDecl.body == NULL);
 
     AstNode *dctor = findMemberDeclInType(node->type, S_DestructorOverload);
-    if (dctor == NULL || !hasFlag(node, ReferenceMembers)) {
-        fwd->funcDecl.body =
-            makeBlockStmt(ctx->pool, &fwd->loc, NULL, NULL, NULL);
+    if (dctor == NULL ||
+        !hasFlags(node, flgReferenceMembers | flgImplementsDeinit)) {
         return;
     }
 
@@ -589,31 +586,33 @@ AstNode *createClassOrStructBuiltins(MemPool *pool, AstNode *node)
     }
 
     csAssert0(!hasMember(node, S_DestructorFwd));
-    insertAstNode(
-        &funcs,
-        makeOperatorOverload(
-            pool,
-            &loc,
-            opDestructorFwd,
-            makeFunctionParam(pool,
+    if (nodeIs(node, ClassDecl)) {
+        insertAstNode(&funcs,
+                      makeOperatorOverload(
+                          pool,
+                          &loc,
+                          opDestructorFwd,
+                          makeFunctionParam(
+                              pool,
                               &loc,
                               S_ptr,
                               makeVoidPointerAstNode(pool, &loc, flgNone, NULL),
                               NULL,
                               flgNone,
                               NULL),
-            makeVoidAstNode(pool, &loc, flgNone, NULL, NULL),
-            NULL,
-            flgPure | flgStatic | flgPublic,
-            NULL,
-            NULL));
-
+                          makeVoidAstNode(pool, &loc, flgNone, NULL, NULL),
+                          NULL,
+                          flgPure | flgStatic | flgPublic,
+                          NULL,
+                          NULL));
+    }
     return funcs.first;
 }
 
 void implementClassOrStructBuiltins(AstVisitor *visitor, AstNode *node)
 {
     AstNode *member = node->structDecl.members;
+
     for (; member; member = member->next) {
         if (!nodeIs(member, FuncDecl))
             continue;
@@ -658,7 +657,6 @@ u64 removeClassOrStructBuiltins(AstNode *node, NamedTypeMember *nms)
         if (nodeIs(member, FuncDecl)) {
             switch (member->funcDecl.operatorOverload) {
             case opDestructorOverload:
-                node->flags |= flgImplementsDeinit;
                 if (member->funcDecl.body == NULL)
                     continue;
                 break;

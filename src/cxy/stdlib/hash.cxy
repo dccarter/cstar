@@ -158,7 +158,7 @@ pub class HashMap[K, V, Hasher = Hash[K], Cmp = Equals[K]] {
         return true;
     }
 
-    func get(key: K) : __Optional[&V] {
+    func get(key: K) : Optional[&V] {
         const hashCode = Hasher{}(&key) | #{OCCUPIED_MASK};
         var index = hashModPrime(hashCode, _capacity);
         while (isBucketOccupied(index)) {
@@ -169,7 +169,7 @@ pub class HashMap[K, V, Hasher = Hash[K], Cmp = Equals[K]] {
         return null
     }
 
-    const func get(key: K) : __Optional[&V] {
+    const func get(key: K) : Optional[&V] {
         const hashCode = Hasher{}(&key) | #{OCCUPIED_MASK};
         var index = hashModPrime(hashCode, _capacity);
         while (isBucketOccupied(index)) {

@@ -37,7 +37,7 @@ extern "C" {
     f(cxy_range_t)              \
     f(sb)                       \
     f(s)                        \
-    f(__Optional)               \
+    f(Optional)               \
     f(Slice)                    \
     f(String)                   \
     f(__string)                  \

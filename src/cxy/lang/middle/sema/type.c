@@ -52,7 +52,7 @@ static void implementUnionTypeCopyAndDestructor(AstVisitor *visitor,
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
     bool hasCopy = node->type->tuple.copyFunc != NULL;
-    if (!isBuiltinsInitialized() || !hasReferenceMembers(node->type) || hasCopy)
+    if (!isBuiltinsInitialized() || !isDestructible(node->type) || hasCopy)
         return;
 
     const Type *func =
@@ -180,7 +180,7 @@ void checkUnionDecl(AstVisitor *visitor, AstNode *node)
     u64 flags = flgNone;
     for (; member; member = member->next) {
         i = addUnionDecl(members_, resolveType(member->type), i);
-        if (isClassType(member->type) || hasReferenceMembers(member->type))
+        if (isClassType(member->type) || isDestructible(member->type))
             flags |= flgReferenceMembers;
     }
 

@@ -235,6 +235,9 @@ static inline bool isEndOfStmt(Parser *P)
     case tokDelete:
     case tokRaise:
         return true;
+    case tokHash:
+        if (checkPeek(P, 1, tokIf, tokFor, tokVar))
+            return true;
     default:
         return false;
     }
@@ -468,10 +471,9 @@ static inline AstNode *parseChar(Parser *P)
     return node;
 }
 
-static inline AstNode *parseInteger(Parser *P)
+static inline AstNode *parseInteger(Parser *P, bool isNegative)
 {
     const Token prev = *previous(P);
-    bool isNegative = prev.tag == tokMinus;
     const Token tok = *consume0(P, tokIntLiteral);
     AstNode *type = NULL;
     AstNode *node = newAstNode(
@@ -495,9 +497,9 @@ static inline AstNode *parseInteger(Parser *P)
     return node;
 }
 
-static inline AstNode *parseFloat(Parser *P)
+static inline AstNode *parseFloat(Parser *P, bool isNegative)
 {
-    bool isNegative = previous(P)->tag == tokMinus;
+    const Token prev = *previous(P);
     const Token *tok = consume0(P, tokFloatLiteral);
     AstNode *node = newAstNode(
         P,
@@ -508,7 +510,7 @@ static inline AstNode *parseFloat(Parser *P)
         AstNode *type = parseType(P);
         return newAstNode(
             P,
-            tok,
+            (isNegative ? &prev : tok),
             &(AstNode){.tag = astTypedExpr,
                        .typedExpr = {.expr = node, .type = type}});
     }
@@ -518,11 +520,43 @@ static inline AstNode *parseFloat(Parser *P)
 static inline AstNode *parseString(Parser *P)
 {
     const Token tok = *consume0(P, tokStringLiteral);
-    return newAstNode(
+    AstNode *node = newAstNode(
         P,
         &tok,
         &(AstNode){.tag = astStringLit,
                    .stringLiteral.value = getStringLiteral(P, &tok)});
+
+    if (match(P, tokDot)) {
+        Token kind = *consume0(P, tokIdent);
+        size_t start = kind.fileLoc.begin.byteOffset;
+        size_t len = kind.fileLoc.end.byteOffset - start;
+        const char c = kind.buffer->fileData[start];
+
+        cstring type = NULL;
+        if (c == 's' && len == 1) {
+            type = S___string;
+        }
+        else if (c == 'S' && len == 1) {
+            type = S_String;
+        }
+        else {
+            parserError(
+                P,
+                &kind.fileLoc,
+                "unexpected string literal suffix, expecting and `s` or `S`",
+                NULL);
+            unreachable();
+        }
+        node = newAstNode(
+            P,
+            &tok,
+            &(AstNode){
+                .tag = astCallExpr,
+                .callExpr = {.callee = makePath(
+                                 P->memPool, &tok.fileLoc, type, flgNone, NULL),
+                             node}});
+    }
+    return node;
 }
 
 static inline AstNode *parseIdentifier(Parser *P)
@@ -542,15 +576,12 @@ static inline AstNode *parseIdentifier(Parser *P)
 static inline AstNode *parseSymbol(Parser *P)
 {
     const Token tok = *consume0(P, tokColon);
-    consume0(P, tokIdent);
-    AstNode *ident =
-        newAstNode(P,
-                   &tok,
-                   &(AstNode){.tag = astSymbol,
-                              .symbol.value = getTokenString(P, &tok, false)});
-    if (check(P, tokLNot) && !checkPeek(P, 1, tokAs))
-        return macroExpression(P, ident);
-
+    const Token name = *consume0(P, tokIdent);
+    AstNode *ident = newAstNode(
+        P,
+        &tok,
+        &(AstNode){.tag = astStringLit,
+                   .stringLiteral.value = getTokenString(P, &name, false)});
     return ident;
 }
 
@@ -617,7 +648,7 @@ static AstNode *member(Parser *P, const Token *begin, AstNode *operand)
         flags = flgAnnotation | flgComptime;
 
     if (check(P, tokIntLiteral))
-        member = parseInteger(P);
+        member = parseInteger(P, false);
     else if (check(P, tokSubstitutue))
         member = substitute(P, false);
     else if (flags & flgAnnotation) {
@@ -711,11 +742,11 @@ static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
     if (check(P, tokMinus, tokPlus)) {
         if (checkPeek(P, 1, tokIntLiteral)) {
             advance(P);
-            return parseInteger(P);
+            return parseInteger(P, previous(P)->tag == tokMinus);
         }
         if (checkPeek(P, 1, tokFloatLiteral)) {
             advance(P);
-            return parseFloat(P);
+            return parseFloat(P, previous(P)->tag == tokMinus);
         }
     }
 
@@ -744,6 +775,9 @@ static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
                                      .boolLiteral.value = preprocessorHasMacro(
                                          &P->cc->preprocessor, name, NULL)});
     }
+
+    if (check(P, tokColon))
+        return parseSymbol(P);
 
     switch (current(P)->tag) {
 #define f(O, T, ...) case tok##T:
@@ -1401,6 +1435,36 @@ static AstNode *raiseStmt(Parser *P)
                    .returnStmt = {.expr = expr, .isRaise = true}});
 }
 
+static AstNode *macroSdlStmt(Parser *P)
+{
+    Token tok = *consume0(P, tokColon);
+    Token name = *consume0(P, tokIdent);
+    AstNodeList args = {};
+    while (check(P, tokLBrace) || !isEndOfStmt(P)) {
+        AstNode *arg = insertAstNode(&args, expression(P, true));
+        if (nodeIs(arg, BlockStmt))
+            break;
+    }
+
+    return newAstNode(
+        P,
+        &tok,
+        &(AstNode){.tag = astExprStmt,
+                   .exprStmt.expr = newAstNode(
+                       P,
+                       &name,
+                       &(AstNode){.tag = astMacroCallExpr,
+                                  .macroCallExpr = {
+                                      .callee = makeIdentifier(
+                                          P->memPool,
+                                          &name.fileLoc,
+                                          getTokenString(P, &name, false),
+                                          0,
+                                          NULL,
+                                          NULL),
+                                      .args = args.first}})});
+}
+
 static AstNode *array(Parser *P)
 {
     Token tok = *consume0(P, tokLBracket);
@@ -1417,7 +1481,7 @@ static AstNode *array(Parser *P)
 static AstNode *parseTypeOrIndex(Parser *P)
 {
     if (check(P, tokIntLiteral))
-        return parseInteger(P);
+        return parseInteger(P, false);
     return parseType(P);
 }
 
@@ -1571,9 +1635,9 @@ static AstNode *primary_(Parser *P, bool allowStructs)
     case tokCharLiteral:
         return parseChar(P);
     case tokIntLiteral:
-        return parseInteger(P);
+        return parseInteger(P, false);
     case tokFloatLiteral:
-        return parseFloat(P);
+        return parseFloat(P, false);
     case tokStringLiteral:
         return parseString(P);
     case tokLString:
@@ -1687,14 +1751,25 @@ static AstNode *attribute(Parser *P)
                 value = parseChar(P);
                 break;
             case tokIntLiteral:
-                value = parseInteger(P);
+                value = parseInteger(P, false);
                 break;
             case tokFloatLiteral:
-                value = parseFloat(P);
+                value = parseFloat(P, false);
                 break;
             case tokStringLiteral:
                 value = parseString(P);
                 break;
+            case tokPlus:
+            case tokMinus:
+                if (match(P, tokIntLiteral)) {
+                    value = parseInteger(P, previous(P)->tag == tokMinus);
+                    break;
+                }
+                if (check(P, tokFloatLiteral)) {
+                    value = parseFloat(P, previous(P)->tag == tokMinus);
+                    break;
+                }
+                // fall through
             default:
                 reportUnexpectedToken(P, "string/float/int/char/bool literal");
             }
@@ -1823,6 +1898,8 @@ static AstNode *variable(
 
     if (!(isExpression || woInit || isExtern)) {
         if (init && init->tag == astClosureExpr)
+            match(P, tokSemicolon);
+        else if (isEndOfStmt(P))
             match(P, tokSemicolon);
         else
             consume(P,
@@ -2493,6 +2570,9 @@ static AstNode *statement(Parser *P, bool exprOnly)
         break;
     case tokRaise:
         stmt = raiseStmt(P);
+        break;
+    case tokColon:
+        stmt = macroSdlStmt(P);
         break;
     default: {
         AstNode *expr = expression(P, false);

@@ -27,14 +27,22 @@ static AstNode *makeClosureForward(ShakeAstContext *ctx,
     AstNode *param = node->closureExpr.params;
     for (; param; param = param->next) {
         insertAstNode(&params, shallowCloneAstNode(ctx->pool, param));
-        insertAstNode(&args,
-                      makeResolvedIdentifier(ctx->pool,
-                                             &param->loc,
-                                             param->funcParam.name,
-                                             param->flags,
-                                             params.last,
-                                             NULL,
-                                             NULL));
+        insertAstNode(
+            &args,
+            makeUnaryExpr(ctx->pool,
+                          &param->loc,
+                          flgNone,
+                          true,
+                          opMove,
+                          makeResolvedIdentifier(ctx->pool,
+                                                 &param->loc,
+                                                 param->funcParam.name,
+                                                 param->flags,
+                                                 params.last,
+                                                 NULL,
+                                                 NULL),
+                          NULL,
+                          NULL));
     }
     // var self_ = self !: Closure
     AstNode *self = makeVarDecl(

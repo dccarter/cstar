@@ -278,11 +278,26 @@ static AstNode *getReturnType(EvalContext *ctx,
     const Type *type = resolveType(node->type ?: evalType(ctx, node));
     if (typeIs(type, Func))
         return makeTypeReferenceNode(ctx->pool, type->func.retType, loc);
-    else if (typeIs(type, Tuple) && hasFlag(type, FuncTypeParam))
+
+    if (typeIs(type, Tuple) && hasFlag(type, FuncTypeParam))
         return makeTypeReferenceNode(
             ctx->pool,
             getTypeDecl(type->tuple.members[1])->type->func.retType,
             loc);
+
+    return NULL;
+}
+
+static AstNode *getBaseType(EvalContext *ctx,
+                            const FileLoc *loc,
+                            AstNode *node,
+                            attr(unused) AstNode *args)
+{
+    const Type *type =
+        resolveUnThisUnwrapType(node->type ?: evalType(ctx, node));
+    type = getTypeBase(type);
+    if (type)
+        return makeTypeReferenceNode(ctx->pool, type, loc);
 
     return NULL;
 }
@@ -636,22 +651,50 @@ static AstNode *isEnum(EvalContext *ctx,
                    .boolLiteral.value = typeIs(node->type, Enum)});
 }
 
-static AstNode *isDestructible(EvalContext *ctx,
+static AstNode *isVoidComptime(EvalContext *ctx,
                                const FileLoc *loc,
                                AstNode *node,
                                attr(unused) AstNode *args)
+{
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = resolveUnThisUnwrapType(node->type);
+    return makeAstNode(
+        ctx->pool,
+        loc,
+        &(AstNode){.tag = astBoolLit, .boolLiteral.value = isVoidType(type)});
+}
+
+static AstNode *hasVoidReturnType(EvalContext *ctx,
+                                  const FileLoc *loc,
+                                  AstNode *node,
+                                  attr(unused) AstNode *args)
+{
+    const Type *type = node->type ?: evalType(ctx, node);
+    if (!typeIs(type, Func))
+        return NULL;
+    type = resolveUnThisUnwrapType(node->type->func.retType);
+    return makeAstNode(ctx->pool,
+                       loc,
+                       &(AstNode){.tag = astBoolLit,
+                                  .boolLiteral.value = isVoidType(type) ||
+                                                       isVoidResultType(type)});
+}
+
+static AstNode *isDestructibleType(EvalContext *ctx,
+                                   const FileLoc *loc,
+                                   AstNode *node,
+                                   attr(unused) AstNode *args)
 {
 
     const Type *type = node->type ?: evalType(ctx, node);
     type = resolveAndUnThisType(unwrapType(type, NULL));
     AstNode *decl = getTypeDecl(type);
 
-    return makeAstNode(
-        ctx->pool,
-        loc,
-        &(AstNode){.tag = astBoolLit,
-                   .boolLiteral.value = isClassOrStructType(type) &&
-                                        hasFlag(decl, ImplementsDeinit)});
+    return makeAstNode(ctx->pool,
+                       loc,
+                       &(AstNode){.tag = astBoolLit,
+                                  .boolLiteral.value = isClassType(type) ||
+                                                       isDestructible(type)});
 }
 
 static AstNode *isCover(EvalContext *ctx,
@@ -690,6 +733,69 @@ static AstNode *isFunction(EvalContext *ctx,
         &(AstNode){.tag = astBoolLit, .boolLiteral.value = value});
 }
 
+static AstNode *isClosure(EvalContext *ctx,
+                          const FileLoc *loc,
+                          AstNode *node,
+                          attr(unused) AstNode *args)
+{
+
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = resolveUnThisUnwrapType(type);
+    bool value = typeIs(type, Class) || hasFlag(type, Closure);
+
+    return makeAstNode(
+        ctx->pool,
+        loc,
+        &(AstNode){.tag = astBoolLit, .boolLiteral.value = value});
+}
+
+static AstNode *isFuncTypeParam(EvalContext *ctx,
+                                const FileLoc *loc,
+                                AstNode *node,
+                                attr(unused) AstNode *args)
+{
+
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = resolveUnThisUnwrapType(type);
+    bool value = typeIs(type, Tuple) || hasFlag(type, FuncTypeParam);
+
+    return makeAstNode(
+        ctx->pool,
+        loc,
+        &(AstNode){.tag = astBoolLit, .boolLiteral.value = value});
+}
+
+static AstNode *isAnonymousStruct(EvalContext *ctx,
+                                  const FileLoc *loc,
+                                  AstNode *node,
+                                  attr(unused) AstNode *args)
+{
+
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = resolveUnThisUnwrapType(type);
+    return makeAstNode(
+        ctx->pool,
+        loc,
+        &(AstNode){.tag = astBoolLit,
+                   .boolLiteral.value = hasFlag(type, Anonymous)});
+}
+
+static AstNode *isResultTypeComptime(EvalContext *ctx,
+                                     const FileLoc *loc,
+                                     AstNode *node,
+                                     attr(unused) AstNode *args)
+{
+
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = resolveUnThisUnwrapType(type);
+    bool value = isResultType(type);
+
+    return makeAstNode(
+        ctx->pool,
+        loc,
+        &(AstNode){.tag = astBoolLit, .boolLiteral.value = value});
+}
+
 static AstNode *hasDeinit(EvalContext *ctx,
                           const FileLoc *loc,
                           AstNode *node,
@@ -697,7 +803,7 @@ static AstNode *hasDeinit(EvalContext *ctx,
 {
 
     const Type *type = node->type ?: evalType(ctx, node);
-    type = unwrapType(type, NULL);
+    type = resolveUnThisUnwrapType(type);
 
     return makeAstNode(
         ctx->pool,
@@ -707,6 +813,23 @@ static AstNode *hasDeinit(EvalContext *ctx,
                        isClassOrStructType(type) &&
                        findMemberInType(type, S_DeinitOverload) != NULL});
 }
+
+static AstNode *hasBaseType(EvalContext *ctx,
+                            const FileLoc *loc,
+                            AstNode *node,
+                            attr(unused) AstNode *args)
+{
+
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = resolveUnThisUnwrapType(type);
+
+    return makeAstNode(
+        ctx->pool,
+        loc,
+        &(AstNode){.tag = astBoolLit,
+                   .boolLiteral.value = getTypeBase(type) != NULL});
+}
+
 static AstNode *typeHasReferenceMembers(EvalContext *ctx,
                                         const FileLoc *loc,
                                         AstNode *node,
@@ -768,6 +891,7 @@ static void initDefaultMembers(EvalContext *ctx)
     ADD_MEMBER("targetType", getTargetType);
     ADD_MEMBER("callable", getCallableType);
     ADD_MEMBER("returnType", getReturnType);
+    ADD_MEMBER("baseType", getBaseType);
     ADD_MEMBER("params", getParams);
     ADD_MEMBER("membersCount", getMembersCount);
     ADD_MEMBER("isInteger", isInteger);
@@ -790,10 +914,17 @@ static void initDefaultMembers(EvalContext *ctx)
     ADD_MEMBER("isArray", isArray);
     ADD_MEMBER("isSlice", isSlice);
     ADD_MEMBER("isEnum", isEnum);
-    ADD_MEMBER("isDestructible", isDestructible);
+    ADD_MEMBER("isVoid", isVoidComptime);
+    ADD_MEMBER("isDestructible", isDestructibleType);
     ADD_MEMBER("isCover", isCover);
     ADD_MEMBER("isFunction", isFunction);
-    ADD_MEMBER("has_deinit", hasDeinit);
+    ADD_MEMBER("isClosure", isClosure);
+    ADD_MEMBER("isFuncTypeParam", isFuncTypeParam);
+    ADD_MEMBER("isAnonymousStruct", isAnonymousStruct);
+    ADD_MEMBER("isResultType", isResultTypeComptime);
+    ADD_MEMBER("hasBase", hasBaseType);
+    ADD_MEMBER("hasDeinit", hasDeinit);
+    ADD_MEMBER("hasVoidReturnType", hasVoidReturnType);
     ADD_MEMBER("hasReferenceMembers", typeHasReferenceMembers);
 
 #undef ADD_MEMBER

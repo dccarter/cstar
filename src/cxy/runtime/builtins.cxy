@@ -127,7 +127,7 @@ func __smart_ptr_alloc(size: u64, dctor: func(ptr: sptr) -> void = null) {
 }
 
 @[pure, linkage("External"), noinline, optimize(0)]
-func __smart_ptr_get(ptr: sptr) : sptr {
+pub func __smart_ptr_get(ptr: sptr) : sptr {
     if (ptr == null)
         return null
 
@@ -140,7 +140,7 @@ func __smart_ptr_get(ptr: sptr) : sptr {
 }
 
 @[pure, linkage("External"), noinline, optimize(0)]
-func __smart_ptr_drop(ptr: sptr) {
+pub func __smart_ptr_drop(ptr: sptr) {
     if (ptr == null)
         return false
 
@@ -180,13 +180,13 @@ func __smart_ptr_alloc_trace(size: u64, dctor: func(ptr: sptr) -> void, path: st
 }
 
 @[pure, linkage("External")]
-func __smart_ptr_get_trace(ptr: sptr, path: string, line: u64) {
+pub func __smart_ptr_get_trace(ptr: sptr, path: string, line: u64) {
     (TRACE_MEMORY!)("get", path, line, ptr)
     return __smart_ptr_get(ptr)
 }
 
 @[pure, linkage("External")]
-func __smart_ptr_drop_trace(ptr: sptr, path: string, line: u64) {
+pub func __smart_ptr_drop_trace(ptr: sptr, path: string, line: u64) {
     (TRACE_MEMORY!)("drop", path, line, ptr)
     if (__smart_ptr_drop(ptr))
         (TRACE_MEMORY!)("freed", path, line, ptr)
@@ -198,7 +198,7 @@ func __smart_ptr_drop_trace(ptr: sptr, path: string, line: u64) {
 pub func __calloc(size: u64) => memset(malloc(size), 0, size)
 
 /* Builtin Optional Type */
-pub struct __Optional[T] {
+pub struct Optional[T] {
     /* @note: Do not change the order of these members */
     ok: bool = false;
     val: T
@@ -212,7 +212,7 @@ pub struct __Optional[T] {
 
     func `destructor`() {
         if (ok) {
-            #if (T.isClass || T.hasReferenceMembers)
+            #if (T.isClass || T.isDestructible)
                 delete val
             else #if (has_member!(#T, "op__destructor", #func() -> void))
                 val.op__destructor()
@@ -220,7 +220,7 @@ pub struct __Optional[T] {
     }
 
     @inline func `copy`() {
-        #if (T.isClass || T.hasReferenceMembers)
+        #if (T.isClass || T.isDestructible)
             return This{ ok: ok, val: __copy!(val) }
         else #if (has_member!(#T, "op__copy", #func() -> T))
             return This{ ok: ok, val: val.op__copy() }
@@ -231,17 +231,19 @@ pub struct __Optional[T] {
     @inline func `!!`() => ok
     @inline func `deref`() { return val }
     @optimize(0) func move() { ok = false; return &&val }
+    // Short circuit to !!opt ? opt.move() : def
+    @inline func `||`(def: T) => ok? move() : &&def
     @inline const func `!!`() => ok
     @inline const func `deref`() { return val }
 }
 
 /* Creates a valid optional value */
 @inline
-pub func Some[T](value: T) => __Optional[T]{ ok: true, val: &&value }
+pub func Some[T](value: T) => Optional[T]{ ok: true, val: &&value }
 
 /* Creates an invalid optional value */
 @inline
-pub func None[T]() => __Optional[T]()
+pub func None[T]() => Optional[T]()
 
 pub type HashCode = u32
 #const FNV_32_PRIME = 0x01000193:u32
@@ -445,7 +447,7 @@ pub struct __string {
         return <T>strtod(s !: ^const char, ptrof ep);
     }
 
-    func indexOf(ch: char) : __Optional[u64] {
+    func indexOf(ch: char) : Optional[u64] {
         var i = 0:u64;
         while (i < _size) {
             if (s.[i] == ch)
@@ -455,7 +457,7 @@ pub struct __string {
         return None[u64]()
     }
 
-    func rIndexOf(ch: char) : __Optional[u64] {
+    func rIndexOf(ch: char) : Optional[u64] {
         if (_size == 0)
             return None[u64]()
 
@@ -480,7 +482,7 @@ pub struct __string {
         return substr(0:u64, <i64>suffix.size()) == suffix
     }
 
-    const func find(part: This) : __Optional[u64] {
+    const func find(part: This) : Optional[u64] {
         if (part.empty())
             return empty()? None[u64]() : Some(_size - 1);
         var i = _size;
@@ -495,7 +497,7 @@ pub struct __string {
         return None[u64]()
     }
 
-    const func rfind(part: This) : __Optional[u64] {
+    const func rfind(part: This) : Optional[u64] {
         if (_size >= part._size) {
             if (part.empty())
                 return empty()? None[u64]() : Some(_size - 1);
@@ -652,12 +654,26 @@ pub class OutputStream {
                 val.op__str(this)
         }
         else #if (U.isStruct) {
-            require!(
-                has_member!(#U, "op__str", #const func (_: &OutputStream) -> void),
-                "type {t} does not implement `str` operator",
-                #U
-            )
-            val.op__str(this)
+            #if (has_member!(#U, "op__str", #const func (_: &OutputStream) -> void)) {
+                val.op__str(this)
+            } else {
+                #if (!U.isAnonymousStruct)
+                    appendString(#{U.name})
+                appendString("{")
+
+                #const first = true
+                #for (const M: U.members) {
+                    #if (!first)
+                        this.appendString(", ")
+                    #if (M.isField) {
+                        appendString(#{M.name})
+                        appendString(": ")
+                        this << val.#{mk_ident!(M.name)}
+                    }
+                    #{first = false}
+                }
+                appendString("}")
+            }
         }
         else #if (U.isTuple) {
             this.appendChar('(')
@@ -735,13 +751,13 @@ pub class String : OutputStream {
     }
 
     @inline
-    func `deinit`() {
+    func `destructor`() {
         clear()
     }
 
     @static
     func `destructor_fwd`(ptr: ^void) {
-        (ptr !: This).op__deinit()
+        (ptr !: This).op__destructor()
     }
 
     func clear() : void {
@@ -763,7 +779,7 @@ pub class String : OutputStream {
         }
     }
 
-    func indexOf(ch: char) : __Optional[u64] {
+    func indexOf(ch: char) : Optional[u64] {
         var i = 0:u64;
         while (i < _size) {
             if (_data.[i] == ch)
@@ -773,7 +789,7 @@ pub class String : OutputStream {
         return None[u64]()
     }
 
-    func rIndexOf(ch: char) : __Optional[u64] {
+    func rIndexOf(ch: char) : Optional[u64] {
         if (_size == 0)
             return None[u64]()
 
@@ -868,7 +884,7 @@ pub class String : OutputStream {
 
     const func `..`() {
         var i:i32 = 0;
-        return () : __Optional[(char, i32)] => {
+        return () : Optional[(char, i32)] => {
             if (i < _size)
                 return Some((_data.[i], i++))
             else
@@ -921,7 +937,8 @@ pub class BufferedOutputStream: OutputStream {
         }
     }
 
-    func `deinit`() {
+    @inline
+    func `destructor`() {
         if (_buffer) {
             if (_size > 0)
                 flush(_buffer, _size)
@@ -929,6 +946,11 @@ pub class BufferedOutputStream: OutputStream {
             _buffer = null
             _size = 0
         }
+    }
+
+    @static
+    func `destructor_fwd`(ptr: ^void) {
+        (ptr !: This).op__destructor()
     }
 }
 
@@ -974,11 +996,25 @@ pub struct Slice[T] {
 
     const func `..`() {
         var i: i32 = 0;
-        return () : __Optional[(T, i32)] => {
+        return () : Optional[(T, i32)] => {
             if (i < len)
                 return Some((data.[i], i++))
             return None[(T, i32)]()
         }
+    }
+
+    @inline
+    func size() => len
+
+    @inline
+    func view(start: u64, count: i64 = -1) {
+        assert!(start <= len)
+        if (count == -1)
+            count = <i64>(len - start);
+        else
+            assert!(count >= 0 && count <= (len - start))
+
+        return This(ptroff!(data + start), count)
     }
 
     #if (!T.isUnresolved) {
@@ -1004,7 +1040,7 @@ func __tuple_dctor[T](tup: &T) {
     require!(T.isTuple, "expecting a tuple type, got `{t}`", #T)
     #for (const i : 0 .. T.membersCount) {
         #const M = typeat!(T, #{i});
-        #if (M.isClass || M.hasReferenceMembers)
+        #if (M.isClass || M.isDestructible)
                 delete tup.#{i}
         else #if (has_member!(#M, "op__destructor", #func() -> void))
             tup.#{i}.op__destructor()
@@ -1018,7 +1054,7 @@ func __union_dctor[T](obj: &T) {
         #for (const i: 0..#{T.membersCount}) {
             case #{typeat!(T, i)} as y => {
                 #const M = typeat!(T, i);
-                #if (M.isClass || M.hasReferenceMembers)
+                #if (M.isClass || M.isDestructible)
                     __forcedrop!(y)
                 else #if (has_member!(#M, "op__destructor", #func() -> void))
                     y.op__destructor()
@@ -1033,7 +1069,7 @@ func __tuple_copy[T](tup: &T) {
     #const nodes = mk_ast_list!();
     #for (const member: 0 .. T.membersCount) {
         #const M = typeat!(T, member);
-        #if (M.isClass || M.hasReferenceMembers) {
+        #if (M.isClass || M.isDestructible) {
             ast_list_add!(
                 #{nodes},
                 __copy!(tup.#{mk_integer!(member)})
@@ -1064,7 +1100,7 @@ func __union_copy[T](obj: &T) : T {
         #for (const member: 0 .. T.membersCount) {
             case #{typeat!(T, member)} as y => {
                 #const M = typeat!(T, member);
-                #if (M.isClass || M.hasReferenceMembers ) {
+                #if (M.isClass || M.isDestructible ) {
                     return __copy!(y)
                 }
                 else #if (has_member!(#M, "op__copy", #func() -> M )) {
@@ -1228,7 +1264,7 @@ struct StackTrace {
         }
     }
 
-    func `deinit`() {
+    func `destructor`() {
         if (calls != null) {
             free(calls !: ^void)
             calls = null
@@ -1257,14 +1293,72 @@ pub class Exception {
     const func `str`(os: &OutputStream) {
         os << name << "(\"" << what() << "\") at:" << stackTrace << "\n"
     }
+
+    @inline func `deinit`() {
+        stackTrace.op__destructor()
+    }
+
+    @inline func `destructor`() {
+        op__deinit()
+    }
 }
 
 pub struct Void{}
 
+pub struct Repeat {
+    - c: char
+    - count: u64
+    func `init`(c: char, count: u64) { this.c = c; this.count = count }
+
+    @inline
+    const func `str`(os: &OutputStream) {
+        for (const i: 0..count)
+            os << c
+    }
+}
+
 @[pure, inline]
-pub func panicUnhandledException(ex: &Exception) {
+pub func panicUnhandledException(ex: Exception) {
     stderr << ex << "\n"
+    __smart_ptr_drop(ex)
     abort()
+}
+
+pub struct Lambda[Fun] {
+    require!(Fun.isFunction, "type '{t}' must be a func type param", Fun)
+    lambda: lambda_of!(Fun)
+
+    func `init`(fun: Fun) {
+        this.lambda = fun
+    }
+
+    func `()`(...params: auto) {
+        #if (Fun.hasVoidReturnType)
+            lambda(...&&params)
+        else
+            return lambda(...&&params)
+    }
+
+    func `destructor`() {
+        if (lambda.0) {
+            #if (defined __DEBUG && defined TRACE_MEMORY)
+                __smart_ptr_drop_trace(lambda.0, file!, line!)
+            else
+                __smart_ptr_drop(lambda.0)
+            lambda.0 = null
+        }
+    }
+
+    func `copy`() {
+        if (lambda.0) {
+            #if (defined __DEBUG && defined TRACE_MEMORY)
+                __smart_ptr_get_trace(lambda.0, file!, line!)
+            else
+                __smart_ptr_get(lambda.0)
+            return This{lambda: lambda}
+        }
+        return This{lambda: lambda}
+    }
 }
 
 #if (defined __CXY_TEST__) {
@@ -1277,7 +1371,7 @@ macro ok(cond) {
 #if (!defined TESTS_RUNNER) {
     func runTests(args: Slice[string],
                   testFile: string,
-                  tests: Slice[( string, func() -> __Optional[(string, u64, u64)] )] ) {
+                  tests: Slice[( string, func() -> Optional[(string, u64, u64)] )] ) {
         var failed = 0;
         if (len!(tests) == 0) {
             stdout << "0 tests defined in " << testFile << "\n";

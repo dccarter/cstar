@@ -146,24 +146,6 @@ static void transformForCustomRange(AstVisitor *visitor,
         rangeOperator->func.retType);
     astModifierAdd(&ctx->blockModifier, rangeOperatorVar);
 
-    AstNode *loopVar = makeVarDecl(
-        ctx->pool,
-        &range->loc,
-        flgNone,
-        makeAnonymousVariable(ctx->strings, "_it"),
-        makeTypeReferenceNode(ctx->pool, iterator->func.retType, &range->loc),
-        makeStructExpr(ctx->pool,
-                       builtinLoc(),
-                       flgNone,
-                       makeTypeReferenceNode(
-                           ctx->pool, iterator->func.retType, &range->loc),
-                       NULL,
-                       NULL,
-                       iterator->func.retType),
-        NULL,
-        iterator->func.retType);
-    astModifierAdd(&ctx->blockModifier, loopVar);
-
     AstNode *callIterator =
         makeCallExpr(ctx->pool,
                      &range->loc,
@@ -179,8 +161,19 @@ static void transformForCustomRange(AstVisitor *visitor,
                      NULL,
                      NULL);
 
+    AstNode *loopVar = makeVarDecl(
+        ctx->pool,
+        &range->loc,
+        flgNone,
+        makeAnonymousVariable(ctx->strings, "_it"),
+        makeTypeReferenceNode(ctx->pool, iterator->func.retType, &range->loc),
+        deepCloneAstNode(ctx->pool, callIterator),
+        NULL,
+        NULL);
+    astModifierAdd(&ctx->blockModifier, loopVar);
+
     // loopVar = iter()
-    AstNode *condition =
+    AstNode *update =
         makeExprStmt(ctx->pool,
                      &range->loc,
                      flgNone,
@@ -200,10 +193,7 @@ static void transformForCustomRange(AstVisitor *visitor,
                                     NULL),
                      NULL,
                      NULL);
-    condition->next = makeExprStmt(
-        ctx->pool,
-        &range->loc,
-        flgNone,
+    AstNode *condition =
         makeUnaryExpr(ctx->pool,
                       &range->loc,
                       flgNone,
@@ -224,18 +214,7 @@ static void transformForCustomRange(AstVisitor *visitor,
                                     NULL,
                                     NULL),
                       NULL,
-                      NULL),
-        NULL,
-        NULL);
-
-    condition = makeStmtExpr(
-        ctx->pool,
-        &range->loc,
-        flgNone,
-        makeBlockStmt(ctx->pool, &range->loc, condition, NULL, NULL),
-        NULL,
-        NULL);
-    condition->stmtExpr.stmt->flags |= flgBlockReturns;
+                      NULL);
 
     if (vars->next == NULL) {
         vars->varDecl.init =
@@ -316,6 +295,8 @@ static void transformForCustomRange(AstVisitor *visitor,
     node->whileStmt.cond = condition;
     body->blockStmt.stmts = vars;
     node->whileStmt.body = body;
+    node->whileStmt.update =
+        makeBlockStmt(ctx->pool, builtinLoc(), update, NULL, NULL);
     checkType(visitor, node);
 }
 
