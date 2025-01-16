@@ -163,7 +163,7 @@ pub func __smart_ptr_drop(ptr: sptr) {
     return false
 }
 
-#if (defined TRACE_MEMORY) {
+#if (defined __DEBUG && defined TRACE_MEMORY) {
 
 @[pure, linkage("External")]
 func __trace_memory_stdout(tag: string, path: string, line: u64, ptr: sptr) {
@@ -198,7 +198,7 @@ pub func __smart_ptr_drop_trace(ptr: sptr, path: string, line: u64) {
 pub func __calloc(size: u64) => memset(malloc(size), 0, size)
 
 /* Builtin Optional Type */
-pub struct __Optional[T] {
+pub struct Optional[T] {
     /* @note: Do not change the order of these members */
     ok: bool = false;
     val: T
@@ -231,17 +231,19 @@ pub struct __Optional[T] {
     @inline func `!!`() => ok
     @inline func `deref`() { return val }
     @optimize(0) func move() { ok = false; return &&val }
+    // Short circuit to !!opt ? opt.move() : def
+    @inline func `||`(def: T) => ok? move() : &&def
     @inline const func `!!`() => ok
     @inline const func `deref`() { return val }
 }
 
 /* Creates a valid optional value */
 @inline
-pub func Some[T](value: T) => __Optional[T]{ ok: true, val: &&value }
+pub func Some[T](value: T) => Optional[T]{ ok: true, val: &&value }
 
 /* Creates an invalid optional value */
 @inline
-pub func None[T]() => __Optional[T]()
+pub func None[T]() => Optional[T]()
 
 pub type HashCode = u32
 #const FNV_32_PRIME = 0x01000193:u32
@@ -445,7 +447,7 @@ pub struct __string {
         return <T>strtod(s !: ^const char, ptrof ep);
     }
 
-    func indexOf(ch: char) : __Optional[u64] {
+    func indexOf(ch: char) : Optional[u64] {
         var i = 0:u64;
         while (i < _size) {
             if (s.[i] == ch)
@@ -455,7 +457,7 @@ pub struct __string {
         return None[u64]()
     }
 
-    func rIndexOf(ch: char) : __Optional[u64] {
+    func rIndexOf(ch: char) : Optional[u64] {
         if (_size == 0)
             return None[u64]()
 
@@ -480,7 +482,7 @@ pub struct __string {
         return substr(0:u64, <i64>suffix.size()) == suffix
     }
 
-    const func find(part: This) : __Optional[u64] {
+    const func find(part: This) : Optional[u64] {
         if (part.empty())
             return empty()? None[u64]() : Some(_size - 1);
         var i = _size;
@@ -495,7 +497,7 @@ pub struct __string {
         return None[u64]()
     }
 
-    const func rfind(part: This) : __Optional[u64] {
+    const func rfind(part: This) : Optional[u64] {
         if (_size >= part._size) {
             if (part.empty())
                 return empty()? None[u64]() : Some(_size - 1);
@@ -652,12 +654,26 @@ pub class OutputStream {
                 val.op__str(this)
         }
         else #if (U.isStruct) {
-            require!(
-                has_member!(#U, "op__str", #const func (_: &OutputStream) -> void),
-                "type {t} does not implement `str` operator",
-                #U
-            )
-            val.op__str(this)
+            #if (has_member!(#U, "op__str", #const func (_: &OutputStream) -> void)) {
+                val.op__str(this)
+            } else {
+                #if (!U.isAnonymousStruct)
+                    appendString(#{U.name})
+                appendString("{")
+
+                #const first = true
+                #for (const M: U.members) {
+                    #if (!first)
+                        this.appendString(", ")
+                    #if (M.isField) {
+                        appendString(#{M.name})
+                        appendString(": ")
+                        this << val.#{mk_ident!(M.name)}
+                    }
+                    #{first = false}
+                }
+                appendString("}")
+            }
         }
         else #if (U.isTuple) {
             this.appendChar('(')
@@ -763,7 +779,7 @@ pub class String : OutputStream {
         }
     }
 
-    func indexOf(ch: char) : __Optional[u64] {
+    func indexOf(ch: char) : Optional[u64] {
         var i = 0:u64;
         while (i < _size) {
             if (_data.[i] == ch)
@@ -773,7 +789,7 @@ pub class String : OutputStream {
         return None[u64]()
     }
 
-    func rIndexOf(ch: char) : __Optional[u64] {
+    func rIndexOf(ch: char) : Optional[u64] {
         if (_size == 0)
             return None[u64]()
 
@@ -868,7 +884,7 @@ pub class String : OutputStream {
 
     const func `..`() {
         var i:i32 = 0;
-        return () : __Optional[(char, i32)] => {
+        return () : Optional[(char, i32)] => {
             if (i < _size)
                 return Some((_data.[i], i++))
             else
@@ -980,7 +996,7 @@ pub struct Slice[T] {
 
     const func `..`() {
         var i: i32 = 0;
-        return () : __Optional[(T, i32)] => {
+        return () : Optional[(T, i32)] => {
             if (i < len)
                 return Some((data.[i], i++))
             return None[(T, i32)]()
@@ -1355,7 +1371,7 @@ macro ok(cond) {
 #if (!defined TESTS_RUNNER) {
     func runTests(args: Slice[string],
                   testFile: string,
-                  tests: Slice[( string, func() -> __Optional[(string, u64, u64)] )] ) {
+                  tests: Slice[( string, func() -> Optional[(string, u64, u64)] )] ) {
         var failed = 0;
         if (len!(tests) == 0) {
             stdout << "0 tests defined in " << testFile << "\n";

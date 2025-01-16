@@ -31,7 +31,7 @@ pub struct List[T] {
 
     func `..`() {
         var item = _head;
-        return () : __Optional[^T] => {
+        return () : Optional[^T] => {
             if (item != null) {
                 var curr = item;
                 item = item.link;

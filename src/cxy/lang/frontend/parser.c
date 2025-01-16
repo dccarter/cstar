@@ -235,6 +235,9 @@ static inline bool isEndOfStmt(Parser *P)
     case tokDelete:
     case tokRaise:
         return true;
+    case tokHash:
+        if (checkPeek(P, 1, tokIf, tokFor, tokVar))
+            return true;
     default:
         return false;
     }
@@ -573,15 +576,12 @@ static inline AstNode *parseIdentifier(Parser *P)
 static inline AstNode *parseSymbol(Parser *P)
 {
     const Token tok = *consume0(P, tokColon);
-    consume0(P, tokIdent);
-    AstNode *ident =
-        newAstNode(P,
-                   &tok,
-                   &(AstNode){.tag = astSymbol,
-                              .symbol.value = getTokenString(P, &tok, false)});
-    if (check(P, tokLNot) && !checkPeek(P, 1, tokAs))
-        return macroExpression(P, ident);
-
+    const Token name = *consume0(P, tokIdent);
+    AstNode *ident = newAstNode(
+        P,
+        &tok,
+        &(AstNode){.tag = astStringLit,
+                   .stringLiteral.value = getTokenString(P, &name, false)});
     return ident;
 }
 
@@ -775,6 +775,9 @@ static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
                                      .boolLiteral.value = preprocessorHasMacro(
                                          &P->cc->preprocessor, name, NULL)});
     }
+
+    if (check(P, tokColon))
+        return parseSymbol(P);
 
     switch (current(P)->tag) {
 #define f(O, T, ...) case tok##T:
@@ -1432,6 +1435,36 @@ static AstNode *raiseStmt(Parser *P)
                    .returnStmt = {.expr = expr, .isRaise = true}});
 }
 
+static AstNode *macroSdlStmt(Parser *P)
+{
+    Token tok = *consume0(P, tokColon);
+    Token name = *consume0(P, tokIdent);
+    AstNodeList args = {};
+    while (check(P, tokLBrace) || !isEndOfStmt(P)) {
+        AstNode *arg = insertAstNode(&args, expression(P, true));
+        if (nodeIs(arg, BlockStmt))
+            break;
+    }
+
+    return newAstNode(
+        P,
+        &tok,
+        &(AstNode){.tag = astExprStmt,
+                   .exprStmt.expr = newAstNode(
+                       P,
+                       &name,
+                       &(AstNode){.tag = astMacroCallExpr,
+                                  .macroCallExpr = {
+                                      .callee = makeIdentifier(
+                                          P->memPool,
+                                          &name.fileLoc,
+                                          getTokenString(P, &name, false),
+                                          0,
+                                          NULL,
+                                          NULL),
+                                      .args = args.first}})});
+}
+
 static AstNode *array(Parser *P)
 {
     Token tok = *consume0(P, tokLBracket);
@@ -1865,6 +1898,8 @@ static AstNode *variable(
 
     if (!(isExpression || woInit || isExtern)) {
         if (init && init->tag == astClosureExpr)
+            match(P, tokSemicolon);
+        else if (isEndOfStmt(P))
             match(P, tokSemicolon);
         else
             consume(P,
@@ -2535,6 +2570,9 @@ static AstNode *statement(Parser *P, bool exprOnly)
         break;
     case tokRaise:
         stmt = raiseStmt(P);
+        break;
+    case tokColon:
+        stmt = macroSdlStmt(P);
         break;
     default: {
         AstNode *expr = expression(P, false);

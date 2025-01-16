@@ -529,7 +529,7 @@ bool transformOptionalNone(AstVisitor *visitor, AstNode *node, const Type *type)
 bool transformOptionalType(AstVisitor *visitor, AstNode *node, const Type *type)
 {
     TypingContext *ctx = getAstVisitorContext(visitor);
-    AstNode *optional = (AstNode *)findBuiltinDecl(S___Optional);
+    AstNode *optional = (AstNode *)findBuiltinDecl(S_Optional);
     csAssert0(optional);
 
     clearAstBody(node);

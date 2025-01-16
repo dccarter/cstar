@@ -238,7 +238,8 @@ static void removeEmptyVariadicFunctionParameter(AstNode *node)
         prev->next = NULL;
     }
     else {
-        node->funcDecl.this_->next = NULL;
+        if (node->funcDecl.this_)
+            node->funcDecl.this_->next = NULL;
         node->funcDecl.signature->params = NULL;
     }
 }
@@ -397,7 +398,7 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
     }
 
     if (nodeIs(substitute, StructDecl) && hasFlag(generic, Builtin)) {
-        if (getDeclarationName(generic) == S___Optional)
+        if (getDeclarationName(generic) == S_Optional)
             substitute->flags |= flgOptional;
         else if (getDeclarationName(generic) == S_Slice)
             substitute->flags |= flgSlice;

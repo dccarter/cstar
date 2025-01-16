@@ -17,7 +17,7 @@ pub struct Param {
     isGlobal = false;
 
     const func show(os: &OutputStream, longestParam: u64) {
-        var remaining = longestParam -name.size();
+        var remaining = longestParam - name.size();
         os << "    "
         if (sf != NOSF!) {
             os << '-' << sf
@@ -44,7 +44,7 @@ pub struct Param {
 struct ParamContainer {
     params = HashMap[__string, Param]();
 
-    func findParamByFlag(flag: char): __Optional[&Param] {
+    func findParamByFlag(flag: char): Optional[&Param] {
         for (const _, param: params) {
             if (param.sf != NOSF! && param.sf == flag)
                 return &param
@@ -61,8 +61,6 @@ struct ParamContainer {
         if (param.sf != NOSF! && !!findParamByFlag(param.sf))
             raise ParserError(f"argument with short format '${param.sf}' already exists")
 
-        if (param.option && !param.def.empty())
-            param.option = false
         params.[param.name] = &&param
     }
 
@@ -149,8 +147,15 @@ pub class Command {
     @inline
     func addParam(param: Param): !void {
         hasLocalFlags = hasLocalFlags || !param.isGlobal
+        if (param.option && !param.def.empty())
+            param.option = false
+        if (!param.option && !param.required && param.def.empty())
+            param.required = true
         params.addParam(param)
-        longestParam = max(longestParam, param.name.size())
+        var len = param.name.size();
+        if (param.required)
+            len += 11
+        longestParam = max(longestParam, len)
     }
 
     func showHelp(app: __string, os: &OutputStream, isHelp: bool) {
@@ -179,9 +184,9 @@ pub class Command {
     }
 
     @inline
-    const func `str`(os: &OutputStream) {
-        os << "Command: " << name
-    }
+    const func `str`(@unused os: &OutputStream) {}
+
+    const func argument(name: __string) => parsed.[name]
 
     - func validateParams(): !void {
         for (const _, param: params.params) {
@@ -338,8 +343,15 @@ pub class App {
     @inline
     func addParam(param: Param): !void {
         param.isGlobal = true
+        if (param.option && !param.def.empty())
+            param.option = false
+        if (!param.option && !param.required && param.def.empty())
+            param.required = true
         params.addParam(param)
-        longestParam = max(longestParam, param.name.size())
+        var len = param.name.size();
+        if (param.required)
+            len += 11
+        longestParam = max(longestParam, len)
     }
 
     func addCommand(cmd: Command): !void {

@@ -765,6 +765,21 @@ static AstNode *isFuncTypeParam(EvalContext *ctx,
         &(AstNode){.tag = astBoolLit, .boolLiteral.value = value});
 }
 
+static AstNode *isAnonymousStruct(EvalContext *ctx,
+                                  const FileLoc *loc,
+                                  AstNode *node,
+                                  attr(unused) AstNode *args)
+{
+
+    const Type *type = node->type ?: evalType(ctx, node);
+    type = resolveUnThisUnwrapType(type);
+    return makeAstNode(
+        ctx->pool,
+        loc,
+        &(AstNode){.tag = astBoolLit,
+                   .boolLiteral.value = hasFlag(type, Anonymous)});
+}
+
 static AstNode *isResultTypeComptime(EvalContext *ctx,
                                      const FileLoc *loc,
                                      AstNode *node,
@@ -905,6 +920,7 @@ static void initDefaultMembers(EvalContext *ctx)
     ADD_MEMBER("isFunction", isFunction);
     ADD_MEMBER("isClosure", isClosure);
     ADD_MEMBER("isFuncTypeParam", isFuncTypeParam);
+    ADD_MEMBER("isAnonymousStruct", isAnonymousStruct);
     ADD_MEMBER("isResultType", isResultTypeComptime);
     ADD_MEMBER("hasBase", hasBaseType);
     ADD_MEMBER("hasDeinit", hasDeinit);

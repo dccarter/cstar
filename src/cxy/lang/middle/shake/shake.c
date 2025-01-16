@@ -384,6 +384,8 @@ static void shakeVariableDecl(AstVisitor *visitor, AstNode *node)
     if (names->next == NULL) {
         node->flags |= isReference ? flgReference : flgNone;
         node->varDecl.name = names->ident.value;
+        if (nodeIs(names, StringLit))
+            names->tag = astIdentifier;
         return;
     }
 
@@ -395,6 +397,9 @@ static void shakeVariableDecl(AstVisitor *visitor, AstNode *node)
         AstNode *name_ = name;
         name = name->next;
         name_->next = NULL;
+
+        if (nodeIs(name_, StringLit))
+            names->tag = astIdentifier;
 
         if (isIgnoreVar(name_->ident.value)) {
             if (tuple == NULL) {

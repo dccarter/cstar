@@ -1731,7 +1731,7 @@ static void generateTestMainFunction(CodegenContext *ctx,
     format(getState(ctx),
            "int main(int argc, char *argv[]) {{{>}\n"
            "return builtins_runTests((SliceI_sE){{.data = argv, .len = argc}, "
-           "\"{s}\", (SliceI_TsFZ__OptionalI_Tsu64u64_E___E){{",
+           "\"{s}\", (SliceI_TsFZOptionalI_Tsu64u64_E___E){{",
            (FormatArg[]){{.s = testFile}});
     if (ctx->hasTestCases) {
         format(getState(ctx),
@@ -1775,7 +1775,7 @@ AstNode *generateCode(CompilerDriver *driver, AstNode *node)
         .state = newFormatState("  ", true),
         .types = newFormatState("  ", true),
         .hasTestCases = driver->hasTestCases,
-        .memTraceEnabled = true, // driver->options.withMemoryTrace,
+        .memTraceEnabled = driver->options.withMemoryTrace,
         .debug = {.enabled = driver->options.debug, .pos = {}}};
     // clang-format off
     ConstAstVisitor visitor = makeConstAstVisitor(&context, {

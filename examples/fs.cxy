@@ -19,6 +19,28 @@ class Log {
     }
 }
 
+struct Option[T] {
+    require!(T.isNumber || T.isBoolean || (T.isString && !T.isClass), "type '{T}' must be a primitive type")
+    _value: T? = null;
+    desc: __string
+
+    @inline func `init`(desc: string) {
+        this.desc = __string(desc)
+        #if(T.isBoolean)
+            _value = false
+    }
+
+    @inline func `init`(desc: string, def: T) {
+        this.desc = __string(desc)
+        this._value = def
+    }
+
+    // This is ok memory management wise since since T is required to be a value type
+    @inline func `||`(def: T) => _value.ok? _value.val : def
+    @inline const func `!!`() => _value.ok
+    @inline func value() => _value
+}
+
 func main() {
      var server = Server[(Log)](Config{address: Address("0.0.0.0", 8081)});
      @unused var fs = FileServer(&server);

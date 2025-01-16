@@ -1,10 +1,6 @@
 module vector
 
-import "stdlib/json.cxy"
-
 macro DEFAULT_VECTOR_CAPACITY <u64>16
-
-
 
 pub class Vector[T] {
     - _data: ^T
@@ -160,18 +156,6 @@ pub class Vector[T] {
                 sb << _data.[i]
             }
             sb << ']'
-        }
-    }
-
-    #if (!(T.isStruct || T.isClass) || (T.isString && T.isClass) || has_member!(#T, "fromJSON", #const func(_: &json.JSONParser) -> !void)) {
-        func fromJSON(p: &json.JSONParser): !void {
-            p.expectChar('[')
-            while (p.peekChar() != ']':char) {
-                var tmp = json.parse[T](p);
-                push(&&tmp)
-                p.consumeChar(',')
-            }
-            p.expectChar(']')
         }
     }
 
