@@ -23,7 +23,7 @@ func configureSocket(fd: i32)  {
     var opt = fcntl.fcntl(fd, F_GETFL!, 0);
     if (opt == -1)
         opt = 0;
-    var rc = fcntl.fcntl(fd, F_SETFL!, opt | O_NONBLOCK!);
+    @unused var rc = fcntl.fcntl(fd, F_SETFL!, opt | O_NONBLOCK!);
     assert!(rc != -1);
     /*  Allow re-using the same local address rapidly. */
     opt = 1;

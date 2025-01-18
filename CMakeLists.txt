@@ -238,7 +238,7 @@ if (ENABLE_LLVM_BACKEND)
     target_link_libraries(cxy msgpack-c yaml ${llvm_libs} ${CLANG_LIBS})
 else ()
     target_link_libraries(cxy msgpack-c yaml ${CLANG_LIBS})
-endif ()
+endif()
 
 target_compile_definitions(cxy PRIVATE
         -DCXY_VERSION="${CXY_VERSION}")
@@ -253,6 +253,7 @@ set(CXY_STD_LIB_SOURCES
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/list.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/log.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/net.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/path.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/tcp.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/time.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/trie.cxy

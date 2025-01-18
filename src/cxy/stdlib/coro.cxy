@@ -17,7 +17,7 @@ pub type State = ae.State
 #if (defined __x86_64) {
 
 macro __cxy_coro_setjmp(ctx) =({
-    var ret: i32 = 0;
+    @volatile var ret: i32 = 0;
     @volatile asm("""
         lea LJMPRET$=(%rip), %rcx
         xor $0, $0
@@ -66,7 +66,7 @@ macro __cxy_coro_longjmp(ctx) {
 }
 
 macro __cxy_coro_setsp(x) {
-    asm(""::"r"(alloca!(#u64)))
+    @volatile asm(""::"r"(alloca!(#u64)))
     @volatile asm("leaq (%rax), %rsp" :: "rax"(x!))
 }
 
@@ -295,7 +295,7 @@ class CoroutineScheduler {
 
     func sleep(ms: i64) {
         if (ms > 0) {
-            var status = ae.aeCreateTimeEvent(
+            @unused var status = ae.aeCreateTimeEvent(
                 eventLoop,
                 ms,
                 eventLoopTimerFired,

@@ -1160,10 +1160,10 @@ pub struct Hash[K] {
 pub struct EqualsCase {
     @inline
     const func `()`(lhs: &const String, rhs: &const String) =>
-        strncasecmp(
+        lhs.size() == rhs.size() && strncasecmp(
             lhs.str(),
             rhs.str(),
-            min(lhs.size(), rhs.size())) == 0
+            lhs.size()) == 0
 
     @inline
     const func `()`(lhs: const string, rhs: const string) =>
@@ -1171,10 +1171,10 @@ pub struct EqualsCase {
 
     @inline
     const func `()`(lhs: &const __string, rhs: &const __string) =>
-        strncasecmp(
+        lhs.size() == rhs.size() && strncasecmp(
             lhs.str(),
             rhs.str(),
-            min(lhs.size(), rhs.size())) == 0
+            lhs.size()) == 0
 }
 
 pub struct HashCase {

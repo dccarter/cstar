@@ -385,15 +385,15 @@ pub struct RouteAttrs {
 
 class Route {
     - prefix: __string
-    - handler: lambda_of!(#HandlerFn)
+    - handler: Lambda[HandlerFn]
     - params: Vector[__string]
     - _methods: u32
     - _attrs = RouteAttrs{};
 
     func `init`(methods: u32, prefix: __string, fn: HandlerFn, params: Vector[__string]) {
-        handler = fn
+        handler = Lambda[HandlerFn](fn)
         this.prefix = prefix
-        this.params = params
+        this.params = &&params
         _methods = methods
     }
 
@@ -572,7 +572,7 @@ class Router {
 }
 
 pub struct Config {
-    - address = Address("0.0.0.0", 8080);
+    - address = Address("0.0.0.0", 8100);
     - serverName = String("cxy");
     - hstsEnable = 5000:u64;
     - keepAliveTime = 5000:i64;

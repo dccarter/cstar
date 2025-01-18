@@ -248,7 +248,7 @@ pub func getLocalAddress(name: string, port: u16, mode: IPVersion = IPVersion.An
        return addr;
     /* address is not a literal. It must be an interface name then. */
     var ifaces: ^ifaddrs.ifaddrs = null;
-    var rc = ifaddrs.getifaddrs(ptrof ifaces);
+    @unused var rc = ifaddrs.getifaddrs(ptrof ifaces);
     assert!(rc == 0);
     assert!(ifaces != null);
     /*  Find first IPv4 and first IPv6 address. */

@@ -76,7 +76,7 @@ void checkAssignExpr(AstVisitor *visitor, AstNode *node)
         else {
             logError(ctx->L,
                      &left->loc,
-                     "index assignment not support on type `{t}`",
+                     "index assignment not supported on type `{t}`",
                      (FormatArg[]){{.t = target}});
             node->type = ERROR_TYPE(ctx);
             return;

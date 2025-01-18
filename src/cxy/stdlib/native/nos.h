@@ -3,7 +3,9 @@
 //
 #pragma once
 
-struct stat;
+#include <sys/stat.h>
+
+typedef struct stat Stat;
 
 int fs_stat(const char *path, struct stat *st);
 int fs_lstat(const char *path, struct stat *st);

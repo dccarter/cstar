@@ -18,7 +18,7 @@ struct TrieNode[T] {
             return *child
         }
 
-        var node = malloc(sizeof!(This)) !: ^This;
+        var node = __calloc(sizeof!(This)) !: ^This;
         node.op__init()
         children.[c] = node
         return node
@@ -30,8 +30,6 @@ struct TrieNode[T] {
                 delete *node.1
                 free(node.1 !: ^void)
             }
-            delete data
-            delete children
         }
     }
 

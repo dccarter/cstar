@@ -42,12 +42,17 @@ struct Option[T] {
 }
 
 func main() {
-     var server = Server[(Log)](Config{address: Address("0.0.0.0", 8081)});
+     var server = Server[(Log)](Config{address: Address("0.0.0.0", 8101)});
      @unused var fs = FileServer(&server);
 
      var api = Server[()]();
      api("/hello", (@unused req: &const Request, resp: &Response) => {
          resp.body() << "Hello, World!"
+     })
+
+     api("/quit", (@unused req: &const Request, @unused resp: &Response) => {
+         server.stop()
+         api.stop()
      })
 
 

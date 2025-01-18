@@ -406,7 +406,7 @@ const Type *transformToConstructCallExpr(AstVisitor *visitor, AstNode *node)
     }
 
     node->callExpr.callee = makeResolvedPath(
-        ctx->pool, &callee->loc, ctor->_name, flgNone, ctor, NULL, ctor->type);
+        ctx->pool, &callee->loc, ctor->_name, flgNone, ctor, NULL, NULL);
 
     const Type *type = checkType(visitor, node);
     if (typeIs(type, Error))

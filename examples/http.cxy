@@ -6,7 +6,7 @@ pub func main()  {
         resp.body() << "Hello, World!"
     })
 
-    server("/quite", (@unused req: &const Request, @unused resp: &Response) => {
+    server("/quit", (@unused req: &const Request, @unused resp: &Response) => {
         server.stop()
     })
     server.start()
