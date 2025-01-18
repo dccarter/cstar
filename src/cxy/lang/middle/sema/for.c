@@ -7,17 +7,20 @@
 #include "lang/frontend/flag.h"
 #include "lang/frontend/strings.h"
 
-static const Type *findCustomRange(TypingContext *ctx, AstNode *range)
+static const Type *findCustomRange(TypingContext *ctx,
+                                   const Type *type,
+                                   const FileLoc *loc,
+                                   u64 flags)
 {
-    const Type *rangeOp =
-        findMemberInType(stripReference(range->type), S_Range);
+    type = stripReference(type);
+    const Type *rangeOp = findMemberInType(type, S_Range);
     if (rangeOp) {
-        rangeOp = matchOverloadedFunction(ctx->L,
-                                          rangeOp,
-                                          (const Type *[]){},
-                                          0,
-                                          &range->loc,
-                                          range->flags & flgConst);
+        rangeOp = matchOverloadedFunction(
+            ctx->L, rangeOp, (const Type *[]){}, 0, loc, flags & flgConst);
+    }
+    type = getTypeBase(type);
+    if (type) {
+        return findCustomRange(ctx, type, loc, flags);
     }
 
     return rangeOp;
@@ -25,7 +28,8 @@ static const Type *findCustomRange(TypingContext *ctx, AstNode *range)
 
 static const Type *findIteratorType(TypingContext *ctx, AstNode *range)
 {
-    const Type *rangeOp = findCustomRange(ctx, range);
+    const Type *rangeOp =
+        findCustomRange(ctx, range->type, &range->loc, range->flags);
     if (rangeOp == NULL) {
         logError(ctx->L,
                  &range->loc,
@@ -112,7 +116,8 @@ static void transformForCustomRange(AstVisitor *visitor,
     AstNode *range = node->forStmt.range, *vars = node->forStmt.var,
             *body = node->forStmt.body;
     // create the iterator
-    const Type *rangeOperator = findCustomRange(ctx, range),
+    const Type *rangeOperator =
+                   findCustomRange(ctx, range->type, &range->loc, range->flags),
                *iterator = findStructMemberType(rangeOperator->func.retType,
                                                 S_CallOverload);
     AstNode *rangeOperatorDecl = rangeOperator->func.decl;
@@ -297,6 +302,8 @@ static void transformForCustomRange(AstVisitor *visitor,
     node->whileStmt.body = body;
     node->whileStmt.update =
         makeBlockStmt(ctx->pool, builtinLoc(), update, NULL, NULL);
+    update->parentScope = body;
+    body->parentScope = node;
     checkType(visitor, node);
 }
 

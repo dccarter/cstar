@@ -1515,7 +1515,8 @@ static void visitSwitchStmt(ConstAstVisitor *visitor, const AstNode *node)
     generateMany(visitor, node->switchStmt.cases, "{{\n", "\n", NULL);
     if (node->switchStmt.defaultCase == NULL) {
         format(getState(ctx),
-               "\ndefault: {{ unreachable(\"unreachable\"); }\n",
+               "\n"
+               "default: {{ unreachable(\"unhandled-default-case\"); }\n",
                NULL);
     }
     format(getState(ctx), "}\n", NULL);
@@ -1602,6 +1603,8 @@ static void visitVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
 
     ((AstNode *)node)->codegen = (void *)true;
     addDebugInfo(ctx, node);
+    if (findAttribute(node, S_volatile))
+        format(getState(ctx), "volatile ", NULL);
     const Type *type = unwrapType(node->type, NULL);
     generateTypeName(ctx, getState(ctx), type);
 
@@ -2120,11 +2123,11 @@ AstNode *backendDumpIR(CompilerDriver *driver, AstNode *node)
 
     Options *opts = &driver->options;
     if (opts->output == NULL) {
-        FILE *f = fopen("./app", "r");
+        FILE *f = fopen("./app.c", "r");
         if (f == NULL) {
             logError(driver->L,
                      NULL,
-                     "opening './app' failed: {s}",
+                     "opening './app.c' failed: {s}",
                      (FormatArg[]){{.s = strerror(errno)}});
             return NULL;
         }

@@ -152,7 +152,15 @@ static bool preCheckClassMembers(AstNode *node, NamedTypeMember *members)
         }
     }
 
-    return hasMemBuiltins;
+    if (hasMemBuiltins)
+        return true;
+    while (node->classDecl.base) {
+        node = node->classDecl.base;
+        if (isDestructible(node->type))
+            return true;
+        node = resolveAstNode(node);
+    }
+    return false;
 }
 
 static void patchDefaultInitializer(TypingContext *ctx,

@@ -603,7 +603,34 @@ void bindBlockStmt(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
     pushScope(ctx->env, node);
-    astVisitManyNodes(visitor, node->blockStmt.stmts);
+    if (ctx->isComptimeContext &&
+        findEnclosingFunction(ctx->env, NULL, NULL, NULL) == NULL) {
+        // We are in a comptime block
+        AstNode *stmt = node->blockStmt.stmts;
+        for (; stmt; stmt = stmt->next) {
+            if (isCallableDecl(stmt)) {
+                if (nodeIs(stmt, FuncDecl)) {
+                    defineFunctionDecl(
+                        ctx->env, ctx->L, getDeclarationName(stmt), stmt);
+                }
+                else {
+                    defineSymbol(
+                        ctx->env, ctx->L, getDeclarationName(stmt), stmt);
+                }
+            }
+            else
+                astVisit(visitor, stmt);
+        }
+
+        stmt = node->blockStmt.stmts;
+        for (; stmt; stmt = stmt->next) {
+            if (isCallableDecl(stmt))
+                astVisit(visitor, stmt);
+        }
+    }
+    else {
+        astVisitManyNodes(visitor, node->blockStmt.stmts);
+    }
     popScope(ctx->env);
 }
 

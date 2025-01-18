@@ -7,7 +7,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y cmake sqlite3 libsqlite3-d
                        uuid-dev openssl libssl-dev build-essential \
                        autoconf automake libtool curl make unzip wget \
                        openssh-server nano rsync gdb bsdmainutils net-tools \
-                       libzmq3-dev git gcc g++ zsh sudo cppcheck clang libclang-dev jq clang-format-12 \
+                       libzmq3-dev git gcc g++ zsh sudo cppcheck clang libclang-dev jq clang-format-18 \
                        ruby
 
 # Add user and home directory

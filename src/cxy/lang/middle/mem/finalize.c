@@ -85,6 +85,29 @@ static AstNode *makeAssignDropFlagsNode(MemFinalizeContext *ctx,
         dropFlags->type);
 }
 
+static AstNode *makeZeromemAstNode(MemFinalizeContext *ctx, AstNode *operand)
+{
+    return makeExprStmt(
+        ctx->pool,
+        &operand->loc,
+        flgNone,
+        makeBackendCallExpr(
+            ctx->pool,
+            &operand->loc,
+            flgNone,
+            bfiZeromem,
+            makePointerOfExpr(
+                ctx->pool,
+                &operand->loc,
+                flgNone,
+                operand,
+                NULL,
+                makePointerType(ctx->types, operand->type, flgNone)),
+            makeVoidType(ctx->types)),
+        NULL,
+        makeVoidType(ctx->types));
+}
+
 static void visitBackendCallExpr(AstVisitor *visitor, AstNode *node)
 {
     MemFinalizeContext *ctx = getAstVisitorContext(visitor);
@@ -187,12 +210,32 @@ static void visitAssignExpr(AstVisitor *visitor, AstNode *node)
 static void visitUnaryExpr(AstVisitor *visitor, AstNode *node)
 {
     MemFinalizeContext *ctx = getAstVisitorContext(visitor);
-    if (node->unaryExpr.op == opMove) {
-        AstNode *operand = resolveIdentifier(node->unaryExpr.operand);
-        if (hasVariableDropFlags(operand))
+    AstNode *operand = node->unaryExpr.operand,
+            *resolved = resolveIdentifier(operand);
+
+    switch (node->unaryExpr.op) {
+    case opMove:
+        if (hasVariableDropFlags(resolved)) {
             astModifierAddAsNext(&ctx->blockModifier,
                                  makeAssignDropFlagsNode(
-                                     ctx, operand->varDecl.dropFlags, false));
+                                     ctx, resolved->varDecl.dropFlags, false));
+        }
+        else if ((nodeIs(operand, MemberExpr) || nodeIs(operand, IndexExpr)) &&
+                 isDestructible(operand->type)) {
+            astModifierAddAsNext(
+                &ctx->blockModifier,
+                makeZeromemAstNode(ctx, deepCloneAstNode(ctx->pool, operand)));
+        }
+        break;
+    case opDelete:
+        if ((nodeIs(operand, MemberExpr) || nodeIs(operand, IndexExpr)) &&
+            isDestructible(operand->type)) {
+            astModifierAddAsNext(
+                &ctx->blockModifier,
+                makeZeromemAstNode(ctx, deepCloneAstNode(ctx->pool, operand)));
+        }
+    default:
+        break;
     }
     astVisitFallbackVisitAll(visitor, node);
 }

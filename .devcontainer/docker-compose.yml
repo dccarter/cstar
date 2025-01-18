@@ -11,6 +11,7 @@ services:
     mem_limit: 16g
     ports:
       - "8100-8109:8100-8109"
+      - "2022:22" # ssh
     command: /bin/sh -c "while sleep 1000; do :; done"
 
 networks:

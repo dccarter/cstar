@@ -7,11 +7,25 @@ import "./log.cxy"
 import { Stat, stat, fstat } from "stdlib/os.cxy"
 import { Request, Response, Server, Method, Status } from "./http.cxy"
 
-import "sys/fcntl.h" as fcntl
 import "unistd.h" as unistd
 import "stdlib.h" as stdlib
 import "sys/mman.h" as vmem
-import "sys/syslimits.h" as limits // for PATH_MAX! macro
+
+##if (defined MACOS) {
+import "sys/fcntl.h" as fcntl
+import "sys/syslimits.h" as limits // for PATH_MAX! macro)
+}
+else {
+import "fcntl.h" as fcntl
+import "linux/limits.h" as limits // for PATH_MAX! macro
+}
+
+#if (defined MACOS) {
+macro StatField(X) mk_ident!("st_", X!, "timespec")
+}
+else {
+macro StatField(X) mk_ident!("st_", X!, "tim")
+}
 
 #if (!defined CXY_FILE_SERVER_ROUTE) {
     macro CXY_FILE_SERVER_ROUTE "/www"
@@ -382,8 +396,8 @@ pub class FileServer {
                     return null
                 }
                 TRC!(
-                    "lastModified: " << s.st_mtimespec.tv_sec << ", " <<
-                    "lassAccessed: " << s.st_atimespec.tv_sec
+                    "lastModified: " << s.#{StatField!("m")}.tv_sec << ", " <<
+                    "lassAccessed: " << s.#{StatField!("a")}.tv_sec
                 )
                 if (!readFile(&cf, &s)) {
                     TRC!("loading file (" << path << ") failed")
@@ -391,8 +405,8 @@ pub class FileServer {
                     return null
                 }
 
-                cf.lastMod    = <time_t> s.st_mtimespec.tv_sec
-                cf.lastAccess = <time_t> s.st_atimespec.tv_sec
+                cf.lastMod    = <time_t> s.#{StatField!("m")}.tv_sec
+                cf.lastAccess = <time_t> s.#{StatField!("a")}.tv_sec
                 cf.len        = s.st_size
                 cf.path       = &&path
 
@@ -409,7 +423,7 @@ pub class FileServer {
             stat(cf.path.str(), ptrof s)
 
             // reload file if it was recently modified
-            if(cf.lastMod != s.st_mtimespec.tv_sec) {
+            if(cf.lastMod != s.#{StatField!("m")}.tv_sec) {
                 cf.clear();
 
                 cf.fd = fcntl.open(cf.path.data(), O_RDONLY!)
@@ -427,8 +441,8 @@ pub class FileServer {
                     }
                 }
 
-                cf.lastMod    = <time_t> s.st_mtimespec.tv_sec
-                cf.lastAccess = <time_t> s.st_atimespec.tv_sec
+                cf.lastMod    = <time_t> s.#{StatField!("m")}.tv_sec
+                cf.lastAccess = <time_t> s.#{StatField!("a")}.tv_sec
                 cf.len        = s.st_size
                 TRC!("file '" << cf.path << "' cache refreshed")
             }

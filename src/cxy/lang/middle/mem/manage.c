@@ -227,7 +227,9 @@ static void mergeUpdateVariableStates(MemContext *ctx,
         VariableState state;
         if (varLhs->state == varRhs->state)
             state = varLhs->state;
-        else if (varLhs->state == vtsAssigned || varRhs->state == vtsAssigned)
+        else if (varLhs->state == vtsAssigned || varRhs->state == vtsAssigned ||
+                 varLhs->state == vtsMaybeAssigned ||
+                 varRhs->state == vtsMaybeAssigned)
             state = vtsMaybeAssigned;
         else
             state = vtsUninitialized;

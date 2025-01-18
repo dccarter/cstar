@@ -24,7 +24,7 @@ object-oriented programming languages (see the `tests/lang` and
 * Meta programming (generics and compile time evaluation).
 * Reference counting memory management.
 * Transpiles to readable `c` code.
-* Come with an LLVM backend.
+* Comes with an LLVM backend.
 
 #### Building
 

@@ -174,6 +174,66 @@ static AstNode *implementCallTupleDestructor(TypingContext *ctx,
         makeVoidType(ctx->types));
 }
 
+static AstNode *implementCallUnionDestructor(TypingContext *ctx,
+                                             AstNode *member,
+                                             const FileLoc *loc)
+{
+    const Type *type = member->type;
+    const Type *destructor = type->tUnion.destructorFunc;
+    csAssert0(destructor);
+
+    return makeExprStmt(
+        ctx->pool,
+        loc,
+        flgNone,
+        makeBackendCallExpr(
+            ctx->pool,
+            loc,
+            flgNone,
+            bfiDrop,
+            makeResolvedPath(ctx->pool,
+                             &member->loc,
+                             member->structField.name,
+                             member->flags | flgMember | flgAddThis,
+                             member,
+                             NULL,
+                             type),
+            destructor->func.retType),
+        NULL,
+        makeVoidType(ctx->types));
+}
+
+static AstNode *implementZeroMemory(TypingContext *ctx,
+                                    AstNode *member,
+                                    const FileLoc *loc)
+{
+    return makeExprStmt(
+        ctx->pool,
+        loc,
+        flgNone,
+        makeBackendCallExpr(
+            ctx->pool,
+            loc,
+            flgNone,
+            bfiZeromem,
+            makePointerOfExpr(
+                ctx->pool,
+                loc,
+                flgNone,
+                makeResolvedPath(ctx->pool,
+                                 loc,
+                                 member->_name,
+                                 flgMember | flgAddThis,
+                                 member,
+                                 NULL,
+                                 member->type),
+                NULL,
+                makePointerType(ctx->types, member->type, flgNone)),
+            makeVoidType(ctx->types)),
+        NULL,
+        makeVoidType(ctx->types));
+}
+
 static AstNode *implementCallClassDeinit(TypingContext *ctx,
                                          AstNode *node,
                                          const FileLoc *loc)
@@ -340,6 +400,9 @@ static void implementDestructorFunction(AstVisitor *visitor,
         else if (isTupleType(type) && isDestructible(type)) {
             call = implementCallTupleDestructor(ctx, member, &destructor->loc);
         }
+        else if (isUnionType(type) && isDestructible(type)) {
+            call = implementCallUnionDestructor(ctx, member, &destructor->loc);
+        }
         else if (isClassType(type)) {
             call = makeDropReferenceCall(ctx, member, &destructor->loc);
         }
@@ -353,6 +416,8 @@ static void implementDestructorFunction(AstVisitor *visitor,
             return;
         }
         insertAstNode(&stmts, call);
+        insertAstNode(&stmts,
+                      implementZeroMemory(ctx, member, &destructor->loc));
     }
 
     if (stmts.first) {

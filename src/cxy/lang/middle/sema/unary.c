@@ -122,6 +122,7 @@ static const Type *checkPrefixExpr(AstVisitor *visitor,
         }
         break;
     case opNot:
+        operand = resolveUnThisUnwrapType(operand);
         if (isClassOrStructType(operand)) {
             if (transformToTruthyOperator(visitor, node->unaryExpr.operand)) {
                 operand = node->unaryExpr.operand->type;

@@ -5,11 +5,11 @@ import "sys/stat.h" as st
 import "native/nos.h" as nos
 import "./native/index.cxy"
 
-pub type Stat = st.stat
+pub type Stat = nos.Stat
 
 @inline
-pub func stat(path: string, s: ^Stat) => nos.fs_stat(path !: ^const char, s)
+pub func stat(path: string, s: ^nos.Stat) => nos.fs_stat(path !: ^const char, s)
 @inline
-pub func fstat(fd: i32, s: ^Stat) => nos.fs_fstat(fd, s)
+pub func fstat(fd: i32, s: ^nos.Stat) => nos.fs_fstat(fd, s)
 @inline
-pub func lstat(path: string, s: ^Stat) => nos.fs_lstat(path !: ^const char, s)
+pub func lstat(path: string, s: ^nos.Stat) => nos.fs_lstat(path !: ^const char, s)
