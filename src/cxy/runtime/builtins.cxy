@@ -5,6 +5,7 @@ pub extern func strcmp(s1: const string, s2: const string): i32
 pub extern func strncmp(s1: const string, s2: const string, len: u64): i32
 pub extern func strcasecmp(s1: const string, s2: const string): i32
 pub extern func strncasecmp(s1: const string, s2: const string, len: u64): i32
+pub extern func strerror(errnum: i32): string
 pub extern func memmove(dst: ^void, src: ^const void, num: u64) : ^void
 pub extern func memset(ptr: ^void, value: i32, num: u64) : ^void
 pub extern func memcpy(dst: ^void, src: ^const void, n: u64): ^void
@@ -977,19 +978,19 @@ pub struct Slice[T] {
     }
 
     @inline
-    func `[]=`(index:  i64, data: T) {
+    func `[]=`(index:  u64, data: T) {
         assert!(index < len)
         this.data.[index] = data
     }
 
     @inline
-    func `[]`(index:  i64) {
+    func `[]`(index:  u64) {
         assert!(index < len)
         return this.data.[index]
     }
 
     @inline
-    const func `[]`(index:  i64) {
+    const func `[]`(index:  u64) {
         assert!(index < len)
         return this.data.[index]
     }
@@ -1258,6 +1259,13 @@ struct StackTrace {
         size++
     }
 
+    const func dump(os: &OutputStream, s: i64 = 0, tabs: u64 = 0) {
+        const sp = Repeat(' ', tabs)
+        for (const i: s..size) {
+            os << "\n " << sp << calls.[i]
+        }
+    }
+
     const func `str`(os: &OutputStream) {
         for (const i: 0..size) {
             os << "\n " << calls.[i]
@@ -1288,6 +1296,15 @@ pub class Exception {
     @inline
     func push(mod: string, cls: string, fun: string, path: string, line: u64) {
         stackTrace.push(mod, cls, fun, path, line)
+    }
+
+    const func header(os: &OutputStream) {
+        os << name << "(\"" << what() << "\")"
+    }
+
+    @inline
+    const func dumpStackTrace(os: &OutputStream, s: i64 = 0, tabs: u64 = 0) {
+        stackTrace.dump(os, s, tabs)
     }
 
     const func `str`(os: &OutputStream) {
@@ -1361,17 +1378,143 @@ pub struct Lambda[Fun] {
     }
 }
 
+pub class MemoryOutputStream : OutputStream {
+    - _buffer: ^void
+    - _capacity: u64
+    - _size: u64 = 0
+
+    func `init`(buffer: ^void, capacity: u64) {
+        this._buffer = buffer
+        this._capacity = capacity
+    }
+
+    func append(str: ^const char, size: u64) : void {
+        if (size) {
+            assert!(size < (_capacity - _size))
+            var p = (this._buffer !: ^char) + this._size;
+            memmove(p, str, size)
+            this._size += size
+            p.[size] = <char>'\0'
+        }
+    }
+
+    @inline
+    const func `str`(os: &OutputStream) {
+        // assert!(!ptreq!(this, os))
+        os.append(_buffer, _size)
+    }
+}
+
+struct Style {
+    color = 0:i8;
+    - _bg = 0:i8;
+    - _bold = false;
+    - _italics = false;
+    - _underline = false;
+    - _blink = false;
+    - _faded = false
+
+    const func `str`(os: &OutputStream) {
+        var tmp: [i8, 64] = [];
+        var mos = stackAlloc!(#MemoryOutputStream, tmp, 64);
+        mos << "\x1B["
+        if (color != 0) {
+            if (_bold)
+                mos << "1;"
+            if (_faded)
+                mos << "2;"
+            if (_italics)
+                mos << "3;"
+            if (_underline)
+                mos << "4;"
+            if (_blink)
+                mos << "5;"
+            if (_bg)
+                mos << _bg << ";"
+        }
+        mos << color << 'm';
+        os << mos
+    }
+
+    const func `()`(cfg: string, bg: This) {
+        var x = *this;
+        const p = cfg !: ^const char;
+        var i = 0:i32;
+        while (p.[i] != '\0':char) {
+            var on = true;
+            if (p.[i] == '~':char) {
+                i++
+                on = false
+            }
+
+            switch(p.[i++]) {
+                case 'b':char => x._bold = on
+                case 'i':char => x._italics = on
+                case 'u':char => x._underline = on
+                case 'f':char => x._faded = on
+                case 'p':char => x._blink = on
+                default => assert!(false)
+            }
+            assert!(p.[i] == '\0':char || p.[i++] == '|':char)
+        }
+        if (bg.color >= 0)
+            x._bg = bg.color
+        return x
+    }
+
+    @inline
+    const func `()`(cfg: string) => this.op__call(cfg, This{color: -1})
+}
+
+pub const DEF = Style{color: 0 };
+pub const RED = Style{color: 31 };
+pub const GRN = Style{color: 32 };
+pub const YLW = Style{color: 33 };
+pub const BLU = Style{color: 34 };
+pub const MGN = Style{color: 35 };
+pub const cxy = Style{color: 36 };
+pub const WHT = Style{color: 37 };
+
+
 #if (defined __CXY_TEST__) {
 // Add macro for testing
+pub class TestFailed: Exception {
+    func `init`() {
+        super( "TestFailed" )
+    }
+
+    func what() => "test failed"
+}
+
 macro ok(cond) {
     if (!(cond!))
-        return (file!, offset!, line!)
+        raise TestFailed()
 }
 
 #if (!defined TESTS_RUNNER) {
+    func runTest(testCase: (string, func() -> !void)) {
+        testCase.1() catch {
+            // test case failed
+            stdout << "\r  " << Repeat(' ':char, 100)
+                   << "\r  " << RED("b") << "\xE2\x9C\x98 " << WHT << testCase.0
+                   << DEF << " "
+            ex!.header( &stdout )
+            stdout << " at:"
+            ex!.dumpStackTrace( &stdout, 1, 4 )
+            stdout << "\n"
+            return false
+        }
+
+        stdout << "\r  " << Repeat(' ':char, 100)
+               << "\r  " << GRN("b") << "\xE2\x9C\x93 " << WHT << testCase.0
+               << DEF << "\n"
+        return true
+    }
+
     func runTests(args: Slice[string],
                   testFile: string,
-                  tests: Slice[( string, func() -> Optional[(string, u64, u64)] )] ) {
+                  tests: Slice[(string, func() -> !void)] ) {
+
         var failed = 0;
         if (len!(tests) == 0) {
             stdout << "0 tests defined in " << testFile << "\n";
@@ -1380,24 +1523,16 @@ macro ok(cond) {
 
         stdout << "Running " << testFile << " tests...\n"
         for (const testCase, _ : tests) {
-            const name, exec = testCase;
-            stdout << "  Running test case " << name << ""
+            stdout << "  Running test case " << testCase.0 << ""
 
-            const r = exec();
-            stdout << "\r                                                               ";
-            if (r) {
-                const res = *r;
-                stdout << "\r  \x1B[1;31m\xE2\x9C\x92 \x1B[1;37m" << name
-                       << " - " << res.0 << ":" << res.1 << "\x1B[0m\n"
+            if (!runTest(testCase))
                 failed++
-            }
-            else {
-                stdout << "\r  \x1B[1;32m\xE2\x9C\x93 \x1B[1;37m" << name << "\x1B[0m\n"
-            }
         }
 
         if (failed != 0) {
-            stdout << "\x1B[1;31m\xE2\x9C\x92 FAILED " << failed << "/" << len!(tests) << " tests failed!\x1B[0m\n"
+            stdout << RED("b") << "\xE2\x9C\x98 FAILED - "
+                   << failed << "/" << len!(tests) << " tests failed!"
+                   << DEF << "\n"
             return -1
         }
         return 0

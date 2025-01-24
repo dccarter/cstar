@@ -142,7 +142,13 @@ static AstNode *getMembers(EvalContext *ctx,
     if (node == NULL)
         return NULL;
 
-    const Type *type = stripAll(node->type);
+    const Type *type = resolveUnThisUnwrapType(stripAll(node->type));
+    if (nodeIs(node, TypeRef) && isClassOrStructType(type)) {
+        node = getTypeDecl(type);
+        if (node == NULL)
+            return NULL;
+    }
+
     switch (node->tag) {
     case astTupleType:
         return comptimeWrapped(
@@ -207,6 +213,12 @@ static AstNode *getMembersCount(EvalContext *ctx,
         break;
     case typUnion:
         count = type->tUnion.count;
+        break;
+    case typClass:
+        count = type->tClass.members->count;
+        break;
+    case typStruct:
+        count = type->tStruct.members->count;
         break;
     default:
         return NULL;

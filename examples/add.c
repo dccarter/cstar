@@ -1,35 +1,32 @@
-#include "add.h"
-#include "unistd.h"
-#include <pwd.h>
+#include <sys/wait.h>
 #include <stdlib.h>
 
-#ifdef __MAIN_RETURN_TYPE__
-__MAIN_RETURN_TYPE__ main(int argc, char *argv[]) {
-#ifdef __MAIN_PARAM_TYPE__
-    __MAIN_PARAM_TYPE__ args = args = {{ .data = argv, .len = argc }};
-#define __MAIN_ARGS__ args
-#else
-#define __MAIN_ARGS__
-#endif
+Array547 _allTestCases = (Array547){(struct Tuple543){
+    ._0 = "__bswap",
+    ._1 = _test1I_E
+  }, (struct Tuple543){
+      ._0 = "min/max",
+      ._1 = _test7I_E
+    }, (struct Tuple543){
+        ._0 = "String::(indexOf/rIndexOf)",
+        ._1 = _test17I_E
+      }, (struct Tuple543){
+          ._0 = "Terminal style",
+          ._1 = _test31I_E
+        }};
 
-#ifdef __MAIN_RAISED_TYPE__
-    __MAIN_RAISED_TYPE__ ex = _main(__MAIN_ARGS__);
-    if (ex.tag == 1) {
-         unhandledException(ex._1);
-         unreachable();
-    }
-#ifdef __MAIN_RETURNS__
-     __MAIN_RETURN_TYPE__ ret = ex._0
-    __MAIN_RAISED_TYPE_DCTOR__(&ex);
-#else
-     __MAIN_RAISED_TYPE_DCTOR__(&ex);
-#endif
-#else
-#ifdef __MAIN_RETURNS__
-      return _main(__MAIN_ARGS__);
-#else
-      _main(__MAIN_ARGS__);
-#endif
-#endif
+#ifdef __CXY_TEST_VARIABLE
+typedef struct { __typeof(__CXY_TEST_VARIABLE[0]) *data; uint64_t len; } __TestCases;
+
+int main(int argc, char *argv[])
+{
+    return builtins_runTests(
+        (SliceI_sE){.data = argv, .len = argc},
+        "/Users/dccarter/projects/cxy/src/cxy/runtime/builtins.test.cxy",
+        (SliceI_TsFZOptionalI_Tsu64u64_E___E){
+            .data = allTestCases,
+            .len = sizeof(allTestCases)/sizeof(allTestCases[0])
+        }
+     );
 }
 #endif

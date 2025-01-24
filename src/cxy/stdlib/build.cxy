@@ -1,0 +1,143 @@
+/**
+ * This module will be used as the build system for cxy
+ */
+module build
+
+import { HashMap, HashSet } from "stdlib/hash.cxy"
+
+pub exception BuildError(msg: String) => msg != null? msg.str() : ""
+
+@poco
+pub struct OptionDesc {
+    name: __string
+    desc: __string
+    def: __string
+}
+
+pub struct Option[T] {
+    require!(
+        T.isChar || (T.isString && T.isStruct) || T.isNumber || T.isBoolean,
+        "type of option must be a primitive type, to '{t}'",
+        #T
+    )
+
+    `isOption = true
+
+    val: T
+    desc: __string
+
+    func (def: T, desc: __string) {
+        this.val = val
+        this.desc = desc
+    }
+
+    @inline
+    func set(str: __string): !void {
+        val = str.parse[T]()
+    }
+
+    @inline
+    func `deref`() => val
+
+    @inline
+    const func `deref`() => val
+}
+
+pub class Context {
+    _options = HashMap[__string, __string]();
+
+    @inline func setOption(name: __string, value: __string) {
+        if (!(_options.[name] = value))
+            raise BuildError(f"build option '${name}' already defined")
+    }
+
+    func option(name: __string): !__string {
+        var value = _options.[name]
+        if (!value)
+            raise BuildError(f"option with name '${name}' does not exist")
+        return *value
+    }
+
+    func bindOption[T](opts: &T, name: __string, value: __string): !void {
+        #for (const M: T.members) {
+            #if (M.isField) {
+                if (name == #{M.name}) {
+                    opts.#{mk_ident!(M.name)}.set(value)
+                    return
+                }
+            }
+        }
+    }
+
+    func bindOptions[T](opts: &T): !void {
+        require(T.isStruct, "expecting a struct of options, got '{t}'", #T)
+        for (const name, value: _options) {
+            bindOption(opts, name, value)
+        }
+    }
+}
+
+pub class Task {
+    name: __string
+    - _run: Lambda[func(ctx: &Context) -> !void];
+
+    func `init`(name: __string, run: func(ctx: &Context) -> !void) {
+        this.name = name
+        this._run = run
+    }
+
+    @inline func `()`(ctx: Context): !void {
+        _run(ctx)
+    }
+}
+
+pub class Builder {
+    - _context = Context();
+    - _tasks = HashMap[__string, Task]();
+    - _options = HashMap[__string, OptionDesc]();
+
+    - func parseOptions(args: [string]) {
+        for (const i: 0..args.size()) {
+            const arg = __string(args.[i])
+            if (arg.[0] != '-':char || arg.[1] != 'D':char)
+                continue
+            var name = arg
+            var value = __string();
+            const idx = arg.indexOf('=':char)
+            if (idx)
+                raise BuildError(f"invalid build option '${arg}', expect -DOPTION=VALUE")
+            var name = arg.substr(0, *idx)
+            if (!_options.contains(name))
+                raise BuildError(f"unknown build option '${name}'")
+
+            var value = arg.substr(*idx + 1)
+            _context.setOption(name, value)
+        }
+    }
+
+    func addTask(task: Task): !void {
+        if (_tasks.contains(task.name))
+            raise BuildError(f"task with name '${task.name}' already exist")
+        _tasks.[task.name] = &&task
+    }
+
+    func addOption(name: __string, desc: __string, def: __string): !void {
+        if (_options.contains(name))
+            raise BuildError(f"duplicate option with name '${name}'")
+        _options.[name] = OptionDesc{name: name, desc: desc, def: def}
+    }
+
+    @inline
+    func addOption(name: __string, desc: __string): !void {
+        addOption(name, desc, "true")
+    }
+
+    func addStaticOptions[T](opts: &T): !void {
+        require!(T.isStruct, "expecting a struct type with option declarations, got '{t}'", #T)
+        #for (const M: T.members) {
+            #if (M.isField && M.Tinfo.annotations.["isOption"]) {
+                addOption(#{M.name}, opts.#{mk_ident!(M.name)}.desc, "")
+            }
+        }
+    }
+}

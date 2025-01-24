@@ -48,6 +48,21 @@ static inline bool validateMacroArgumentCount(EvalContext *ctx,
     return true;
 }
 
+static inline bool validateMacroArgumentLimit(
+    EvalContext *ctx, const FileLoc *loc, const AstNode *args, u64 min, u64 max)
+{
+    u64 count = args ? countAstNodes(args) : 0;
+    if (count < min || count > max) {
+        logError(ctx->L,
+                 loc,
+                 "unsupported number of arguments given to macro, "
+                 "expecting range '[{u64}< count < {u64}]', got '{u64}'",
+                 (FormatArg[]){{.u64 = min}, {.u64 = max}, {.u64 = count}});
+        return false;
+    }
+    return true;
+}
+
 static void staticLog(AstVisitor *visitor,
                       DiagnosticKind lvl,
                       attr(unused) const AstNode *node,
@@ -939,6 +954,20 @@ static AstNode *makeLenNode(AstVisitor *visitor,
     csAssert0(type);
     const Type *raw = stripAll(type);
 
+    AstNode *arg = resolveAstNode(args);
+    if (nodeIs(arg, FuncParamDecl) && hasFlag(arg, Variadic)) {
+        args->tag = astIntegerLit;
+        args->intLiteral.isNegative = false;
+        args->type = getPrimitiveType(ctx->types, prtU64);
+        clearAstBody(args);
+        if (!typeIs(type, Void)) {
+            args->intLiteral.uValue = countAstNodes(arg);
+        }
+        else
+            args->intLiteral.uValue = 0;
+        return args;
+    }
+
     switch (raw->tag) {
     case typString: {
         if (nodeIs(args, StringLit)) {
@@ -1210,6 +1239,21 @@ static AstNode *makeTypeofNode(AstVisitor *visitor,
     type = unwrapType(type, &flags);
 
     return makeTypeinfoNode(visitor, &node->loc, type);
+}
+
+static AstNode *makeVarArgsDefaultNode(AstVisitor *visitor,
+                                       const AstNode *node,
+                                       AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentLimit(ctx, &node->loc, args, 1, 2))
+        return NULL;
+
+    if (nodeIs(args, Noop))
+        args = args->next;
+    const Type *type = args->type ?: evalType(ctx, args);
+    csAssert0(type);
+    return args;
 }
 
 static AstNode *makeTypeAtIdxNode(AstVisitor *visitor,
@@ -1501,6 +1545,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "typeat", makeTypeAtIdxNode},
     {.name = "typeof", makeTypeofNode},
     {.name = "unchecked", makeUncheckedNode},
+    {.name = "varargs_def", makeVarArgsDefaultNode},
     {.name = "warn", makeAstLogWarningNode},
 };
 

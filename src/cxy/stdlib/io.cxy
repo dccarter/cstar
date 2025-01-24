@@ -1,20 +1,27 @@
 module io
 
-import "unistd.h" as stdio
+import "unistd.h" as unistd
+import "stdlib.h" as stdlib
+import "sys/wait.h" as syswait
+import "sys/_types/_pid_t.h" as pid_t
 
-struct File {
+pub exception IOError(msg: String) => msg == null? "": msg.str()
+
+macro _W_INT(x)      *(<^i32>(ptrof x!))
+macro _WSTATUS(x)    =(_W_INT!(x!) & 0177)
+macro WIFEXITED(x)   =(_WSTATUS!(x!) == 0)
+macro WEXITSTATUS(x) =((_W_INT!(x!) >> 8) & 0x000000ff)
+
+pub type Pid = pid_t.pid_t
+
+pub struct FileDescriptor {
     fd: i32 = -1
-
-    @inline
-    func `init`(fd: i32) {
-        this.fd = fd
-    }
 
     func read(data: ^void, size: u64) : u64? {
         if (fd == -1)
             return null
 
-        var bytes = stdio.read(fd, data, size);
+        var bytes = unistd.read(fd, data, size);
         if (bytes == -1)
             return null
 
@@ -25,134 +32,220 @@ struct File {
         if (fd == -1)
             return null
 
-        if (stdio.lseek(fd, off, SEEK_SET!) == -1)
+        if (unistd.lseek(fd, off, SEEK_SET!) == -1)
             return null
 
-        var bytes = stdio.read(fd, data, size);
+        var bytes = unistd.read(fd, data, size);
         if (bytes == -1)
             return null
 
         return <u64>bytes;
     }
 
+    func readAll(): !String {
+        var buf: [char, 4092] = []
+        var str = String();
+        while (true) {
+            var tmp = unistd.read(fd, buf, 4092)
+            if (tmp == 0)
+                return &&str
+            if (tmp < 0)
+                raise IOError(f"reading command output failed: ${strerror(errno!)}")
+            str.append(buf, tmp)
+        }
+    }
+
     @inline
     func `!!`() => fd != -1
 
     @inline
-    func seek(off: u64, whence: i32 = SEEK_SET!) => stdio.lseek(fd, <i64>off, whence)
+    func seek(off: u64, whence: i32 = SEEK_SET!) => unistd.lseek(fd, <i64>off, whence)
 }
 
-pub class MemoryOutputStream : OutputStream {
-    - _buffer: ^void
-    - _capacity: u64
-    - _size: u64 = 0
+pub struct Process {
+    - out = FileDescriptor{};
+    - err = FileDescriptor{};
+    - input  = -1:i32;
+    - _pid: Pid = 0;
 
-    func `init`(buffer: ^void, capacity: u64) {
-        this._buffer = buffer
-        this._capacity = capacity
+    func `init`(pid: Pid, out: i32 = -1, err: i32 = -1, input: i32 = -1) {
+        _pid = pid
+        this.out = FileDescriptor{fd: out}
+        this.err = FileDescriptor{fd: err}
+        this.input = input
     }
 
-    func append(str: ^const char, size: u64) : void {
-        if (size) {
-            assert!(size < (_capacity - _size))
-            var p = (this._buffer !: ^char) + this._size;
-            memmove(p, str, size)
-            this._size += size
-            p.[size] = <char>'\0'
+    func wait(): !i32 {
+        var status:i32 = 0;
+        const ret = syswait.waitpid(_pid, ptrof status, 0)
+        if (ret < 0)
+            raise IOError(f"wait for pid ${_pid} failed: ${strerror(errno!)}")
+
+        if (WIFEXITED!(status)) {
+            return WEXITSTATUS!(status)
         }
-    }
-
-    @inline
-    const func `str`(os: &OutputStream) {
-        // assert!(!ptreq!(this, os))
-        os.append(_buffer, _size)
+        return -1:i32
     }
 }
 
-struct Style {
-    color = 0:i8;
-    - _bg = 0:i8;
-    - _bold = false;
-    - _italics = false;
-    - _underline = false;
-    - _blink = false;
-    - _faded = false
+pub func execvpe(cmd: string, argv: [string], env: [(string, string)]): !Process {
+    var input:[i32, 2] = []
+    var out:[i32, 2] = []
+    var err:[i32, 2] = []
 
-    const func `str`(os: &OutputStream) {
-        var tmp: [i8, 64] = [];
-        var mos = stackAlloc!(#MemoryOutputStream, tmp, 64);
-        mos << "\x1B["
-        if (color != 0) {
-            if (_bold)
-                mos << "1;"
-            if (_faded)
-                mos << "2;"
-            if (_italics)
-                mos << "3;"
-            if (_underline)
-                mos << "4;"
-            if (_blink)
-                mos << "5;"
-            if (_bg)
-                mos << _bg << ";"
-        }
-        mos << color << 'm';
-        os << mos
+    const sz = argv.size()
+    if (sz < 2 || argv.[sz-1] != null)
+        raise IOError("arguments `argv` must be null terminated and argv[0] must be the command")
+    if (__string(cmd) != __string(argv.[0]))
+        raise IOError("first entry of `argv` must be the same as the command name")
+
+    if (unistd.pipe(input) != 0)
+        raise IOError(f"opening process input stream failed: ${strerror(errno!)}")
+    if (unistd.pipe(out) != 0)
+        raise IOError(f"opening process output stream failed: ${strerror(errno!)}")
+    if (unistd.pipe(err) != 0)
+        raise IOError(f"opening process error stream failed: ${strerror(errno!)}")
+
+    var pid = unistd.fork();
+    if (pid == -1)
+        raise IOError(f"creating a process failed: ${strerror(errno!)}")
+
+    if (pid == 0) {
+        // Child process
+        unistd.dup2(input.[1], STDIN_FILENO!)
+        unistd.dup2(out.[1], STDOUT_FILENO!)
+        unistd.dup2(err.[1], STDERR_FILENO!)
+        unistd.close(input.[0])
+        unistd.close(out.[0])
+        unistd.close(err.[0])
+        for (const x, _: env)
+            stdlib.setenv(x.0 !: ^const char, x.1 !: ^const char, 1)
+        var ret = unistd.execvp(cmd !: ^const char, argv.data !: ^^const char)
+        raise IOError(f"starting ${cmd} failed: ${strerror(errno!)}")
+        stdlib.exit(ret)
     }
+    else if (pid > 0) {
+        unistd.close(input.[1])
+        unistd.close(out.[1])
+        unistd.close(err.[1])
+        return Process(pid, out.[0], err.[0], input.[0])
+    }
+    raise IOError(f"forking process failed: ${strerror(errno!)}")
+}
 
-    const func `()`(cfg: string, bg: This) {
-        var x = *this;
-        const p = cfg !: ^const char;
-        var i = 0:i32;
-        while (p.[i] != '\0':char) {
-            var on = true;
-            if (p.[i] == '~':char) {
-                i++
-                on = false
+@[inline]
+pub func execvp(cmd: string, argv: Slice[string]): !Process {
+    var env = Slice[(string, string)](null, 0);
+    return execvpe(cmd, argv, env)
+}
+
+@[inline]
+pub func exec(cmd: string): !Process {
+    var env = Slice[(string, string)](null, 0);
+    var argv: [string, 2] = [cmd, null];
+    return execvpe(cmd, argv, env)
+}
+
+pub func execlp(cmd: string, ...args: string): !Process {
+    var env = Slice[(string, string)](null, 0);
+    #const sz = len!(args) + 2
+    var argv: [string, #{sz}] = [];
+    argv.[0] = cmd
+    #const i = 1
+    #for (const arg: args) {
+        argv.[#{i}] = #{arg}
+        #{i += 1}
+    }
+    argv.[#{sz -1 }] = null
+    return execvpe(cmd, argv, env)
+}
+
+pub func execlpe(cmd: string, env: [(string, string)], ...args: string): !Process {
+    #const sz = len!(args) + 2
+    var argv: [string, #{sz}] = [];
+    argv.[0] = cmd
+    #const i = 1
+    #for (const arg: args) {
+        argv.[#{i}] = #{arg}
+        #{i += 1}
+    }
+    argv.[#{sz -1 }] = null
+    return execvpe(cmd, argv, env)
+}
+
+@inline
+pub func shell(cmd: string, ...args: string): !Process {
+    #if (len!(args)) {
+        var env = Slice[(string, string)](null, 0);
+        var s = String(cmd);
+        #const hasEnv = false
+        #for (const arg: args) {
+            require!(!hasEnv, "environment variables must be the last argument")
+            #const T = typeof!(#{arg})
+            #if (T.isStruct) {
+                var _env: [(string, string), #{T.membersCount}] = [];
+                #const i = 0
+                #for (const M: T.members) {
+                    #if (M.isField) {
+                        _env.[#{i}] = (#{M.name}, #{arg}.#{mk_ident!(M.name)})
+                        #{i += 1}
+                    }
+                }
+                env = Slice[(string, string)](_env, #{i})
+                #{hasEnv = true}
             }
-
-            switch(p.[i++]) {
-                case 'b':char => x._bold = on
-                case 'i':char => x._italics = on
-                case 'u':char => x._underline = on
-                case 'f':char => x._faded = on
-                case 'p':char => x._blink = on
-                default => assert!(false)
+            else #if (T.isArray) {
+                env = Slice[(string, string)](#{arg}, len!(#{arg}))
+                #{hasEnv = true}
             }
-            assert!(p.[i] == '\0':char || p.[i++] == '|':char)
+            else #if (T.isSlice) {
+                env = #{arg}
+                #{hasEnv = true}
+            }
+            else {
+                s << " " << #{arg}
+            }
         }
-        if (bg.color >= 0)
-            x._bg = bg.color
-        return x
+        return execlpe("sh", env, "-c", s.str())
     }
-
-    @inline
-    const func `()`(cfg: string) => this.op__call(cfg, This{color: -1})
+    else
+        return execlpe("sh",  Slice[(string, string)](null, 0), "-c", cmd)
 }
 
-pub const DEF = Style{color: 0 };
-pub const RED = Style{color: 31 };
-pub const GRN = Style{color: 32 };
-pub const YLW = Style{color: 33 };
-pub const BLU = Style{color: 34 };
-pub const MGN = Style{color: 35 };
-pub const cxy = Style{color: 36 };
-pub const WHT = Style{color: 37 };
+pub func execute[T](
+    cmd: string,
+    @unused env: T
+): !i32 {
+    require!(T.isStruct || T.isSlice || T.isArray,
+        "type {t} must be struct whose fields are environment variables or a slice/array of type [(string, string)]",
+        #T)
+    const pid = unistd.fork();
+    if (pid == -1)
+        raise IOError(f"creating a process failed: ${strerror(errno!)}")
 
-test "Terminal style" {
-    var x = YLW("b|i|u|f|p", WHT);
-    ok!(x._bold)
-    ok!(x._italics)
-    ok!(x._underline)
-    ok!(x._faded)
-    ok!(x._blink)
+    if (pid == 0) {
+        var argv = [ "sh", "-c", cmd, null ]
+        // Child process
+        #if (T.isStruct) {
+            #for(const M: T.members) {
+                #if (M.isField && M.Tinfo == #string)
+                    stdlib.setenv(#{M.name} !: ^const char,
+                                  env.#{mk_ident!(M.name)} !: ^const char, 1)
+            }
+        }
+        else {
+            for (const x,_: env)
+                stdlib.setenv(x.0 !: ^const char, x.1 !: ^const char, 1)
+        }
 
-    var s = String();
-    s << x
-    ok!(s == "\x1B[1;2;3;4;5;37;33m")
-
-    x = x("~b|i|~u|~f")
-    s.clear()
-    s << x
-    ok!(s == "\x1B[3;5;37;33m")
+        var ret = unistd.execvp("sh" !: ^const char, argv !: ^^const char)
+        raise IOError(f"starting ${cmd} failed: ${strerror(errno!)}")
+        stdlib.exit(ret)
+    }
+    else if (pid > 0) {
+        return Process(pid).wait()
+    }
+    raise IOError(f"forking process failed: ${strerror(errno!)}")
 }
+
+macro sh(cmd, ...env) os.execute(cmd!, varargs_def!(env!, {}))

@@ -2037,20 +2037,18 @@ static AstNode *testDecl(Parser *P)
         consume0(P, tokRBrace);
         return decls;
     }
-    else {
-        Token name = *consume0(P, tokStringLiteral);
+    Token name = *consume0(P, tokStringLiteral);
 
-        body = block(P);
-        if (body->blockStmt.stmts == NULL)
-            parserError(P, &body->loc, "empty test block not allowed", NULL);
+    body = block(P);
+    if (body->blockStmt.stmts == NULL)
+        parserError(P, &body->loc, "empty test block not allowed", NULL);
 
-        return newAstNode(
-            P,
-            &tok,
-            &(AstNode){.tag = astTestDecl,
-                       .testDecl = {.name = getStringLiteral(P, &name),
-                                    .body = body}});
-    }
+    return newAstNode(
+        P,
+        &tok,
+        &(AstNode){
+            .tag = astTestDecl,
+            .testDecl = {.name = getStringLiteral(P, &name), .body = body}});
 }
 
 static AstNode *exceptionDecl(Parser *P)

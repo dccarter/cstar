@@ -177,8 +177,11 @@ static const char *formatArg(FormatState *state,
             if (*ptr == 'l')
                 len = args[(*index)++].len;
             const char *p = arg->s;
-            while (*p != '\0' && i++ < len) {
-                format(state, "{cE}", (FormatArg[]){{.c = *p++}});
+            while (*p != '\0' && i < len) {
+                u32 ch = 0;
+                p += readChar(p, len - i, &ch);
+                format(state, "{cE}", (FormatArg[]){{.u32 = ch}});
+                i++;
             }
         }
         else

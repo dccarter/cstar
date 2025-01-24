@@ -248,11 +248,11 @@ set(CXY_STD_LIB_SOURCES
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/coro.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/hash.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/http.cxy
-        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/io.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/json.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/list.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/log.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/net.cxy
+        ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/os.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/path.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/tcp.cxy
         ${CMAKE_SOURCE_DIR}/src/cxy/stdlib/time.cxy
@@ -301,5 +301,5 @@ foreach (CXY_SRC ${CXY_STD_LIB_SOURCES})
     get_filename_component(_FILE ${CXY_SRC} NAME)
     message(STATUS "Adding stdlib test case ${CXY_SRC}")
     add_test(NAME "stdlib/${_FILE}"
-             COMMAND cxy test --no-progress --stdlib ${CMAKE_SOURCE_DIR}/src/cxy --with-mm ${CXY_SRC})
+             COMMAND cxy test --no-progress --stdlib ${CMAKE_SOURCE_DIR}/src/cxy --with-mm ${cte})
 endforeach ()

@@ -24,6 +24,8 @@
 
 typedef CxyPair(u32, u32) u32_u32_pair;
 
+static inline bool isodigit(int c) { return c >= '0' && c <= '7'; }
+
 static size_t convertStrToCharOrd(const char *ptr, int base, u32 *res)
 {
     char *next = NULL;
@@ -75,9 +77,6 @@ size_t convertEscapeSeq(const char *ptr, size_t n, u32 *res)
         if (n <= 1)
             return 0;
         switch (ptr[1]) {
-        case '0':
-            *res = '\0';
-            return 2;
         case 'n':
             *res = '\n';
             return 2;
@@ -111,10 +110,16 @@ size_t convertEscapeSeq(const char *ptr, size_t n, u32 *res)
         case 'x':
             if (n <= 2)
                 return 0;
-            return convertStrToCharOrd(ptr + 2, 16, res);
+            return 2 + convertStrToCharOrd(ptr + 2, 16, res);
+        case '0':
+            if (!isodigit(ptr[2]) || !isodigit(ptr[3])) {
+                *res = '\0';
+                return 2;
+            }
+            return 1 + convertStrToCharOrd(ptr + 1, 8, res);
         default:
             if (isdigit(ptr[1]))
-                return convertStrToCharOrd(ptr + 1, 8, res);
+                return 1 + convertStrToCharOrd(ptr + 1, 8, res);
             return 0;
         }
     }
@@ -126,6 +131,16 @@ size_t convertEscapeSeq(const char *ptr, size_t n, u32 *res)
 
     *res = (u8)ptr[0];
     return 1;
+}
+
+size_t readChar(cstring str, size_t len, u32 *res)
+{
+    if (((u8 *)str)[0] >= 0x80) {
+        size_t tmp = countLeadingZeros(str[0]);
+        csAssert(tmp <= len, "invalid UTF-8 character sequence");
+        len = tmp;
+    }
+    return convertEscapeSeq(str, len, res);
 }
 
 size_t escapeString(const char *str, size_t n, char *dst, size_t size)
@@ -145,10 +160,6 @@ size_t escapeString(const char *str, size_t n, char *dst, size_t size)
             continue;
 
         switch (str[i]) {
-        case '0':
-            dst[j++] = '\0';
-            i++;
-            break;
         case 'n':
             dst[j++] = '\n';
             i++;
@@ -181,6 +192,12 @@ size_t escapeString(const char *str, size_t n, char *dst, size_t size)
             dst[j++] = '"';
             i++;
             break;
+        case '0':
+            if (!isdigit(str[i + 1])) {
+                dst[j++] = '\0';
+                i++;
+                break;
+            }
         default:
             dst[j++] = '\\';
             break;
