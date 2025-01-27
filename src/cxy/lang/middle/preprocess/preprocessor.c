@@ -149,6 +149,12 @@ static void visitMacroCall(AstVisitor *visitor, AstNode *node)
         astVisit(visitor, tmp);
         ok = defineSymbol(ctx->env, ctx->L, param->ident.value, tmp) && ok;
     }
+    if (ok && hasFlag(macro, Variadic) && param && arg == NULL) {
+        ok = defineSymbol(ctx->env,
+                          ctx->L,
+                          param->ident.value,
+                          makeAstNop(ctx->pool, &param->loc));
+    }
 
     if (ok && macro->macroDecl.body) {
         typeof(ctx->stack) stack = ctx->stack;
@@ -165,8 +171,8 @@ static void visitExprStmt(AstVisitor *visitor, AstNode *node)
     PreprocessorContext *ctx = getAstVisitorContext(visitor);
     AstNode *expr = node->exprStmt.expr;
     astVisit(visitor, expr);
-    if (hasFlag(expr, Substituted))
-        replaceAstNode(node, expr);
+    // if (hasFlag(expr, Substituted))
+    //     replaceAstNode(node, expr);
 }
 
 static void visitBlockStmt(AstVisitor *visitor, AstNode *node)

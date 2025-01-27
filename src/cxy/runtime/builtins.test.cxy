@@ -27,3 +27,21 @@ test "String::(indexOf/rIndexOf)" {
     ok!(!!idx)
     ok!(*idx == 7)
 }
+
+test "Terminal style" {
+    var x = YLW("b|i|u|f|p", WHT);
+    ok!(x._bold)
+    ok!(x._italics)
+    ok!(x._underline)
+    ok!(x._faded)
+    ok!(x._blink)
+
+    var s = String();
+    s << x
+    ok!(s == "\x1B[1;2;3;4;5;37;33m")
+
+    x = x("~b|i|~u|~f")
+    s.clear()
+    s << x
+    ok!(s == "\x1B[3;5;37;33m")
+}

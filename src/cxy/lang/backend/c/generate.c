@@ -12,6 +12,7 @@
 #include "lang/frontend/visitor.h"
 #include "lang/middle/builtins.h"
 
+#include <ctype.h>
 #include <errno.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -815,7 +816,9 @@ static void visitStringLit(ConstAstVisitor *visitor, const AstNode *node)
     cstring p = node->stringLiteral.value;
     format(getState(ctx), "\"", NULL);
     while (*p != '\0') {
-        format(getState(ctx), "{cE}", (FormatArg[]){{.c = *p++}});
+        bool escaped =
+            p[0] != '\\' || (p[1] != 'x' && p[1] != 'X' && !isdigit(p[1]));
+        printUtf8(getState(ctx), *p++, escaped);
     }
     format(getState(ctx), "\"", NULL);
 }
@@ -1332,7 +1335,10 @@ static void visitInlineAssembly(ConstAstVisitor *visitor, const AstNode *node)
             format(getState(ctx), "%%", NULL);
             break;
         default:
-            format(getState(ctx), "{cE}", (FormatArg[]){{.c = *p}});
+            printUtf8(getState(ctx),
+                      *p,
+                      p[0] != '\\' ||
+                          (p[1] != 'x' && p[1] != 'X' && !isdigit(p[1])));
             break;
         }
         p++;
@@ -1734,7 +1740,7 @@ static void generateTestMainFunction(CodegenContext *ctx,
     format(getState(ctx),
            "int main(int argc, char *argv[]) {{{>}\n"
            "return builtins_runTests((SliceI_sE){{.data = argv, .len = argc}, "
-           "\"{s}\", (SliceI_TsFZOptionalI_Tsu64u64_E___E){{",
+           "\"{s}\", (SliceI_TsFU_ZVoid_ZException____E){{",
            (FormatArg[]){{.s = testFile}});
     if (ctx->hasTestCases) {
         format(getState(ctx),

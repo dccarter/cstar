@@ -263,6 +263,7 @@ int exec(const char *command, struct FormatState *output);
 
 size_t convertEscapeSeq(const char *str, size_t n, u32 *res);
 size_t escapeString(const char *str, size_t n, char *dst, size_t size);
+size_t readChar(cstring str, size_t len, u32 *res);
 
 bool isColorSupported(FILE *);
 char *readFile(const char *fileName, size_t *file_size);

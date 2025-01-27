@@ -639,6 +639,17 @@ static void shakeCallExpr(AstVisitor *visitor, AstNode *node)
     if (findAttribute(node, S_sync))
         node->flags |= flgSyncCall;
     astVisitFallbackVisitAll(visitor, node);
+    AstNodeList args = {};
+    AstNode *arg = node->callExpr.args;
+    for (; arg;) {
+        AstNode *tmp = arg;
+        arg = arg->next;
+        tmp->next = NULL;
+        if (!nodeIs(tmp, Noop)) {
+            insertAstNode(&args, tmp);
+        }
+    }
+    node->callExpr.args = args.first;
 }
 
 static void shakeGroupExpr(AstVisitor *visitor, AstNode *node)
@@ -874,14 +885,6 @@ static void shakeTestDecl(AstVisitor *visitor, AstNode *node)
     AstNode *body = node->testDecl.body;
     astVisit(visitor, body);
     csAssert0(nodeIs(body, BlockStmt));
-    AstNode *last = getLastAstNode(body->blockStmt.stmts);
-    last->next =
-        makeReturnAstNode(ctx->pool,
-                          &body->loc,
-                          flgNone,
-                          makeNullLiteral(ctx->pool, &node->loc, NULL, NULL),
-                          NULL,
-                          NULL);
 
     node->tag = astFuncDecl;
     node->flags |= flgTestContext;
@@ -889,36 +892,26 @@ static void shakeTestDecl(AstVisitor *visitor, AstNode *node)
     node->funcDecl.name = name;
     node->funcDecl.signature = makeFunctionSignature(
         ctx->pool,
-        &(FunctionSignature){
-            // (string, u64, u64)?
-            .ret = makeOptionalTypeAst(
-                ctx->pool,
-                &node->loc,
-                flgNone,
-                makeTupleTypeAst(
-                    ctx->pool,
-                    &node->loc,
-                    flgNone,
-                    makeStringTypeAst(
-                        ctx->pool,
-                        &node->loc,
-                        flgNone,
-                        makePrimitiveTypeAst(ctx->pool,
-                                             &node->loc,
-                                             flgNone,
-                                             prtU64,
-                                             makePrimitiveTypeAst(ctx->pool,
-                                                                  &node->loc,
-                                                                  flgNone,
-                                                                  prtU64,
-                                                                  NULL,
-                                                                  NULL),
-                                             NULL),
-                        NULL),
-                    NULL,
-                    NULL),
-                NULL,
-                NULL)});
+        &(FunctionSignature){// Void|Exception
+                             .ret = makeUnionDeclAst(
+                                 ctx->pool,
+                                 &node->loc,
+                                 flgNone,
+                                 makeResolvedPath(ctx->pool,
+                                                  &node->loc,
+                                                  S_Void,
+                                                  flgNone,
+                                                  NULL,
+                                                  makeResolvedPath(ctx->pool,
+                                                                   &node->loc,
+                                                                   S_Exception,
+                                                                   flgNone,
+                                                                   NULL,
+                                                                   NULL,
+                                                                   NULL),
+                                                  NULL),
+                                 NULL,
+                                 NULL)});
 
     insertAstNode(
         &ctx->testCases,
