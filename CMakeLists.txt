@@ -301,5 +301,5 @@ foreach (CXY_SRC ${CXY_STD_LIB_SOURCES})
     get_filename_component(_FILE ${CXY_SRC} NAME)
     message(STATUS "Adding stdlib test case ${CXY_SRC}")
     add_test(NAME "stdlib/${_FILE}"
-             COMMAND cxy test --no-progress --stdlib ${CMAKE_SOURCE_DIR}/src/cxy --with-mm ${cte})
+             COMMAND cxy test --no-progress --stdlib ${CMAKE_SOURCE_DIR}/src/cxy --with-mm ${CXY_SRC})
 endforeach ()

@@ -164,7 +164,7 @@ checkBackendToolChain() {
 }
 
 INSTALL_DIR=~/.cxy
-WORKING_DIR=`mktemp -d -t cxy`
+WORKING_DIR=`mktemp -d -t cxy-buildXXXXXX`
 LOG_FILE=${WORKING_DIR}/build.log
 
 cleanup() {
