@@ -1,12 +1,29 @@
 module os
 
+import { State } from "./coro.cxy"
+
+import "errno.h" as errno
 import "stdlib.h" as stdlib
 import "unistd.h" as unistd
 import "sys/wait.h" as syswait
-import "sys/_types/_pid_t.h" as pid_t
 
 import "native/nos.h" as nos
 import "./native/index.cxy"
+
+##if (defined MACOS) {
+import "sys/_types/_pid_t.h" as pid_t
+}
+else {
+import "sys/types.h" as types
+import "sys/pidfd.h" as pidfd
+}
+
+#if (defined MACOS) {
+pub type Pid = pid_t.pid_t
+}
+else {
+pub type Pid = types.pid_t
+}
 
 pub type Stat = nos.Stat
 
@@ -23,8 +40,6 @@ macro _W_INT(x)      *(<^i32>(ptrof x!))
 macro _WSTATUS(x)    =(_W_INT!(x!) & 0177)
 macro WIFEXITED(x)   =(_WSTATUS!(x!) == 0)
 macro WEXITSTATUS(x) =((_W_INT!(x!) >> 8) & 0x000000ff)
-
-pub type Pid = pid_t.pid_t
 
 pub struct FileDescriptor {
     fd: i32 = -1
@@ -97,6 +112,38 @@ pub struct Process {
             return WEXITSTATUS!(status)
         }
         return -1:i32
+    }
+
+    func waitAsync(): !i32 {
+        #if (defined MACOS) {
+            warn!("Process::waitAsync is not defined for MACOS yet")
+            raise IOError("Process::waitAsync is not defined for MACOS yet")
+        }
+        else {
+            const pidFd = pidfd.pidfd_open(_pid, PIDFD_NONBLOCK!);
+            if (pidFd < 1) {
+                if (errno! == EINVAL!)
+                    return -(<i32>EINVAL!)
+                raise IOError(f"wait for pid ${_pid} failed: ${strerror(errno!)}")
+            }
+
+            defer unistd.close(pidFd)
+            var status:i32 = 0;
+            var ret = syswait.waitpid(_pid, ptrof status, WNOHANG!);
+            if (ret < 0)
+                raise IOError(f"wait for pid ${_pid} failed: ${strerror(errno!)}")
+            if (ret == 0) {
+                fdWaitRead(pidFd)
+                ret = syswait.waitpid(_pid, ptrof status, WNOHANG!)
+                if (ret < 0)
+                    raise IOError(f"wait for pid ${_pid} failed: ${strerror(errno!)}")
+            }
+
+            if (WIFEXITED!(status)) {
+                return WEXITSTATUS!(status)
+            }
+            return -1:i32
+        }
     }
 }
 
@@ -209,7 +256,7 @@ pub func capture(cmd: string, ...args: auto): !Process {
                 #{hasEnv = true}
             }
             else {
-                require!(T.isString, "unsupported argument of type '{t}', argument must be of string type")
+                require!(T.isString, "unsupported argument of type '{t}', argument must be of string type", #T)
                 #if (T.isClass || T.isStruct)
                     argv.[#{argc}] = #{arg}.str()
                 else

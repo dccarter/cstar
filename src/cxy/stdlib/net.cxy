@@ -359,7 +359,7 @@ pub async func getRemoteAddress(name: string, port: u16, mode: IPVersion = IPVer
         if (rc == EAGAIN!) {
             var fd = dns.dns_ai_pollfd(ai);
             assert!(fd >= 0)
-            evin(fd)
+            fdWaitRead(fd)
             continue
         }
 

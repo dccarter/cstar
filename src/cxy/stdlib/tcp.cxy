@@ -88,7 +88,7 @@ pub class TcpSocket {
                 if (total > 0)
                     return total
 
-                var rc = evin(fd, timeout);
+                var rc = fdWaitRead(fd, timeout);
                 if (rc != State.AE_READABLE) {
                     errno! = ETIMEDOUT!;
                     return null
@@ -120,7 +120,7 @@ pub class TcpSocket {
                 if(errno! != EAGAIN! && errno! != EWOULDBLOCK!)
                     return null
 
-                var rc = evout(fd, timeout);
+                var rc = fdWaitWrite(fd, timeout);
                 if (rc != State.AE_WRITABLE) {
                     errno! = ETIMEDOUT!
                     return null
@@ -251,7 +251,7 @@ pub class TcpListener {
             if (errno! != EAGAIN! && errno! != EWOULDBLOCK!)
                 return null
             /* Wait till new connection is available. */
-            var rc = evin(fd, timeout);
+            var rc = fdWaitRead(fd, timeout);
             if (rc != State.AE_READABLE) {
                 errno! = ETIMEDOUT!;
                 return null
@@ -289,7 +289,7 @@ pub async func tcpConnect(addr: Address, @unused deadline: i64 = 0): TcpSocket {
         if (errno! != EINPROGRESS!)
             return null
 
-        rc = evin(fd)
+        rc = fdWaitRead(fd)
         if (rc == 0) {
             errno! = ETIMEDOUT!
             return null

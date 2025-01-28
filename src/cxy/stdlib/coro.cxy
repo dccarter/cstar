@@ -330,14 +330,11 @@ macro __async(CALL, NAME) {
 @[inline, __override_builtin("timestamp")]
 func __now() => ae.aeOsTime()
 
-@[inline, __override_builtin("evin")]
-func __evin(fd: i32, timeout: u64 = 0) => __scheduler.fdWaitRead(fd, timeout)
+@[inline, __override_builtin("fdWaitRead")]
+func __fdWaitRead(fd: i32, timeout: u64 = 0) => __scheduler.fdWaitRead(fd, timeout)
 
-@[inline, __override_builtin("evout")]
-func __evout(fd: i32, timeout: u64 = 0) => __scheduler.fdWaitWrite(fd, timeout)
+@[inline, __override_builtin("fdWaitWrite")]
+func __fdWaitWrite(fd: i32, timeout: u64 = 0) => __scheduler.fdWaitWrite(fd, timeout)
 
-@[inline, __override_builtin("sleep")]
+@[inline, __override_builtin("sleepAsync")]
 func __sleep(ms: i64) { __scheduler.sleep(ms) }
-
-@[inline, __override_builtin("istimeout")]
-func __istimeout(status: i32) => (status & ae.State.AE_TIMEOUT) == ae.State.AE_TIMEOUT

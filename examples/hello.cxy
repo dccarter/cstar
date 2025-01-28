@@ -1,4 +1,5 @@
-import "stdlib/os.cxy"
 
 func main(): !void {
+    var x = " Hello World \n".s;
+    stdout << x.trimRight()
 }

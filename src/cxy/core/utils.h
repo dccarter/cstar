@@ -267,6 +267,7 @@ size_t readChar(cstring str, size_t len, u32 *res);
 
 bool isColorSupported(FILE *);
 char *readFile(const char *fileName, size_t *file_size);
+
 int binarySearch(const void *arr,
                  u64 len,
                  const void *x,

@@ -14,10 +14,9 @@ extern "C" {
 #define OVERRIDABLE_BUILTINS(f)    \
     f(__scheduler)                 \
     f(timestamp)                   \
-    f(evin)                        \
-    f(evout)                       \
-    f(sleep)                       \
-    f(istimeout)                   \
+    f(fdWaitRead)                        \
+    f(fdWaitWrite)                       \
+    f(sleepAsync)                       \
     f(__smart_ptr_alloc)           \
     f(__smart_ptr_alloc_trace)
 

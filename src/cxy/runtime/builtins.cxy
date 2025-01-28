@@ -393,6 +393,32 @@ pub struct __string {
         _size = size
     }
 
+    const func trimLeft() {
+        var i = 0:u64
+        while (i < _size && isSpace!(s.[i]))
+            i++
+        if (i != 0) {
+            var p = ptroff!(this.s !: ^const char + i);
+            return This(p !: string, _size - i)
+        }
+        return This(s, _size)
+    }
+
+    const func trimRight() {
+        var i = _size
+        while (i > 0) {
+            if (!isSpace!(s.[i - 1]))
+                break
+            i--
+        }
+        return This(s, i)
+    }
+
+    @inline
+    const func trim() {
+        return trimLeft().trimRight()
+    }
+
     const func compare(other: &This) {
         if (_size == other._size)
             return strncmp(this.s, other.s, _size)
@@ -780,7 +806,34 @@ pub class String : OutputStream {
         }
     }
 
-    func indexOf(ch: char) : Optional[u64] {
+    func trimLeft() {
+        var i = 0:u64
+        while (i < _size && isSpace!(_data.[i]))
+            i++
+        if (i != 0) {
+            var p = ptroff!(this._data + i);
+            memmove(_data, p, _size - i)
+            _size = _size - i
+        }
+    }
+
+    func trimRight() {
+        while (_size > 0) {
+            if (!isSpace!(_data.[_size - 1]))
+                break
+            _size--
+        }
+        if (_capacity > 0)
+            _data.[_size] = '\0'
+    }
+
+    @inline
+    func trim() {
+        trimLeft()
+        trimRight()
+    }
+
+    const func indexOf(ch: char) : Optional[u64] {
         var i = 0:u64;
         while (i < _size) {
             if (_data.[i] == ch)
@@ -790,7 +843,7 @@ pub class String : OutputStream {
         return None[u64]()
     }
 
-    func rIndexOf(ch: char) : Optional[u64] {
+    const func rIndexOf(ch: char) : Optional[u64] {
         if (_size == 0)
             return None[u64]()
 
@@ -807,7 +860,7 @@ pub class String : OutputStream {
     func `+`[U](other: &const U) => this << other
 
     @inline
-    func `str`(sb: OutputStream) {
+    const func `str`(sb: OutputStream) {
         sb.append(_data, _size)
     }
 

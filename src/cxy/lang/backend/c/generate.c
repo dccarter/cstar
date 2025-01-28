@@ -1945,10 +1945,10 @@ void *initCompilerBackend(CompilerDriver *driver, int argc, char **argv)
 {
     csAssert0(driver->backend == NULL);
     Options *options = &driver->options;
-    cstring filename = makeStringConcat(driver->strings,
-                                        options->buildDir ?: "./",
-                                        options->output ?: "app",
-                                        ".c");
+    cstring filename = joinPath(
+        driver->strings,
+        options->buildDir ?: "./",
+        makeStringConcat(driver->strings, options->output ?: "app", ".c"));
     struct stat st;
     if (stat(filename, &st) == 0) {
         // remove file

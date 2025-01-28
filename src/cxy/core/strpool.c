@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <stdarg.h>
 #include <string.h>
 
@@ -127,6 +128,30 @@ const char *makeStringConcat_(StrPool *pool, const char *s1, ...)
     va_end(ap);
 
     return makeString(pool, variable);
+}
+
+cstring joinPath_(StrPool *pool, const char *p1, ...)
+{
+    char path[PATH_MAX];
+    va_list ap;
+    va_start(ap, p1);
+    const char *s = p1;
+    size_t len = 0;
+    while (s) {
+        size_t sz = strlen(s);
+        const char *next = va_arg(ap, const char *);
+        if (sz > 0) {
+            csAssert0(sz + len < PATH_MAX);
+            memcpy(&path[len], s, sz);
+            len += sz;
+            if (next && s[sz - 1] != '/')
+                path[len++] = '/';
+        }
+        s = next;
+    }
+    path[len] = '\0';
+    va_end(ap);
+    return makeString(pool, path);
 }
 
 const char *makeStringf(StrPool *strings, const char *fmt, ...)

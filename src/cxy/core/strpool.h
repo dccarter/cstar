@@ -39,6 +39,10 @@ const char *makeAnonymousVariable(StrPool *pool, const char *prefix);
 const char *makeStringf(StrPool *strings, const char *fmt, ...);
 const char *makeStringConcat_(StrPool *, const char *, ...);
 
+cstring joinPath_(StrPool *pool, const char *p1, ...);
+
+#define joinPath(P, S1, ...) joinPath_((P), (S1), ##__VA_ARGS__, NULL)
+
 #define makeStringConcat(P, S1, ...)                                           \
     makeStringConcat_((P), (S1), ##__VA_ARGS__, NULL)
 

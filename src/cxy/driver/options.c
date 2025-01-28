@@ -233,23 +233,23 @@ Command(test,
     f(test)
 
 #define DEV_CMD_LAYOUT(f, ...)                                                 \
-    f(dev.lastStage, Local, Int, 0, ##__VA_ARGS__)                             \
-    f(dev.dumpMode, Local, Int, 1, ##__VA_ARGS__)                              \
-    f(dev.cleanAst, Local, Option, 2, ##__VA_ARGS__)                           \
-    f(dev.withLocation, Local, Option, 3, ##__VA_ARGS__)                       \
-    f(dev.withoutAttrs, Local, Option, 4, ##__VA_ARGS__)                       \
-    f(dev.withNamedEnums, Local, Option, 5, ##__VA_ARGS__)                     \
-    f(output, Local, String, 6, ##__VA_ARGS__)                                 \
-    f(dev.printIR, Local, Option, 7, ##__VA_ARGS__)                            \
-    f(dev.emitAssembly, Local, Option, 8, ##__VA_ARGS__)                       \
-    f(dev.emitBitCode, Local, Option, 9, ##__VA_ARGS__)                        \
+    f(dev.lastStage, Local, Int, 0, ## __VA_ARGS__)                             \
+    f(dev.dumpMode, Local, Int, 1, ## __VA_ARGS__)                              \
+    f(dev.cleanAst, Local, Option, 2, ## __VA_ARGS__)                           \
+    f(dev.withLocation, Local, Option, 3, ## __VA_ARGS__)                       \
+    f(dev.withoutAttrs, Local, Option, 4, ## __VA_ARGS__)                       \
+    f(dev.withNamedEnums, Local, Option, 5, ## __VA_ARGS__)                     \
+    f(output, Local, String, 6, ## __VA_ARGS__)                                 \
+    f(dev.printIR, Local, Option, 7, ## __VA_ARGS__)                            \
+    f(dev.emitAssembly, Local, Option, 8, ## __VA_ARGS__)                       \
+    f(dev.emitBitCode, Local, Option, 9, ## __VA_ARGS__)                        \
 
 #define BUILD_CMD_LAYOUT(f, ...)                                               \
-    f(output, Local, String, 0, ##__VA_ARGS__)                                 \
-    f(buildDir, Local, String, 1, ##__VA_ARGS__)
+    f(output, Local, String, 0, ## __VA_ARGS__)                                 \
+    f(buildDir, Local, String, 1, ## __VA_ARGS__)
 
 #define TEST_CMD_LAYOUT(f, ...)                                                \
-    f(buildDir, Local, String, 0, ##__VA_ARGS__)
+    f(buildDir, Local, String, 0, ## __VA_ARGS__)
 
 // clang-format on
 
@@ -334,6 +334,7 @@ static void initializeOptions(StrPool *strings, Options *options)
 #else
     pushStringOnDynArray(&options->cDefines, "-D_XOPEN_SOURCE=1");
     pushStringOnDynArray(&options->cDefines, "-D_DEFAULT_SOURCE");
+    pushOnDynArray(&options->defines, &(CompilerDefine){"UNIX", "1"});
 #endif
 
 #endif
