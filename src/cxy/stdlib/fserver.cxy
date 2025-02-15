@@ -458,8 +458,7 @@ pub class FileServer {
 
         if (s.st_size >= config.mappedMin) {
             var total = s.st_size;
-            var pageSize = unistd.sysconf(<i32> _SC_PAGE_SIZE!);
-            total += pageSize - (total % pageSize)
+            total += SysConfPageSize - (total % SysConfPageSize)
             cf.data = vmem.mmap(null, total, PROT_READ!, MAP_SHARED!, cf.fd, 0)
             if (cf.data == ((-1:u64) !: ^void)) {
                 WRN!("mapping static resource (" << cf.fd << ") of size " << total << " failed: " << errno!);

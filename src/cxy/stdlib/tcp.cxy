@@ -176,8 +176,8 @@ class SocketOutputStream : OutputStream {
         this.timeout = timeout
     }
 
-    func append(data: ^const void, size: u64) {
-        sock.sendBuffer(data, size, timeout)
+    func append(data: ^const void, size: u64): u64? {
+        return sock.sendBuffer(data, size, timeout)
     }
 }
 

@@ -1,7 +1,7 @@
 # Comptime
 
-`cxy` support compile time code evaluation backed by builtin macros and comptime AST not
-attributes.
+`cxy` support compile time code evaluation backed by builtin macros and comptime AST
+properties.
 
 ### Macros
 
@@ -17,6 +17,7 @@ attributes.
       #const list = mk_ast_list!();
       ast_list_add!(list, true)
       ast_list_add!(list, "Hello World")
+      println(#{list})
       ```
 - **`base_of!(T)`**: Gets the base of the given type if any. If the type does not have
   a base, compilation will fail. Note that `T` must be a typeinfo node.

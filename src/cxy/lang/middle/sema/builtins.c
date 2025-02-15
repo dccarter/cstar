@@ -743,5 +743,5 @@ u64 removeClassOrStructBuiltins(AstNode *node, NamedTypeMember *nms)
     }
 
     node->structDecl.members = members.first;
-    return total - count;
+    return count;
 }

@@ -120,8 +120,8 @@ bool isTypeConst(const Type *type)
 
 bool isTypeAssignableFrom(const Type *to, const Type *from)
 {
-    to = resolveAndUnThisType(to);
-    from = resolveAndUnThisType(from);
+    to = resolveType(to);
+    from = resolveType(from);
     if (to == from)
         return true;
     if (hasFlag(to, Optional) && !hasFlag(from, Optional)) {
@@ -137,6 +137,8 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
     }
 
     const Type *_to = unwrapType(to, NULL), *_from = unwrapType(from, NULL);
+    if (_to == NULL || _from == NULL)
+        return false;
     if (isTypeConst(from) && !isTypeConst(to)) {
         if (typeIs(_to, Pointer))
             return false;
@@ -247,7 +249,9 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
 
     case typUnion:
         for (u64 i = 0; i < to->tUnion.count; i++) {
-            if (unThisType(to->tUnion.members[i].type) == from)
+            const Type *member = to->tUnion.members[i].type;
+            if (member == from || unThisType(member) == from ||
+                member == unThisType(from))
                 return true;
         }
         return false;
@@ -347,6 +351,9 @@ bool isTypeCastAssignable(const Type *to, const Type *from)
         switch (to->primitive.id) {
 #define f(I, ...) case prt##I:
             INTEGER_TYPE_LIST(f)
+            if (isBooleanType(unwrappedFrom))
+                return true;
+            // fallthrough
             FLOAT_TYPE_LIST(f)
             return isNumericType(unwrappedFrom);
 #undef f

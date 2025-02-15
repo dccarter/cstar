@@ -103,6 +103,7 @@ extern "C" {
     f(Catch,  "catch")              \
     f(Raise,  "raise")              \
     f(Async,  "async")              \
+    f(Launch, "launch")             \
     f(Ptrof,   "ptrof")             \
     f(Await,  "await")              \
     f(Delete, "delete")             \
