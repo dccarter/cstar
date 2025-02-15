@@ -245,6 +245,8 @@ static void generateStructType(CodegenContext *ctx, const Type *type)
         if (!nodeIs(member->decl, FieldDecl))
             continue;
         format(typeState(ctx), "\n", NULL);
+        if (findAttribute(member->decl, S_atomic))
+            format(typeState(ctx), "_Atomic ", NULL);
         generateTypeName(ctx, typeState(ctx), member->type);
         if (member->decl->structField.bits != 0)
             format(typeState(ctx),
@@ -1468,9 +1470,16 @@ static void visitExprStmt(ConstAstVisitor *visitor, const AstNode *node)
 static void visitIfStmt(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
+    cstring likely = findAttribute(node, S_likely)     ? S_likely
+                     : findAttribute(node, S_unlikely) ? S_unlikely
+                                                       : NULL;
 
     format(getState(ctx), "if (", NULL);
+    if (likely)
+        format(getState(ctx), "{s}(", (FormatArg[]){{.s = likely}});
     astConstVisit(visitor, node->ifStmt.cond);
+    if (likely)
+        format(getState(ctx), ")", NULL);
     format(getState(ctx), ") ", NULL);
     astConstVisit(visitor, node->ifStmt.body);
     if (node->ifStmt.otherwise) {
@@ -1611,9 +1620,11 @@ static void visitVariableDecl(ConstAstVisitor *visitor, const AstNode *node)
     addDebugInfo(ctx, node);
     if (findAttribute(node, S_volatile))
         format(getState(ctx), "volatile ", NULL);
+    if (findAttribute(node, S_thread))
+        format(getState(ctx), "__thread ", NULL);
+
     const Type *type = unwrapType(node->type, NULL);
     generateTypeName(ctx, getState(ctx), type);
-
     format(getState(ctx), " ", NULL);
     generateVariableName(getState(ctx), node);
     if (node->varDecl.init) {
@@ -1885,6 +1896,9 @@ static void generatedCodePrologue(FILE *f)
         "#define unreachable(...) abort();\n"
         "#endif\n"
         "\n"
+        "#define likely(x)      __builtin_expect(!!(x), 1)\n"
+        "#define unlikely(x)    __builtin_expect(!!(x), 0)\n"
+        "\n"
         "#define __CXY_LOOP_CLEANUP(FLAGS, LABEL) \\\n"
         "   if ((FLAGS) == 1) goto LABEL; \\\n"
         "   if ((FLAGS) == 2) { (FLAGS) = 0; break; }\n"
@@ -1900,7 +1914,11 @@ static void generateCodeEpilogue(FILE *f)
 {
     appendCode(f,
                "#ifdef __MAIN_RETURN_TYPE__\n"
+               "#ifdef __MAIN_RETURNS___\n"
                "__MAIN_RETURN_TYPE__ main(int argc, char *argv[]) {\n"
+               "#else\n"
+               "int main(int argc, char *argv[]) {\n"
+               "#endif\n"
                "#ifdef __MAIN_PARAM_TYPE__\n"
                "    __MAIN_PARAM_TYPE__ args = { .data = argv, .len = argc };\n"
                "#define __MAIN_ARGS__ args\n"
@@ -1920,12 +1938,14 @@ static void generateCodeEpilogue(FILE *f)
                "    return ret;\n"
                "#else\n"
                "     __MAIN_RAISED_TYPE_DCTOR__(&ex);\n"
+               "     return 0;\n"
                "#endif\n"
                "#else\n"
                "#ifdef __MAIN_RETURNS__\n"
                "      return _main(__MAIN_ARGS__);\n"
                "#else\n"
                "      _main(__MAIN_ARGS__);\n"
+               "      return 0;\n"
                "#endif\n"
                "#endif\n"
                "}\n"

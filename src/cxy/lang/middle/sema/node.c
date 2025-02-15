@@ -217,16 +217,17 @@ static AstNode *createCoverProto(TypingContext *ctx,
         insertAstNode(&params, deepCloneAstNode(ctx->pool, param));
     }
 
-    AstNode *cover =
-        makeFunctionDecl(ctx->pool,
-                         builtinLoc(),
-                         makeStringConcat(ctx->strings, node->_name, "Cover"),
-                         params.first,
-                         makeTypeReferenceNode(ctx->pool, target, builtinLoc()),
-                         NULL,
-                         flgStatic,
-                         NULL,
-                         NULL);
+    AstNode *cover = makeFunctionDecl(
+        ctx->pool,
+        builtinLoc(),
+        makeStringConcat(ctx->strings, node->_name, "Cover"),
+        params.first,
+        makeTypeReferenceNode(
+            ctx->pool, getTypeDecl(target)->type, builtinLoc()),
+        NULL,
+        flgStatic,
+        NULL,
+        NULL);
     cover->parentScope = node->parentScope;
     cover->funcDecl.index = node->funcDecl.index;
     cover->attrs = makeAttribute(ctx->pool, builtinLoc(), S_inline, NULL, NULL);

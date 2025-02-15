@@ -1,5 +1,8 @@
-
-func main(): !void {
-    var x = " Hello World \n".s;
-    stdout << x.trimRight()
+func say(x: i32)  {
+    return 0
+}
+struct User {
+    x: String = null
+}
+func main(): !i32 {
 }

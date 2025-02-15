@@ -29,3 +29,6 @@ func main(args: [string]) {
   "Hello World"
   "Hello 世界"
 }
+
+[1;32m✓[1;37m Compilation success
+[0m

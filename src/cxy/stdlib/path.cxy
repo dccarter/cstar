@@ -1,10 +1,13 @@
 module path
 
-import { Stat, stat, fstat, lstat } from "stdlib/os.cxy"
+import { Stat, stat, fstat, lstat, IOError } from "stdlib/os.cxy"
 
 import "unistd.h" as unistd
 import "stdlib.h" as stdlib
 import "pwd.h" as pwd
+import "dirent.h" as dirent
+import "native/nos.h" as nos
+import "sys/stat.h" as sysstat
 
 #if (defined UNIX) {
     macro DIR_SEPARATOR "/"
@@ -80,14 +83,25 @@ pub struct Path {
     }
 
     @inline
-    const func isFile() {
-
-    }
+    const func empty() => path.empty()
 
     @inline
-    const func isDir() {
+    const func `==`(other: &const String) => path == &other
 
-    }
+    @inline
+    const func `==`(other: __string) => path.__str() == other
+
+    @inline
+    const func `==`(other:  string) => path.__str() == __string(other)
+
+    @inline
+    const func `!=`(other: &const String) => path != &other
+
+    @inline
+    const func `!=`(other: __string) => path.__str() != other
+
+    @inline
+    const func `!=`(other:  string) => path.__str() != __string(other)
 }
 
 pub type PathLike = string | __string | String | Path
@@ -249,4 +263,111 @@ pub func dirname(path: PathLike) : PathLike {
         return Path(spath)
     }
     return path
+}
+
+pub func basename(path: PathLike): PathLike {
+    var spath = cast[__string](&path);
+    var sep = spath.rfind(DIR_SEPARATOR!);
+    if (sep) {
+        spath = spath.substr(*sep + 1)
+        return Path(spath)
+    }
+    return path
+}
+
+pub func mkdir(path: PathLike, mode: u16 = 0o777): !void {
+    var spath = cast[__string](&path);
+    const status = withNullTermination[i32](
+        &spath, (p: ^const char) => sysstat.mkdir(p, mode))
+    if (status != 0)
+        raise IOError(f"creating directory ${spath} failed: ${strerr()}")
+}
+
+pub func mkdirs(path: PathLike, mode: u16 = 0o777): !void {
+    if (!exists(path)) {
+        var base = dirname(path);
+        var sbase = cast[__string](&base);
+        var spath = cast[__string](&path);
+        if (!sbase.empty() && spath != sbase)
+            mkdirs(base, mode)
+        mkdir(path, mode)
+    }
+}
+
+pub func ls(
+    path: PathLike,
+    cb: func(path: PathLike) -> bool,
+    recursive: bool = false
+): !void {
+    var spath = cast[__string](&path)
+    var d = withNullTermination[^dirent.DIR](&spath, (p: ^const char) => dirent.opendir(p))
+    if (d == null)
+        raise IOError(f"opendir('${path}') failed: ${strerr()}")
+    defer dirent.closedir(d)
+
+    var base = cast[Path](&path)
+    while (true) {
+        var tmp = nos.nos_readdir(d)
+        if (tmp == null)
+            break
+
+        /* ignore parent and current directory */
+        const name = __string(tmp.d_name !: string)
+        if (name == ".".s || name == "..".s)
+            continue;
+
+        var ipath = base / name;
+        var isDir = tmp.d_type == DT_DIR!
+        if (recursive && isDir) {
+            /* recursively iterate current directory*/
+            ls(ipath, cb, recursive);
+        }
+
+        if (!cb(ipath)) {
+            /* delegate cancelled travesal*/
+            break;
+        }
+    }
+}
+
+pub func isDirEmpty(path: PathLike): !bool {
+    var spath = cast[__string](&path);
+    var d = withNullTermination[^dirent.DIR](&spath, (p: ^const char) => dirent.opendir(p))
+    if (d == null)
+        raise IOError(f"opendir('${spath}') failed: ${strerr()}")
+    defer dirent.closedir(d)
+
+    var n = 0
+    while (n <= 2) {
+        var tmp = nos.nos_readdir(d)
+        if (tmp == null)
+            break;
+        n++
+    }
+
+    return n <= 2;
+}
+
+pub func remove(path: PathLike, recursive: bool = false): !void {
+    var spath = cast[__string](&path);
+    if (isdir(spath)) {
+        if (!isDirEmpty(spath)) {
+            if (!recursive)
+                raise IOError(f"attempt to delete a non empty directory ${spath}")
+
+            // Recursive delete all directories
+            ls(path, (path: PathLike): bool => {
+                remove(path, true) catch discard
+                return true
+            })
+        }
+        var status = withNullTermination[i32](&spath, (p: ^const char) => unistd.rmdir(p))
+        if (status != 0)
+            raise IOError(f"deleting directory '${spath}' failed: ${strerr()}")
+    }
+    else if (exists(path)) {
+        var status = withNullTermination[i32](&spath, (p: ^const char) => unistd.unlink(p))
+        if (status != 0)
+            raise IOError(f"deleting file '${spath}' failed: ${strerr()}")
+    }
 }

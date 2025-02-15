@@ -228,13 +228,13 @@ compileProgramDone:
                      !(hasFlag(program, ImportedModule));
     if (dumpStats) {
         if (hasErrors(driver->L))
-            printStatus(driver->L,
-                        cBRED "\xE2\x9C\x92" cBWHT
-                              " Compilation failure\n" cDEF);
+            printStatusAlways(driver->L,
+                              cBRED "\xE2\x9C\x92" cBWHT
+                                    " Compilation failure\n" cDEF);
         else
-            printStatus(driver->L,
-                        cBGRN "\xE2\x9C\x93" cBWHT
-                              " Compilation success\n" cDEF);
+            printStatusAlways(driver->L,
+                              cBGRN "\xE2\x9C\x93" cBWHT
+                                    " Compilation success\n" cDEF);
         compilerStatsPrint(driver);
     }
     if (status && options->cmd == cmdTest) {

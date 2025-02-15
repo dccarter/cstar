@@ -1,0 +1,69 @@
+module thread
+
+import "native/thread/tinythread.h" as tinyThread
+
+@__cc "native/thread/tinythread.c"
+
+pub exception ThreadError(msg: String) => msg == null? "" : msg.str()
+
+#if (defined MACOS) {
+macro DEFAULT_TID null
+}
+else #if (defined UNIX) {
+macro DEFAULT_TID 0:u64
+}
+
+struct Handle {
+    - hdl: tinyThread.thrd_t = DEFAULT_TID!;
+    - _id = 0:u64;
+
+    func `init`(hdl: tinyThread.thrd_t) {
+        this.hdl = hdl
+        tinyThread.thrd_id(hdl, ptrof _id)
+    }
+
+    @inline
+    func id() => _id
+
+    @inline
+    const func `==`(other: &const This) => hdl == other.hdl
+}
+
+pub struct Thread {
+    - _handle: Handle
+    - _joinable = false;
+
+    func `init`(hdl: tinyThread.thrd_t, joinable: bool = true) {
+        _handle = Handle(hdl)
+        _joinable = joinable
+    }
+
+    func join() {
+        if (_joinable) {
+            tinyThread.thrd_join(_handle.hdl, null)
+            _joinable = false
+        }
+    }
+
+    func id() => _handle.id()
+
+    @[inline, static]
+    func current(): Handle {
+        return Handle(tinyThread.thrd_current())
+    }
+
+    @inline
+    func `==`(other: &const This) => _handle == other._handle
+}
+
+@[__override_builtin("__thread_launch")]
+func __launch(fn: func() -> i32): !Thread {
+    var handle: tinyThread.thrd_t = DEFAULT_TID!;
+    // This take advantage of the fact that fn will be a callable tuple
+    var status = tinyThread.thrd_create(ptrof handle, fn.1, fn.0)
+    if (status != thrd_success!) {
+        raise ThreadError(f"creating thread failed: ${status}")
+    }
+    return Thread(handle)
+}
+

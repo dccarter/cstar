@@ -12,20 +12,38 @@ import "./native/index.cxy"
 
 ##if (defined MACOS) {
 import "sys/_types/_pid_t.h" as pid_t
+import "sys/fcntl.h" as fcntl
+import "copyfile.h" as copyfile
 }
 else {
+import "fcntl.h" as fcntl
 import "sys/types.h" as types
 import "sys/pidfd.h" as pidfd
+import "sys/sendfile.h" as sendfile
 }
 
 #if (defined MACOS) {
 pub type Pid = pid_t.pid_t
+macro S_ISREG(mode) =(((mode!) & S_IFMT!) == S_IFREG!)
+
+macro COPYFILE_ACL	      =(1<<0)
+macro COPYFILE_STAT	      =(1<<1)
+macro COPYFILE_XATTR	  =(1<<2)
+macro COPYFILE_DATA	      =(1<<3)
+macro COPYFILE_SECURITY   =(COPYFILE_STAT! | COPYFILE_ACL!)
+macro COPYFILE_METADATA   =(COPYFILE_SECURITY! | COPYFILE_XATTR!)
+macro COPYFILE_ALL	      =(COPYFILE_METADATA! | COPYFILE_DATA!)
 }
 else {
 pub type Pid = types.pid_t
+macro __S_ISTYPE(mode, mask)	=(((mode!) & __S_IFMT!) == (mask!))
+macro S_ISREG(mode)  =__S_ISTYPE!(mode!, __S_IFREG!)
 }
 
 pub type Stat = nos.Stat
+
+pub exception IOError(msg: String) => msg == null? "": msg.str()
+pub exception OSError(msg: String) => msg == null? "": msg.str()
 
 @inline
 pub func stat(path: string, s: ^nos.Stat) => nos.fs_stat(path !: ^const char, s)
@@ -34,79 +52,476 @@ pub func fstat(fd: i32, s: ^nos.Stat) => nos.fs_fstat(fd, s)
 @inline
 pub func lstat(path: string, s: ^nos.Stat) => nos.fs_lstat(path !: ^const char, s)
 
-pub exception IOError(msg: String) => msg == null? "": msg.str()
+@inline
+pub func setNonblocking(fd: i32, blocking: bool = false) {
+    var flags = fcntl.fcntl(fd, F_GETFL!, 0)
+    if (flags == -1)
+        return false
+    flags = (blocking ? (flags & ~(<u32>O_NONBLOCK!)) : (flags | O_NONBLOCK!))
+    return (fcntl.fcntl(fd, F_SETFL!, flags) == 0)
+}
+
+@inline
+pub func getenv(name: string, def: string = null): !__string {
+    var value = stdlib.getenv(name !: ^const char) !: string
+    if (value == null) {
+        if (def == null)
+            raise OSError(f"environment variable ${name} does not exist")
+        value = def
+    }
+    return __string(value)
+}
+
+@inline
+pub func setenv(name: string, value: string, overwrite: bool = false): !void {
+    if (stdlib.setenv(name !: ^const char, value !: ^const char, <u8>overwrite) != 0)
+        raise OSError(f"setenv ${name}=${value} failed: ${strerr()}")
+}
+
+@inline
+pub func unsetenv(name: string): !void {
+    if (stdlib.unsetenv(name !: ^const char) != 0)
+        raise OSError(f"unsetenv ${name} failed: ${strerr()}")
+}
 
 macro _W_INT(x)      *(<^i32>(ptrof x!))
 macro _WSTATUS(x)    =(_W_INT!(x!) & 0177)
 macro WIFEXITED(x)   =(_WSTATUS!(x!) == 0)
 macro WEXITSTATUS(x) =((_W_INT!(x!) >> 8) & 0x000000ff)
 
+pub enum Seek {
+    Set = SEEK_SET!, Current = SEEK_CUR!, End = SEEK_END!
+}
+
 pub struct FileDescriptor {
-    fd: i32 = -1
-
-    func read(data: ^void, size: u64) : u64? {
-        if (fd == -1)
-            return null
-
-        var bytes = unistd.read(fd, data, size);
-        if (bytes == -1)
-            return null
-
-        return <u64>bytes;
+    fd = -1:i32;
+    - closeAfter = false;
+    func `init`(fd: i32, closeAfter: bool = false) {
+        this.fd = fd
+        this.closeAfter = closeAfter
     }
 
-    func read(data: ^void, size: u64, off: i64) : u64? {
-        if (fd == -1)
-            return null
-
-        if (unistd.lseek(fd, off, SEEK_SET!) == -1)
-            return null
-
-        var bytes = unistd.read(fd, data, size);
-        if (bytes == -1)
-            return null
-
-        return <u64>bytes;
+    @inline
+    func close() {
+        if (fd != -1)
+            unistd.close(fd)
     }
 
-    func readAll(): !String {
-        var buf: [char, 4092] = []
-        var str = String();
-        while (true) {
-            var tmp = unistd.read(fd, buf, 4092)
-            if (tmp == 0)
-                return &&str
-            if (tmp < 0)
-                raise IOError(f"reading command output failed: ${strerror(errno!)}")
-            str.append(buf, tmp)
+    func `deinit`() {
+        if (closeAfter) {
+            close()
+            fd = -1
+            closeAfter = false
         }
     }
 
     @inline
-    func `!!`() => fd != -1
+    func size(): !u64 {
+        var st = Stat{}
+        if (nos.fs_fstat(fd, ptrof st) != 0)
+            raise IOError(f"fstat(${fd}) failed: ${strerr()}")
+        return <u64>st.st_size
+    }
 
     @inline
-    func seek(off: u64, whence: i32 = SEEK_SET!) => unistd.lseek(fd, <i64>off, whence)
+    func `!!`() => fd != -1
+}
+
+pub func open(
+    path: string|__string|String,
+    nonBlocking: bool = true,
+    flags: i32 = O_RDONLY!,
+    mode: i32 = 0o666
+): !FileDescriptor {
+    var spath:string = null;
+    match (path) {
+        case string as s => spath = s;
+        case __string as s => spath = s.str()
+        case String as s => spath = s.str()
+    }
+
+    var fd = fcntl.open(spath !: ^const char, flags, mode);
+    if (fd < 0)
+        raise IOError(f"opening file '${path}' failed: ${strerr()}")
+    if (nonBlocking)
+        setNonblocking(fd)
+    return FileDescriptor(fd, true)
+}
+
+pub struct TempFile {
+    fd = -1:i32;
+    path: String = null;
+
+    func `init`(fd: i32, path: String) {
+        this.fd = fd
+        this.path = &&path
+    }
+
+    func `deinit`() {
+        if (path != null) {
+            unistd.unlink(path.str() !: ^const char)
+            path = null
+            fd = -1;
+        }
+    }
+
+    @inline
+    func name() => &path
+
+    @inline
+    func `!!`() => path != null
+
+    @inline
+    func size(): !u64 {
+        var st = Stat{}
+        if (nos.fs_fstat(fd, ptrof st) != 0)
+            raise IOError(f"fstat(${fd}) failed: ${strerr()}")
+        return <u64>st.st_size
+    }
+
+    @inline
+    func keep() => &&path
+}
+
+pub func mkstemp(
+    prefix: string,
+    suffix: __string = __string(),
+    nonBlocking: bool = true
+): !TempFile {
+    var path = String(prefix);
+    path << "XXXXXX" << suffix
+    var fd:i32;
+    #if (defined MACOS) {
+        fd = unistd.mkstemps(path.data() !: ^char, <i32>suffix.size())
+    }
+    else #if (defined UNIX) {
+        fd = stdlib.mkstemps(path.data() !: ^char, <i32>suffix.size())
+    }
+
+    if (fd < 0)
+        raise IOError(f"creating temp file ${path} failed: ${strerr()}")
+    if (nonBlocking)
+        setNonblocking(fd)
+    return TempFile(fd, &&path)
+}
+
+@inline
+func getFileDescriptor[T](src: &const T): !FileDescriptor {
+    #if (T.isString) {
+        return open(src)
+    }
+    else #if (#T == #TempFile || #T == #FileDescriptor) {
+        return FileDescriptor(src.fd)
+    }
+    else
+        error!("type {t} is unsupported", #T)
+}
+
+pub func copy[Src, Dest](dst: &const Dest, src: &const Src): !void {
+    var dstFd = getFileDescriptor(dst);
+    var srcFd = getFileDescriptor(src);
+    #if (defined MACOS) {
+         var status = copyfile.fcopyfile(srcFd.fd, dstFd.fd, null, COPYFILE_ALL!)
+         if (status < 0) {
+            raise IOError(f"copy file ${srcFd.fd}->${dstFd.fd} failed: ${strerr()}")
+         }
+    }
+    else #if (defined UNIX) {
+        const size = srcFd.size()
+        var copied = 0:i64
+        while (copied < size) {
+            var numWritten = sendfile.sendfile(dstFd.fd, srcFd.fd, ptrof copied, size-copied);
+            if (numWritten == -1 || numWritten == 0) {
+                if (errno! == EAGAIN! || errno! == EWOULDBLOCK!) {
+                    const ret = fdWaitRead(srcFd.fd)
+                    if (ret != State.AE_READABLE)
+                        raise IOError(f"Waiting for file ${srcFd.fd} to be readable failed: ${strerr()}")
+                    continue
+                }
+                raise IOError(f"copy file ${srcFd.fd}->${dstFd.fd} failed: ${strerr()}")
+            }
+            copied += numWritten;
+        }
+    }
+    else {
+        error!("Unsupported os")
+    }
+}
+
+pub class InputStream {
+    /// Reads the specified number of bytes from the input stream
+    virtual func read(buf: ^void, size: u64): u64?
+    /// Seek the input stream
+    virtual func seek(off: u64, whence: Seek = Seek.Set): u64?
+}
+
+pub class FileInputStream: InputStream {
+    - closeOnDestruct: bool
+    - fd: i32
+
+    func `init`(fd: i32, closeOnDestruct: bool, nonBlocking: bool = true) {
+        this.fd = fd
+        this.closeOnDestruct = closeOnDestruct
+        if (nonBlocking)
+            setNonblocking(fd)
+    }
+
+    func `deinit`() {
+        if (closeOnDestruct && fd != -1)
+            unistd.close(fd)
+        fd = -1
+    }
+
+    @static
+    func open(path: string, nonBlocking: bool = true, mode: i32 = 0666): !This {
+        var fd = fcntl.open(path !: ^const char, O_RDONLY!, mode);
+        if (fd < 0)
+            raise IOError(f"opening file '${path}' failed: ${strerr()}")
+        return This(fd, true, nonBlocking)
+    }
+
+    func read(buf: ^void, size: u64): u64? {
+        if (fd == -1)
+            return null
+
+        var bytes = unistd.read(fd, buf, size)
+        if (bytes == -1)
+            return null
+
+        return <u64>bytes
+    }
+
+    func seek(off: u64, whence: Seek = Seek.Set): u64? {
+        var pos = unistd.lseek(fd, <i64>off, <i32>whence)
+        if (pos < 0)
+            return null
+        return <u64>pos
+    }
+
+    func readAsync(os: &OutputStream, timeout: u64 = 0): !void {
+        var buf: [char, 4092] = []
+        while (true) {
+            var tmp = read(buf, 4092)
+            if (!tmp) {
+                if (errno! == EAGAIN!) {
+                    const ret = fdWaitRead(fd, timeout)
+                    if (ret != State.AE_READABLE)
+                        raise IOError(f"Waiting for file ${fd} to be readable failed: ${strerr()}")
+                    continue
+                }
+                raise IOError(f"reading from file ${fd} failed: ${strerr()}")
+            }
+
+            if (*tmp == 0)
+                return Void{}
+            os.append(buf, *tmp)
+        }
+    }
+
+    @inline
+    func readAsync(buf: ^void, size: u64, timeout: u64 = 0): !u64 {
+        var mos = stackAlloc!(#MemoryOutputStream, buf, size);
+        readAsync(&mos, timeout)
+        return mos.size()
+    }
+
+    @inline
+    func readAsync(timeout: u64 = 0): !String {
+        var str = String();
+        readAsync(&str, timeout)
+        return &&str
+    }
+
+    @inline
+    func readAll(): !String {
+        var st = Stat{}
+        if (nos.fs_fstat(fd, ptrof st) != 0)
+            raise IOError(f"fstat(${fd}) failed: ${strerr()}")
+
+        if (st.st_size > 1048576)
+            raise IOError(f"file size(=${st.st_size}) to large (limit: 1mb) to read with this api")
+
+        var s = String();
+        if (!S_ISREG!(st.st_mode)) {
+            // Size is likely always going to be 0 for non-regular files
+            readAll(&s)
+            return &&s
+        }
+
+        if (st.st_size == 0)
+            return &&s
+
+        var buf = s.reserve(st.st_size);
+        var nRead = 0:u64;
+        while (nRead < st.st_size) {
+            var p = ptroff!(buf + nRead)
+            var tmp = read(p, st.st_size - nRead)
+            if (!tmp)
+                raise IOError(f"error reading file ${fd}: ${strerr()}")
+            nRead += *tmp
+        }
+        s.resize(nRead)
+        return &&s
+    }
+
+    func readAll(os: &OutputStream): !void {
+        var buf: [char, 4092] = []
+        while (true) {
+            var tmp = read(buf, 4092)
+            if (*tmp < 0)
+                raise IOError(f"reading command output failed: ${strerr()}")
+            if (*tmp == 0)
+                return;
+
+            os.append(buf, *tmp)
+        }
+    }
+}
+
+pub class FileOutputStream : OutputStream {
+    - closeOnDestruct: bool
+    - fd: i32
+
+    func `init`(fd: i32, closeOnDestruct: bool = true, nonBlocking: bool = true) {
+        this.fd = fd
+        this.closeOnDestruct = closeOnDestruct
+         if (nonBlocking)
+            setNonblocking(fd)
+    }
+
+    func `deinit`() {
+        if (closeOnDestruct && fd != -1)
+            unistd.close(fd)
+        fd = -1
+    }
+
+    @static
+    func open(
+        path: string,
+        nonBlocking: bool = true,
+        flags: i32 = O_WRONLY!|O_CREAT!|O_APPEND!,
+        mode: i32 = 0o666
+    ): !This {
+        var fd = fcntl.open(path !: ^const char, flags, mode);
+        if (fd < 0)
+            raise IOError(f"opening file '${path}' failed: ${strerr()}")
+        return This(fd, true, nonBlocking)
+    }
+
+    @override
+    func append(data: ^const void, size: u64): u64? {
+        if (fd == -1)
+            return null
+
+        var bytes = unistd.write(fd, data, size)
+        if (bytes == -1)
+            return null
+
+        return <u64>bytes
+    }
+
+    @inline
+    func write(buf: ^const void, size: u64) => append(buf, size)
+
+    func writeAsync(buf: ^const void, size: u64, timeout: u64 = 0): !u64 {
+        var numWritten = 0:u64;
+        while (numWritten < size) {
+            var p = ptroff!((buf !: ^char) + numWritten)
+            var tmp = append(p, size - numWritten)
+            if (!tmp) {
+                if (errno! == EAGAIN!) {
+                    const ret = fdWaitRead(fd, timeout)
+                    if (ret != State.AE_WRITABLE)
+                        raise IOError(f"Waiting for file ${fd} to be writable failed: ${strerr()}")
+                    continue
+                }
+                raise IOError(f"writing to file ${fd} failed: ${strerr()}")
+            }
+
+            numWritten += *tmp
+        }
+        return numWritten
+    }
+
+    func seek(off: u64, whence: Seek = Seek.Set): u64? {
+        var pos = unistd.lseek(fd, <i64>off, <i32>whence)
+        if (pos < 0)
+            return null
+        return <u64>pos
+    }
 }
 
 pub struct Process {
-    - out = FileDescriptor{};
-    - err = FileDescriptor{};
-    - input  = -1:i32;
+    - _stdout: FileInputStream = null;
+    - _stderr: FileInputStream = null;
+    - _stdin : FileOutputStream = null;
+    - _fdin: i32;
+    - _fdout: i32;
+    - _fderr: i32;
     - _pid: Pid = 0;
 
-    func `init`(pid: Pid, out: i32 = -1, err: i32 = -1, input: i32 = -1) {
+    func `init`(pid: Pid, input: i32 = -1, out: i32 = -1, err: i32 = -1) {
         _pid = pid
-        this.out = FileDescriptor{fd: out}
-        this.err = FileDescriptor{fd: err}
-        this.input = input
+        _fdin = input
+        _fdout = out
+        _fderr = err
+    }
+
+    @inline
+    func stdout()  {
+        if (_stdout == null) {
+            _stdout = FileInputStream(_fdout, true)
+            _fdout = -1
+        }
+        return &_stdout
+    }
+
+    @inline
+    func stderr()  {
+        if (_stderr == null) {
+            _stderr = FileInputStream(_fderr, true)
+            _fderr = -1
+        }
+        return &_stderr
+    }
+
+    @inline
+    func stdin() {
+        if (_stdin == null) {
+            _stdin = FileOutputStream(_fdin)
+            _fdin = -1
+        }
+        return &_fdin
+    }
+
+    func `deinit`() {
+        if (_fdin > 0) {
+            unistd.close(_fdin)
+            _fdin = -1
+        }
+        if (_fdout > 0) {
+            unistd.close(_fdout)
+            _fdout = -1
+        }
+        if (_fderr > 0) {
+            unistd.close(_fderr)
+            _fderr = -1
+        }
+    }
+
+    const func isExited() {
+        var status:i32 = 0;
+        const ret = syswait.waitpid(_pid, ptrof status, WNOHANG!);
+        if (ret < 0)
+            return true
+        return ret == _pid  && WIFEXITED!(status)
     }
 
     func wait(): !i32 {
         var status:i32 = 0;
         const ret = syswait.waitpid(_pid, ptrof status, 0)
         if (ret < 0)
-            raise IOError(f"wait for pid ${_pid} failed: ${strerror(errno!)}")
+            raise IOError(f"wait for pid ${_pid} failed: ${strerr()}")
 
         if (WIFEXITED!(status)) {
             return WEXITSTATUS!(status)
@@ -124,19 +539,19 @@ pub struct Process {
             if (pidFd < 1) {
                 if (errno! == EINVAL!)
                     return -(<i32>EINVAL!)
-                raise IOError(f"wait for pid ${_pid} failed: ${strerror(errno!)}")
+                raise IOError(f"wait for pid ${_pid} failed: ${strerr()}")
             }
 
             defer unistd.close(pidFd)
             var status:i32 = 0;
             var ret = syswait.waitpid(_pid, ptrof status, WNOHANG!);
             if (ret < 0)
-                raise IOError(f"wait for pid ${_pid} failed: ${strerror(errno!)}")
+                raise IOError(f"wait for pid ${_pid} failed: ${strerr()}")
             if (ret == 0) {
                 fdWaitRead(pidFd)
                 ret = syswait.waitpid(_pid, ptrof status, WNOHANG!)
                 if (ret < 0)
-                    raise IOError(f"wait for pid ${_pid} failed: ${strerror(errno!)}")
+                    raise IOError(f"wait for pid ${_pid} failed: ${strerr()}")
             }
 
             if (WIFEXITED!(status)) {
@@ -159,15 +574,15 @@ pub func execvpe(cmd: string, argv: [string], env: [(string, string)]): !Process
         raise IOError("first entry of `argv` must be the same as the command name")
 
     if (unistd.pipe(input) != 0)
-        raise IOError(f"opening process input stream failed: ${strerror(errno!)}")
+        raise IOError(f"opening process input stream failed: ${strerr()}")
     if (unistd.pipe(out) != 0)
-        raise IOError(f"opening process output stream failed: ${strerror(errno!)}")
+        raise IOError(f"opening process output stream failed: ${strerr()}")
     if (unistd.pipe(err) != 0)
-        raise IOError(f"opening process error stream failed: ${strerror(errno!)}")
+        raise IOError(f"opening process error stream failed: ${strerr()}")
 
     var pid = unistd.fork();
     if (pid == -1)
-        raise IOError(f"creating a process failed: ${strerror(errno!)}")
+        raise IOError(f"creating a process failed: ${strerr()}")
 
     if (pid == 0) {
         // Child process
@@ -180,16 +595,16 @@ pub func execvpe(cmd: string, argv: [string], env: [(string, string)]): !Process
         for (const x, _: env)
             stdlib.setenv(x.0 !: ^const char, x.1 !: ^const char, 1)
         var ret = unistd.execvp(cmd !: ^const char, argv.data !: ^^const char)
-        raise IOError(f"starting ${cmd} failed: ${strerror(errno!)}")
+        raise IOError(f"starting ${cmd} failed: ${strerr()}")
         stdlib.exit(ret)
     }
     else if (pid > 0) {
         unistd.close(input.[1])
         unistd.close(out.[1])
         unistd.close(err.[1])
-        return Process(pid, out.[0], err.[0], input.[0])
+        return Process(pid, input.[0], out.[0], err.[0])
     }
-    raise IOError(f"forking process failed: ${strerror(errno!)}")
+    raise IOError(f"forking process failed: ${strerr()}")
 }
 
 @[inline]
@@ -235,7 +650,7 @@ pub func capture(cmd: string, ...args: auto): !Process {
         #for (const arg: args) {
             require!(!hasEnv, "environment variables must be the last argument")
             #const T = typeof!(#{arg})
-            #if (T.isStruct) {
+             #if (T.isAnonymousStruct) {
                 var _env: [(string, string), #{T.membersCount}] = [];
                 #const i = 0
                 #for (const M: T.members) {
@@ -280,7 +695,7 @@ pub func shell(cmd: string, ...args: string): !Process {
         #for (const arg: args) {
             require!(!hasEnv, "environment variables must be the last argument")
             #const T = typeof!(#{arg})
-            #if (T.isStruct) {
+            #if (T.isAnonymousStruct) {
                 var _env: [(string, string), #{T.membersCount}] = [];
                 #const i = 0
                 #for (const M: T.members) {
@@ -319,7 +734,7 @@ pub func execute[T](
         #T)
     const pid = unistd.fork();
     if (pid == -1)
-        raise IOError(f"creating a process failed: ${strerror(errno!)}")
+        raise IOError(f"creating a process failed: ${strerr()}")
 
     if (pid == 0) {
         var argv = [ "sh", "-c", cmd, null ]
@@ -337,13 +752,13 @@ pub func execute[T](
         }
 
         var ret = unistd.execvp("sh" !: ^const char, argv !: ^^const char)
-        raise IOError(f"starting ${cmd} failed: ${strerror(errno!)}")
+        raise IOError(f"starting ${cmd} failed: ${strerr()}")
         stdlib.exit(ret)
     }
     else if (pid > 0) {
         return Process(pid).wait()
     }
-    raise IOError(f"forking process failed: ${strerror(errno!)}")
+    raise IOError(f"forking process failed: ${strerr()}")
 }
 
 macro sh(cmd, ...env) os.execute(cmd!, varargs_def!(env!, {}))

@@ -49,13 +49,13 @@ pub class Trie[Data] {
         add(key, len!(key), &&data)
     }
 
-    func find(key: string) : Data? {
+    func find(key: string) : Optional[&Data] {
         var size = len!(key);
         var found = find(key, size);
         if (found) {
             var idx, data = *found;
             if (idx == size)
-                return &&data
+                return &data
         }
         return null
     }
@@ -69,9 +69,9 @@ pub class Trie[Data] {
         node.data = &&data
     }
 
-    - func find(prefix: string, len: u64) : (i64, Data)? {
+    - func find(prefix: string, len: u64) : (i64, &Data)? {
         var node = ptrof root;
-        var found: (i64, Data)? = null;
+        var found: (i64, &Data)? = null;
 
         for (var i: 0..len) {
             var child = node.get(prefix.[i]);
@@ -80,7 +80,7 @@ pub class Trie[Data] {
 
             node = *child;
             if (node.data) {
-                found = (i+1, *node.data)
+                found = (i+1, &node.data.val)
             }
         }
         return found

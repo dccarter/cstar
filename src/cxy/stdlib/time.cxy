@@ -38,7 +38,7 @@ pub struct Time {
 
     func `init`(str: string, fmt: string = HTTP_TIME_FMT!) {
         ctime.strptime(str !: ^const char, fmt !: ^const char, ptrof _tm)
-        _t = ctime.mktime(ptrof _tm)
+        _t = ctime.timegm(ptrof _tm)
     }
 
     const func format(fmt: string, os: &OutputStream) {

@@ -1,8 +1,9 @@
 module json
+import "./base64.cxy"
 
 macro EOS '\0':char
 
-pub func toJSON[T](os: &OutputStream, it: const T) : void {
+pub func toJSON[T](os: &OutputStream, it: &const T) : void {
     #if (T.isChar) {
         os << <i64>it
     }
@@ -15,7 +16,7 @@ pub func toJSON[T](os: &OutputStream, it: const T) : void {
     else #if (T.isOptional) {
         if (it) {
             const value = *it;
-            toJSON[#{typeof!(value)}](os, value)
+            toJSON[#{typeof!(value)}](os, &value)
         }
         else {
             os << "null"
@@ -26,12 +27,21 @@ pub func toJSON[T](os: &OutputStream, it: const T) : void {
         #const first = true;
         #for (const member: T.members) {
             #if (member.isField) {
+                #const M = member.Tinfo;
+                #const jsonAttr = member.attributes.["json"];
                 #if (first == false) {
                     os << ", "
                 }
 
                 os << '"' << #{member.name} << "\": ";
-                toJSON[#{member.Tinfo}](os, it.#{mk_ident!(member.name)})
+                #if (M.isString && jsonAttr && jsonAttr.["b64"]) {
+                    os << '"'
+                    base64.encode(os, &it.#{mk_ident!(member.name)})
+                    os << '"'
+                }
+                else {
+                    toJSON[#{member.Tinfo}](os, &it.#{mk_ident!(member.name)})
+                }
                 #{first = false}
             }
         }
@@ -46,7 +56,7 @@ pub func toJSON[T](os: &OutputStream, it: const T) : void {
             }
 
             var member = it.#{i};
-            toJSON(os, member)
+            toJSON(os, &member)
         }
         os << "]"
     }
@@ -56,7 +66,7 @@ pub func toJSON[T](os: &OutputStream, it: const T) : void {
         for (const member, _: it) {
             if (!first) os << ", "
 
-            toJSON[#{T.elementType}](os, member)
+            toJSON[#{T.elementType}](os, &member)
 
             first = false
         }
@@ -228,7 +238,17 @@ func fieldFromJSON[T](p: &JSONParser, pos: (u32, u32), obj: &T, key: &__string):
         #if (member.isField) {
             #const M = member.Tinfo;
             if (__string(#{member.name}) == key) {
-                obj.#{mk_ident!(member.name)} = parseJSON[M](p)
+                #const jsonAttr = member.attributes.["json"]
+                #if (M.isString && jsonAttr && jsonAttr.["b64"]) {
+                    require!(M.isClass, "JSON parser supports class string types only")
+                    var jstr = p.expectString()
+                    var str = String();
+                    base64.decode(&str, &jstr)
+                    obj.#{mk_ident!(member.name)} = &&str
+                }
+                else {
+                    obj.#{mk_ident!(member.name)} = parseJSON[M](p)
+                }
                 return
             }
         }
@@ -301,24 +321,24 @@ test "Json encode" {
     ok!(s == "10")
 
     s.clear()
-    toJSON(&s, {a: 10, b: true, c: "world", d: 'c'})
+    toJSON(&s, &{a: 10, b: true, c: "world", d: 'c'})
     ok!(s == "{\"a\": 10, \"b\": true, \"c\": \"world\", \"d\": 99}")
 
     s.clear()
-    toJSON(&s, (10:u32, true, "World"))
+    toJSON(&s, &(10:u32, true, "World"))
     ok!(s == "[10, true, \"World\"]")
 
     s.clear()
-    toJSON(&s, [10:u32, 20, 30])
+    toJSON(&s, &[10:u32, 20, 30])
     ok!(s == "[10, 20, 30]")
 
     var x:i32? = 100;
     s.clear()
-    toJSON(&s, x)
+    toJSON(&s, &x)
     ok!(s == "100")
 
     x = null
     s.clear()
-    toJSON(&s, x)
+    toJSON(&s, &x)
     ok!(s == "null")
 }

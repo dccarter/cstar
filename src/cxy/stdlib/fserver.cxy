@@ -4,8 +4,8 @@ import { time_t, Time } from "./time.cxy"
 import { Vector } from "./vector.cxy"
 import { HashMap } from "./hash.cxy"
 import "./log.cxy"
-import { Stat, stat, fstat } from "stdlib/os.cxy"
-import { Request, Response, Server, Method, Status } from "./http.cxy"
+import { Stat, stat, fstat, FileDescriptor } from "stdlib/os.cxy"
+import { Request, Response, Server, Method, Status, SendFile } from "./http.cxy"
 
 import "unistd.h" as unistd
 import "stdlib.h" as stdlib
@@ -126,10 +126,10 @@ pub class FileServer {
             }
             var ext = String(path.substr(*idx));
             if (req.method() == .Get) {
-                this.get(req, resp, &&path, &&ext)
+                resp.end(this.get(req, resp, &&path, &&ext))
             }
             else {
-                this.head(req, resp, &&path, &&ext)
+                resp.end(this.head(req, resp, &&path, &&ext))
             }
         })([Method.Get, Method.Head])
           .setAttrs({isStatic: true})
@@ -231,25 +231,26 @@ pub class FileServer {
     - func requestPrologue(
         req: &const Request, resp: &Response, path: String, ext: String
     ) : Status | (&MimeType, &CachedFile) {
-        var mime = mimeTypes.[ext];
+        var mime = mimeTypes.[ext]
         if (!mime) {
             TRC!("extension type " << ext << " not supported")
             return Status.NotFound
         }
 
-        var mm = *mime;
-        var sf = loadFile(path);
+        var mm = *mime
+        var sf = loadFile(path)
         if (!sf) {
             TRC!("requested static resource (" << path << ") does not exist");
             return Status.NotFound
         }
 
-        var cf = *sf;
+        var cf = *sf
         if (mm.config.allowCaching) {
             // if file supports cache headers employ cache headers
-            const cc = req.header("If-Modified-Since");
+            const cc = req.header("If-Modified-Since")
             if (cc) {
                 const ifMod = Time((*cc).str());
+                println(ifMod, " -- ", Time(cf.lastMod))
                 if (ifMod.timestamp() >= cf.lastMod) {
                     // file was not modified
                     return Status.NotModified
@@ -276,9 +277,9 @@ pub class FileServer {
             case Status as s => return s
             case (&MimeType, &CachedFile) as s {
                 // set the content type
-                resp.header("Content-Type", s.0.mime);
+                resp.header("Content-Type", s.0.mime)
                 // prepare the Response
-                return prepareResponse(req, resp, s.1, s.0);
+                return prepareResponse(req, resp, s.1, s.0)
             }
             else => return Status.InternalError
         }
@@ -298,7 +299,10 @@ pub class FileServer {
             return buildRangeResponse(resp, *rng, cf);
         }
         else {
-            resp.body() << __string(cf.data !: string, cf.len);
+            if (config.enableSendFile)
+                resp.chunk(SendFile(FileDescriptor(cf.fd), cf.len))
+            else
+                resp.chunk(__string(cf.data !: string, cf.len))
             return Status.Ok
         }
     }
@@ -345,7 +349,10 @@ pub class FileServer {
         // depending on the number of requested ranges, build Response
         if (ranges.size() == 1) {
             var rng = ranges.[0];
-            resp.body() << __string(cf.data !: string, cf.len).substr(rng.0, rng.1)
+            if (config.enableSendFile)
+                resp.chunk(SendFile(FileDescriptor(cf.fd), rng.0, rng.1))
+            else
+                resp.chunk(__string(cf.data !: string, cf.len).substr(rng.0, rng.1))
             // add the range header
             var header = String();
             header << "bytes " << rng.0 << '-' << rng.1 << '/' << cf.len
@@ -399,7 +406,11 @@ pub class FileServer {
                     "lastModified: " << s.#{StatField!("m")}.tv_sec << ", " <<
                     "lassAccessed: " << s.#{StatField!("a")}.tv_sec
                 )
-                if (!readFile(&cf, &s)) {
+                if (config.enableSendFile) {
+                    TRC!( "enable send fd(" << cf.fd << ") for " << path)
+                    cf.useFd = true
+                }
+                else if (!readFile(&cf, &s)) {
                     TRC!("loading file (" << path << ") failed")
                     unistd.close(cf.fd)
                     return null
@@ -432,13 +443,16 @@ pub class FileServer {
                     cachedFiles.remove(rel)
                     return null
                 }
-                else {
-                    if (!readFile(cf, s)) {
-                        TRC!("loading file " << cf.path << " failed")
-                        unistd.close(cf.fd)
-                        cachedFiles.remove(rel)
-                        return null
-                    }
+
+                if (config.enableSendFile) {
+                    TRC!( "enable send fd(" << cf.fd << ") for " << cf.path)
+                    cf.useFd = true
+                }
+                else if (!readFile(cf, s)) {
+                    TRC!("loading file " << cf.path << " failed")
+                    unistd.close(cf.fd)
+                    cachedFiles.remove(rel)
+                    return null
                 }
 
                 cf.lastMod    = <time_t> s.#{StatField!("m")}.tv_sec
@@ -458,8 +472,7 @@ pub class FileServer {
 
         if (s.st_size >= config.mappedMin) {
             var total = s.st_size;
-            var pageSize = unistd.sysconf(<i32> _SC_PAGE_SIZE!);
-            total += pageSize - (total % pageSize)
+            total += SysConfPageSize - (total % SysConfPageSize)
             cf.data = vmem.mmap(null, total, PROT_READ!, MAP_SHARED!, cf.fd, 0)
             if (cf.data == ((-1:u64) !: ^void)) {
                 WRN!("mapping static resource (" << cf.fd << ") of size " << total << " failed: " << errno!);
@@ -514,7 +527,7 @@ pub class FileServer {
             return null
         }
 
-        if ((s.st_mode & S_IFMT!) != S_IFREG!) {
+        if (!S_ISREG!(s.st_mode)) {
             // file does not exist
             DBG!("requested path '" <<  (absolute !: string) << "' is not a regular file, mode: " << (s.st_mode & S_IFMT!))
             return null

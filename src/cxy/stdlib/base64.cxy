@@ -1,0 +1,146 @@
+module base64
+
+const b64table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const ASCII_LOOKUP: [u8, 256] = [
+    /* ASCII table */
+    64:u8,
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 62, 64, 64, 64, 63,
+    52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 64, 64, 64, 64, 64, 64,
+    64,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
+    15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 64, 64, 64, 64, 64,
+    64, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+    41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+    64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64
+];
+
+pub func encodeBuffer(os: &OutputStream, data: ^const void, size: u64) {
+    var p = data !: ^const u8
+    var i = 0:u64;
+    while (size >= 3) {
+        // |X|X|X|X|X|X|-|-|
+        os.append(ptrof b64table.[((p.[i] & 0xFC) >> 2)], 1)
+        // |-|-|-|-|-|-|X|X|
+        var h = <u8> (p.[i++] & 0x03) << 4;
+        // |-|-|-|-|-|-|X|X|_|X|X|X|X|-|-|-|-|
+        os.append(ptrof b64table.[h | ((p.[i] & 0xF0) >> 4)], 1)
+        // |-|-|-|-|X|X|X|X|
+        h = <u8> (p.[i++] & 0x0F) << 2
+        // |-|-|-|-|X|X|X|X|_|X|X|-|-|-|-|-|-|
+        os.append(ptrof b64table.[h | ((p.[i] & 0xC0) >> 6)], 1)
+        // |-|-|X|X|X|X|X|X|
+        os.append(ptrof  b64table.[(p.[i++] & 0x3F)], 1)
+        size -= 3
+    }
+
+    if (size == 1) {
+        // pad with ==
+        // |X|X|X|X|X|X|-|-|
+        os.append(ptrof b64table.[((p.[i] & 0xFC) >> 2)], 1)
+        // |-|-|-|-|-|-|X|X|
+        var h = <u8> (p.[i++] & 0x03) << 4;
+        os.append(ptrof b64table.[h], 1)
+        os << "=="
+    } else if (size == 2) {
+        // pad with =
+        // |X|X|X|X|X|X|-|-|
+        os.append(ptrof b64table.[((p.[i] & 0xFC) >> 2)], 1)
+        // |-|-|-|-|-|-|X|X|
+        var h = <u8> (p.[i++] & 0x03) << 4;
+        // |-|-|-|-|-|-|X|X|_|X|X|X|X|-|-|-|-|
+        os.append(ptrof b64table.[h | ((p.[i] & 0xF0) >> 4)], 1)
+        // |-|-|-|-|X|X|X|X|
+        h = <u8> (p.[i] & 0x0F) << 2;
+        os.append(ptrof b64table.[h], 1)
+        os << "="
+    }
+}
+
+pub func encode[T](os: &OutputStream, value: &const T) {
+    require!(T.isString, "Type {t} must a string, use encodeBuffer instead", #T)
+    #if (T.isStruct) {
+        encodeBuffer(os, value.data(), value.size())
+    }
+    else #if (T.isClass) {
+        if (value != null)
+            encodeBuffer(os, value.data(), value.size())
+    }
+    else {
+        if (value != null)
+            encodeBuffer(os, value !: ^const void, len!(value))
+    }
+}
+
+pub exception Base64Error(msg: string) => msg
+
+pub func decodeBuffer(os: &OutputStream, data: ^const void, size: u64): !void {
+    var sz = size
+    var i = 0:u64;
+    const p = data !: ^const u8;
+
+    while (sz > 4) {
+        const it = ptroff!(p + i)
+        if (ASCII_LOOKUP.[it.[0]] == 64 ||
+            ASCII_LOOKUP.[it.[1]] == 64 ||
+            ASCII_LOOKUP.[it.[2]] == 64 ||
+            ASCII_LOOKUP.[it.[3]] == 64)
+        {
+            // invalid base64 character
+            raise Base64Error("base64::decode - invalid base64 encoded string passed");
+        }
+
+        os << <char>(<u8>(ASCII_LOOKUP.[it.[0]] << 2 | ASCII_LOOKUP.[it.[1]] >> 4))
+        os << <char>(<u8>(ASCII_LOOKUP.[it.[1]] << 4 | ASCII_LOOKUP.[it.[2]] >> 2))
+        os << <char>(<u8>(ASCII_LOOKUP.[it.[2]] << 6 | ASCII_LOOKUP.[it.[3]]))
+        sz -= 4;
+        i += 4
+    }
+
+    const it = ptroff!(p + i);
+    i = 0;
+    while (i < 4 && (p.[i] != <u8>'=') && ASCII_LOOKUP.[it.[i]] != 64)
+        i++
+
+    if ((sz - i) != 0 && (it.[i] != <u8>'=')) {
+        // invalid base64 character
+        raise Base64Error("base64::decode - invalid base64 encoded string passed");
+    }
+
+    sz -= 4-i;
+    if (sz > 1) {
+        os << <char>(ASCII_LOOKUP.[it.[0]] << 2 | ASCII_LOOKUP.[it.[1]] >> 4)
+    }
+    if (sz > 2) {
+        os << <char>(ASCII_LOOKUP.[it.[1]] << 4 | ASCII_LOOKUP.[it.[2]] >> 2)
+    }
+    if (sz > 3) {
+        os << <char>(ASCII_LOOKUP.[it.[2]] << 6 | ASCII_LOOKUP.[it.[3]]);
+    }
+}
+
+pub func decode[T](os: &OutputStream, value: &const T) : !void {
+    #if (T.isString) {
+        #if (T.isStruct) {
+            decodeBuffer(os, value.data() !: ^const void, value.size())
+        }
+        else #if (T.isClass) {
+            if (value != null)
+                decodeBuffer(os, value.data() !: ^const void, value.size())
+        }
+        else {
+            if (value != null)
+                decodeBuffer(os, value !: ^const void, len!(value))
+        }
+    }
+    else {
+        error!("Type {t} is currently unsupported", #T)
+    }
+}

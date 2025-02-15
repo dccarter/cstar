@@ -43,7 +43,8 @@ pub class Vector[T] {
 
     func push(item: T) {
         grow()
-        _data.[_size++] = &&item
+        _data.[_size] = &&item
+        _size++
     }
 
     func pop() {
@@ -79,7 +80,12 @@ pub class Vector[T] {
 
     func `[]`(index: i32) {
         assert!(index < _size)
-        return _data.[index]
+        return &_data.[index]
+    }
+
+    const func `[]`(index: i32) {
+        assert!(index < _size)
+        return &_data.[index]
     }
 
     func `[]=`(index: i32, value: T) {
@@ -92,6 +98,18 @@ pub class Vector[T] {
         return () : (T, i64)? => {
             if (i < _size) {
                 var tmp = (_data.[i], i++);
+                return &&tmp
+            }
+            else
+                return null
+        }
+    }
+
+    const func `..`() {
+        var i : i64 = 0;
+        return () : (&const T, i64)? => {
+            if (i < _size) {
+                var tmp = (&_data.[i], i++);
                 return &&tmp
             }
             else

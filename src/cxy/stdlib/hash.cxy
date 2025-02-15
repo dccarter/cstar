@@ -36,7 +36,7 @@ pub class HashMap[K, V, Hasher = Hash[K], Cmp = Equals[K]] {
     - _capacity: u64 = 0;
     - _size: u64 = 0;
 
-    - func idealSize(size: u64) {
+    - const func idealSize(size: u64) {
         size = <u64>(<f64>(size + 1) / HMAP_LOAD_FACTOR!)
         for (const i: 0..HMAP_PRIMES_COUNT!) {
             if (HMAP_RIMES.[i] >= size)
@@ -49,7 +49,7 @@ pub class HashMap[K, V, Hasher = Hash[K], Cmp = Equals[K]] {
         return last
     }
 
-    - func probe(i: u64, h: u64) {
+    - const func probe(i: u64, h: u64) {
         var v = i - (h - 1)
         if (v < 0)
             v = _capacity + v
@@ -243,7 +243,6 @@ pub class HashMap[K, V, Hasher = Hash[K], Cmp = Equals[K]] {
         func get(key: K) : Optional[&V] {
             const idx = getInternal(&&key)
             if (idx) {
-                resizeMore()
                 return &_data.[*idx].value
             }
             return null
@@ -252,7 +251,6 @@ pub class HashMap[K, V, Hasher = Hash[K], Cmp = Equals[K]] {
         const func get(key: K) : Optional[&V] {
             const idx = getInternal(&&key)
             if (idx) {
-                resizeMore()
                 return &_data.[*idx].value
             }
             return null

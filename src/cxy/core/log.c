@@ -478,18 +478,32 @@ const FileLoc *builtinLoc(void)
     return &builtin;
 }
 
-void printStatus(Log *L, const char *fmt, ...)
+void printStatus_(Log *L, bool always, const char *fmt, va_list args)
 {
-    if (L->progress) {
+    if (L->progress || always) {
         static int lastPrinted = 0;
         if (lastPrinted) {
             printf("\r%*c", lastPrinted, ' ');
         }
-        va_list args;
         printf("\r");
-        va_start(args, fmt);
+        ;
         lastPrinted = vprintf(fmt, args);
-        va_end(args);
         fflush(stdout);
     }
+}
+
+void printStatus(Log *L, const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    printStatus_(L, false, fmt, args);
+    va_end(args);
+}
+
+void printStatusAlways(Log *L, const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    printStatus_(L, true, fmt, args);
+    va_end(args);
 }

@@ -51,6 +51,7 @@ static AstNode *parseUnionType(Parser *P);
 static AstNode *primary(Parser *P, bool allowStructs);
 static AstNode *postfixCast(Parser *P, AstNode *expr, bool allowStructs);
 static AstNode *macroExpression(Parser *P, AstNode *callee);
+static AstNode *launchExpression(Parser *P);
 
 static AstNode *callExpression(Parser *P, AstNode *callee);
 
@@ -779,6 +780,9 @@ static AstNode *prefix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
     if (check(P, tokColon))
         return parseSymbol(P);
 
+    if (check(P, tokLaunch))
+        return launchExpression(P);
+
     switch (current(P)->tag) {
 #define f(O, T, ...) case tok##T:
         AST_PREFIX_EXPR_LIST(f)
@@ -1282,6 +1286,50 @@ static AstNode *macroExpression(Parser *P, AstNode *callee)
         &(AstNode){.tag = astMacroCallExpr,
                    .flags = flgComptime,
                    .macroCallExpr = {.callee = callee, .args = args}});
+}
+
+static AstNode *launchExpression(Parser *P)
+{
+    Token tok = *consume0(P, tokLaunch);
+    AstNode *body = NULL;
+    bool callStyle = match(P, tokLParen);
+    if (check(P, tokLBrace)) {
+        body = block(P);
+    }
+    else {
+        body = expression(P, true);
+        body = makeExprStmt(P->memPool, &body->loc, flgNone, body, NULL, NULL);
+    }
+
+    if (callStyle)
+        consume0(P, tokRParen);
+
+    body->next = makeReturnAstNode(
+        P->memPool,
+        builtinLoc(),
+        flgNone,
+        makeIntegerLiteral(P->memPool, builtinLoc(), 0, NULL, NULL),
+        NULL,
+        NULL);
+    body = makeBlockStmt(P->memPool, &body->loc, body, NULL, NULL);
+    AstNode *arg = newAstNode(
+        P,
+        &tok,
+        &(AstNode){.tag = astClosureExpr, .closureExpr = {.body = body}});
+
+    return newAstNode(
+        P,
+        &tok,
+        &(AstNode){
+            .tag = astCallExpr,
+            .callExpr = {
+                .callee = makePath(
+                    P->memPool, &tok.fileLoc, S___thread_launch, flgNone, NULL),
+                .args =
+                    newAstNode(P,
+                               &tok,
+                               &(AstNode){.tag = astClosureExpr,
+                                          .closureExpr = {.body = body}})}});
 }
 
 static AstNode *parseCallArguments(Parser *P)
@@ -2051,7 +2099,7 @@ static AstNode *testDecl(Parser *P)
             .testDecl = {.name = getStringLiteral(P, &name), .body = body}});
 }
 
-static AstNode *exceptionDecl(Parser *P)
+static AstNode *exceptionDecl(Parser *P, u64 flags)
 {
     AstNode *params = NULL, *body = NULL;
     Token tok = *current(P);
@@ -2071,6 +2119,7 @@ static AstNode *exceptionDecl(Parser *P)
         P,
         &tok,
         &(AstNode){.tag = astException,
+                   .flags = flags,
                    .exception = {.name = getTokenString(P, &name, false),
                                  .params = params,
                                  .body = body}});
@@ -3225,7 +3274,7 @@ static AstNode *declaration(Parser *P)
         decl = testDecl(P);
         break;
     case tokException:
-        decl = exceptionDecl(P);
+        decl = exceptionDecl(P, isPublic ? flgPublic : flgNone);
         break;
     case tokExtern:
         parserError(P,

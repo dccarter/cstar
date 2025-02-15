@@ -1,7 +1,7 @@
 module http
 
 import "./log.cxy"
-
+import { FileDescriptor, TempFile } from "./os.cxy"
 import { Time } from "./time.cxy"
 import { Vector } from "./vector.cxy"
 import { HashMap } from "./hash.cxy"
@@ -9,6 +9,7 @@ import { Trie } from "./trie.cxy"
 
 import { Address } from "./net.cxy"
 import { TcpSocket, TcpListener, BufferedSocketOutputStream } from "./tcp.cxy"
+import { Thread } from "./thread.cxy"
 
 ##if (defined MACOS) {
     import "_ctype.h" as ctype
@@ -21,6 +22,8 @@ import "stdlib.h" as stdlib
 import "strings.h" as cstrings
 
 import "native/http/parser.h" as parser
+
+pub exception HttpError(msg: String) => msg == null? "" : msg.str()
 
 pub enum Method : u32 {
     Delete,
@@ -227,10 +230,47 @@ pub var DATE_S = String("Date");
 pub var SERVER_S = String("Server");
 pub var CONNECTION_S = String("Connection");
 
+pub struct SendFile {
+    fd: FileDescriptor
+    count: u64
+    offset: u64
+
+    func `init`(fd: FileDescriptor, count: u64, offset: u64 = 0) {
+        this.fd = &&fd
+        this.count = count
+        this.offset = offset
+    }
+
+    func raw() => fd.fd
+}
+
+pub struct SendTempFile {
+    - tmp: TempFile
+    - count: u64
+
+    @static
+    func create(tmp: TempFile): !This {
+        return This{
+            count: tmp.size(),
+            tmp: &&tmp
+        }
+    }
+
+    @inline
+    func raw() => tmp.fd
+
+    @inline
+    func size() => count
+}
+
+pub type ResponseChunk = string | __string | String | SendTempFile | SendFile
+
 pub class Response {
     - _status: Status = .Ok;
     - _headers = HeaderMap();
-    - _body = String();
+    - _chunks: Vector[ResponseChunk] = null;
+    - _body: String = null;
+    - _isComplete = false;
 
     func `init`() {
     }
@@ -238,15 +278,86 @@ pub class Response {
     @[prop, inline]
     const func headers() => &_headers
     @[prop, inline]
-    func body() => &_body
+    func body() {
+        if (_body == null) {
+            assert!(_chunks == null)
+            _body = String()
+        }
+        return &_body
+    }
+
+    @inline
+    func body(str: String) {
+        _body = &&str
+    }
+
+    func chunk(ch: ResponseChunk) {
+        assert!(_body == null) // Cannot mix chunked body with string body
+        if (_chunks == null)
+            _chunks = Vector[ResponseChunk]()
+        _chunks.push(&&ch)
+    }
+
+    @inline
+    func chunk(fd: FileDescriptor, count: u64, offset: u64 = 0) {
+        chunk(SendFile(&&fd, count, offset))
+    }
+
+    @inline
+    func chunk(tmp: TempFile): !void {
+        chunk(SendTempFile.create(&&tmp))
+    }
+
+    func stream(sos: &BufferedSocketOutputStream) {
+        if (_body != null) {
+            sos << _body
+        }
+        else if (_chunks != null) {
+            for (var chunk, _: _chunks) {
+                match (chunk) {
+                    case string as s => sos << s
+                    case __string as s => sos << s
+                    case String as s => sos << s
+                    case SendFile as sf {
+                        // send the file
+                        sos.sendFile(sf.raw(), sf.offset, sf.count)
+                    }
+                    case SendTempFile as st {
+                        // Send temp file
+                        sos.sendFile(st.raw(), 0, st.size())
+                    }
+                }
+            }
+        }
+    }
+
     @[prop, inline]
     const func status() => _status
     @[prop, inline]
-    const func size() => _body.size()
+    const func size() {
+        if (_body != null)
+            return _body.size()
+        if (_chunks == null)
+            return 0
+        var sz = 0:u64;
+        for (const chunk, _: _chunks) {
+            match (chunk) {
+                case string as s => sz += len!(s)
+                case __string as s => sz += s.size()
+                case String as s => sz += s.size()
+                case SendFile as sf => sz += sf.count
+                case SendTempFile as st => sz += st.size()
+            }
+        }
+        return sz
+    }
 
     const func ok() => _status == .Ok
 
+    const func empty() => (_body == null || _body.empty()) && (_chunks == null || _chunks.empty())
+
     func end(status: Status = .Ok) {
+        _isComplete = true
         _status = status
     }
 
@@ -257,6 +368,9 @@ pub class Response {
 
     @inline
     const func header(name: String) => _headers.[&&name]
+
+    @[inline, prop]
+    const func isComplete() => _isComplete
 }
 
 pub class Request {
@@ -271,7 +385,7 @@ pub class Request {
     - _body: String = null;
     - _minorVersion: i32 = 1;
     - _contentLength: u64 = 0;
-    - _route: ^Route
+    - _route: &Route
 
     func `init`() {
     }
@@ -361,10 +475,10 @@ pub class Request {
     const func header(name: String) => _headers.[name]
 
     @[inline, prop]
-    const func route() => &(*_route)
+    const func route() => _route
 
     @[inline]
-    func route(it: ^Route) {
+    func route(it: &Route) {
         _route = it
     }
 
@@ -496,7 +610,7 @@ class Router {
         route(req, resp)
     }
 
-    func find(req: &Request, resp: &Response): Route? {
+    func find(req: &Request, resp: &Response): Optional[&Route] {
         var path = req.path().__str();
         var found = routes.find(path.str(), path.size());
         if (!found) {
@@ -528,7 +642,7 @@ class Router {
         else {
             req.uri(String(args))
         }
-        return &&route
+        return &route
     }
 
     - func parseParams(params: &Vector[__string], path: string, idx: i64) : void {
@@ -559,7 +673,7 @@ class Router {
                 j++;
             var value = __string(ptroff!(p + idx) !: string, j - idx);
             idx = j;
-            req.param(params.[<i32>i], value)
+            req.param(<__string>params.[<i32>i], value)
         }
 
         if (p.[idx] != '\0':char && p.[idx] != '?':char) {
@@ -621,18 +735,18 @@ pub class Connection[Middlewares] {
             sendResponse()
             return;
         }
-        invokeRouteHandler(route.move())
+        invokeRouteHandler(*route)
 
         sendResponse()
     }
 
-    - func invokeRouteHandler(route: Route) : void {
-        req.route(ptrof route)
+    - func invokeRouteHandler(route: &Route) : void {
+        req.route(route)
         #for (const i: 0..Middlewares.membersCount) {
             // invoke middlewares
             mws.#{i}.before(&req, &resp)
             defer mws.#{i}.after(&req, &resp)
-            if (!resp.ok())
+            if (resp.isComplete())
                 return;
         }
         // handle route
@@ -661,7 +775,7 @@ pub class Connection[Middlewares] {
         var sos = BufferedSocketOutputStream(sock);
         var line0 = __string(statusText(resp.status()));
         sos << line0 << "\r\n"
-        if (resp.status() != .Ok && resp.body().empty()) {
+        if (resp.status() != .Ok && resp.empty()) {
             resp.body() << line0.substr(9)
         }
 
@@ -676,7 +790,7 @@ pub class Connection[Middlewares] {
         }
 
         if (config.hstsEnable > 0) {
-            sos << "Strict-Transport-Security: max-age"
+            sos << "Strict-Transport-Security: max-age="
                 << config.hstsEnable << "; includeSubdomains\r\n"
         }
 
@@ -697,8 +811,7 @@ pub class Connection[Middlewares] {
         }
 
         sos << "\r\n"
-        if (resp.size() > 0)
-            sos << resp.body()
+        resp.stream(&sos)
     }
 }
 
@@ -741,27 +854,44 @@ pub class Server[Middlewares] {
         return mws.#{idx}
     }
 
-    func start() {
-        DBG!( "starting server at " << config.address )
+    func listen(): !void {
+        DBG!( "listening at " << config.address )
         if (!listener.listen(1024)) {
-            ERR!( "listening failed" )
-            return;
+            raise HttpError(f"listening failed: ${strerr()}" )
         }
+    }
 
+    func accept() {
+        DBG!( "accepting connection on thread: " << Thread.current().id() )
         while (listener) {
             var sock = listener.accept();
             if (!sock)
                 continue;
 
-            async {
-                var name: [char, 64] = [];
-                var s = sock.move();
-                sprintf(name, "conn-%hu", s.address().port())
-                setname!(name !: string)
-                handleConnection(&&s)
-            }
+            async handleConnection(sock.move())
         }
         DBG!( "server stopped" )
+    }
+
+    func start(nThreads: u32 = 1): !void {
+        if (nThreads > SysConfNumProcs) {
+            WRN!("`nThreads=" << nThreads << "` > `SysConfNumProcs=" << SysConfNumProcs
+                 << "` defaulting to SysConfNumProcs")
+             nThreads = min(<u32>SysConfNumProcs, nThreads)
+        }
+
+        listen()
+
+        var procs = Vector[Thread]();
+        if (nThreads > 1) {
+            for (const i: 0..nThreads-1) {
+                procs.push(launch this.accept())
+            }
+        }
+        accept()
+        for (const i: 0..nThreads-1) {
+            procs.[<i32>i].join()
+        }
     }
 
     func stop() {
@@ -791,7 +921,7 @@ pub class Cors {
     func `init`() { }
 
     func before(req: &const Request, res: &Response) {
-        if (req.method() == .Head) {
+        if (req.method() == .Options) {
             /* Requesting options */
             var requestMethod = req.header("Access-Control-Request-Method");
             if (requestMethod) {
@@ -805,7 +935,7 @@ pub class Cors {
 
                 if (req.route().isMethodSupported(corsMethod.0)) {
                     // only if route supports requested method
-                    res.header("Access-Control-Allow-Methods", <String>(*requestMethod));
+                    res.header("Access-Control-Allow-Methods", (*requestMethod).str());
                     res.end();
                 }
             }

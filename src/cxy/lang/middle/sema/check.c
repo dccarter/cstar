@@ -212,7 +212,7 @@ static void checkReturnStmt(AstVisitor *visitor, AstNode *node)
         return;
 
     if (ret) {
-        const Type *retType = resolveAndUnThisType(ret->type);
+        const Type *retType = resolveType(ret->type);
         if (expr == NULL && isVoidResultType(retType)) {
             expr_ = getResultTargetType(retType);
             expr = makeStructExpr(

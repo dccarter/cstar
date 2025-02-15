@@ -1,13 +1,31 @@
-import { Server, Request, Response } from "stdlib/http.cxy"
+import { Server, Request, Response, Config, SendFile } from "stdlib/http.cxy"
+import { Address } from "stdlib/net.cxy"
+import { Thread } from "stdlib/thread.cxy"
+import "stdlib/os.cxy"
 
-pub func main()  {
-    var server = Server[()]();
+func stream(resp: &Response): !void {
+    var fd = os.open("app.c");
+    resp.chunk(SendFile(&&fd, fd.size()))
+    resp.header("Content-Type", "text/plain")
+}
+
+pub func main(): !void  {
+    var server = Server[()](Config{address: Address("0.0.0.0", 8004)});
     server("/hello", (@unused req: &const Request, resp: &Response) => {
         resp.body() << "Hello, World!"
     })
 
-    server("/quit", (@unused req: &const Request, @unused resp: &Response) => {
-        server.stop()
+    server("/whoami", (@unused req: &const Request, resp: &Response) => {
+        resp.header("Content-Type", "application/json")
+        resp.body() << "{ \"tid\": " << Thread.current().id() << ", \"cid\": " << coroRunning!.id <<  " }"
     })
+
+    server("/stream", (@unused req: &const Request, resp: &Response) => {
+        stream(resp) catch {
+            // Just write the exception
+            resp.body() << ex!
+        }
+    })
+
     server.start()
 }

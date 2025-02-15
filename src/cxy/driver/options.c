@@ -331,6 +331,7 @@ static void initializeOptions(StrPool *strings, Options *options)
 #ifdef __APPLE__
     pushOnDynArray(&options->defines, &(CompilerDefine){"MACOS", "1"});
     pushOnDynArray(&options->defines, &(CompilerDefine){"UNIX", "1"});
+    pushStringOnDynArray(&options->cDefines, "-D_DARWIN_C_SOURCE");
 #else
     pushStringOnDynArray(&options->cDefines, "-D_XOPEN_SOURCE=1");
     pushStringOnDynArray(&options->cDefines, "-D_DEFAULT_SOURCE");
@@ -395,10 +396,11 @@ bool parseCommandLineOptions(
             Help("disable colored output when formatting outputs")),
         Opt(Name("without-builtins"),
             Help("Disable building builtins (does not for build command)")),
-        Str(Name("cflags"),
+        Use(cmdArrayArgument,
+            Name("cflags"),
             Help("C compiler flags to add to the c compiler when importing C "
                  "files"),
-            Def("")),
+            Def("[]")),
         Opt(Name("no-pie"), Help("disable position independent code")),
         Use(cmdOptimizationLevel,
             Name("optimization"),
@@ -495,8 +497,7 @@ bool parseCommandLineOptions(
         UnloadCmd(cmd, options, TEST_CMD_LAYOUT);
     }
 
-    cstring str = getGlobalString(cmd, 5);
-    parseSpaceSeperatedList(&options->cflags, strings, str);
+    moveListOptions(&options->cflags, &getGlobalArray(cmd, 5));
     options->noPIE = getGlobalOption(cmd, 6);
     options->optimizationLevel = getGlobalInt(cmd, 7);
     moveListOptions(&options->defines, &getGlobalArray(cmd, 8));
