@@ -9,6 +9,7 @@ import { Trie } from "./trie.cxy"
 
 import { Address } from "./net.cxy"
 import { TcpSocket, TcpListener, BufferedSocketOutputStream } from "./tcp.cxy"
+import { Thread } from "./thread.cxy"
 
 ##if (defined MACOS) {
     import "_ctype.h" as ctype
@@ -21,6 +22,8 @@ import "stdlib.h" as stdlib
 import "strings.h" as cstrings
 
 import "native/http/parser.h" as parser
+
+pub exception HttpError(msg: String) => msg == null? "" : msg.str()
 
 pub enum Method : u32 {
     Delete,
@@ -271,7 +274,7 @@ pub class Request {
     - _body: String = null;
     - _minorVersion: i32 = 1;
     - _contentLength: u64 = 0;
-    - _route: ^Route
+    - _route: &Route
 
     func `init`() {
     }
@@ -361,10 +364,10 @@ pub class Request {
     const func header(name: String) => _headers.[name]
 
     @[inline, prop]
-    const func route() => &(*_route)
+    const func route() => _route
 
     @[inline]
-    func route(it: ^Route) {
+    func route(it: &Route) {
         _route = it
     }
 
@@ -496,7 +499,7 @@ class Router {
         route(req, resp)
     }
 
-    func find(req: &Request, resp: &Response): Route? {
+    func find(req: &Request, resp: &Response): Optional[&Route] {
         var path = req.path().__str();
         var found = routes.find(path.str(), path.size());
         if (!found) {
@@ -528,7 +531,7 @@ class Router {
         else {
             req.uri(String(args))
         }
-        return &&route
+        return &route
     }
 
     - func parseParams(params: &Vector[__string], path: string, idx: i64) : void {
@@ -621,13 +624,13 @@ pub class Connection[Middlewares] {
             sendResponse()
             return;
         }
-        invokeRouteHandler(route.move())
+        invokeRouteHandler(*route)
 
         sendResponse()
     }
 
-    - func invokeRouteHandler(route: Route) : void {
-        req.route(ptrof route)
+    - func invokeRouteHandler(route: &Route) : void {
+        req.route(route)
         #for (const i: 0..Middlewares.membersCount) {
             // invoke middlewares
             mws.#{i}.before(&req, &resp)
@@ -741,13 +744,15 @@ pub class Server[Middlewares] {
         return mws.#{idx}
     }
 
-    func start() {
-        DBG!( "starting server at " << config.address )
+    func listen(): !void {
+        DBG!( "listening at " << config.address )
         if (!listener.listen(1024)) {
-            ERR!( "listening failed" )
-            return;
+            raise HttpError(f"listening failed: ${strerr()}" )
         }
+    }
 
+    func accept() {
+        DBG!( "accepting connection on thread: " << Thread.current().id() )
         while (listener) {
             var sock = listener.accept();
             if (!sock)
@@ -757,11 +762,32 @@ pub class Server[Middlewares] {
                 var name: [char, 64] = [];
                 var s = sock.move();
                 sprintf(name, "conn-%hu", s.address().port())
-                setname!(name !: string)
+                coroSetName!(name !: string)
                 handleConnection(&&s)
             }
         }
         DBG!( "server stopped" )
+    }
+
+    func start(nThreads: u32 = 1): !void {
+        if (nThreads > SysConfNumProcs) {
+            WRN!("`nThreads=" << nThreads << "` > `SysConfNumProcs=" << SysConfNumProcs
+                 << "` defaulting to SysConfNumProcs")
+             nThreads = <u32>SysConfNumProcs
+        }
+
+        listen()
+
+        var procs = Vector[Thread]();
+        if (nThreads > 1) {
+            for (const i: 0..nThreads-1) {
+                procs.push(launch this.accept())
+            }
+        }
+        accept()
+        for (const i: 0..nThreads-1) {
+            procs.[<i32>i].join()
+        }
     }
 
     func stop() {

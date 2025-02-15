@@ -1,4 +1,4 @@
-FROM ubuntu:latest as builder
+FROM ubuntu:latest AS builder
 
 # Install ZSH
 RUN apt-get -y update && apt-get -y upgrade

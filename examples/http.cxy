@@ -1,13 +1,16 @@
 import { Server, Request, Response } from "stdlib/http.cxy"
+import { Thread } from "stdlib/thread.cxy"
 
-pub func main()  {
+pub func main(): !void  {
     var server = Server[()]();
     server("/hello", (@unused req: &const Request, resp: &Response) => {
         resp.body() << "Hello, World!"
     })
 
-    server("/quit", (@unused req: &const Request, @unused resp: &Response) => {
-        server.stop()
+    server("/whoami", (@unused req: &const Request, resp: &Response) => {
+        resp.header("Content-Type", "application/json")
+        resp.body() << "{ \"tid\": " << Thread.current().id() << ", \"cid\": " << coroRunning!.id <<  " }"
     })
+
     server.start()
 }

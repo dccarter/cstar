@@ -331,6 +331,7 @@ static void initializeOptions(StrPool *strings, Options *options)
 #ifdef __APPLE__
     pushOnDynArray(&options->defines, &(CompilerDefine){"MACOS", "1"});
     pushOnDynArray(&options->defines, &(CompilerDefine){"UNIX", "1"});
+    pushStringOnDynArray(&options->cDefines, "-D_DARWIN_C_SOURCE");
 #else
     pushStringOnDynArray(&options->cDefines, "-D_XOPEN_SOURCE=1");
     pushStringOnDynArray(&options->cDefines, "-D_DEFAULT_SOURCE");

@@ -2741,6 +2741,8 @@ AstNode *findInAstNode(AstNode *node, cstring name)
         return findMemberByName(node->enumDecl.options, name);
     case astException:
         return findMemberByName(node->exception.params, name);
+    case astImportDecl:
+        return findMemberDeclInType(node->type, name);
     default:
         unreachable("NOT SUPPORTED");
     }

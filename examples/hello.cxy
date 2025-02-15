@@ -1,5 +1,33 @@
+import { Thread } from "stdlib/thread.cxy"
+import "stdlib/coro.cxy"
+
+func hello() {
+    const id = Thread.current().id();
+    println(id,  ":", coroId!, " - enter: hello")
+    async {
+       println(id, ":", coroId!, " - beforeSleep.async: hello")
+       sleepAsync(3000)
+       println(id, ":", coroId!, " - afterSleep.async: hello")
+    }
+    println(id, ":", coroId!, " - beforeSleep: hello")
+    sleepAsync(5000)
+    println(id, ":", coroId!, " - afterSleep: hello")
+    println(id, ":", coroId!, " - exit: hello")
+}
 
 func main(): !void {
-    var x = " Hello World \n".s;
-    stdout << x.trimRight()
+    const id = Thread.current().id();
+    println(id,  ":", coroId!, " - enter: main")
+    var t = launch hello();
+    println(id,   ":", coroId!, "- start: main")
+    async {
+       println(id, ":", coroId!, " - beforeSleep.async: main")
+       sleepAsync(4000)
+       println(id, ":", coroId!, " - afterSleep.async: main")
+    }
+    println(id, ":", coroId!, " - beforeSleep: main")
+    sleepAsync(10000)
+    println(id, ":", coroId!, " - afterSleep: main")
+    println(id, ":", coroId!, " - join: main")
+    t.join()
 }
