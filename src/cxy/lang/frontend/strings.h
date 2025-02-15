@@ -97,6 +97,10 @@ extern "C" {
     f(what)                     \
     f(push)                     \
     f(ex)                       \
+    f(thread)                   \
+    f(likely)                   \
+    f(unlikely)                 \
+    f(atomic)                   \
     f(__init)                   \
     f(__defaults_init)          \
     f(__startup)                \

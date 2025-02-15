@@ -341,21 +341,17 @@ static void implementStructCopyFunction(AstVisitor *visitor,
         insertAstNode(&stmts, expr);
     }
 
-    if (refMembers) {
+    if (refMembers)
         node->flags |= flgReferenceMembers;
-        copy->funcDecl.body = makeExprStmt(
-            ctx->pool,
-            &copy->loc,
-            flgNone,
-            makeStructExprFromType(
-                ctx->pool, &copy->loc, flgNone, stmts.first, NULL, node->type),
-            NULL,
-            node->type);
-    }
-    else {
-        copy->funcDecl.body = makeBlockStmt(
-            ctx->pool, &copy->loc, NULL, NULL, makeVoidType(ctx->types));
-    }
+    copy->funcDecl.body = makeExprStmt(
+        ctx->pool,
+        &copy->loc,
+        flgNone,
+        makeStructExprFromType(
+            ctx->pool, &copy->loc, flgNone, stmts.first, NULL, node->type),
+        NULL,
+        node->type);
+    copy->attrs = makeAttribute(ctx->pool, &copy->loc, S_inline, NULL, NULL);
 }
 
 static void implementDestructorFunction(AstVisitor *visitor,
@@ -743,5 +739,5 @@ u64 removeClassOrStructBuiltins(AstNode *node, NamedTypeMember *nms)
     }
 
     node->structDecl.members = members.first;
-    return total - count;
+    return count;
 }

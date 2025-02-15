@@ -55,6 +55,9 @@ static bool evalStringIndexExpr(EvalContext *ctx, AstNode *node)
             return setEvalStringIndexExprResult(
                 node,
                 findAttributeArgument(target, index->stringLiteral.value));
+    case astNullLit:
+        node->tag = astNullLit;
+        return false;
     default:
         break;
     }

@@ -75,6 +75,7 @@ macro __cxy_coro_setsp(x) {
 @align(16)
 struct Coroutine {
     link: ^This = null;
+    scheduler: ^void = null;
     id: i32 = -1;
     result: i32 = 0;
     /* When the coroutine is suspended 'ctx' holds the context (registers and such).*/
@@ -105,10 +106,10 @@ func stackAlign(size: u64, align: u64) =>
 
 #if (! defined CORO_STACK_SIZE) {
     // 256kb stack by default
-    macro CORO_STACK_SIZE() 256:u64 * 1024:u64
+    macro CORO_STACK_SIZE() 1024:u64 * 1024:u64
 }
 
-var stackSize = stackAlign(CORO_STACK_SIZE!, unistd.sysconf(<i32> _SC_PAGE_SIZE!));
+var stackSize = stackAlign(CORO_STACK_SIZE!, SysConfPageSize);
 
 struct CachedStack {
     link: ^This
@@ -121,11 +122,11 @@ class CoroutineScheduler {
     /* List of coroutines ready for execution. */
     - ready = List[Coroutine]{};
     /* Coroutine that we don't launch */
-    - main = Coroutine("main", -1);
+    - main = Coroutine("main", 0);
     /* Cache some stacks */
     - stacks = List[CachedStack]{};
     /* Coroutine ID generator */
-    - idGenerator: i32 = 0;
+    - idGenerator: i32 = 1;
     /* Counter used in rescheduling coroutines */
     - counter : i32 = 0;
     /* Event loop for handling IO events */
@@ -240,6 +241,7 @@ class CoroutineScheduler {
         var stack = allocStack();
         var cr = ptroff!((stack !: ^Coroutine) + (-1));
         cr.link = null
+        cr.scheduler = (this !: ^void);
         cr.id = idGenerator++
         cr.ready = false;
         cr.name = name
@@ -312,18 +314,30 @@ class CoroutineScheduler {
 }
 
 // @global installs the variable into the global scope
-@[thread, __override_builtin("__scheduler"), linkage("External")]
-var __cxy_coro_scheduler = CoroutineScheduler();
-macro yld() __scheduler.yld()
-macro running() __scheduler.running
-macro setname(NAME) { __scheduler.running.name = NAME! }
+@[thread, linkage("External")]
+var __cxy_coro_scheduler: CoroutineScheduler = null;
+
+@[inline, __override_builtin("__scheduler")]
+func __get_scheduler() {
+    @unlikely if (__cxy_coro_scheduler == null) __cxy_coro_scheduler = CoroutineScheduler()
+    return &__cxy_coro_scheduler
+}
+
+macro coroSuspend() __scheduler().suspend()
+macro coroResume(CO, RES) __scheduler().resume(CO!, RES!)
+macro coroYield() __scheduler().yld()
+macro coroRunning() __scheduler().running
+macro coroId() coroRunning!.id
+macro coroSetName(NAME) { (__scheduler().running).name = NAME! }
 
 macro __async(CALL, NAME) {
-    if (__cxy_coro_setjmp!(ptrof __scheduler.running.ctx) == 0) {
-        var cr = __scheduler.prologue(NAME!, file!, line!);
+    // Only create the scheduler when it's needed
+    var sched = __scheduler();
+    if (__cxy_coro_setjmp!(ptrof sched.running.ctx) == 0) {
+        var cr = sched.prologue(NAME!, file!, line!);
         __cxy_coro_setsp!(cr !: ^void)
         CALL!
-        __scheduler.epilogue()
+        sched.epilogue()
     }
 }
 
@@ -331,10 +345,44 @@ macro __async(CALL, NAME) {
 func __now() => ae.aeOsTime()
 
 @[inline, __override_builtin("fdWaitRead")]
-func __fdWaitRead(fd: i32, timeout: u64 = 0) => __scheduler.fdWaitRead(fd, timeout)
+func __fdWaitRead(fd: i32, timeout: u64 = 0) => __scheduler().fdWaitRead(fd, timeout)
 
 @[inline, __override_builtin("fdWaitWrite")]
-func __fdWaitWrite(fd: i32, timeout: u64 = 0) => __scheduler.fdWaitWrite(fd, timeout)
+func __fdWaitWrite(fd: i32, timeout: u64 = 0) => __scheduler().fdWaitWrite(fd, timeout)
 
 @[inline, __override_builtin("sleepAsync")]
-func __sleep(ms: i64) { __scheduler.sleep(ms) }
+func __sleep(ms: i64) { __scheduler().sleep(ms) }
+
+pub struct Mutex {
+    waiting = List[Coroutine]{};
+    holder: ^Coroutine = null;
+
+    func `init`() {}
+
+    func lock() {
+        if (holder == null) {
+            holder = coroRunning!
+            return
+        }
+        waiting.push(coroRunning!)
+        coroSuspend!()
+    }
+
+    func tryLock() {
+        if (holder == null) {
+            holder = coroRunning!
+            return true
+        }
+        return false
+    }
+
+    func unlock() {
+        var next = waiting.pop()
+        if (next == null) {
+            return
+        }
+        holder = next
+        coroResume!(next, 0)
+    }
+}
+

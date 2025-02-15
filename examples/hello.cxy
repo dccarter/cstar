@@ -1,5 +1,10 @@
+func say(): !i32 {
+    return 0:i32
+}
 
-func main(): !void {
-    var x = " Hello World \n".s;
-    stdout << x.trimRight()
+func main(): !i32 {
+    var x:i32 = 0;
+    var y = say() catch {
+        return 0:i32
+    }
 }

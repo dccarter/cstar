@@ -13,10 +13,11 @@ extern "C" {
 // clang-format off
 #define OVERRIDABLE_BUILTINS(f)    \
     f(__scheduler)                 \
+    f(__thread_launch)             \
     f(timestamp)                   \
-    f(fdWaitRead)                        \
-    f(fdWaitWrite)                       \
-    f(sleepAsync)                       \
+    f(fdWaitRead)                  \
+    f(fdWaitWrite)                 \
+    f(sleepAsync)                  \
     f(__smart_ptr_alloc)           \
     f(__smart_ptr_alloc_trace)
 

@@ -23,6 +23,7 @@ pub extern func toupper(c: i32): i32
 pub extern func isspace(c: i32): i32
 pub extern func isdigit(c: i32): i32
 pub extern func isalpha(c: i32): i32
+pub extern func sysconf(name: i32): i64
 
 macro isSpace(X) =(isspace(<i32>X!) != 0)
 macro isDigit(X) =(isdigit(<i32>X!) != 0)
@@ -81,6 +82,9 @@ pub func __cxy_panic(file: string, line: u64, column: u64, msg: string) {
 macro panic(msg) { __cxy_panic(file!, line!, column!, msg!) }
 
 @inline
+pub func strerr() => strerror(errno!)
+
+@inline
 pub func __bswap16(x: u16) => <u16>(((x >> 8) & 0xff) | ((x & 0xff) << 8))
 
 @inline
@@ -106,6 +110,7 @@ pub func __bswap64(x: u64) => (
 type sptr = ^void
 
 struct __mem {
+    @atomic
     refs: u32
     magic: u32
     dctor: func(ptr: sptr) -> void
@@ -210,7 +215,6 @@ pub struct Optional[T] {
     }
 
     @inline func `init`(value: T) { val = &&value; ok = true }
-
     func `destructor`() {
         if (ok) {
             #if (T.isClass || T.isDestructible)
@@ -550,11 +554,12 @@ pub func isnull[T](cls: &const T) {
 }
 
 pub class OutputStream {
-    virtual func append(str: ^const void, size: u64): void
+    virtual func append(str: ^const void, size: u64): Optional[u64]
 
     @inline
     func appendString(s: string) : void {
-        append(s !: ^const void, strlen(s))
+        if (s != null)
+            append(s !: ^const void, strlen(s))
     }
 
     @inline
@@ -787,6 +792,20 @@ pub class String : OutputStream {
         (ptr !: This).op__destructor()
     }
 
+    func head() => _data
+    func tail() => ptroff!( _data + _size )
+
+    func reserve(size: u64) {
+        grow(size)
+        return tail()
+    }
+
+    func resize(newSize: u64) {
+        assert!(_capacity <= newSize)
+        _size = newSize
+        _data.[_size] = '\0':char
+    }
+
     func clear() : void {
         if (_data != null) {
             free(this._data)
@@ -796,7 +815,7 @@ pub class String : OutputStream {
         }
     }
 
-    func append(str: ^const char, size: u64) : void {
+    func append(str: ^const char, size: u64) : Optional[u64] {
         if (size) {
             grow(size)
             var p = this._data + this._size;
@@ -804,6 +823,7 @@ pub class String : OutputStream {
             this._size += size
             this._data.[this._size] = <char>'\0'
         }
+        return Some(size)
     }
 
     func trimLeft() {
@@ -974,12 +994,18 @@ pub class BufferedOutputStream: OutputStream {
 
     virtual func flush(str: ^const void, size: u64): void
 
-    func append(data: ^const void, size: u64) {
+    func sync() {
+        if (_size > 0) {
+            flush(_buffer, _size)
+            _size = 0
+        }
+    }
+
+    func append(data: ^const void, size: u64): Optional[u64] {
         var room = _capacity - _size;
         if (size > room && _size > 0) {
-            flush(_buffer, _size)
+            sync()
             room = _capacity
-            _size = 0
         }
         if (size < room) {
             var src = data !: ^const char;
@@ -989,16 +1015,15 @@ pub class BufferedOutputStream: OutputStream {
         else {
             flush(data, size)
         }
+        return Some(size)
     }
 
     @inline
     func `destructor`() {
         if (_buffer) {
-            if (_size > 0)
-                flush(_buffer, _size)
+            sync()
             free(_buffer !: ^void)
             _buffer = null
-            _size = 0
         }
     }
 
@@ -1008,16 +1033,17 @@ pub class BufferedOutputStream: OutputStream {
     }
 }
 
-pub class FileOutputStream : OutputStream {
+class StdOutputStream : OutputStream {
     - fd: i32
     func `init`(fd: i32 = 0) {
         this.fd = fd
     }
 
-    func append(str: ^const char, size: u64) {
+    func append(str: ^const char, size: u64): Optional[u64] {
         if (size) {
            write(fd, str, size)
         }
+        return Some(size)
     }
 }
 
@@ -1175,8 +1201,19 @@ macro stackAlloc(T, ...ARGS) =({
     obj
 })
 
-pub var stdout: OutputStream = FileOutputStream(1);
-pub var stderr: OutputStream = FileOutputStream(2);
+pub var stdout: OutputStream = StdOutputStream(1);
+pub var stderr: OutputStream = StdOutputStream(2);
+
+#if (defined MACOS) {
+macro SC_PAGESIZE         29
+macro SC_NPROCESSORS_ONLN 58
+}
+else #if (defined UNIX) {
+macro SC_PAGESIZE         30
+macro SC_NPROCESSORS_ONLN 84
+}
+pub var SysConfPageSize = sysconf(SC_PAGESIZE!);
+pub var SysConfNumProcs = sysconf(SC_NPROCESSORS_ONLN!);
 
 @inline
 pub func print[T](data: &const T) {
@@ -1298,7 +1335,7 @@ struct StackTrace {
                 capacity = 8
             else
                 capacity <<= 1
-            calls = realloc( calls !: ^void, capacity ) !: ^CallTrace
+            calls = realloc( calls !: ^void, sizeof!(*calls) * capacity ) !: ^CallTrace
         }
     }
 
@@ -1441,7 +1478,7 @@ pub class MemoryOutputStream : OutputStream {
         this._capacity = capacity
     }
 
-    func append(str: ^const char, size: u64) : void {
+    func append(str: ^const char, size: u64) : Optional[u64] {
         if (size) {
             assert!(size < (_capacity - _size))
             var p = (this._buffer !: ^char) + this._size;
@@ -1449,7 +1486,10 @@ pub class MemoryOutputStream : OutputStream {
             this._size += size
             p.[size] = <char>'\0'
         }
+        return Some(size)
     }
+
+    func size() => _size
 
     @inline
     const func `str`(os: &OutputStream) {

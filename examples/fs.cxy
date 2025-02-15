@@ -1,4 +1,4 @@
-import { FileServer } from "stdlib/fserver.cxy"
+import { FileServer, Config as FsConfig } from "stdlib/fserver.cxy"
 import { Config, Server, Request, Response, Status } from "stdlib/http.cxy"
 import { Address } from "stdlib/net.cxy"
 
@@ -41,11 +41,16 @@ struct Option[T] {
     @inline func value() => _value
 }
 
-func main() {
-     var server = Server[(Log)](Config{address: Address("0.0.0.0", 8101)});
-     @unused var fs = FileServer(&server);
+@[noinline, optimize(0)]
+func start[Ep](ep: &Ep): !void {
+    async ep.start()
+}
 
-     var api = Server[()]();
+func main(): !void {
+     var server = Server[(Log)](Config{address: Address("0.0.0.0", 8004)});
+     @unused var fs = FileServer(&server, FsConfig{enableSendFile: true});
+
+     var api = Server[()](Config{address: Address("0.0.0.0", 8005)});
      api("/hello", (@unused req: &const Request, resp: &Response) => {
          resp.body() << "Hello, World!"
      })
@@ -56,6 +61,6 @@ func main() {
      })
 
 
-     async { api.start() }
+     start(&api)
      server.start()
 }

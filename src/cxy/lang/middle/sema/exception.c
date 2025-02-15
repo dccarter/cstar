@@ -257,24 +257,29 @@ void checkCatchBinaryOperator(AstVisitor *visitor,
         return;
     }
 
-    if (isVoidType(rhsType) && !isVoidResultType(lhsType)) {
-        logError(
-            ctx->L, &rhs->loc, "catch block must yield a default value", NULL);
-        node->type = ERROR_TYPE(ctx);
-        return;
-    }
+    if (!ctx->returnState) {
+        if (isVoidType(rhsType) && !isVoidResultType(lhsType)) {
+            logError(ctx->L,
+                     &rhs->loc,
+                     "catch block must yield a default value",
+                     NULL);
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
 
-    const Type *targetType = isVoidResultType(lhsType)
-                                 ? makeVoidType(ctx->types)
-                                 : getResultTargetType(lhsType);
-    if (!isTypeAssignableFrom(targetType, rhsType)) {
-        logError(ctx->L,
-                 &rhs->loc,
-                 "catch default value type `{t}` not assignable to expression "
-                 "value type `{t}`",
-                 (FormatArg[]){{.t = rhsType}, {.t = targetType}});
-        node->type = ERROR_TYPE(ctx);
-        return;
+        const Type *targetType = isVoidResultType(lhsType)
+                                     ? makeVoidType(ctx->types)
+                                     : getResultTargetType(lhsType);
+        if (!isTypeAssignableFrom(targetType, rhsType)) {
+            logError(
+                ctx->L,
+                &rhs->loc,
+                "catch default value type `{t}` not assignable to expression "
+                "value type `{t}`",
+                (FormatArg[]){{.t = rhsType}, {.t = targetType}});
+            node->type = ERROR_TYPE(ctx);
+            return;
+        }
     }
 
     // x = lhs
@@ -311,17 +316,27 @@ void checkCatchBinaryOperator(AstVisitor *visitor,
                        NULL));
     }
 
-    if (catcher->variable != NULL) {
-        node->tag = astPath;
-        clearAstBody(node);
-        node->path.elements = makeResolvedPathElement(ctx->pool,
-                                                      &node->loc,
-                                                      catcher->variable->_name,
-                                                      flgNone,
-                                                      catcher->variable,
-                                                      NULL,
-                                                      catcher->variable->type);
-        node->type = catcher->variable->type;
+    AstNode *parent = node->parentScope;
+    if (!nodeIs(parent, ExprStmt)) {
+        if (catcher->variable != NULL) {
+            node->tag = astPath;
+            clearAstBody(node);
+            node->path.elements =
+                makeResolvedPathElement(ctx->pool,
+                                        &node->loc,
+                                        catcher->variable->_name,
+                                        flgNone,
+                                        catcher->variable,
+                                        NULL,
+                                        catcher->variable->type);
+            node->type = catcher->variable->type;
+        }
+        else {
+            node->tag = astGroupExpr;
+            clearAstBody(node);
+            node->groupExpr.expr = makeCastResultTo(ctx, var, false);
+            node->type = node->groupExpr.expr->type;
+        }
     }
     else {
         node->tag = astNoop;

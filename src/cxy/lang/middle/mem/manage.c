@@ -530,7 +530,7 @@ static void visitCallExpr(AstVisitor *visitor, AstNode *node)
         arg = arg ? arg->next : NULL;
     }
 
-    for (; arg; arg = arg->next, param = param->next) {
+    for (; arg && param; arg = arg->next, param = param->next) {
         astVisit(visitor, arg);
         if (isLeftValueExpr(arg) && nodeNeedsMemMgmt(param) &&
             !hasFlag(arg, Move))

@@ -12,10 +12,30 @@ import "unistd.h" as unistd
 else {
     import "fcntl.h" as fcntl
     import "bits/socket_type.h" as _st
+    import "sys/sendfile.h" as sf
 }
 
 #if (!defined MACOS) {
     macro SOCK_STREAM _st.__socket_type.SOCK_STREAM
+
+    @inline
+    func Socket_sendfile(outFd: i32, inFd: i32, off: ^u64, count: u64) {
+        var offset = <i64>*off;
+        var status = sf.sendfile(outFd, inFd, ptrof offset, count)
+        if (status == 0)
+            *off = offset
+        return status
+    }
+}
+else {
+    @inline
+    func Socket_sendfile(outFd: i32, inFd: i32, off: ^u64, count: u64) {
+        var size = <i64> count;
+        var status = socket.sendfile(inFd, outFd, <i64>*off, ptrof size, null, 0:i32)
+        if (status == 0)
+            *off = *off + size
+        return status
+    }
 }
 
 func configureSocket(fd: i32)  {
@@ -78,7 +98,7 @@ pub class TcpSocket {
                 return null
             }
 
-            if (sz == -1) {
+            if (sz == -1 || sz == 0) {
                 if (errno! != EAGAIN! && errno! != EWOULDBLOCK!) {
                     if (errno! == ECONNRESET!)
                         close()
@@ -110,14 +130,14 @@ pub class TcpSocket {
         var total: u64 = 0;
         while (fd != -1 && remaining > 0) {
             var sz = socket.send(fd, ptrof data.[total], remaining, 0);
-            if (sz == -1) {
+            if (sz == -1 || sz == 0) {
                 if(errno! == EPIPE!) {
                     errno! = ECONNRESET!
                     close()
                     return null
                 }
 
-                if(errno! != EAGAIN! && errno! != EWOULDBLOCK!)
+                if (errno! != EAGAIN! && errno! != EWOULDBLOCK!)
                     return null
 
                 var rc = fdWaitWrite(fd, timeout);
@@ -133,6 +153,34 @@ pub class TcpSocket {
         }
         errno! = 0
         return total
+    }
+
+    func sendFile(fd: i32, offset: u64, count: u64, timeout: u64 = 0): u64? {
+        var toffset = offset + count
+        var remaining = count
+        while (toffset > offset) {
+            var sz = Socket_sendfile(this.fd, fd, ptrof offset, remaining)
+            if (sz == -1 || sz == 0) {
+                if (errno!  == EPIPE!) {
+                    errno! = ECONNRESET!
+                    close()
+                    return null
+                }
+
+                if (errno! != EAGAIN! && errno! != EWOULDBLOCK!)
+                    return null
+
+                var rc = fdWaitWrite(fd, timeout);
+                if (rc != State.AE_WRITABLE) {
+                    errno! = ETIMEDOUT!
+                    return null
+                }
+                continue
+            }
+            remaining -= sz
+        }
+        errno! = 0
+        return count
     }
 
     func send[T](data: T, timeout: u64 = 0) {
@@ -176,8 +224,8 @@ class SocketOutputStream : OutputStream {
         this.timeout = timeout
     }
 
-    func append(data: ^const void, size: u64) {
-        sock.sendBuffer(data, size, timeout)
+    func append(data: ^const void, size: u64): u64? {
+        return sock.sendBuffer(data, size, timeout)
     }
 }
 
@@ -193,6 +241,13 @@ pub class BufferedSocketOutputStream : BufferedOutputStream {
 
     func flush(data: ^const void, size: u64) {
         sock.sendBuffer(data, size, timeout)
+    }
+
+    @inline
+    func sendFile(fd: i32, offset: u64, count: u64, timeout: u64 = 0): u64? {
+        // flush current buffer
+        this.sync()
+        return sock.sendFile(fd, offset, count, timeout)
     }
 }
 
