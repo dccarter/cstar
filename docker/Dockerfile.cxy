@@ -1,8 +1,7 @@
 FROM suilteam/cxyenv:latest AS builder
 
 # Setup cxy environment variables
-ENV CXY_ROOT="/home/dev/.cxy"
-ENV PATH="$PATH:${CXY_ROOT}/bin"
+ENV CXY_ROOT=/usr/local
 ENV CXY_STDLIB_DIR="${CXY_ROOT}/lib/cxy/std"
 
 # Install packages
