@@ -1,8 +1,8 @@
-name: Build cxy development environment
+name: Build image with latest cxy
 
 on:
   push:
-    tags: [ "release/dev/**" ]
+    tags: [ "release/**" ]
 
 env:
   BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
@@ -24,6 +24,6 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context:
-          file: docker/Dockerfile.dev
+          file: docker/Dockerfile.cxy
           push: true
-          tags: suilteam/cxyenv:latest
+          tags: suilteam/cxy:latest

@@ -1,0 +1,14 @@
+FROM suilteam/cxyenv:latest AS builder
+
+# Setup cxy environment variables
+ENV CXY_ROOT="/home/dev/.cxy"
+ENV PATH="$PATH:${CXY_ROOT}/bin"
+ENV CXY_STDLIB_DIR="${CXY_ROOT}/lib/cxy/std"
+
+# Install packages
+RUN apt-get -y update && apt-get -y upgrade
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --fix-missing \
+    wget git
+
+# Install cxy compiler
+RUN bash -c "$(wget https://raw.githubusercontent.com/dccarter/cstar/refs/heads/main/src/tools/download-cxy.sh -O -)"
