@@ -1,7 +1,7 @@
 module time
 
 ##if (defined MACOS) {
-    import "time.h" as ctime
+    import "_time.h" as ctime
     import "sys/_types/_time_t.h" as _time_t
 }
 else {

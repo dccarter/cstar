@@ -48,19 +48,6 @@ func start[Ep](ep: &Ep): !void {
 
 func main(): !void {
      var server = Server[(Log)](Config{address: Address("0.0.0.0", 8004)});
-     @unused var fs = FileServer(&server, FsConfig{enableSendFile: true});
-
-     var api = Server[()](Config{address: Address("0.0.0.0", 8005)});
-     api("/hello", (@unused req: &const Request, resp: &Response) => {
-         resp.body() << "Hello, World!"
-     })
-
-     api("/quit", (@unused req: &const Request, @unused resp: &Response) => {
-         server.stop()
-         api.stop()
-     })
-
-
-     start(&api)
+     @unused var fs = FileServer(&server, FsConfig{enableSendFile: true, root: String("./"), rootRedirect: String("hello.txt")});
      server.start()
 }

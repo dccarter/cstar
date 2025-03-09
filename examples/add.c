@@ -9,5 +9,5 @@
 #include <copyfile.h>
 int main(int argc, char *argv[])
 {
-    SSIZE_MAX
+    struct tm tm;
 }

@@ -5,6 +5,7 @@ import { Vector } from "./vector.cxy"
 import { HashMap } from "./hash.cxy"
 import "./log.cxy"
 import { Stat, stat, fstat, FileDescriptor } from "stdlib/os.cxy"
+import { Path } from "stdlib/path.cxy"
 import { Request, Response, Server, Method, Status, SendFile } from "./http.cxy"
 
 import "unistd.h" as unistd
@@ -37,7 +38,8 @@ pub struct Config {
     cacheExpires = 86400:i64;
     mappedMin = 2048:u64;
     root = String("./www/");
-    route = CXY_FILE_SERVER_ROUTE!;
+    route: string = CXY_FILE_SERVER_ROUTE!;
+    rootRedirect: String = null;
 }
 
 struct CachedFile {
@@ -105,7 +107,7 @@ pub class FileServer {
     - mimeTypes = MimeTypes();
     - cachedFiles = CachedFiles();
     - redirects = HashMap[String, String, HashCase, EqualsCase]();
-    - wwwDir: String
+    - wwwDir: Path
     - config: Config
 
     func `init`[Endpoint](ep: &Endpoint, config: Config = Config{}) {
@@ -115,6 +117,18 @@ pub class FileServer {
         ep(config.route, (req: &const Request, resp: &Response) => {
             var uri = req.uri();
             var path = __copy!( uri );
+            println(path)
+            if (path.empty()) {
+                if (this.config.rootRedirect == null) {
+                    // `/` does not redirect to anything
+                    resp.end(Status.NotFound)
+                    return
+                }
+                // BUG: We shouldn't have to copy here `this.config.rootRedirect` is not
+                // a reference.
+                path = __copy!(this.config.rootRedirect)
+            }
+
             var idx = path.rIndexOf('.':char);
             if (!idx) {
                 var aliasedPath = this.redirects.[path];
@@ -213,7 +227,7 @@ pub class FileServer {
         else {
             stdlib.realpath(config.root.str() !: ^const char, absolute)
         }
-        wwwDir = String(absolute !: string)
+        wwwDir = Path(absolute !: string)
     }
 
     func alias(src: String, dst: String) : void {
@@ -505,9 +519,8 @@ pub class FileServer {
 
     func fileExists(rel: &const String) : String? {
         // we want to ensure that the file is within the base directory
-        var b = String();
+        var b = wwwDir / rel.__str()
         // append base, followed by file
-        b << wwwDir << rel
         var absolute: [char, PATH_MAX!] = [];
         var p = stdlib.realpath(b.str() !: ^const char, absolute);
         if (p == null)

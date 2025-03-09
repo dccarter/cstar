@@ -102,6 +102,9 @@ pub struct Path {
 
     @inline
     const func `!=`(other:  string) => path.__str() != __string(other)
+
+    @inline
+    const func size() => path.size()
 }
 
 pub type PathLike = string | __string | String | Path
