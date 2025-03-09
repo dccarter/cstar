@@ -378,6 +378,18 @@ pub class FileInputStream: InputStream {
     }
 }
 
+pub func readAll(
+    path: string|__string|String,
+    nonBlocking: bool = false
+): !String {
+    var fd = open(path, nonBlocking)
+    var fis = FileInputStream(fd.fd, false, false) // nonBlocking already set above
+    if (nonBlocking)
+        return fis.readAsync()
+    else
+        return fis.readAll()
+}
+
 pub class FileOutputStream : OutputStream {
     - closeOnDestruct: bool
     - fd: i32

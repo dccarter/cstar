@@ -32,6 +32,7 @@ macro StatField(X) mk_ident!("st_", X!, "tim")
     macro CXY_FILE_SERVER_ROUTE "/www"
 }
 
+@json
 pub struct Config {
     compressMin = 2048:u64;
     enableSendFile = false;
@@ -40,6 +41,7 @@ pub struct Config {
     root = String("./www/");
     route: string = CXY_FILE_SERVER_ROUTE!;
     rootRedirect: String = null;
+    allowRange = true;
 }
 
 struct CachedFile {
@@ -166,7 +168,11 @@ pub class FileServer {
     func updateMime[T](ext: String, config: T) : void {
         var mm = mimeTypes.[&&ext];
         assert!(!!mm);
+        var mConfig = *mm;
         update[MimeConfig, T](&(*mm).config, config)
+        // Disable ranges is globally disabled
+        if (mConfig.config.allowRange && !this.config.allowRange)
+            mConfig.config.allowRange = false
     }
 
     - func initialize() : void {

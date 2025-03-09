@@ -315,6 +315,12 @@ func parseJSON[T](p: &JSONParser): !T {
 @inline
 pub func parse[T](p: &JSONParser): !T => parseJSON[T](p)
 
+@inline
+pub func fromString[T](s: &const String): !T {
+    var p = JSONParser(s.__str());
+    return parse[T](&p)
+}
+
 test "Json encode" {
     var s = String();
     toJSON(&s, 10:i32)

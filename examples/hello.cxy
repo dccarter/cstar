@@ -1,8 +1,18 @@
-func say(x: i32)  {
-    return 0
-}
+import "stdlib/os.cxy"
+import "stdlib/json.cxy"
+
+@json
 struct User {
-    x: String = null
+    name: String = null;
+    age: i32 = 0;
+
+    const func `str`(os: &OutputStream) {
+        os << "{ name: " << name << ", age: " << age << " }"
+    }
 }
+
 func main(): !i32 {
+   var str = os.readAll("hello.json");
+   var user = json.fromString[User](&str);
+   println(user)
 }
