@@ -250,7 +250,6 @@ pub class FileServer {
             const cc = req.header("If-Modified-Since")
             if (cc) {
                 const ifMod = Time((*cc).str());
-                println(ifMod, " -- ", Time(cf.lastMod))
                 if (ifMod.timestamp() >= cf.lastMod) {
                     // file was not modified
                     return Status.NotModified
