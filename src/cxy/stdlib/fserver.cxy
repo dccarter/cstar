@@ -52,6 +52,7 @@ struct CachedFile {
     lastAccess: time_t = 0;
     useFd = false;
     isMapped = false;
+    valid = false;
     flags = 0:u8;
 
     func `init`() {}
@@ -77,7 +78,10 @@ struct CachedFile {
     }
 
     func `deinit`() {
-        clear()
+        if (valid) {
+            clear()
+            valid = false
+        }
     }
 }
 
@@ -116,16 +120,13 @@ pub class FileServer {
 
         ep(config.route, (req: &const Request, resp: &Response) => {
             var uri = req.uri();
-            var path = __copy!( uri );
-            println(path)
+            var path = __copy!(uri);
             if (path.empty()) {
                 if (this.config.rootRedirect == null) {
                     // `/` does not redirect to anything
                     resp.end(Status.NotFound)
                     return
                 }
-                // BUG: We shouldn't have to copy here `this.config.rootRedirect` is not
-                // a reference.
                 path = __copy!(this.config.rootRedirect)
             }
 
@@ -138,12 +139,18 @@ pub class FileServer {
                 }
                 idx =  path.rIndexOf('.':char);
             }
+            var pathOpt = this.fileExists(&path);
+            if (!pathOpt) {
+                resp.end(Status.NotFound)
+                return
+            }
+
             var ext = String(path.substr(*idx));
             if (req.method() == .Get) {
-                resp.end(this.get(req, resp, &&path, &&ext))
+                resp.end(this.get(req, resp, pathOpt.move(), &&ext))
             }
             else {
-                resp.end(this.head(req, resp, &&path, &&ext))
+                resp.end(this.head(req, resp, pathOpt.move(), &&ext))
             }
         })([Method.Get, Method.Head])
           .setAttrs({isStatic: true})
@@ -396,50 +403,45 @@ pub class FileServer {
         }
     }
 
-    func loadFile(rel: String) : Optional[&CachedFile] {
-        var it = cachedFiles.[rel];
+    func loadFile(path: String) : Optional[&CachedFile] {
+        var it = cachedFiles.[path];
         if (!it) {
-            var pathOpt = fileExists(&rel);
-            if (pathOpt) {
-                var cf = CachedFile{};
-                var s = Stat{};
+            var cf = CachedFile{};
+            var s = Stat{};
 
-                const path = pathOpt.move();
-                cf.fd = fcntl.open(path.str() !: ^const char, O_RDONLY!)
-                if (cf.fd < 0) {
-                    WRN!("opening static resource(" << path << ") failed")
-                    return null
-                }
-
-                if (fstat(cf.fd, ptrof s) != 0) {
-                    DBG!("static resource cannot b stat'd: " << path)
-                    return null
-                }
-                TRC!(
-                    "lastModified: " << s.#{StatField!("m")}.tv_sec << ", " <<
-                    "lassAccessed: " << s.#{StatField!("a")}.tv_sec
-                )
-                if (config.enableSendFile) {
-                    TRC!( "enable send fd(" << cf.fd << ") for " << path)
-                    cf.useFd = true
-                }
-                else if (!readFile(&cf, &s)) {
-                    TRC!("loading file (" << path << ") failed")
-                    unistd.close(cf.fd)
-                    return null
-                }
-
-                cf.lastMod    = <time_t> s.#{StatField!("m")}.tv_sec
-                cf.lastAccess = <time_t> s.#{StatField!("a")}.tv_sec
-                cf.len        = s.st_size
-                cf.path       = &&path
-
-                // file successfully loaded, add file to cache
-                TRC!("file '" << cf.path << "' loaded and cached")
-                cachedFiles.[rel] = &&cf
-                return cachedFiles.[rel]
+            cf.fd = fcntl.open(path.str() !: ^const char, O_RDONLY!)
+            if (cf.fd < 0) {
+                WRN!("opening static resource(" << path << ") failed")
+                return null
             }
-            return null
+
+            if (fstat(cf.fd, ptrof s) != 0) {
+                DBG!("static resource cannot b stat'd: " << path)
+                return null
+            }
+            TRC!(
+                "lastModified: " << s.#{StatField!("m")}.tv_sec << ", " <<
+                "lassAccessed: " << s.#{StatField!("a")}.tv_sec
+            )
+            if (config.enableSendFile) {
+                TRC!( "enable send fd(" << cf.fd << ") for " << path)
+                cf.useFd = true
+            }
+            else if (!readFile(&cf, &s)) {
+                TRC!("loading file (" << path << ") failed")
+                unistd.close(cf.fd)
+                return null
+            }
+
+            cf.lastMod    = <time_t> s.#{StatField!("m")}.tv_sec
+            cf.lastAccess = <time_t> s.#{StatField!("a")}.tv_sec
+            cf.len        = s.st_size
+            cf.path       = path
+
+            // file successfully loaded, add file to cache
+            TRC!("file '" << cf.path << "' loaded and cached")
+            cachedFiles.[path] = &&cf
+            return cachedFiles.[&&path]
         }
         else {
             var cf = *it;
@@ -453,7 +455,7 @@ pub class FileServer {
                 cf.fd = fcntl.open(cf.path.data(), O_RDONLY!)
                 if (cf.fd < 0) {
                     WRN!("opening static resource(" << cf.path << ") failed")
-                    cachedFiles.remove(rel)
+                    cachedFiles.remove(path)
                     return null
                 }
 
@@ -464,7 +466,7 @@ pub class FileServer {
                 else if (!readFile(cf, s)) {
                     TRC!("loading file " << cf.path << " failed")
                     unistd.close(cf.fd)
-                    cachedFiles.remove(rel)
+                    cachedFiles.remove(path)
                     return null
                 }
 
@@ -520,7 +522,6 @@ pub class FileServer {
     func fileExists(rel: &const String) : String? {
         // we want to ensure that the file is within the base directory
         var b = wwwDir / rel.__str()
-        // append base, followed by file
         var absolute: [char, PATH_MAX!] = [];
         var p = stdlib.realpath(b.str() !: ^const char, absolute);
         if (p == null)
