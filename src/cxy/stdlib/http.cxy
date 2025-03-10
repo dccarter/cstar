@@ -453,7 +453,9 @@ pub class Request {
         var remaining = len - parsed;
         if (remaining == _contentLength)
             _body = String(ptroff!(buf + parsed), remaining)
-
+        else
+            TRC!( "partial request received, len: " << len << ", passed: "
+                  << parsed << ", Content-Length: " << _contentLength)
         return Status.Ok
     }
 
