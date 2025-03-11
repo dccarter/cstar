@@ -2,6 +2,6 @@ module _
 
 @__cc "dns/dns.c"
 @__cc "evloop/ae.c"
-@__cc "http/parser.c"
 @__cc "memtrace.c"
 @__cc "nos.c"
+

@@ -11,6 +11,10 @@ import { Address } from "./net.cxy"
 import { TcpSocket, TcpListener, BufferedSocketOutputStream } from "./tcp.cxy"
 import { Thread } from "./thread.cxy"
 
+@__cc "native/http/api.c"
+@__cc "native/http/http.c"
+@__cc "native/http/llhttp.c"
+
 ##if (defined MACOS) {
     import "_ctype.h" as ctype
 }
@@ -21,7 +25,7 @@ else {
 import "stdlib.h" as stdlib
 import "strings.h" as cstrings
 
-import "native/http/parser.h" as parser
+import "native/http/llhttp.h" as parser
 
 pub exception HttpError(msg: String) => msg == null? "" : msg.str()
 
@@ -371,92 +375,45 @@ pub class Response {
 
     @[inline, prop]
     const func isComplete() => _isComplete
+
+    @inline
+    func clear() {
+        _headers.clear()
+        _status = .Ok
+        if (_body != null)
+            _body = null
+        if (_chunks != null)
+            _chunks = null
+        _isComplete = false
+    }
 }
 
 pub class Request {
     - LOG_TAG = "HTTP_REQUEST";
 
     - _headers = HeaderMap();
-    - _method: Method = .Unknown;
-    - _query = HashMap[String, String]();
     - _params = HashMap[__string, __string]();
     - _path: String = null;
     - _uri: String = null;
     - _body: String = null;
-    - _minorVersion: i32 = 1;
-    - _contentLength: u64 = 0;
+    - _s1: String = null;
+    - _s2: String = null;
+    - _isComplete = false;
+    - _parser: ^parser.llhttp_t = null;
     - _route: &Route
 
-    func `init`() {
+    @inline
+    func `init`(settings: ^const parser.llhttp_settings_t) {
+        _parser = parser.llhttp_alloc(parser.llhttp_type_t.HTTP_REQUEST, settings)
+        _parser.data = this
     }
 
-    - func parseHeaders(buf: ^const char, len: u64) : Status | i32 {
-        var method: ^const char = null;
-        var methodLen : u64 = 0;
-        var path: ^const char = null;
-        var pathLen : u64 = 0;
-        var headers: [parser.phr_header, 128] = [];
-        var numHeaders: u64 = len!(headers);
-        var minorVersion: i32 = -1;
-
-        var parsed = parser.phr_parse_request(
-            buf,
-            len,
-            ptrof method,
-            ptrof methodLen,
-            ptrof path,
-            ptrof pathLen,
-            ptrof minorVersion,
-            (ptrof headers) !: ^parser.phr_header,
-            ptrof numHeaders,
-            0);
-
-        if (parsed < 0) {
-            // failed to parse request
-            TRC!("parse failed: " << parsed << '/' << len)
-            return Status.BadRequest
+    @inline
+    func `deinit`() {
+        if (_parser) {
+            parser.llhttp_free(_parser)
+            _parser = null
         }
-
-        var parsedMethod = methodFromString(__string(method !: string, methodLen));
-        if (parsedMethod.0 == .Unknown) {
-            // Invalid request method
-            TRC!("bad request: invalid request method " << __string(method !: string, methodLen))
-            return Status.BadRequest
-        }
-        _method = parsedMethod.0
-        _minorVersion = minorVersion
-        _path = String(path, pathLen)
-        for (var i: 0..numHeaders) {
-            const header = headers.[i];
-            const headerName = __string(header.name !: string, header.name_len);
-            if (EqualsCase{}(&headerName, &CONTENT_LENGTH_CS)) {
-                _contentLength =
-                    __string(header.value !: string, header.value_len).toi[u64]();
-            }
-            else {
-                _headers.[String(header.name, header.name_len)] =
-                    String(header.value, header.value_len)
-            }
-        }
-
-        return parsed
-    }
-
-    func feed(buf: ^const char, len: u64) {
-        var ret = parseHeaders(buf, len);
-        var parsed: u64 = 0;
-        match (ret) {
-            case Status as status => return status
-            case i32 as consumed => parsed = consumed
-        }
-
-        var remaining = len - parsed;
-        if (remaining == _contentLength)
-            _body = String(ptroff!(buf + parsed), remaining)
-        else
-            TRC!( "partial request received, len: " << len << ", passed: "
-                  << parsed << ", Content-Length: " << _contentLength)
-        return Status.Ok
     }
 
     @inline
@@ -471,7 +428,37 @@ pub class Request {
     const func path() => &_path
 
     @[prop, inline]
-    const func method() => _method
+    const func method() {
+        switch(_parser.method) {
+            case 0:u8 /* HTTP_DELETE */ => return Method.Delete
+            case 1:u8 /* HTTP_GET */ => return Method.Get
+            case 2:u8 /* HTTP_HEAD */ => return Method.Head
+            case 3:u8 /* HTTP_POST */ => return Method.Post
+            case 4:u8 /* HTTP_PUT */ => return Method.Put
+            case 5:u8 /* HTTP_CONNECT */ => return Method.Connect
+            case 6:u8 /* HTTP_OPTIONS */ => return Method.Options
+            case 7:u8 /* HTTP_TRACE */ => return Method.Trace
+            default => return Method.Unknown
+        }
+    }
+
+    @[prop, inline]
+    const func contentLength() => _parser.content_length
+
+    @[prop, inline]
+    const func majorVersion() => _parser.http_major
+
+    @[prop, inline]
+    const func minorVersion() => _parser.http_minor
+
+    @[prop, inline]
+    const func isUpgrade() => _parser.upgrade != 0
+
+    @[prop, inline]
+    const func isComplete() => _isComplete
+
+    @[prop, inline]
+    const func body() => &_body
 
     @[prop, inline]
     const func header(name: String) => _headers.[name]
@@ -491,7 +478,116 @@ pub class Request {
     func uri(it: String) {
         _uri = it
     }
+
+    func clear() {
+        _headers.clear()
+        _params.clear()
+        _s1 = null
+        _s2 = null
+        _uri = null
+        _path = null
+        _body = null
+        _isComplete = false
+        if (_parser != null)
+            parser.llhttp_reset(_parser)
+    }
+
+    func feed(buf: ^const char, len: u64) {
+        const ret = parser.llhttp_execute(_parser, buf !: ^const char, len)
+        if (ret != parser.llhttp_errno.HPE_OK) {
+            const s = parser.llhttp_errno_name(ret) !: string
+            const reason = parser.llhttp_get_error_reason(_parser) !: string;
+            DBG!("parsing request failed - error: " << s << ", reason: " << reason )
+            return false
+        }
+        return true
+    }
 }
+
+func requestParserOnMessageBegin(p: ^parser.llhttp_t) {
+    var req = p.data !: Request;
+    req.clear()
+    return 0:i32
+}
+
+func requestParserOnUrl(p: ^parser.llhttp_t, at: ^const char, len: u64) {
+    var req = p.data !: Request;
+    if (req._path == null) {
+        req._path = String(at, len)
+    }
+    else {
+        req._path << __string(at !: string, len)
+    }
+    return 0:i32
+}
+
+func requestParserOnHeaderField(p: ^parser.llhttp_t, at: ^const char, len: u64) {
+    var req = p.data !: Request;
+    if (req._s2 != null) {
+        // We have seen a new header
+        assert!(req._s1 != null)
+        req._headers.[&&req._s1] = &&req._s2
+        req._s1 = null
+        req._s2 = null
+    }
+    if (req._s1 == null) {
+        req._s1 = String(at, len)
+    }
+    else {
+        req._s1 << __string(at !: string, len)
+    }
+    return 0:i32
+}
+
+func requestParserOnHeaderValue(p: ^parser.llhttp_t, at: ^const char, len: u64) {
+    var req = p.data !: Request;
+    assert!(req._s1 != null)
+    if (req._s2 == null) {
+        req._s2 = String(at, len)
+    }
+    else {
+        req._s2 << __string(at !: string, len)
+    }
+    return 0:i32
+}
+
+func requestParserOnHeadersComplete(p: ^parser.llhttp_t) {
+    var req = p.data !: Request;
+    if (req._s1 != null) {
+        assert!(req._s1 != null)
+        req._headers.[&&req._s1] = &&req._s2
+        req._s1 = null
+        req._s2 = null
+    }
+    return 0
+}
+
+func requestParserOnBody(p: ^parser.llhttp_t, at: ^const char, len: u64) {
+    var req = p.data !: Request;
+    if (req._body == null) {
+        req._body = String(at, len)
+    }
+    else {
+        req._body << __string(at !: string, len)
+    }
+    return 0
+}
+
+func requestParserOnMessageComplete(p: ^parser.llhttp_t) {
+    var req = p.data !: Request;
+    req._isComplete = true;
+    return 0
+}
+
+const HTTP_PARSER_SETTINGS = parser.llhttp_settings_t{
+    on_message_begin: requestParserOnMessageBegin,
+    on_url: requestParserOnUrl,
+    on_header_field: requestParserOnHeaderField,
+    on_header_value: requestParserOnHeaderValue,
+    on_headers_complete: requestParserOnHeadersComplete,
+    on_body: requestParserOnBody,
+    on_message_complete: requestParserOnMessageComplete
+};
 
 type HandlerFn = func(req: &const Request, res: &Response) -> void
 
@@ -587,7 +683,7 @@ class Router {
     func handle(path: __string, req: &Request, resp: &Response) {
         var found = routes.find(path.str(), path.size());
         if (!found) {
-            TRC!("route: " << path)
+            TRC!("Route not found: " << path)
             resp.end(Status.NotFound)
             return;
         }
@@ -616,14 +712,14 @@ class Router {
         var path = req.path().__str();
         var found = routes.find(path.str(), path.size());
         if (!found) {
-            TRC!("not found: " << req.path())
+            TRC!("Route not found - path: " << req.path())
             resp.end(Status.NotFound)
             return null;
         }
 
         var consumed, route = found.move();
         if (!route.isMethodSupported(req.method())) {
-            TRC!("not found: unsupported method '" << req.method() << "'")
+            TRC!("Route not found: unsupported method '" << req.method() << "'")
             resp.end(Status.NotFound)
             return null;
         }
@@ -687,6 +783,7 @@ class Router {
     }
 }
 
+@json
 pub struct Config {
     - address = Address("0.0.0.0", 8100);
     - serverName = String("cxy");
@@ -713,14 +810,16 @@ pub class Connection[Middlewares] {
     }
 
     func handle() {
+        req = Request(ptrof HTTP_PARSER_SETTINGS)
+        resp = Response()
         while (!_close && !!sock) {
             handleConnection()
+            req.clear()
+            resp.clear()
         }
     }
 
     - func handleConnection(): void {
-        req = Request()
-        resp = Response()
         if (!receive())
             return;
 
@@ -757,20 +856,22 @@ pub class Connection[Middlewares] {
 
     - func receive() : bool {
         var buf: [char, 8192] = [];
+        while (!req.isComplete()) {
+            var received = sock.receive(buf, 8192);
+            if (!received)
+                return false;
 
-        var received = sock.receive(buf, 8192);
-
-        if (received) {
             var len = *received;
             if (len > 0) {
-                var status = req.feed(buf, *received);
-                if (status != .Ok)
-                    resp.end(status)
-                return true
+                if (!req.feed(buf !: ^const char, *received)) {
+                    resp.end(Status.BadRequest)
+                    return false
+                }
             }
+
         }
 
-        return false
+        return req.isComplete()
     }
 
     - func sendResponse() : void {

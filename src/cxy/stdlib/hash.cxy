@@ -90,6 +90,13 @@ pub class HashMap[K, V, Hasher = Hash[K], Cmp = Equals[K]] {
     }
 
     - func insertInternal(item: HashMapNode[K, V], replace: bool): bool {
+        if (_capacity == 0) {
+            _capacity = idealSize(1)
+            if (_capacity > 0) {
+                _data = __calloc(sizeof!(#HashMapNode[K,V]) * _capacity) !: ^HashMapNode[K,V]
+            }
+        }
+
         var i = Hasher{}(&item.key) % _capacity
         var j = 0:u64;
         item.hash = i + 1

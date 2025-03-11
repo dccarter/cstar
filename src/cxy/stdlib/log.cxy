@@ -2,7 +2,7 @@ module logger
 
 import { Time } from "./time.cxy"
 
-enum Level {
+pub enum Level {
     @str("TRC")
     TRACE,
     @str("DBG")
@@ -33,7 +33,7 @@ struct FixedWidth {
 
 class Logger {
     - os: OutputStream;
-    - _level: Level = .TRACE;
+    - _level: Level = .DEBUG;
 
     func `init`() {
         os = stdout
@@ -64,3 +64,8 @@ macro DBG(MSG) =( __LOG!(logger.Level.DEBUG, MSG!) )
 macro INF(MSG) =( __LOG!(logger.Level.INFO, MSG!) )
 macro WRN(MSG) =( __LOG!(logger.Level.WARNING, MSG!) )
 macro ERR(MSG) =( __LOG!(logger.Level.ERROR, MSG!) )
+
+@inline
+pub func setLogLevel(lvl: Level) {
+    __L.level(lvl)
+}
