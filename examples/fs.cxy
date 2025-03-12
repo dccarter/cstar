@@ -48,6 +48,7 @@ func start[Ep](ep: &Ep): !void {
 
 func main(): !void {
      var server = Server[(Log)](Config{address: Address("0.0.0.0", 8004)});
-     @unused var fs = FileServer(&server, FsConfig{enableSendFile: true, root: String("./"), rootRedirect: String("hello.txt")});
+     @unused var fs = FileServer(&server, FsConfig{enableSendFile: true, root: String("./")});
+     fs.alias("/", "hello.txt")
      server.start()
 }

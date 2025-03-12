@@ -695,14 +695,22 @@ pub class OutputStream {
 
                 #const first = true
                 #for (const M: U.members) {
-                    #if (!first)
-                        this.appendString(", ")
                     #if (M.isField) {
+                        #if (!first)
+                            this.appendString(", ")
                         appendString(#{M.name})
                         appendString(": ")
+                        #if (M.isString)
+                            appendString("\"")
+                        else #if (#M == #wchar || #M == #char)
+                            appendString("'")
                         this << val.#{mk_ident!(M.name)}
+                        #if (M.isString)
+                            appendString("\"")
+                        else #if (#M == #wchar || #M == #char)
+                            appendString("'")
+                        #{first = false}
                     }
-                    #{first = false}
                 }
                 appendString("}")
             }

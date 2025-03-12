@@ -39,8 +39,7 @@ pub struct Config {
     cacheExpires = 86400:i64;
     mappedMin = 2048:u64;
     root = String("./www/");
-    route: string = CXY_FILE_SERVER_ROUTE!;
-    rootRedirect: String = null;
+    route = String(CXY_FILE_SERVER_ROUTE!);
     allowRange = true;
 }
 
@@ -109,6 +108,7 @@ struct MimeType {
 type MimeTypes = HashMap[String, MimeType, HashCase, EqualsCase]
 
 pub class FileServer {
+    @static
     LOG_TAG = "FILE_SERVER";
     - mimeTypes = MimeTypes();
     - cachedFiles = CachedFiles();
@@ -120,26 +120,30 @@ pub class FileServer {
         this.config = config
         initialize()
 
-        ep(config.route, (req: &const Request, resp: &Response) => {
-            var uri = req.uri();
-            var path = __copy!(uri);
+        ep(config.route.str(), (req: &const Request, resp: &Response) => {
+            var uri = req.uri()
+            var path = __copy!(uri)
             if (path.empty()) {
-                if (this.config.rootRedirect == null) {
+                var rootAliasOpt = this.redirects.["/"];
+                if (!rootAliasOpt) {
                     // `/` does not redirect to anything
                     resp.end(Status.NotFound)
                     return
                 }
-                path = __copy!(this.config.rootRedirect)
+                var rootAlias = *rootAliasOpt;
+                path = __copy!(rootAlias)
             }
 
-            var idx = path.rIndexOf('.':char);
+            var idx = path.rIndexOf('.':char)
             if (!idx) {
-                var aliasedPath = this.redirects.[path];
+                var aliasedPath = this.redirects.[path]
                 if (!aliasedPath) {
                     resp.end(Status.NotFound)
                     return
                 }
-                idx =  path.rIndexOf('.':char);
+                var tmp = *aliasedPath;
+                path = __copy!(tmp)
+                idx =  path.rIndexOf('.':char)
             }
             var pathOpt = this.fileExists(&path);
             if (!pathOpt) {
@@ -147,7 +151,7 @@ pub class FileServer {
                 return
             }
 
-            var ext = String(path.substr(*idx));
+            var ext = String(path.substr(*idx))
             if (req.method() == .Get) {
                 resp.end(this.get(req, resp, pathOpt.move(), &&ext))
             }
@@ -177,6 +181,7 @@ pub class FileServer {
 
     - func initialize() : void {
         // add text mime types
+        DBG!( "Server config: " << config )
         mime(".html", "text/html", { allowCaching: false })
         mime(".css", "text/css", {})
         mime(".csv", "text/csv", {})
@@ -225,9 +230,6 @@ pub class FileServer {
         mime(".ttf",   "font/ttf", {})
         mime(".xhtml", "application/xhtml+xml", {})
         mime(".xml",   "application/xml", {})
-
-        // Usually '/' falls back to index.html
-        alias("/", "index.html")
 
         setupWwwDir()
     }
