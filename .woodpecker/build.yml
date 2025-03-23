@@ -19,8 +19,8 @@ steps:
     image: suilteam/cxyenv:latest
     directory: ./build
     commands:
-      - pwd
-      - FILE_CHECK=./FileCheck $CI_WORKSPACE/tests/runner.sh
+      - export LLVM_MAJOR_VERSION=`llvm-config --version | cut -d '.' -f 1`
+      - FILE_CHECK=FileCheck-$LLVM_MAJOR_VERSION $CI_WORKSPACE/tests/runner.sh
 
   - name: Stdlib tests
     image: suilteam/cxyenv:latest
