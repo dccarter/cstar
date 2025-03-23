@@ -17,12 +17,13 @@ steps:
 
   - name: Compiler tests
     image: suilteam/cxyenv:latest
-    directory: ${CI_WORKSPACE}/build
+    directory: ./build
     commands:
+      - pwd
       - FILE_CHECK=./FileCheck $CI_WORKSPACE/tests/runner.sh
 
   - name: Stdlib tests
     image: suilteam/cxyenv:latest
-    directory: ${CI_WORKSPACE}/build
+    directory: ./build
     commands:
       - ctest --output-on-failure
