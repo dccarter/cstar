@@ -10,12 +10,12 @@ pub exception ThreadError(msg: String) => msg == null? "" : msg.str()
 macro DEFAULT_TID null
 }
 else #if (defined UNIX) {
-macro DEFAULT_TID 0:u64
+macro DEFAULT_TID 0 as u64
 }
 
 struct Handle {
     - hdl: tinyThread.thrd_t = DEFAULT_TID!;
-    - _id = 0:u64;
+    - _id = 0 as u64;
 
     func `init`(hdl: tinyThread.thrd_t) {
         this.hdl = hdl

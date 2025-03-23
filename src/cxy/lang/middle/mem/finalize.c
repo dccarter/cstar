@@ -122,7 +122,7 @@ static void visitBackendCallExpr(AstVisitor *visitor, AstNode *node)
             func = findMemberDeclInType(type, S_CopyOverload);
         else if (isUnionType(type))
             func = type->tUnion.copyFunc->func.decl;
-        else if (isTupleType(type))
+        else if (isTupleType(type) && type->tuple.copyFunc)
             func = type->tuple.copyFunc->func.decl;
         break;
     case bfiDrop:
@@ -130,7 +130,7 @@ static void visitBackendCallExpr(AstVisitor *visitor, AstNode *node)
             func = findMemberDeclInType(type, S_DestructorOverload);
         else if (isUnionType(type))
             func = type->tUnion.destructorFunc->func.decl;
-        else if (isTupleType(type))
+        else if (isTupleType(type) && type->tuple.destructorFunc)
             func = type->tuple.destructorFunc->func.decl;
         var = resolveIdentifier(args);
         if (hasVariableDropFlags(var)) {

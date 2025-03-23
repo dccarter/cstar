@@ -89,22 +89,22 @@ pub func __bswap16(x: u16) => <u16>(((x >> 8) & 0xff) | ((x & 0xff) << 8))
 
 @inline
 pub func __bswap32(x: u32) => (
-      ((x & 0xff000000:u32) >> 24)
-    | ((x & 0x00ff0000:u32) >> 8)
-    | ((x & 0x0000ff00:u32) << 8)
-    | ((x & 0x000000ff:u32) << 24)
+      ((x & 0xff000000 as u32) >> 24)
+    | ((x & 0x00ff0000 as u32) >> 8)
+    | ((x & 0x0000ff00 as u32) << 8)
+    | ((x & 0x000000ff as u32) << 24)
 )
 
 @inline
 pub func __bswap64(x: u64) => (
-      ((x & 0xff00000000000000:u64) >> 56)
-    | ((x & 0x00ff000000000000:u64) >> 40)
-    | ((x & 0x0000ff0000000000:u64) >> 24)
-    | ((x & 0x000000ff00000000:u64) >> 8)
-    | ((x & 0x00000000ff000000:u64) << 8)
-    | ((x & 0x0000000000ff0000:u64) << 24)
-    | ((x & 0x000000000000ff00:u64) << 40)
-    | ((x & 0x00000000000000ff:u64) << 56)
+      ((x & 0xff00000000000000 as u64) >> 56)
+    | ((x & 0x00ff000000000000 as u64) >> 40)
+    | ((x & 0x0000ff0000000000 as u64) >> 24)
+    | ((x & 0x000000ff00000000 as u64) >> 8)
+    | ((x & 0x00000000ff000000 as u64) << 8)
+    | ((x & 0x0000000000ff0000 as u64) << 24)
+    | ((x & 0x000000000000ff00 as u64) << 40)
+    | ((x & 0x00000000000000ff as u64) << 56)
 )
 
 type sptr = ^void
@@ -116,7 +116,7 @@ struct __mem {
     dctor: func(ptr: sptr) -> void
 }
 
-#const MEMORY_MAGIC = 0xAEAEAEAE:u32
+#const MEMORY_MAGIC = 0xAEAEAEAE as u32
 
 @[pure, linkage("External"), noinline, optimize(0), __override_builtin("__smart_ptr_alloc")]
 func __smart_ptr_alloc(size: u64, dctor: func(ptr: sptr) -> void = null) {
@@ -235,11 +235,13 @@ pub struct Optional[T] {
 
     @inline func `!!`() => ok
     @inline func `deref`() { return val }
+    @inline func `&.`() { return &val }
     @optimize(0) func move() { ok = false; return &&val }
     // Short circuit to !!opt ? opt.move() : def
     @inline func `||`(def: T) => ok? move() : &&def
     @inline const func `!!`() => ok
     @inline const func `deref`() { return val }
+    @inline const func `&.`() { return &val }
 }
 
 /* Creates a valid optional value */
@@ -251,7 +253,7 @@ pub func Some[T](value: T) => Optional[T]{ ok: true, val: &&value }
 pub func None[T]() => Optional[T]()
 
 pub type HashCode = u32
-#const FNV_32_PRIME = 0x01000193:u32
+#const FNV_32_PRIME = 0x01000193 as u32
 
 @inline
 pub func hash_fnv1a_uint8(h: HashCode, x: u8) : HashCode
@@ -274,7 +276,7 @@ pub func hash_fnv1a_ptr(h: HashCode, ptr: ^const void) =>
 pub func hash_fnv1a_string(h: HashCode, str: string)
 {
     var i = 0;
-    while (str.[i] != '\0':char) {
+    while (str.[i] != '\0' as char) {
         h = hash_fnv1a_uint8(h, <u8>str.[i]);
         i++
     }
@@ -305,7 +307,7 @@ pub func hash_fnv1a_string_n_igc(h: HashCode, str: ^const char, len: u64)
 pub func hash_fnv1a_string_igc(h: HashCode, str: const string)
 {
     var i = 0;
-    while (str.[i] != '\0':char) {
+    while (str.[i] != '\0' as char) {
         var c = toupper(<i32>str.[i]);
         h = hash_fnv1a_uint8(h, <u8>c);
         i++
@@ -398,7 +400,7 @@ pub struct __string {
     }
 
     const func trimLeft() {
-        var i = 0:u64
+        var i = 0 as u64
         while (i < _size && isSpace!(s.[i]))
             i++
         if (i != 0) {
@@ -447,7 +449,7 @@ pub struct __string {
     @inline const func str() => s
     @inline const func empty() => _size == 0
     @inline const func isnt() {
-        return !empty() && s.[_size] == '\0':char
+        return !empty() && s.[_size] == '\0' as char
     }
 
     const func substr(start: u64, count: i64 = -1) {
@@ -463,7 +465,7 @@ pub struct __string {
     const func copyto(buf: ^char, size: u64) {
         assert!(size > _size)
         memcpy(buf !: ^void, s !: ^void, _size)
-        buf.[_size] = '\0':char
+        buf.[_size] = '\0' as char
     }
 
     const func toi[T](base: i32 = 0) {
@@ -479,7 +481,7 @@ pub struct __string {
     }
 
     func indexOf(ch: char) : Optional[u64] {
-        var i = 0:u64;
+        var i = 0 as u64;
         while (i < _size) {
             if (s.[i] == ch)
                 return Some(i)
@@ -510,14 +512,14 @@ pub struct __string {
     const func startswith(suffix: This) {
         if (suffix.size() > size())
             return false;
-        return substr(0:u64, <i64>suffix.size()) == suffix
+        return substr(0 as u64, <i64>suffix.size()) == suffix
     }
 
     const func find(part: This) : Optional[u64] {
         if (part.empty())
             return empty()? None[u64]() : Some(_size - 1);
         var i = _size;
-        var j = 0:u64;
+        var j = 0 as u64;
         var p = s !: ^const char;
         while (i >= part._size) {
             i--
@@ -545,7 +547,7 @@ pub struct __string {
     }
 }
 
-#const CXY_STRING_BUILDER_DEFAULT_CAPACITY = 32:u64
+#const CXY_STRING_BUILDER_DEFAULT_CAPACITY = 32 as u64
 
 @[inline, pure]
 pub func isnull[T](cls: &const T) {
@@ -620,9 +622,9 @@ pub class OutputStream {
     @inline
     func appendBool(val: bool) {
         if (val)
-            append("true" !: ^const void, 4:u64)
+            append("true" !: ^const void, 4 as u64)
         else
-            append("false" !: ^const void, 5:u64)
+            append("false" !: ^const void, 5 as u64)
     }
 
     func appendPointer[T](ptr: &const T) {
@@ -759,7 +761,7 @@ pub class String : OutputStream {
     - _data: ^char = null;
 
     - func grow(growSize: u64) {
-        const newSize = max(_size + growSize, 16:u64);
+        const newSize = max(_size + growSize, 16 as u64);
         if (this._data == null) {
             this._data = <^char> malloc(newSize + 1)
             this._capacity = newSize
@@ -811,7 +813,7 @@ pub class String : OutputStream {
     func resize(newSize: u64) {
         assert!(_capacity <= newSize)
         _size = newSize
-        _data.[_size] = '\0':char
+        _data.[_size] = '\0' as char
     }
 
     func clear() : void {
@@ -835,7 +837,7 @@ pub class String : OutputStream {
     }
 
     func trimLeft() {
-        var i = 0:u64
+        var i = 0 as u64
         while (i < _size && isSpace!(_data.[i]))
             i++
         if (i != 0) {
@@ -862,7 +864,7 @@ pub class String : OutputStream {
     }
 
     const func indexOf(ch: char) : Optional[u64] {
-        var i = 0:u64;
+        var i = 0 as u64;
         while (i < _size) {
             if (_data.[i] == ch)
                 return Some(i)
@@ -965,7 +967,7 @@ pub class String : OutputStream {
     }
 
     const func `..`() {
-        var i:i32 = 0;
+        var i = 0 as i32;
         return () : Optional[(char, i32)] => {
             if (i < _size)
                 return Some((_data.[i], i++))
@@ -1010,7 +1012,7 @@ pub class BufferedOutputStream: OutputStream {
     }
 
     func append(data: ^const void, size: u64): Optional[u64] {
-        var room = _capacity - _size;
+        var room = _capacity - _size
         if (size > room && _size > 0) {
             sync()
             room = _capacity
@@ -1144,7 +1146,7 @@ func __union_dctor[T](obj: &T) {
                 #const M = typeat!(T, i);
                 #if (M.isClass || M.isDestructible)
                     __forcedrop!(y)
-                else #if (has_member!(#M, "op__destructor", #func() -> void))
+                else #if (!M.isReference && has_member!(#M, "op__destructor", #func() -> void))
                     y.op__destructor()
             }
         }
@@ -1334,8 +1336,8 @@ struct CallTrace {
 
 struct StackTrace {
     - calls: ^CallTrace = null;
-    - size = 0:u64;
-    - capacity = 0:u64;
+    - size = 0 as u64;
+    - capacity = 0 as u64;
 
     - func grow() {
         if (size >= capacity) {
@@ -1439,43 +1441,6 @@ pub func panicUnhandledException(ex: Exception) {
     abort()
 }
 
-pub struct Lambda[Fun] {
-    require!(Fun.isFunction, "type '{t}' must be a func type param", Fun)
-    lambda: lambda_of!(Fun)
-
-    func `init`(fun: Fun) {
-        this.lambda = fun
-    }
-
-    func `()`(...params: auto) {
-        #if (Fun.hasVoidReturnType)
-            lambda(...&&params)
-        else
-            return lambda(...&&params)
-    }
-
-    func `destructor`() {
-        if (lambda.0) {
-            #if (defined __DEBUG && defined TRACE_MEMORY)
-                __smart_ptr_drop_trace(lambda.0, file!, line!)
-            else
-                __smart_ptr_drop(lambda.0)
-            lambda.0 = null
-        }
-    }
-
-    func `copy`() {
-        if (lambda.0) {
-            #if (defined __DEBUG && defined TRACE_MEMORY)
-                __smart_ptr_get_trace(lambda.0, file!, line!)
-            else
-                __smart_ptr_get(lambda.0)
-            return This{lambda: lambda}
-        }
-        return This{lambda: lambda}
-    }
-}
-
 pub class MemoryOutputStream : OutputStream {
     - _buffer: ^void
     - _capacity: u64
@@ -1507,8 +1472,8 @@ pub class MemoryOutputStream : OutputStream {
 }
 
 struct Style {
-    color = 0:i8;
-    - _bg = 0:i8;
+    color = 0 as i8;
+    - _bg = 0 as i8;
     - _bold = false;
     - _italics = false;
     - _underline = false;
@@ -1540,23 +1505,23 @@ struct Style {
     const func `()`(cfg: string, bg: This) {
         var x = *this;
         const p = cfg !: ^const char;
-        var i = 0:i32;
-        while (p.[i] != '\0':char) {
+        var i = 0 as i32;
+        while (p.[i] != '\0' as char) {
             var on = true;
-            if (p.[i] == '~':char) {
+            if (p.[i] == '~' as char) {
                 i++
                 on = false
             }
 
             switch(p.[i++]) {
-                case 'b':char => x._bold = on
-                case 'i':char => x._italics = on
-                case 'u':char => x._underline = on
-                case 'f':char => x._faded = on
-                case 'p':char => x._blink = on
+                case 'b' as char => x._bold = on
+                case 'i' as char => x._italics = on
+                case 'u' as char => x._underline = on
+                case 'f' as char => x._faded = on
+                case 'p' as char => x._blink = on
                 default => assert!(false)
             }
-            assert!(p.[i] == '\0':char || p.[i++] == '|':char)
+            assert!(p.[i] == '\0' as char || p.[i++] == '|' as char)
         }
         if (bg.color >= 0)
             x._bg = bg.color
@@ -1596,7 +1561,7 @@ macro ok(cond) {
     func runTest(testCase: (string, func() -> !void)) {
         testCase.1() catch {
             // test case failed
-            stdout << "\r  " << Repeat(' ':char, 100)
+            stdout << "\r  " << Repeat(' ' as char, 100)
                    << "\r  " << RED("b") << "\xE2\x9C\x98 " << WHT << testCase.0
                    << DEF << " "
             ex!.header( &stdout )
@@ -1606,7 +1571,7 @@ macro ok(cond) {
             return false
         }
 
-        stdout << "\r  " << Repeat(' ':char, 100)
+        stdout << "\r  " << Repeat(' ' as char, 100)
                << "\r  " << GRN("b") << "\xE2\x9C\x93 " << WHT << testCase.0
                << DEF << "\n"
         return true

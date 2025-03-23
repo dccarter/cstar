@@ -182,6 +182,7 @@ static void generateEnumType(CodegenContext *ctx, const Type *type)
 
 static void generateClassType(CodegenContext *ctx, const Type *type)
 {
+    format(typeState(ctx), "// {u64}\n", (FormatArg[]){{.u64 = type->index}});
     format(typeState(ctx), "typedef struct ", NULL);
     generateCustomTypeName(ctx, typeState(ctx), type, "Class");
     format(typeState(ctx), " ", NULL);
@@ -425,7 +426,7 @@ static void generateFunctionType(CodegenContext *ctx, const Type *type)
 
 static void generateType(CodegenContext *ctx, const Type *type)
 {
-    if (type->generated)
+    if (type->generated || type->retyped)
         return;
 
     ((Type *)type)->generated = true;
@@ -763,7 +764,13 @@ static inline bool isImportDeclReference(const AstNode *node)
 static void visitNullLit(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    format(getState(ctx), "nullptr", NULL);
+    if (hasFlag(node->type, FuncTypeParam)) {
+        format(getState(ctx), "((", NULL);
+        generateTypeName(ctx, getState(ctx), node->type);
+        format(getState(ctx), "){{nullptr})", NULL);
+    }
+    else
+        format(getState(ctx), "nullptr", NULL);
 }
 
 static void visitBoolLit(ConstAstVisitor *visitor, const AstNode *node)
@@ -839,13 +846,14 @@ static void visitIdentifier(ConstAstVisitor *visitor, const AstNode *node)
     else {
         cstring name = node->ident.value;
         if (name == S_super) {
-            format(getState(ctx), "(", NULL);
+            format(getState(ctx), "((", NULL);
             generateTypeName(
                 ctx, getState(ctx), getTypeBase(stripReference(node->type)));
             format(getState(ctx), ")", NULL);
-            name = S_this;
+            format(getState(ctx), "this)", (FormatArg[]){{.s = name}});
         }
-        format(getState(ctx), "{s}", (FormatArg[]){{.s = name}});
+        else
+            format(getState(ctx), "{s}", (FormatArg[]){{.s = name}});
     }
 }
 
@@ -1197,9 +1205,20 @@ static void visitBackendBfiCopy(ConstAstVisitor *visitor, const AstNode *node)
         }
     }
     else if (isTupleType(type)) {
-        const AstNode *func = type->tuple.copyFunc->func.decl;
-        csAssert0(func);
-        generateBfiCallWithFunc(visitor, func, node);
+        if (type->tuple.copyFunc) {
+            const AstNode *func = type->tuple.copyFunc->func.decl;
+            csAssert0(func);
+            generateBfiCallWithFunc(visitor, func, node);
+        }
+        else {
+            format(getState(ctx), "(", NULL);
+            generateTypeName(ctx, getState(ctx), type);
+            format(getState(ctx), "){{ __smart_ptr_get(", NULL);
+            astConstVisit(visitor, node);
+            format(getState(ctx), "._0), ", NULL);
+            astConstVisit(visitor, node);
+            format(getState(ctx), "._1 }", NULL);
+        }
     }
     else if (isUnionType(type)) {
         const AstNode *func = type->tUnion.copyFunc->func.decl;
@@ -1244,9 +1263,16 @@ static void visitBackendBfiDrop(ConstAstVisitor *visitor, const AstNode *node)
         }
     }
     else if (isTupleType(type)) {
-        const AstNode *func = type->tuple.destructorFunc->func.decl;
-        csAssert0(func);
-        generateBfiCallWithFunc(visitor, func, args);
+        if (type->tuple.destructorFunc) {
+            const AstNode *func = type->tuple.destructorFunc->func.decl;
+            csAssert0(func);
+            generateBfiCallWithFunc(visitor, func, args);
+        }
+        else {
+            format(getState(ctx), "__smart_ptr_drop(", NULL);
+            astConstVisit(visitor, args);
+            format(getState(ctx), "._0)", NULL);
+        }
     }
     else if (isUnionType(type)) {
         const AstNode *func = type->tUnion.destructorFunc->func.decl;

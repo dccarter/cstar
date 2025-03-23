@@ -7,7 +7,7 @@ struct TrieNode[T] {
     - tag: char;
     - data: T?;
 
-    func `init`(c: char = '\0':char) {
+    func `init`(c: char =  '\0'as char) {
         tag = c
         data = null
         children = HashMap[wchar, ^This]();

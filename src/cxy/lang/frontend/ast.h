@@ -131,6 +131,7 @@ struct StrPool;
     f(AsmOperand)           \
     f(NodeArray)            \
     f(Exception)            \
+    f(TupleXform)           \
     CXY_LANG_AST_EXP_TAGS(f)    \
     CXY_LANG_AST_STMT_TAGS(f)   \
     CXY_LANG_AST_DECL_TAGS(f)   \
@@ -337,6 +338,20 @@ struct AstNode {
             AstNode *params;
             AstNode *body;
         } exception;
+
+        struct {
+            AstNode *target;
+            AstNode *args;
+            AstNode *cond;
+            AstNode *xForm;
+        } xForm;
+
+        struct {
+            AstNode *tuple;
+            AstNode *args;
+            AstNode *cond;
+            AstNode *xform;
+        } xFormExpr;
 
         struct {
             cstring value;

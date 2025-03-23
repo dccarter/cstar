@@ -1,18 +1,20 @@
-import "stdlib/os.cxy"
+
 import "stdlib/json.cxy"
 
 @json
 struct User {
-    name: String = null;
+    name: String  = null;
     age: i32 = 0;
 
-    const func `str`(os: &OutputStream) {
-        os << "{ name: " << name << ", age: " << age << " }"
+    func `init`(){}
+
+    const func `str`(os: OutputStream) {
+        os << "User{ " << name << ", " << age << "}"
     }
 }
 
-func main(): !i32 {
-   var str = os.readAll("hello.json");
-   var user = json.fromString[User](&str);
-   println(user)
+func main(): !void {
+    var j = "{\"name\": \"John\", \"age\": 100, \"loc\": {\"city\": \"Vancouver\", \"ids\": [100, 100.9000, null, false, true, \"\", {}]}}".S;
+    var user = json.fromString[User](&j);
+    println(user)
 }

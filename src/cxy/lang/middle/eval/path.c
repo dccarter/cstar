@@ -47,17 +47,23 @@ void evalPathEpilogue(AstVisitor *visitor,
         }
         else {
             while (elem) {
+
                 cstring name = elem->pathElement.alt ?: elem->pathElement.name;
                 AstNode *tmp = evalAstNodeMemberAccess(
                     ctx, &elem->loc, symbol, name, false);
 
                 if (tmp == NULL) {
-                    logError(ctx->L,
-                             &elem->loc,
-                             "undefined compile time member named '{s}'",
-                             (FormatArg[]){{.s = name}});
-                    node->tag = astError;
-                    return;
+                    tmp = symbol->type
+                              ? findMemberDeclInType(symbol->type, name)
+                              : NULL;
+                    if (!nodeIs(tmp, TypeDecl)) {
+                        logError(ctx->L,
+                                 &elem->loc,
+                                 "undefined compile time member named '{s}'",
+                                 (FormatArg[]){{.s = name}});
+                        node->tag = astError;
+                        return;
+                    }
                 }
                 symbol = tmp;
                 elem = elem->next;
@@ -114,9 +120,10 @@ void evalPathEpilogue(AstVisitor *visitor,
         case typUnion:
         case typThis:
         case typFunc:
+        case typAlias:
             node->tag = astTypeRef;
             node->flags = type->flags;
-            node->type = type;
+            node->type = resolveType(type);
             break;
         case typError:
             node->tag = astError;

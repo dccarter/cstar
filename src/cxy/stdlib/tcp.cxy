@@ -1,6 +1,6 @@
 module tcp
 
-import { Address } from "./net.cxy"
+import { Address, Socket } from "./net.cxy"
 import { State } from "./coro.cxy"
 
 import "sys/socket.h" as socket
@@ -31,7 +31,7 @@ else {
     @inline
     func Socket_sendfile(outFd: i32, inFd: i32, off: ^u64, count: u64) {
         var size = <i64> count;
-        var status = socket.sendfile(inFd, outFd, <i64>*off, ptrof size, null, 0:i32)
+        var status = socket.sendfile(inFd, outFd, <i64>*off, ptrof size, null, 0 as i32)
         if (status == 0)
             *off = *off + size
         return status
@@ -49,47 +49,24 @@ func configureSocket(fd: i32)  {
     opt = 1;
     rc = socket.setsockopt(fd, SOL_SOCKET!, SO_REUSEADDR!, ptrof opt, <u32>sizeof!(opt));
     assert!(rc == 0);
-
-//#if (defined MACOS) {
-//    opt = 1;
-//    rc = socket.setsockopt(fd, SOL_SOCKET!, SO_NOSIGPIPE!, ptrof opt, <u32>sizeof!(opt));
-//    const err = errno!;
-//    assert!(rc == 0 && err != EINVAL!);
-//}
 }
 
-pub class TcpSocket {
-    - addr: Address
-    - fd: i32
-
+pub class TcpSocket: Socket {
     func `init`(fd: i32, addr: Address) {
-        this.fd = fd
-        this.addr = addr
-        configureSocket(this.fd)
+        super(fd, &&addr)
     }
 
     func `init`() {
-        fd = -1
+        super(-1 as i32, Address())
     }
-
-    @inline
-    const func `hash`() => addr.op__hash()
-
-    @inline
-    const func `!!`() {
-        return !isnull(this) && fd != -1
-    }
-
-    @inline
-    const func address() => addr
 
     func receive(buffer: ^void, size: u64, timeout: u64 = 0): u64? {
         var remaining = size;
         var data = buffer !: ^char;
         var total: u64 = 0;
 
-        while (fd != -1 && remaining > 0) {
-            var sz = socket.recv(fd, ptrof data.[total], remaining, 0);
+        while (super._fd != -1 && remaining > 0) {
+            var sz = socket.recv(super._fd, ptrof data.[total], remaining, 0);
             if (sz == 0) {
                 if (total > 0)
                     return total
@@ -108,11 +85,8 @@ pub class TcpSocket {
                 if (total > 0)
                     return total
 
-                var rc = fdWaitRead(fd, timeout);
-                if (rc != State.AE_READABLE) {
-                    errno! = ETIMEDOUT!;
+                if (!wait(timeout, State.AE_READABLE))
                     return null
-                }
 
                 continue
             }
@@ -128,8 +102,8 @@ pub class TcpSocket {
         var data = buffer !: ^const char;
         var remaining = size;
         var total: u64 = 0;
-        while (fd != -1 && remaining > 0) {
-            var sz = socket.send(fd, ptrof data.[total], remaining, 0);
+        while (super._fd != -1 && remaining > 0) {
+            var sz = socket.send(super._fd, ptrof data.[total], remaining, 0);
             if (sz == -1 || sz == 0) {
                 if(errno! == EPIPE!) {
                     errno! = ECONNRESET!
@@ -140,11 +114,9 @@ pub class TcpSocket {
                 if (errno! != EAGAIN! && errno! != EWOULDBLOCK!)
                     return null
 
-                var rc = fdWaitWrite(fd, timeout);
-                if (rc != State.AE_WRITABLE) {
-                    errno! = ETIMEDOUT!
+                if (!wait(timeout, State.AE_WRITABLE))
                     return null
-                }
+
                 continue
             }
 
@@ -159,7 +131,7 @@ pub class TcpSocket {
         var toffset = offset + count
         var remaining = count
         while (toffset > offset) {
-            var sz = Socket_sendfile(this.fd, fd, ptrof offset, remaining)
+            var sz = Socket_sendfile(super._fd, fd, ptrof offset, remaining)
             if (sz == -1 || sz == 0) {
                 if (errno!  == EPIPE!) {
                     errno! = ECONNRESET!
@@ -170,84 +142,14 @@ pub class TcpSocket {
                 if (errno! != EAGAIN! && errno! != EWOULDBLOCK!)
                     return null
 
-                var rc = fdWaitWrite(fd, timeout);
-                if (rc != State.AE_WRITABLE) {
-                    errno! = ETIMEDOUT!
+                if (!wait(timeout, State.AE_WRITABLE))
                     return null
-                }
                 continue
             }
             remaining -= sz
         }
         errno! = 0
         return count
-    }
-
-    func send[T](data: T, timeout: u64 = 0) {
-        #if (T.isString) {
-            #if (T.isStruct) {
-                return sendBuffer(data.str !: ^void, len!(data), timeout)
-            }
-            else {
-                return sendBuffer(data !: ^void, len!(data), timeout)
-            }
-        }
-        else #if (T.isSlice) {
-            return sendBuffer(data.data, data.count, timeout)
-        }
-        else {
-            error!("type {t} cannot be sent as is, consider using sendBuffer", T)
-        }
-    }
-
-    func close(): void {
-        if (fd != -1) {
-            unistd.close(fd)
-            fd = -1
-        }
-    }
-
-    @inline
-    func `deinit`()  { close() }
-
-    const func `str`(os: &OutputStream) {
-        os << addr
-    }
-}
-
-class SocketOutputStream : OutputStream {
-    - sock: TcpSocket
-    - timeout: u64
-
-    func `init`(sock: TcpSocket, timeout: u64 = 0) {
-        this.sock = sock
-        this.timeout = timeout
-    }
-
-    func append(data: ^const void, size: u64): u64? {
-        return sock.sendBuffer(data, size, timeout)
-    }
-}
-
-pub class BufferedSocketOutputStream : BufferedOutputStream {
-    - sock: TcpSocket
-    - timeout: u64
-
-    func `init`(sock: TcpSocket, timeout: u64 = 0) {
-        super()
-        this.sock = &&sock
-        this.timeout = timeout
-    }
-
-    func flush(data: ^const void, size: u64) {
-        sock.sendBuffer(data, size, timeout)
-    }
-
-    @inline
-    func sendFile(fd: i32, offset: u64, count: u64, timeout: u64 = 0): u64? {
-        // flush current buffer
-        this.sync()
-        return sock.sendFile(fd, offset, count, timeout)
     }
 }
 
@@ -300,6 +202,7 @@ pub class TcpListener {
             var len = <u32> sizeof!(addr);
             var accepted = socket.accept(fd, addr.nativeAddr(), ptrof len);
             if (accepted >= 0) {
+                configureSocket(this.fd)
                 return TcpSocket(accepted, addr)
             }
 
@@ -329,25 +232,25 @@ pub class TcpListener {
     func `deinit`() { close(); }
 }
 
-pub async func tcpConnect(addr: Address, @unused deadline: i64 = 0): TcpSocket {
+exception TcpError(msg: String) => msg == null? "": msg.str()
+
+pub func tcpConnect(addr: Address, timeout: u64 = 0): !i32 {
     /* Open a socket. */
     var fd = socket.socket(addr.family(), <i32>SOCK_STREAM!, 0);
     if (fd == -1)
-        return null
-
-    var sock = TcpSocket(fd, addr);
+        raise TcpError(f"socket.socket(${addr}) failed: ${strerr()}")
 
     /* Connect to the remote endpoint. */
     var rc = socket.connect(fd, addr.nativeAddr(), <i32>addr.len());
     if (rc != 0) {
         assert!(rc == -1)
         if (errno! != EINPROGRESS!)
-            return null
+            raise TcpError(f"socket.connect(${addr}) failed: ${strerr()}")
 
-        rc = fdWaitRead(fd)
-        if (rc == 0) {
+        rc = fdWaitWrite(fd, timeout)
+        if (rc != State.AE_WRITABLE) {
             errno! = ETIMEDOUT!
-            return null
+            raise TcpError(f"Waiting for socket(${addr}) to be writable failed")
         }
 
         var err: i32 = 0;
@@ -357,16 +260,17 @@ pub async func tcpConnect(addr: Address, @unused deadline: i64 = 0): TcpSocket {
             err = errno!
             unistd.close(fd)
             errno! = err
-            return null
+            raise TcpError(f"socket.getsockopt(${addr}) failed: ${strerr()}")
         }
 
         if (err != 0) {
             unistd.close(fd)
             errno! = err
-            return null
+            raise TcpError(f"socket(${addr}) error: ${strerr()}")
         }
     }
 
     errno! = 0
-    return sock
+    configureSocket(fd)
+    return fd
 }

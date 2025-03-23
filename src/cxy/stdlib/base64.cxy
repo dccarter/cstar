@@ -3,7 +3,7 @@ module base64
 const b64table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const ASCII_LOOKUP: [u8, 256] = [
     /* ASCII table */
-    64:u8,
+    64 as u8,
         64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
     64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
     64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 62, 64, 64, 64, 63,
@@ -24,7 +24,7 @@ const ASCII_LOOKUP: [u8, 256] = [
 
 pub func encodeBuffer(os: &OutputStream, data: ^const void, size: u64) {
     var p = data !: ^const u8
-    var i = 0:u64;
+    var i = 0 as u64;
     while (size >= 3) {
         // |X|X|X|X|X|X|-|-|
         os.append(ptrof b64table.[((p.[i] & 0xFC) >> 2)], 1)
@@ -83,7 +83,7 @@ pub exception Base64Error(msg: string) => msg
 
 pub func decodeBuffer(os: &OutputStream, data: ^const void, size: u64): !void {
     var sz = size
-    var i = 0:u64;
+    var i = 0 as u64;
     const p = data !: ^const u8;
 
     while (sz > 4) {
@@ -138,6 +138,113 @@ pub func decode[T](os: &OutputStream, value: &const T) : !void {
         else {
             if (value != null)
                 decodeBuffer(os, value !: ^const void, len!(value))
+        }
+    }
+    else {
+        error!("Type {t} is currently unsupported", #T)
+    }
+}
+
+const b64tableU = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+pub func urlEncodeBuffer(os: &OutputStream, buf: ^const void, size: u64) {
+    var i = 0 as u64;
+    var p = buf !: ^const u8;
+    while (i < (<i64>size)-2) {
+        os << <char>(b64tableU.[(p.[i] >> 2) & 0x3F] )
+        os << <char>(b64tableU.[((p.[i] & 0x3) << 4) | (p.[i + 1] & 0xF0) >> 4] )
+        os << <char>(b64tableU.[((p.[i + 1] & 0xF) << 2) | (p.[i + 2] & 0xC0) >> 6] )
+        os << <char>(b64tableU.[p.[i + 2] & 0x3F] )
+        i +=2
+    }
+
+    if (i < size) {
+        os << <char>(b64tableU.[(p.[i] >> 2) & 0x3F])
+        if (i == (size - 1)) {
+            os << <char>(b64tableU.[((p.[i] & 0x3) << 4)])
+        } else {
+            os << <char>(b64tableU.[((p.[i] & 0x3) << 4) | (p.[i + 1] & 0xF0) >> 4])
+            os << <char>(b64tableU.[((p.[i + 1] & 0xF) << 2)])
+        }
+    }
+}
+
+pub func urlEncodeSize(size: u64) {
+    var i = size - (size % 2)
+    var len = 0 as u64
+    if (i > 0) {
+        len = i*2
+    }
+    if (i < size) {
+        len++
+        if (i == (size - 1))
+            len++
+        else
+            len += 2
+    }
+    return len
+}
+
+pub func urlDecodeBuffer(os: &OutputStream, buf: ^const void, size: u64): !void {
+    var p = buf !: const ^u8
+    var i = 0 as u64
+    var sz = size
+    while (sz > 4) {
+        var it = ptroff!(p + i)
+        if (ASCII_LOOKUP.[it.[0]] == 64 ||
+            ASCII_LOOKUP.[it.[1]] == 64 ||
+            ASCII_LOOKUP.[it.[2]] == 64 ||
+            ASCII_LOOKUP.[it.[3]] == 64)
+        {
+            raise Base64Error("Base64::urlDecode - invalid base64 encoded string passed");
+        }
+
+        os << <char>(<u8>(ASCII_LOOKUP.[it.[0]] << 2 | ASCII_LOOKUP.[it.[1]] >> 4))
+        os << <char>(<u8>(ASCII_LOOKUP.[it.[1]] << 4 | ASCII_LOOKUP.[it.[2]] >> 2))
+        os << <char>(<u8>(ASCII_LOOKUP.[it.[2]] << 6 | ASCII_LOOKUP.[it.[3]]))
+        sz -= 4;
+        i += 4
+    }
+
+    var it = ptroff!(p + i)
+    if (sz > 1) {
+       os << <char>(ASCII_LOOKUP.[it.[0]] << 2 | ASCII_LOOKUP.[it.[1]] >> 4)
+    }
+    if (sz > 2) {
+       os << <char>(ASCII_LOOKUP.[it.[1]] << 4 | ASCII_LOOKUP.[it.[2]] >> 2)
+    }
+    if (sz > 3) {
+       os << <char>(ASCII_LOOKUP.[it.[2]] << 6 | ASCII_LOOKUP.[it.[3]]);
+    }
+}
+
+pub func urlEncode[T](os: &OutputStream, value: &const T) {
+    require!(T.isString, "Type {t} must a string, use urlEncodeBuffer instead", #T)
+    #if (T.isStruct) {
+        urlEncodeBuffer(os, value.data(), value.size())
+    }
+    else #if (T.isClass) {
+        if (value != null)
+            urlEncodeBuffer(os, value.data(), value.size())
+    }
+    else {
+        if (value != null)
+            urlEncodeBuffer(os, value !: ^const void, len!(value))
+    }
+}
+
+pub func urlDecode[T](os: &OutputStream, value: &const T) : !void {
+    #if (T.isString) {
+        #if (T.isStruct) {
+            urlDecodeBuffer(os, value.data() !: ^const void, value.size())
+        }
+        else #if (T.isClass) {
+            if (value != null)
+                urlDecodeBuffer(os, value.data() !: ^const void, value.size())
+        }
+        else {
+            if (value != null)
+                urlDecodeBuffer(os, value !: ^const void, len!(value))
         }
     }
     else {

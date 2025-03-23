@@ -1,5 +1,6 @@
 module net
 
+import "unistd.h" as unistd
 import "ifaddrs.h" as ifaddrs
 import "netdb.h" as netdb
 import "arpa/inet.h" as arpa
@@ -15,10 +16,10 @@ else {
 
 import "native/dns/dns.h" as dns
 
-// This will get native sources compiled
-import "./native/index.cxy"
+@__cc "native/dns/dns.c"
+
 // bring in coroutine stuff
-import "./coro.cxy"
+import { State } from "./coro.cxy"
 
 #if (defined MACOS) {
 type sockaddr = socket.sockaddr
@@ -111,7 +112,7 @@ func ntohll(x: u64) : u64 {
 
 // This macro is defined in netinet/in.h, redefining
 // C macros defined with casts cannot be imported
-macro INADDR_ANY 0x00000000:u32
+macro INADDR_ANY 0x00000000 as u32
 
 var cxy_DNS_conf: ^dns.dns_resolv_conf = null;
 var cxy_DNS_hosts: ^dns.dns_hosts = null;
@@ -240,7 +241,7 @@ pub struct Address {
 }
 
 pub func getLocalAddress(name: string, port: u16, mode: IPVersion = IPVersion.Any) {
-    if (name.[0] == '\0':char)
+    if (name.[0] == '\0' as char)
         return Address(port, mode);
 
     var addr = Address(name, port, mode);
@@ -422,4 +423,130 @@ pub async func getRemoteAddress(name: string, port: u16, mode: IPVersion = IPVer
     return addr
 }
 
+pub class Socket {
+    _fd: i32
+    _addr: Address
 
+    @inline func `init`(fd: i32, addr: Address) {
+        _fd = fd
+        _addr = &&addr
+    }
+
+    @inline
+    const func `hash`() => _addr.op__hash()
+
+    @inline
+    const func `!!`() {
+        return !isnull(this) && _fd != -1
+    }
+
+    @inline
+    const func address() => _addr
+
+    @inline
+    const func raw() => _fd
+
+    virtual func receive(buffer: ^void, size: u64, timeout: u64 = 0): u64?
+
+    virtual func sendBuffer(buffer: ^const void, size: u64, timeout: u64 = 0): u64?
+
+    virtual func sendFile(fd: i32, offset: u64, count: u64, timeout: u64 = 0): u64?
+
+    func send[T](data: T, timeout: u64 = 0) {
+        #if (T.isString) {
+            #if (T.isStruct) {
+                return sendBuffer(data.str !: ^void, len!(data), timeout)
+            }
+            else {
+                return sendBuffer(data !: ^void, len!(data), timeout)
+            }
+        }
+        else #if (T.isSlice) {
+            return sendBuffer(data.data, data.count, timeout)
+        }
+        else {
+            error!("type {t} cannot be sent as is, consider using sendBuffer", T)
+        }
+    }
+
+    func close(): void {
+        if (_fd != -1) {
+            unistd.close(_fd)
+            _fd = -1
+        }
+    }
+
+    @inline
+    func `deinit`()  { close() }
+
+    const func `str`(os: &OutputStream) {
+        os << _addr
+    }
+
+    func wait(timeout: u64, state: State) {
+        if (_fd == -1) {
+            errno! = EINVAL!
+            return false
+        }
+
+        if (state == .AE_READABLE) {
+            const rc = fdWaitRead(_fd, timeout);
+            if (rc != State.AE_READABLE) {
+                errno! = ETIMEDOUT!;
+                return false
+            }
+        }
+        else if (state == .AE_WRITABLE) {
+            const rc = fdWaitRead(_fd, timeout);
+            if (rc != State.AE_WRITABLE) {
+                errno! = ETIMEDOUT!;
+                return false
+            }
+        }
+        else {
+            errno! = EINVAL!
+            return false
+        }
+        return true
+    }
+}
+
+pub class SocketOutputStream : OutputStream {
+    - timeout: u64
+    - sock: Socket = null
+
+    func `init`(sock: Socket, timeout: u64 = 0) {
+        this.timeout = timeout
+        this.sock = &&sock
+    }
+
+    func append(data: ^const void, size: u64): u64? {
+        return sock.sendBuffer(data, size, timeout)
+    }
+
+    @inline
+    func sendFile(fd: i32, offset: u64, count: u64, timeout: u64 = 0): u64? {
+        return sock.sendFile(fd, offset, count, timeout)
+    }
+}
+
+pub class BufferedSocketOutputStream : BufferedOutputStream {
+    - timeout: u64
+    - sock: Socket = null
+
+    func `init`(sock: Socket, timeout: u64 = 0) {
+        super()
+        this.timeout = timeout
+        this.sock = &&sock
+    }
+
+    func flush(data: ^const void, size: u64) {
+        sock.sendBuffer(data, size, timeout)
+    }
+
+    func sendFile(fd: i32, offset: u64, count: u64, timeout: u64 = 0): u64? {
+        // flush current buffer
+        this.sync()
+        return sock.sendFile(fd, offset, count, timeout)
+    }
+}

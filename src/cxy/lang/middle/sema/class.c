@@ -391,6 +391,7 @@ void checkClassDecl(AstVisitor *visitor, AstNode *node)
                                       implements,
                                       implementsCount,
                                       node->flags & flgTypeApplicable);
+        ((Type *)this->_this.that)->retyped = node->type;
         ((Type *)this)->_this.that = node->type;
     }
     else {

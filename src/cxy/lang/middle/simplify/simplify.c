@@ -833,9 +833,9 @@ static void visitIdentifier(AstVisitor *visitor, AstNode *node)
 static void visitBinaryExpr(AstVisitor *visitor, AstNode *node)
 {
     astVisitFallbackVisitAll(visitor, node);
+    SimplifyContext *ctx = getAstVisitorContext(visitor);
+    AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;
     if (node->binaryExpr.op == opIs) {
-        SimplifyContext *ctx = getAstVisitorContext(visitor);
-        AstNode *lhs = node->binaryExpr.lhs, *rhs = node->binaryExpr.rhs;
         const Type *type = stripPointerOrReferenceOnce(lhs->type, NULL);
         csAssert0(isUnionType(type));
         u32 idx = findUnionTypeIndex(type, rhs->type);
@@ -857,6 +857,23 @@ static void visitBinaryExpr(AstVisitor *visitor, AstNode *node)
         rhs->type = getPrimitiveType(ctx->types, prtU64);
 
         node->binaryExpr.op = opEq;
+    }
+    else if (node->binaryExpr.op == opEq || node->binaryExpr.op == opNe) {
+        if (nodeIs(rhs, NullLit) && hasFlag(lhs->type, FuncTypeParam)) {
+            // We want to turn this into lhs.0 = null
+            AstNode *target = deepCloneAstNode(ctx->pool, lhs);
+            lhs->tag = astMemberExpr;
+            lhs->flags = flgNone;
+            lhs->type = target->type->tuple.members[0];
+            clearAstBody(lhs);
+            lhs->memberExpr.member =
+                makeIntegerLiteral(ctx->pool,
+                                   &lhs->loc,
+                                   0,
+                                   NULL,
+                                   getPrimitiveType(ctx->types, prtU64));
+            lhs->memberExpr.target = target;
+        }
     }
 }
 
@@ -1348,14 +1365,36 @@ static void withSavedStack(Visitor func, AstVisitor *visitor, AstNode *node)
 {
     SimplifyContext *ctx = getAstVisitorContext(visitor);
     __typeof(ctx->stack) stack = ctx->stack;
+    if (node->type && node->type->retyped) {
+        node->type = node->type->retyped;
+    }
 
     func(visitor, node);
 
     ctx->stack = stack;
 }
 
+static void resolveTypesImpl(Visitor func, AstVisitor *visitor, AstNode *node)
+{
+    if (node->type && node->type->retyped) {
+        node->type = node->type->retyped;
+    }
+    func(visitor, node);
+}
+
+static void resolveTypes(CompilerDriver *driver, AstNode *node)
+{
+    AstVisitor visitor = makeAstVisitor(NULL,
+                                        {},
+                                        .fallback = astVisitFallbackVisitAll,
+                                        .dispatch = resolveTypesImpl);
+    astVisit(&visitor, node);
+}
+
 static AstNode *simplifyCode(CompilerDriver *driver, AstNode *node)
 {
+    // resolveTypes(driver, node);
+
     SimplifyContext context = {.L = driver->L,
                                .types = driver->types,
                                .strings = driver->strings,

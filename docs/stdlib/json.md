@@ -76,7 +76,7 @@ class Colour {
 
 @[json]
 struct User {
-    age = 0:u32
+    age = 0 as u32
     name: String = null
     eyes = Colour()
 }

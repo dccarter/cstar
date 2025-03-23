@@ -99,6 +99,7 @@ static AstNode *getName(EvalContext *ctx,
     case astEnumOptionDecl:
     case astAttr:
     case astAnnotation:
+    case astTypeDecl:
         name = node->_name;
         break;
     case astPrimitiveType:

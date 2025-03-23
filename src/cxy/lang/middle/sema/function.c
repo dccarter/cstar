@@ -270,7 +270,7 @@ void checkFunctionParam(AstVisitor *visitor, AstNode *node)
                           (const Type *[]){
                               makeVoidPointerType(ctx->types, flgNone), type_},
                           2,
-                          flgFuncTypeParam));
+                          flgFuncTypeParam | flgReferenceMembers));
         node->type = type->type;
         node->flags |= flgFuncTypeParam;
         return;

@@ -30,6 +30,7 @@
 #include <clang/Sema/Sema.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/ErrorHandling.h>
+#include <llvm/Support/FileSystem.h>
 #include <llvm/Support/Path.h>
 #include <llvm/TargetParser/Host.h>
 #pragma warning(pop)
@@ -159,8 +160,10 @@ static FileLoc toCxy(IncludeContext &ctx, const clang::Decl &decl)
         auto start = toCxy(ctx, decl.getSourceRange().getBegin());
         auto end = toCxy(ctx, decl.getSourceRange().getEnd());
         auto filename = ctx.SM.getFilename(decl.getLocation());
+        llvm::SmallString<1024> RealPath;
+        llvm::sys::fs::real_path(filename, RealPath);
         ctx.loc = FileLoc{.fileName = makeStringSized(
-                              ctx.strings, filename.data(), filename.size()),
+                              ctx.strings, RealPath.data(), RealPath.size()),
                           .begin = start,
                           .end = end};
     };
@@ -947,8 +950,10 @@ AstNode *importCHeader(CompilerDriver *driver,
         return NULL;
     }
 
-    auto requestPath = fileEntry->getFileEntry().tryGetRealPathName();
-#ifdef __APPLE__
+    auto _requestPath = fileEntry->getFileEntry().tryGetRealPathName();
+    llvm::SmallString<1024> requestPath;
+    llvm::sys::fs::real_path(_requestPath, requestPath);
+#ifdef NOT__APPLE__
     auto requestPathString = removeSDKVersion(requestPath.str());
     requestPath = clang::StringRef(requestPathString);
 #endif

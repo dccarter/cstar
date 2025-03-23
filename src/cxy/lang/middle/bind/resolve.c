@@ -139,8 +139,12 @@ static AstNode *resolvePathBaseUpChain(AstVisitor *visitor, AstNode *path)
     // lookup symbol upstream
     for (u64 i = 1; isClassDeclaration(base);
          base = resolvePath(underlyingDeclaration(base)->classDecl.base), i++) {
-        resolved = findInAstNode(
-            base, root->pathElement.alt ?: root->pathElement.name);
+        if (base->type)
+            resolved = findMemberDeclInType(
+                base->type, root->pathElement.alt ?: root->pathElement.name);
+        else
+            resolved = findInAstNode(
+                base, root->pathElement.alt ?: root->pathElement.name);
         if (resolved) {
             path->path.inheritanceDepth = i;
 
@@ -310,6 +314,21 @@ void bindGenericParam(AstVisitor *visitor, AstNode *node)
     astVisit(visitor, node->genericParam.defaultValue);
 }
 
+void bindTupleXform(AstVisitor *visitor, AstNode *node)
+{
+    BindContext *ctx = getAstVisitorContext(visitor);
+    astVisit(visitor, node->xForm.target);
+    pushScope(ctx->env, node);
+    AstNode *v1 = node->xForm.args, *v2 = v1->next;
+    defineSymbol(ctx->env, ctx->L, v1->varDecl.name, v1);
+    if (v2)
+        defineSymbol(ctx->env, ctx->L, v2->varDecl.name, v2);
+    if (node->xForm.cond)
+        astVisit(visitor, node->xForm.cond);
+    astVisit(visitor, node->xForm.xForm);
+    popScope(ctx->env);
+}
+
 void bindGenericDecl(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
@@ -380,6 +399,9 @@ void bindVarDecl(AstVisitor *visitor, AstNode *node)
 
 void bindTypeDecl(AstVisitor *visitor, AstNode *node)
 {
+    BindContext *ctx = getAstVisitorContext(visitor);
+    if (findEnclosingClassOrStruct(ctx->env, NULL, NULL, NULL))
+        defineSymbol(ctx->env, ctx->L, node->typeDecl.name, node);
     astVisit(visitor, node->typeDecl.aliased);
 }
 
@@ -696,6 +718,24 @@ void bindCaseStmt(AstVisitor *visitor, AstNode *node)
     popScope(ctx->env);
 }
 
+void bindCallExpr(AstVisitor *visitor, AstNode *node)
+{
+    astVisit(visitor, node->callExpr.callee);
+    AstNode *args = node->callExpr.args;
+    for (; args; args = args->next) {
+        if (nodeIs(args, AssignExpr)) {
+            AstNode *name = args->assignExpr.lhs;
+            if (nodeIs(name, Path) && name->path.elements->next == NULL) {
+                name->tag = astIdentifier;
+                name->ident.value = name->path.elements->pathElement.name;
+                astVisit(visitor, args->assignExpr.rhs);
+                continue;
+            }
+        }
+        astVisit(visitor, args);
+    }
+}
+
 void bindMacroCallExpr(AstVisitor *visitor, AstNode *node)
 {
     BindContext *ctx = getAstVisitorContext(visitor);
@@ -762,6 +802,7 @@ void bindAstPhase2(CompilerDriver *driver, Env *env, AstNode *node)
         [astProgram] = bindProgram,
         [astIdentifier] = bindIdentifier,
         [astGenericParam] = bindGenericParam,
+        [astTupleXform] = bindTupleXform,
         [astGenericDecl] = bindGenericDecl,
         [astPath] = bindPath,
         [astFuncType] = bindFuncType,
@@ -791,6 +832,7 @@ void bindAstPhase2(CompilerDriver *driver, Env *env, AstNode *node)
         [astMatchStmt] = bindMatchStmt,
         [astCaseStmt] = bindCaseStmt,
         [astMacroCallExpr] = bindMacroCallExpr,
+        [astCallExpr] = bindCallExpr,
         [astMemberExpr] = bindMemberExpr
     }, .fallback = astVisitFallbackVisitAll, .dispatch = withParentScope);
     // clang-format on

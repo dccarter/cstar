@@ -91,7 +91,8 @@ extern "C" {
     f(DestructorOverload,       "destructor", "destructor")    \
     f(HashOverload,             "hash",       "hash")          \
     f(DestructorFwd,            "destructor_fwd",  "destructor__fwd") \
-    f(InitDefaults,             "init_defaults", "init_defaults")
+    f(InitDefaults,             "init_defaults", "init_defaults")\
+    f(Redirect,                 "redirect", "&.")
 
 typedef enum {
     opInvalid,

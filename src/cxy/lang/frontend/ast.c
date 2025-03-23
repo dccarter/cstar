@@ -2120,6 +2120,11 @@ AstNode *cloneAstNode(CloneAstConfig *config, const AstNode *node)
     case astGenericParam:
         CLONE_MANY(genericParam, constraints);
         break;
+    case astTupleXform:
+        CLONE_ONE(xForm, target);
+        CLONE_MANY(xForm, args);
+        CLONE_ONE(xForm, cond);
+        CLONE_ONE(xForm, xForm);
     case astGenericDecl:
         CLONE_MANY(genericDecl, params);
         CLONE_ONE(genericDecl, decl);

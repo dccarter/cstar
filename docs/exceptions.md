@@ -170,7 +170,7 @@ exception AgeError(msg: String) => msg.str()
 
 struct User {
     - name: String;
-    - age = 16:i32;
+    - age = 16 as i32;
     func `init`(name: String) { this.name = &&name }
 
     func drink() : !void {

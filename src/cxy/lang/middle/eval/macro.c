@@ -374,6 +374,113 @@ static AstNode *makeHasMemberNode(AstVisitor *visitor,
     return args;
 }
 
+static AstNode *makeHasTypeNode(AstVisitor *visitor,
+                                attr(unused) const AstNode *node,
+                                attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentCount(ctx, &node->loc, args, 2))
+        return NULL;
+
+    const Type *target = args->type ?: evalType(ctx, args);
+    if (!nodeIs(args, TypeRef) && !hasFlag(args, Typeinfo)) {
+        logError(ctx->L,
+                 &args->loc,
+                 "unexpected type {t}, expecting type information",
+                 (FormatArg[]){{.t = target}});
+        return NULL;
+    }
+    target = resolveType(target);
+
+    AstNode *name = args->next;
+    if (!evaluate(visitor, name))
+        return NULL;
+    if (!nodeIs(name, StringLit)) {
+        logError(
+            ctx->L,
+            &name->loc,
+            "unexpect argument, expecting the name of the member to lookup",
+            NULL);
+        return NULL;
+    }
+
+    const AstNode *type =
+        findMemberDeclInType(target, name->stringLiteral.value);
+    args->next = NULL;
+    args->tag = astBoolLit;
+    args->boolLiteral.value = nodeIs(type, TypeDecl);
+    return args;
+}
+
+static AstNode *makeSelectNode(AstVisitor *visitor,
+                               attr(unused) const AstNode *node,
+                               attr(unused) AstNode *args)
+{
+    EvalContext *ctx = getAstVisitorContext(visitor);
+    if (!validateMacroArgumentLimit(ctx, &node->loc, args, 2, 3))
+        return NULL;
+
+    const Type *target = args->type ?: evalType(ctx, args);
+    if (!nodeIs(args, TypeRef) && !hasFlag(args, Typeinfo)) {
+        logError(ctx->L,
+                 &args->loc,
+                 "unexpected type {t}, expecting type information",
+                 (FormatArg[]){{.t = target}});
+        return NULL;
+    }
+    target = resolveType(target);
+    if (!typeIs(target, Tuple)) {
+        logError(ctx->L,
+                 &args->loc,
+                 "unexpected type {t}, expecting a tuple type",
+                 (FormatArg[]){{.t = target}});
+        return NULL;
+    }
+
+    AstNode *name = args->next, *defType = name->next;
+    if (!evaluate(visitor, name))
+        return NULL;
+    if (!nodeIs(name, StringLit)) {
+        logError(
+            ctx->L,
+            &name->loc,
+            "unexpect argument, expecting the name of the member to select",
+            NULL);
+        return NULL;
+    }
+    const Type *defaultType = defType ? evalType(ctx, defType) : NULL;
+    const Type **members = mallocOrDie(target->tuple.count * sizeof(Type *));
+    for (int i = 0; i < target->tuple.count; i++) {
+        const Type *member = target->tuple.members[i];
+        const AstNode *selected =
+            findMemberDeclInType(member, name->stringLiteral.value);
+        if (!nodeIs(selected, TypeDecl)) {
+            if (defaultType == NULL) {
+                free(members);
+                logError(ctx->L,
+                         &node->loc,
+                         "tuple member '{t}' at index {u64} does not have a "
+                         "type alias named {s}",
+                         (FormatArg[]){{.t = member},
+                                       {.u64 = i},
+                                       {.s = name->stringLiteral.value}});
+                return NULL;
+            }
+            members[i] = defaultType;
+        }
+        else
+            members[i] = resolveType(selected->type);
+    }
+
+    args->next = NULL;
+    args->tag = astTypeRef;
+    clearAstBody(args);
+    args->type =
+        makeTupleType(ctx->types, members, target->tuple.count, flgNone);
+    free(members);
+    return args;
+}
+
 static AstNode *makeLineNumberNode(AstVisitor *visitor,
                                    attr(unused) const AstNode *node,
                                    attr(unused) AstNode *args)
@@ -880,7 +987,7 @@ static AstNode *makeLambdaOfAstNode(AstVisitor *visitor,
             ctx->types,
             (const Type *[]){makeVoidPointerType(ctx->types, flgNone), func},
             2,
-            flgFuncTypeParam));
+            flgFuncTypeParam | flgReferenceMembers));
 }
 
 static AstNode *makeTypeinfoNode(AstVisitor *visitor,
@@ -1521,6 +1628,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "ex", makeExNode},
     {.name = "file", makeFilenameNode},
     {.name = "has_member", makeHasMemberNode},
+    {.name = "has_type", makeHasTypeNode},
     {.name = "indexof", makeIndexOfNode},
     {.name = "info", makeAstLogNoteNode},
     {.name = "init_defaults", makeInitializeDefaults},
@@ -1541,6 +1649,7 @@ static const BuiltinMacro builtinMacros[] = {
     {.name = "offset", makeOffsetNumberNode},
     {.name = "ptroff", makePointerOfNode},
     {.name = "require", makeRequireNode},
+    {.name = "select", makeSelectNode},
     {.name = "sizeof", makeSizeofNode},
     {.name = "typeat", makeTypeAtIdxNode},
     {.name = "typeof", makeTypeofNode},

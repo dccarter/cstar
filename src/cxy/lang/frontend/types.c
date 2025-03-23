@@ -286,9 +286,9 @@ bool isTypeAssignableFrom(const Type *to, const Type *from)
         return typeIs(from, Pointer) && typeIs(from->pointer.pointed, Null);
     case typClass:
         if (typeIs(from, This))
-            return to == from->_this.that;
+            return isTypeAssignableFrom(to, from->_this.that);
         if (typeIs(from, Class) && from->tClass.inheritance->base)
-            return to == from->tClass.inheritance->base;
+            return isTypeAssignableFrom(to, from->tClass.inheritance->base);
         if (typeIs(from, Class) && getTypeDecl(to) == getTypeDecl(from))
             // TODO workaround circular types
             return true;
@@ -1282,7 +1282,9 @@ bool isDestructible(const Type *type)
     }
 
     return isTupleType(type) &&
-           hasFlags(type, flgReferenceMembers | flgImplementsDeinit);
+           hasFlags(type,
+                    flgReferenceMembers | flgImplementsDeinit |
+                        flgFuncTypeParam);
 }
 
 void pushThisReference(const Type *this, AstNode *node)

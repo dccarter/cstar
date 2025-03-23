@@ -110,7 +110,7 @@ static const Type *closureArgToClosureParamType(TypingContext *ctx,
                       (const Type *[]){makeVoidPointerType(ctx->types, flgNone),
                                        funcTypeDecl->type},
                       2,
-                      flgFuncTypeParam);
+                      flgFuncTypeParam | flgReferenceMembers);
     free(funcTypeParams);
     return paramType;
 }

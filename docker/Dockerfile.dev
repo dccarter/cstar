@@ -3,4 +3,4 @@ FROM ubuntu:latest AS builder
 # Install packages
 RUN apt-get -y update && apt-get -y upgrade
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --fix-missing cmake \
-  clang llvm llvm-dev libclang-dev clang-format gdb
+  clang llvm llvm-dev libclang-dev clang-format gdb openssl libssl-dev
