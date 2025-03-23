@@ -20,7 +20,7 @@ static AstNode *implementCallTupleCopy(TypingContext *ctx,
 {
     const Type *type = member->type;
     const Type *copy_ = type->tuple.copyFunc;
-    csAssert0(copy_);
+    csAssert0(copy_ || hasFlag(type, FuncTypeParam));
 
     return makeBackendCallExpr(
         ctx->pool,
@@ -34,7 +34,7 @@ static AstNode *implementCallTupleCopy(TypingContext *ctx,
                          member,
                          NULL,
                          type),
-        copy_->func.retType);
+        member->type);
 }
 
 static AstNode *implementCallStructCopyMember(TypingContext *ctx,
@@ -151,7 +151,7 @@ static AstNode *implementCallTupleDestructor(TypingContext *ctx,
 {
     const Type *type = member->type;
     const Type *destructor = type->tuple.destructorFunc;
-    csAssert0(destructor);
+    csAssert0(destructor || hasFlag(type, FuncTypeParam));
 
     return makeExprStmt(
         ctx->pool,
@@ -169,7 +169,7 @@ static AstNode *implementCallTupleDestructor(TypingContext *ctx,
                              member,
                              NULL,
                              type),
-            destructor->func.retType),
+            member->type),
         NULL,
         makeVoidType(ctx->types));
 }
@@ -709,7 +709,7 @@ void implementClassOrStructBuiltins(AstVisitor *visitor, AstNode *node)
 u64 removeClassOrStructBuiltins(AstNode *node, NamedTypeMember *nms)
 {
     AstNodeList members = {};
-    u64 count = 0, total = 0;
+    u64 count = hasFlag(node, Virtual), total = count;
     for (AstNode *it = node->structDecl.members; it;) {
         AstNode *member = it;
         it = it->next;

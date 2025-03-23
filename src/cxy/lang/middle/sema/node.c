@@ -446,8 +446,14 @@ bool transformToTruthyOperator(AstVisitor *visitor, AstNode *node)
     if (!isClassOrStructType(type))
         return false;
 
-    const Type *member = findMemberInType(type, S_Truthy);
-    if (member == NULL)
+    do {
+        const Type *member = findMemberInType(type, S_Truthy);
+        if (member != NULL)
+            break;
+        type = getTypeBase(type);
+    } while (type);
+
+    if (type == NULL)
         return false;
 
     transformToMemberCallExpr(

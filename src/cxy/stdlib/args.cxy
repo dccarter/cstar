@@ -3,7 +3,7 @@ module args
 import { Vector } from "stdlib/vector.cxy"
 import { HashMap } from "stdlib/hash.cxy"
 
-macro NOSF '\0':char
+macro NOSF  '\0'as char
 
 exception ParserError(msg: String) => msg != null? msg.str() : ""
 
@@ -71,7 +71,7 @@ struct ParamContainer {
 pub class Command {
     name: __string
     desc: __string
-    longestParam = 0:u64;
+    longestParam = 0 as u64;
     interactive = false;
     hasLocalFlags = false;
     params = ParamContainer{};
@@ -91,12 +91,12 @@ pub class Command {
         while (i < args.size()) {
             var full = args.[i++];
             var arg = __string(full);
-            if (arg.[0] != '-':char) {
+            if (arg.[0] != '-' as char) {
                 positionals.push(arg)
                 continue
             }
             var val = __string();
-            var idx = arg.indexOf('=':char);
+            var idx = arg.indexOf('=' as char);
             if (idx) {
                 var index = *idx;
                 val = arg.substr(index + 1)
@@ -104,7 +104,7 @@ pub class Command {
             }
 
             var paramOpt = None[&Param]();
-            if (arg.[1] == '-':char) {
+            if (arg.[1] == '-' as char) {
                 // skip the --
                 arg = arg.substr(2)
                 if (arg.empty()) {
@@ -135,7 +135,7 @@ pub class Command {
                     raise ParserError(f"value given to an option argument '${name}'")
             }
             else if (val.empty()) {
-                if (i >= args.size() || args.[i].[0] == '-':char)
+                if (i >= args.size() || args.[i].[0] == '-' as char)
                     raise ParserError(f"argument '${arg}' is missing a value")
                 val = __string(args.[i++])
             }
@@ -276,8 +276,8 @@ pub class App {
     version: __string
     desc: __string
     defaultCmd: __string
-    longestParam = 0:u64;
-    longestCmd = 0:u64;
+    longestParam = 0 as u64;
+    longestCmd = 0 as u64;
     params = ParamContainer{};
     commands = HashMap[__string, Command]();
 
@@ -366,7 +366,7 @@ pub class App {
 
     func parse(args: [string]): i32 {
         var name = defaultCmd;
-        if (args.size() > 1 && args.[1].[0] != '-':char ) {
+        if (args.size() > 1 && args.[1].[0] != '-' as char ) {
            name = __string(args.[1])
            args = args.view(2)
         }

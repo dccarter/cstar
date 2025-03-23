@@ -1,7 +1,7 @@
 module json
 import "./base64.cxy"
 
-macro EOS '\0':char
+macro EOS  '\0'as char
 
 pub func toJSON[T](os: &OutputStream, it: &const T) : void {
     #if (T.isChar) {
@@ -82,9 +82,9 @@ exception JSONParserError(msg: String) => (msg != null)? msg.str() : ""
 
 pub class JSONParser {
     - data: __string
-    - off = 0:u32;
-    - line = 1:u32;
-    - col = 1:u32;
+    - off = 0 as u32;
+    - line = 1 as u32;
+    - col = 1 as u32;
 
     func `init`(data: __string) {
         this.data = &&data
@@ -93,7 +93,7 @@ pub class JSONParser {
     func advance() {
         off++
         col++
-        if (data.[off] == '\n':char) {
+        if (data.[off] == '\n' as char) {
             line++
             col = 1
         }
@@ -121,23 +121,23 @@ pub class JSONParser {
     func expectString(): !__string {
         skipWhitespace();
 
-        if (data.[off] != '"':char)
+        if (data.[off] != '"' as char)
             raise JSONParserError(f"${line}:${col} - expecting a string start token '\"'")
 
         advance()
         var start = off;
         var p = data.str();
         while (!done() && p.[off] != EOS!) {
-            if (p.[off] == '\\':char && p.[off + 1] == '\"':char) {
+            if (p.[off] == '\\' as char && p.[off + 1] == '\"' as char) {
                 advance()
                 advance()
                 continue
             }
-            if (p.[off] == '\"':char)
+            if (p.[off] == '\"' as char)
                 break
             advance()
         }
-        if (p.[off] != '\"':char)
+        if (p.[off] != '\"' as char)
             raise JSONParserError(f"${line}:${col} - expecting a '\"' to terminate the string")
         var str = data.substr(start, off-start);
         advance()
@@ -171,18 +171,18 @@ pub class JSONParser {
         var l, c = (line, col);
         var start = off;
         var p = data.str();
-        if (p.[off] == '-':char)
+        if (p.[off] == '-' as char)
             advance()
         while (!done() && isDigit!(p.[off]))
             advance()
 
-        if (p.[off] == '.':char) {
+        if (p.[off] == '.' as char) {
             advance()
             while (!done() && isDigit!(p.[off]))
                 advance()
         }
 
-        if (p.[off] == 'E':char || p.[off] == 'e':char) {
+        if (p.[off] == 'E' as char || p.[off] == 'e' as char) {
             advance()
             if (!consumeChar('-'))
                 consumeChar('+')
@@ -231,9 +231,56 @@ pub class JSONParser {
     }
 
     @inline func tag() => (line, col)
+
+    func skipValue(): !void {
+        skipWhitespace()
+        if (data.[off] == '"' as char) {
+            expectString()
+        }
+        else if(data.[off] == 't' as char || data.[off] == 'f' as char) {
+            expectBool()
+        }
+        else if (data.[off] == 'n' as char) {
+            matchNull()
+        }
+        else if (isDigit!(data.[off])) {
+            expectFloat[f64]()
+        }
+        else if (consumeChar('{')) {
+            skipWhitespace()
+            while (data.[off] != '}' as char) {
+                expectString()
+                skipWhitespace()
+                expectChar(':')
+                skipValue()
+                skipWhitespace()
+                if (!consumeChar(','))
+                    break
+                skipWhitespace()
+            }
+            expectChar('}')
+        }
+        else if (consumeChar('[')) {
+            skipWhitespace()
+            while (data.[off] != ']' as char) {
+                skipValue()
+                skipWhitespace()
+                if (!consumeChar(','))
+                    break
+                skipWhitespace()
+            }
+            expectChar(']')
+        }
+    }
 }
 
-func fieldFromJSON[T](p: &JSONParser, pos: (u32, u32), obj: &T, key: &__string): !void {
+func fieldFromJSON[T](
+    p: &JSONParser,
+    pos: (u32, u32),
+    obj: &T,
+    key: &__string,
+    partialAllowed: bool
+): !void {
     #for(const member: T.members) {
         #if (member.isField) {
             #const M = member.Tinfo;
@@ -253,6 +300,12 @@ func fieldFromJSON[T](p: &JSONParser, pos: (u32, u32), obj: &T, key: &__string):
             }
         }
     }
+
+    if (partialAllowed) {
+       p.skipValue()
+       return
+    }
+
     const typeName = #{T.name};
     raise JSONParserError(f"${pos.0}:${pos.1} - Json key '${key}' does not exist in type '${typeName}'")
 }
@@ -292,13 +345,19 @@ func parseJSON[T](p: &JSONParser): !T {
             return &&tmp
         }
         else #if (T.isStruct && T.attributes.["json"]) {
+            #const attrs = T.attributes.["json"];
+            #const pa = attrs.["partial"];
             var tmp = T{};
             p.expectChar('{')
-            while (p.peekChar() != '}':char) {
+
+            while (p.peekChar() != '}' as char) {
                 var pos = p.tag();
                 var key = p.expectKey();
                 p.expectChar(':')
-                fieldFromJSON(p, pos, &tmp, &key)
+                #if (pa)
+                    fieldFromJSON(p, pos, &tmp, &key, true)
+                else
+                    fieldFromJSON(p, pos, &tmp, &key, false)
                 p.consumeChar(',')
             }
             p.expectChar('}')
@@ -323,7 +382,7 @@ pub func fromString[T](s: &const String): !T {
 
 test "Json encode" {
     var s = String();
-    toJSON(&s, 10:i32)
+    toJSON(&s, 10 as i32)
     ok!(s == "10")
 
     s.clear()
@@ -331,11 +390,11 @@ test "Json encode" {
     ok!(s == "{\"a\": 10, \"b\": true, \"c\": \"world\", \"d\": 99}")
 
     s.clear()
-    toJSON(&s, &(10:u32, true, "World"))
+    toJSON(&s, &(10 as u32, true, "World"))
     ok!(s == "[10, true, \"World\"]")
 
     s.clear()
-    toJSON(&s, &[10:u32, 20, 30])
+    toJSON(&s, &[10 as u32, 20, 30])
     ok!(s == "[10, 20, 30]")
 
     var x:i32? = 100;

@@ -186,7 +186,7 @@ void checkCallExpr(AstVisitor *visitor, AstNode *node)
             if (nodeIs(symbol, GenericParam))
                 symbol = getTypeDecl(rawType);
         }
-        else if (nodeIs(callee, TypeRef)) {
+        else if (nodeIs(callee, TypeRef) || nodeIs(callee, TypeDecl)) {
             symbol = getTypeDecl(rawType);
         }
 

@@ -99,11 +99,11 @@ pub class Builder {
     - func parseOptions(args: [string]) {
         for (const i: 0..args.size()) {
             const arg = __string(args.[i])
-            if (arg.[0] != '-':char || arg.[1] != 'D':char)
+            if (arg.[0] != '-' as char || arg.[1] != 'D' as char)
                 continue
             var name = arg
             var value = __string();
-            const idx = arg.indexOf('=':char)
+            const idx = arg.indexOf('=' as char)
             if (idx)
                 raise BuildError(f"invalid build option '${arg}', expect -DOPTION=VALUE")
             var name = arg.substr(0, *idx)

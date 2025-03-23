@@ -154,6 +154,7 @@ set(CXY_MIDDLE_SOURCES
         src/cxy/lang/middle/eval/member.c
         src/cxy/lang/middle/eval/path.c
         src/cxy/lang/middle/eval/unary.c
+        src/cxy/lang/middle/eval/xform.c
 
         src/cxy/lang/middle/bind/bind.c
         src/cxy/lang/middle/bind/discover.c

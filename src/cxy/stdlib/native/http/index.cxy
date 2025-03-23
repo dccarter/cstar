@@ -1,0 +1,5 @@
+module _http
+
+@__cc "api.c"
+@__cc "http.c"
+@__cc "llhttp.c"

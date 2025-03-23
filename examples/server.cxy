@@ -9,7 +9,7 @@ func handleConnection(sock: TcpSocket) {
         if (len) {
             sock.send("You said: ")
             sock.sendBuffer(buffer, *len)
-            if ((buffer.[0] == 'Q':char) && (buffer.[1] == 'U':char)) {
+            if ((buffer.[0] == 'Q ' as char) && (buffer.[1] == 'U ' as char)) {
                 // Quit signal
                 sock.close()
             }

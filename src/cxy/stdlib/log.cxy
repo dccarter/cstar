@@ -25,15 +25,19 @@ struct FixedWidth {
 
     @inline
     const func `str`(os: &OutputStream) {
-        os << s.substr(0:u64, <i64>min(count, s.size()))
+        os << s.substr(0 as u64, <i64>min(count, s.size()))
         if (s.size() < count)
             os << Repeat( ' ', count - s.size() )
     }
 }
 
+#if (!defined CXY_LOG_LEVEL) {
+    macro CXY_LOG_LEVEL = .TRACE
+}
+
 class Logger {
     - os: OutputStream;
-    - _level: Level = .DEBUG;
+    - _level: Level = CXY_LOG_LEVEL!;
 
     func `init`() {
         os = stdout
@@ -64,6 +68,29 @@ macro DBG(MSG) =( __LOG!(logger.Level.DEBUG, MSG!) )
 macro INF(MSG) =( __LOG!(logger.Level.INFO, MSG!) )
 macro WRN(MSG) =( __LOG!(logger.Level.WARNING, MSG!) )
 macro ERR(MSG) =( __LOG!(logger.Level.ERROR, MSG!) )
+
+#if (defined CXY_TRACE_LEVEL) {
+    #if (CXY_TRACE_LEVEL! == 3) {
+        macro TRC3(MSG) TRC!(MSG!)
+        macro TRC2(MSG) TRC!(MSG!)
+        macro TRC1(MSG) TRC!(MSG!)
+    }
+    else #if (CXY_TRACE_LEVEL! == 2) {
+        macro TRC3(MSG) ()
+        macro TRC2(MSG) TRC!(MSG!)
+        macro TRC1(MSG) TRC!(MSG!)
+    }
+    else #if (CXY_TRACE_LEVEL! == 1) {
+        macro TRC3(MSG) ()
+        macro TRC2(MSG) ()
+        macro TRC1(MSG) TRC!(MSG!)
+    }
+}
+else {
+    macro TRC3(MSG) ()
+    macro TRC2(MSG) ()
+    macro TRC1(MSG) ()
+}
 
 @inline
 pub func setLogLevel(lvl: Level) {

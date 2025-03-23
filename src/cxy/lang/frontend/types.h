@@ -152,7 +152,7 @@ struct MirType;
             bool generated;                                                    \
         };                                                                     \
     };                                                                         \
-    const struct MirType *mir;
+    const Type *retyped;
 
 #ifdef __cpluplus
 

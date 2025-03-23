@@ -155,7 +155,7 @@ pub func main() {
 
     bodies.[0].offsetMomentum(px, py, pz);
 
-    for(const i: 0:i32..50000000) {
+    for(const i: 0 as i32..50000000) {
         bodiesAdvance(bodies, <u64>5, 1.0e-5);
     }
 

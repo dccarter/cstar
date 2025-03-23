@@ -1,0 +1,692 @@
+module fetch
+
+import { Address, Socket, BufferedSocketOutputStream, getRemoteAddress } from "./net.cxy"
+import { TcpSocket, tcpConnect } from "./tcp.cxy"
+import { SslSocket } from "./ssl.cxy"
+import { Path, getFileSize } from "./path.cxy"
+import { Vector } from "./vector.cxy"
+import { HashMap } from "./hash.cxy"
+import { Time } from "./time.cxy"
+import { HeaderMap, Method, SendFile, Status, HttpError, methodFromString } from "./http.cxy"
+
+import "./log.cxy"
+import "./os.cxy" as os
+import "./base64.cxy" as base64
+
+import "native/http/llhttp.h" as parser
+
+macro CRLF =    "\r\n"
+
+enum Encoding {
+    UrlEncode, MultipartForm, MultipartOther
+}
+
+func urlEncode(os: &OutputStream, url: __string) {
+    const hex = "0123456789abcdef"
+    var p = url.data() !: ^const u8;
+    for (var i: 0..url.size()) {
+        if (   ('a' as char <= url.[i] && url.[i] <= 'z' as char)
+            || ('A' as char <= url.[i] && url.[i] <= 'Z' as char)
+            || ('0' as char <= url.[i] && url.[i] <= '9' as char)
+           )
+        {
+            os << url.[i];
+        }
+        else {
+            os << '%' as char
+            os << hex.[p.[i] >> 4]
+            os << hex.[p.[i] & 0xF];
+        }
+    }
+}
+
+const LOG_TAG = "HTTP_CLIENT";
+
+struct FileUpload {
+    _name: String;
+    _contentType: __string;
+    _path: Path = null
+
+    func `init`(name: String, path: Path, contentType: __string = "".s) {
+        _name = &&name
+        _path = &&path
+        _contentType = &&contentType
+    }
+
+    @inline
+    const func contentType() => _contentType
+
+    @inline
+    const func path() => &_path
+
+    @inline
+    const func name() => &_name
+
+    @inline
+    const func open(): !os.FileDescriptor {
+        return os.open(_path.__str())
+    }
+
+    @inline
+    const func size(): !u64 => getFileSize(_path.str())
+
+    @inline
+    const func `==`(other: &const This) => _name == other._name
+}
+
+const CONTENT_DISPOSITION = "Content-Disposition: form-data; name=\"".s;
+const CONTENT_DISPOSITION_FILENAME = "\"; filename=\"".s;
+const CONTENT_TYPE = "Content-Type: ".s;
+
+pub class Form {
+    - _encoding = Encoding.UrlEncode;
+    - _boundary: String = null;
+    - _data = HeaderMap();
+    - _uploads = Vector[FileUpload]();
+
+    func `init`(boundary: String) {
+        this._boundary = boundary
+    }
+
+    @inline
+    func add(name: String, value: String) {
+        _data.[&&name] = &&value
+    }
+
+    @inline
+    func upload(name: String, path: Path, contentType: __string = "".s) {
+        _uploads.push(FileUpload(&&name, &&path, contentType))
+        _encoding = .MultipartForm
+    }
+
+    @inline
+    const func `!!`() => !_data.empty() || !_uploads.empty();
+
+    - const func urlEncode(os: &OutputStream) {
+        var first = true
+        for (const item: _data) {
+            if (!first)
+                os << "&"
+            base64.urlEncode(os, &item.0)
+            os << "="
+            base64.urlEncode(os, &item.1)
+            first = false
+        }
+    }
+
+    - const func multipartEncode(os: &BufferedSocketOutputStream): !void {
+        for (const item: _data) {
+            os << "--" << _boundary << CRLF!
+               << CONTENT_DISPOSITION
+               << item.0 << '"' << CRLF!
+               << CRLF! << item.1 << CRLF!
+        }
+
+        if (_uploads.empty()) {
+            os << "--" << _boundary << "--"
+            return
+        }
+
+        for (const item, _: _uploads) {
+            os << "--" << _boundary << CRLF!
+               << CONTENT_DISPOSITION
+               << item.name() << CONTENT_DISPOSITION_FILENAME << item.path().name()
+               << "\"" << CRLF!
+
+            if (!item.contentType().empty())
+                os << CONTENT_TYPE << item.contentType() << CRLF!
+            os << CRLF!
+
+            var fd = item.open()
+            var sent =  os.sendFile(fd.fd, 0, fd.size())
+            if (!sent)
+                raise HttpError(f"uploading file '${item.path()}' failed: ${strerr()}")
+            os << CRLF!
+        }
+
+        os << "--" << _boundary << "--"
+    }
+
+    const func encode(os: &BufferedSocketOutputStream): !void {
+        if (_data.empty() && _uploads.empty())
+            return
+        if (_encoding == .UrlEncode)
+            urlEncode(os)
+        else
+            multipartEncode(os)
+    }
+
+    - const func urlEncodedSize() {
+        var size = _data.size() - 1 /* & by size-1 */
+        for (const item: _data) {
+            size += (
+                  1 /* = */
+                + base64.urlEncodeSize(item.0.size())
+                + base64.urlEncodeSize(item.1.size())
+            )
+        }
+
+        return size
+    }
+
+    - const func multipartEncodeSize(): !u64 {
+        var size = 0 as u64
+        for (const item: _data) {
+            size += (
+                2 /*--*/
+              + _boundary.size()
+              + 8 /* 4 * CRLF */
+              + CONTENT_DISPOSITION.size()
+              + 1 /* +1 for the last '"' */
+              + item.0.size()
+              + item.1.size()
+            )
+        }
+
+        if (_uploads.empty()) {
+            size += ( 4 /* 2 * -- */ + _boundary.size())
+            return size
+        }
+
+        for (const item, _: _uploads) {
+            size += (
+                  2 /* -- */
+                + _boundary.size()
+                + 4 /* 2 * CRLF */
+                + CONTENT_DISPOSITION.size()
+                + item.name().size()
+                + CONTENT_DISPOSITION_FILENAME.size()
+                + item.path().name().size()
+                + 1 /* '"' */
+            )
+
+            if (!item.contentType().empty())
+                size += (CONTENT_TYPE.size() + item.contentType().size() + 2 /* CRLF */ )
+            size += 2 /* CRLF */
+            size += (item.size() + 2 /* CRLF */ )
+        }
+
+        size +=  (
+              4 /* 2 * -- */
+            + _boundary.size()
+        )
+        return size
+    }
+
+    - const func size(): !u64 {
+        if (_data.empty() && _uploads.empty())
+            return 0 as u64
+        if (_encoding == .UrlEncode)
+            return urlEncodedSize()
+        else
+            return multipartEncodeSize()
+    }
+}
+
+pub class Request {
+    - _headers = HeaderMap();
+    - _args = HashMap[String, String]();
+    - _form: Form? = null;
+    - _body: String = null;
+    - _sendFile: SendFile? = null;
+    - _method = Method.Get;
+    - _resource = __string("");
+
+    @inline
+    - func `init`() {}
+
+    @inline
+    func header(name: String, value: String) => _headers.[&&name] = &&value
+
+    @inline
+    func arg(name: String, value: String) => _args.[&&name] = &&value
+
+    func body(value: String = null): !&String {
+        if (_form)
+            raise HttpError("Request body already set as a form")
+        else if (_sendFile)
+            raise HttpError("Request body already set as a file")
+        if (_body == null)
+            _body = (value == null? String() : &&value)
+        return &_body
+    }
+
+    @inline
+    func setContentType(value: String) => _headers.["Content-Type"] = &&value
+
+    func setForm(fm: Form): !void {
+        if (_body != null)
+            raise HttpError("Request body already set as a string buffer")
+        else if (_sendFile)
+            raise HttpError("Request body already set as a file")
+        else if (_form)
+            raise HttpError("Request form already set")
+
+        if (fm._encoding == .UrlEncode) {
+            setContentType("application/x-www-form-url-encoded")
+        }
+        else {
+            var contentType = "multipart/form-data; boundary=".S;
+            contentType << fm._boundary
+            setContentType(&&contentType)
+        }
+
+        _form = &&fm
+    }
+
+    func setFile(path: Path, contentType: String): !void {
+        if (_body != null)
+            raise HttpError("Request body already set as a string buffer")
+        else if (_form)
+            raise HttpError("Request body already set as a form")
+        else if (_sendFile)
+            raise HttpError("Request file already set")
+        var fd = os.open(path.__str())
+        var size = fd.size();
+        _sendFile = SendFile(&&fd, size)
+        setContentType(&&contentType)
+    }
+
+    func cleanup() {
+        _args.clear()
+        _headers.clear()
+        _form = null
+        _body = null
+        _sendFile = null
+        _resource = __string();
+    }
+
+    func reset(method: Method, resource: __string, clear: bool) {
+       if (clear || method != _method || _resource != resource) {
+            cleanup()
+            _resource = &&resource
+            _method = method
+       }
+    }
+
+    const func contentLength(): !u64 {
+        if (_body != null)
+            return _body.size()
+        if (_form)
+           return _form&.size()
+        if (_sendFile)
+            return _sendFile&.count
+        return 0 as u64
+    }
+
+    const func encodeHeaders(os: &BufferedSocketOutputStream) {
+        for (const hdr: _headers) {
+            os << hdr.0 << ": " << hdr.1 << CRLF!
+        }
+    }
+
+    const func encodeArgs(os: &BufferedSocketOutputStream) {
+        if (_args.empty())
+            return;
+        os << '?'
+        var first = true
+        for (const arg: _args) {
+            if (!first)
+                os << '&'
+            urlEncode(os, arg.0.__str())
+            os << '='
+            urlEncode(os, arg.1.__str())
+            first = false
+        }
+    }
+
+    func submit(sock: Socket, timeout: u64 = 0): !void {
+        var sos = BufferedSocketOutputStream(&&sock, timeout);
+        sos << _method << " "
+        if (_resource.empty())
+            sos << "/"
+        else
+            sos << _resource
+        encodeArgs(&sos)
+        sos << " HTTP/1.1" << CRLF!
+        encodeHeaders(&sos)
+        var size = contentLength();
+        if (size > 0)
+            sos << "Content-Length: " << size << CRLF!
+        sos << "Date: " << Time() << CRLF!
+        sos << CRLF!
+
+        if (size == 0)
+            return
+
+        if (_body != null) {
+            // Send body as it is
+            sos << _body
+        }
+        else if (_sendFile) {
+            // Send the file
+            sos.sendFile(_sendFile&.raw(), _sendFile&.count, 0)
+        }
+        else if (_form) {
+            // Encode the for
+            _form&.encode(&sos)
+        }
+        sos << CRLF!
+    }
+}
+
+type WriterFn = func(buf: ^const char, size: u64) -> bool
+
+pub class Response {
+    - _status: Status;
+    - _headers = HeaderMap();
+    - _writer: lambda_of!(#WriterFn);
+    - _body: String = null;
+    - _parser: ^parser.llhttp_t = null;
+    - _s1: String = null;
+    - _s2: String = null;
+    - _isComplete = false;
+
+    @inline
+    func `init`(settings: ^const parser.llhttp_settings_t) {
+        _parser = parser.llhttp_alloc(parser.llhttp_type_t.HTTP_RESPONSE, settings)
+        _parser.data = this
+    }
+
+    @inline
+    func `init`(settings: ^const parser.llhttp_settings_t, fn: WriterFn) {
+        this.op__init(settings)
+        _writer = &&fn
+    }
+
+    func `deinit`() {
+        if (_parser != null) {
+            parser.llhttp_free(_parser)
+            _parser = null
+        }
+    }
+
+    @[inline, prop]
+    const func ok() => _parser.status_code == Status.Ok
+
+    @[inline, prop]
+    const func statusCode() => _parser.status_code
+
+    @[prop, inline]
+    const func contentLength() => _parser.content_length
+
+    @[prop]
+    const func body() => &_body
+
+    @inline
+    func header(name: String, value: String) => _headers.[&&name] = &&value
+
+    func onBodyPart(buf: ^const char, len: u64): i32 {
+        if (_writer != null) {
+            // Write the body to the writer
+            return _writer(buf, len)? (-1 as i32) : 0
+        }
+        else if (_body == null) {
+            _body = String(buf, len)
+        }
+        else {
+            _body << __string(buf !: string, len)
+        }
+        return 0
+    }
+
+    func onHeadersComplete(): i32 {
+        if (_writer != null)
+            return 0
+
+        // invoke _writer with null and contentLength to initialized
+        if (_writer(null, contentLength()))
+            return 0
+        return -1
+    }
+
+    func onMessageComplete(): i32 {
+        if (_writer != null) {
+            // notify writer that message os complete
+            _writer(null, 0)
+        }
+        return 0
+    }
+
+    func feed(buf: ^const char, len: u64): bool {
+        const ret = parser.llhttp_execute(_parser, buf !: ^const char, len)
+        if (ret != parser.llhttp_errno.HPE_OK) {
+            const s = parser.llhttp_errno_name(ret) !: string
+            const reason = parser.llhttp_get_error_reason(_parser) !: string;
+            DBG!("parsing request failed - error: " << s << ", reason: " << reason )
+            return false
+        }
+        return true
+    }
+
+    func receive(sock: &Socket, timeout: u64): !void {
+        var buffer: [char, 8192] = []
+        while (!_isComplete) {
+            var count = sock.receive(buffer, sizeof!(buffer), timeout);
+            if (!count)
+                raise HttpError(f"Receiving fetch response failed: ${strerr()}")
+            if (!feed(buffer, *count)) {
+                const err = parser.llhttp_get_error_reason(_parser) !: string
+                raise HttpError(f"Parsing fetch response failed: ${err}")
+            }
+        }
+    }
+}
+
+func responseParserOnHeaderField(p: ^parser.llhttp_t, at: ^const char, len: u64) {
+    var resp = p.data !: Response;
+    if (resp._s2 != null) {
+        // We have seen a new header
+        assert!(resp._s1 != null)
+        resp._headers.[&&resp._s1] = &&resp._s2
+        resp._s1 = null
+        resp._s2 = null
+    }
+    if (resp._s1 == null) {
+        resp._s1 = String(at, len)
+    }
+    else {
+        resp._s1 << __string(at !: string, len)
+    }
+    return 0 as i32
+}
+
+func responseParserOnHeaderValue(p: ^parser.llhttp_t, at: ^const char, len: u64) {
+    var resp = p.data !: Response;
+    assert!(resp._s1 != null)
+    if (resp._s2 == null) {
+        resp._s2 = String(at, len)
+    }
+    else {
+        resp._s2 << __string(at !: string, len)
+    }
+    return 0 as i32
+}
+
+func responseParserOnHeadersComplete(p: ^parser.llhttp_t) {
+    var resp = p.data !: Response;
+    if (resp._s1 != null) {
+        assert!(resp._s1 != null)
+        resp._headers.[&&resp._s1] = &&resp._s2
+        resp._s1 = null
+        resp._s2 = null
+    }
+    return 0
+}
+
+func responseParserOnBody(p: ^parser.llhttp_t, at: ^const char, len: u64) {
+    var resp = p.data !: Response;
+    return resp.onBodyPart(at, len)
+}
+
+func responseParserOnMessageComplete(p: ^parser.llhttp_t) {
+    var resp = p.data !: Response;
+    resp._isComplete = true;
+    return 0
+}
+
+const HTTP_PARSER_SETTINGS = parser.llhttp_settings_t{
+    on_header_field: responseParserOnHeaderField,
+    on_header_value: responseParserOnHeaderValue,
+    on_headers_complete: responseParserOnHeadersComplete,
+    on_body: responseParserOnBody,
+    on_message_complete: responseParserOnMessageComplete
+};
+
+type RequestBuilder = func(req: &Request) -> !void
+
+class Session {
+    - _port = 80 as u16;
+    - _headers = HeaderMap();
+    - _timeout = 20000 as u64; /* 20 sec */
+    - _addr = Address();
+    - _proto = __string("http");
+    - _sock: Socket = null;
+    - _req: Request = null;
+
+    func `init`(proto: __string, host: String, port: u16, addr: Address) {
+        _proto = &&proto
+        _port = port
+        _addr = &&addr
+        header("Host", &&host)
+    }
+
+    @inline
+    func isHttps() => _proto == "https".s
+
+    @inline
+    func header(name: String, value: String): void { _headers.[&&name] = &&value }
+
+    @inline
+    func language(lang: String) { header("Accept-Language", &&lang) }
+
+    @inline
+    func userAgent(agent: String) { header("User-Agent", &&agent) }
+
+    func perform(
+        method: Method,
+        resource: __string,
+        builder: RequestBuilder = null,
+        writer: WriterFn = null
+    ): !Response {
+        if (_req == null)
+            _req = Request()
+        _req.reset(method, &&resource, false)
+        for (var hdr: _headers) {
+            _req.header(hdr.0, hdr.1)
+        }
+
+        if (builder != null) {
+            // Invoke request builder
+            builder(&_req)
+        }
+
+        @unlikely if (_sock == null || !_sock) {
+            var fd = tcpConnect(_addr, _timeout)
+            if (isHttps())
+                _sock = SslSocket.create(fd, _addr)
+            else
+                _sock = TcpSocket(fd, _addr)
+        }
+        // Submit request
+        _req.submit(_sock, _timeout)
+        var resp: Response = Response(ptrof HTTP_PARSER_SETTINGS, &&writer);
+        resp.receive(&_sock, _timeout)
+        return &&resp
+    }
+
+    func connect(hdrs: &const HeaderMap): !void {
+        var resp = perform(Method.Connect,  "/", (req: &Request): !void => {
+            if (hdrs != null) {
+                for (const hdr: hdrs) {
+                    req.header(hdr.0, hdr.1)
+                }
+            }
+        })
+
+        if (!resp.ok())
+            raise HttpError(
+                f".Connect to server '${_addr}' failed (status: ${resp.statusCode()}"
+            )
+        _req.cleanup()
+    }
+
+    @inline
+    func connect(): !void {
+        var hdrs: HeaderMap = null;
+        connect(&hdrs)
+    }
+
+    func head(resource: __string, hdrs: &const HeaderMap): !Response {
+        return perform(Method.Head, &&resource, (req: &Request): !void => {
+            for (const hdr: hdrs) {
+                req.header(hdr.0, hdr.1)
+            }
+        })
+    }
+
+    @inline
+    func head(resource: __string): !Response {
+        var hdrs: HeaderMap = null;
+        return head(&&resource, &hdrs)
+    }
+
+    @static
+    func create(url: __string) {
+        var idx = url.find("://")
+        var host = url;
+        var proto = "http".s
+        var port  = 80 as u16
+
+        if (idx) {
+            proto = url.substr(0, <i64>*idx)
+            host = url.substr(*idx + 3)
+        }
+
+        idx = host.rIndexOf(':' as char)
+        if (idx) {
+            port = host.substr(*idx + 1).toi[u16]()
+            host = host.substr(0, <i64>*idx)
+        }
+        else if(proto == "https".s) {
+            port = 443
+        }
+        var hostStr = String(host)
+        var addr = getRemoteAddress(hostStr.str(), port);
+        TRC1!(f"Connected to host: '${proto}://${host}:${port}'")
+        return This(proto, hostStr, port, &&addr)
+    }
+}
+
+pub func fetch(url: __string, builder: RequestBuilder = null): !Response {
+    var method = Method.Get
+    if (!url.empty() && url.[0] == '@' as char) {
+        var methodName = url.substr(1)
+        var ret = methodFromString(methodName)
+        if (ret.0 == .Unknown)
+            raise HttpError(f"Invalid fetch url '${url}', @METHOD in url is unknown")
+        var i = <i64>ret.1
+        while (true) {
+            if (!isSpace!(methodName.[i]))
+                break
+            i++
+        }
+        url = methodName.substr(i)
+        method = ret.0
+    }
+
+    var idx = url.find("://")
+    var resource = "/".s
+    if (idx) {
+        var stem = url.substr(*idx + 3)
+        var idx2 = stem.indexOf('/' as char)
+        if (idx2) {
+            resource = stem.substr(*idx2)
+            url = url.substr(0, <i64>(3 + *idx + *idx2))
+        }
+    }
+
+    var session = Session.create(url);
+    session.userAgent("Cxy/0.0.1")
+    return session.perform(method, resource, &&builder)
+}

@@ -1,0 +1,260 @@
+module ssl
+
+import { Socket, Address } from "./net.cxy"
+import { State } from "./coro.cxy"
+
+import "./log.cxy"
+
+import "unistd.h" as unistd
+import "sys/mman.h" as vmem
+import "openssl/bio.h" as BIO
+import "openssl/ssl.h" as SSL
+import "openssl/err.h" as ERR
+import "openssl/crypto.h" as CRYPTO
+import "openssl/types.h" as TYPES
+
+@__cc:clib "ssl"
+@__cc:clib "crypto"
+
+@thread
+var initSslOnce = false;
+
+macro ERR_SYSTEM_FLAG                =(INT_MAX! + 1)
+macro ERR_SYSTEM_MASK                =(INT_MAX!)
+macro ERR_SYSTEM_ERROR(errcode)      =(((errcode!) & ERR_SYSTEM_FLAG!) != 0)
+macro SSL_load_error_strings()       =(
+    SSL.OPENSSL_init_ssl(OPENSSL_INIT_LOAD_SSL_STRINGS! | OPENSSL_INIT_LOAD_CRYPTO_STRINGS!, null)
+)
+macro SSL_library_init()             =( SSL.OPENSSL_init_ssl(0, null) )
+macro OpenSSL_add_all_algorithms     =(
+     CRYPTO.OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS! | OPENSSL_INIT_ADD_ALL_DIGESTS!, null)
+)
+
+macro BIO_get_ssl(b, sslp)     =(
+    BIO.BIO_ctrl(b!, BIO_C_GET_SSL!, 0,(sslp! !: ^char))
+)
+
+macro BIO_flush(b)             =(BIO.BIO_ctrl(b!, BIO_CTRL_FLUSH!,0, null))
+
+macro SSL_set_mode(ssl, op)    =(
+    SSL.SSL_ctrl((ssl!), SSL_CTRL_MODE! ,(op!), null)
+)
+
+macro BIO_should_retry(a)      =(BIO.BIO_test_flags(a!, BIO_FLAGS_SHOULD_RETRY!))
+macro BIO_should_read(a)       =(BIO.BIO_test_flags(a!, BIO_FLAGS_READ!))
+macro BIO_should_write(a)      =(BIO.BIO_test_flags(a!, BIO_FLAGS_WRITE!))
+macro BIO_do_handshake(b)      =(BIO.BIO_ctrl(b!, BIO_C_DO_STATE_MACHINE!, 0, null))
+
+@inline
+func ERR_GET_LIB(code: u64) {
+    if (ERR_SYSTEM_ERROR!(code))
+        return <u64>ERR_LIB_SYS!
+    return (code >> ERR_LIB_OFFSET!) & ERR_LIB_MASK!
+}
+
+@thread
+var sslClientCtx = initialize();
+
+const LOG_TAG = "SSL_PROTO";
+
+func initialize() {
+    assert!(!initSslOnce)
+    initSslOnce = true
+
+    SSL_load_error_strings!()
+    SSL_library_init!()
+    OpenSSL_add_all_algorithms!()
+    var ctx = SSL.SSL_CTX_new(SSL.TLS_client_method());
+    assert!(ctx != null)
+    return ctx
+}
+
+pub exception SslError(msg: String) =>
+    msg != null? msg.str() : ""
+
+@inline
+func getSslError(): string {
+    var code = ERR.ERR_get_error()
+    if (code != 0)
+        return ERR.ERR_error_string(code, null) !: string
+    return null
+}
+
+pub class SslSocket: Socket {
+    - bio: ^TYPES.bio_st = null;
+
+    - func bioFlush(ssl: ^TYPES.ssl_st, timeout: u64) {
+        while (true) {
+            var rc = BIO_flush!(bio)
+            if (rc >= 0)
+                return true
+
+            var err = SSL.SSL_get_error(ssl, <i32>rc)
+            if (err != SSL_ERROR_WANT_WRITE!) {
+                errno! = ECONNRESET!
+                TRC!( "BIO_get_ssl failed: " << getSslError() )
+                return false
+            }
+
+            if (!wait(timeout, State.AE_WRITABLE)) {
+                TRC!( "Waiting for socket to be writable failed during flush")
+                return false
+            }
+        }
+    }
+
+    func `init`(fd: i32, addr: Address, bio: ^TYPES.bio_st) {
+        super(fd, &&addr)
+        this.bio = bio
+    }
+
+    @static
+    func create(fd: i32, addr: Address, ctx: ^TYPES.ssl_ctx_st = sslClientCtx): !This {
+        var ssl: ^TYPES.ssl_st = null
+        var bio = SSL.BIO_new_ssl(ctx, (ctx == sslClientCtx)? 1 : 0)
+        if (bio == null) {
+            unistd.close(fd)
+            raise SslError(f"BIO_new_ssl failed: ${getSslError()}")
+        }
+
+        BIO_get_ssl!(bio, ptrof ssl)
+        if (ssl == null) {
+            BIO.BIO_free(bio)
+            unistd.close(fd)
+            raise SslError(f"BIO_get_ssl failed: ${getSslError()}")
+        }
+
+        SSL_set_mode!(ssl, SSL_MODE_ENABLE_PARTIAL_WRITE!|SSL_MODE_AUTO_RETRY!)
+        var cbio = BIO.BIO_new_socket(fd, BIO_NOCLOSE!)
+        if (cbio == null) {
+            BIO.BIO_free(bio)
+            unistd.close(fd)
+            raise SslError( f"BIO_new_socket failed: ${getSslError()}")
+        }
+
+        BIO.BIO_push(bio, cbio)
+
+        while (true) {
+            var rc = BIO_do_handshake!(bio);
+            if (rc <= 0) {
+                var err = SSL.SSL_get_error(ssl, <i32>rc);
+                if (err == SSL_ERROR_WANT_WRITE!) {
+                    if (fdWaitWrite(fd, 0) == State.AE_WRITABLE)
+                        continue
+                }
+                else if (err == SSL_ERROR_WANT_READ!) {
+                    if (fdWaitRead(fd, 0) == State.AE_READABLE)
+                        continue
+                }
+
+                BIO.BIO_free_all(bio)
+                unistd.close(fd)
+                raise SslError( f"BIO_new_socket failed(${err}): ${getSslError()}")
+            }
+            TRC3!("SSL handshake done")
+            break
+        }
+        return This(fd, &&addr, bio)
+    }
+
+    func sendBuffer(buf: ^const void, size: u64, timeout: u64 = 0): u64? {
+        var ssl: ^TYPES.ssl_st = null;
+        BIO_get_ssl!(bio, ptrof ssl)
+        if (ssl == null) {
+            ERR!( "BIO_get_ssl failed: " << getSslError())
+            return null
+        }
+
+        if (buf == null) {
+            if (!bioFlush(ssl, timeout))
+                return null
+        }
+
+        var written = 0 as u64
+        var p = buf !: ^u8
+        while (written < size) {
+            var rc = BIO.BIO_write(bio, ptroff!(p + written), <i32>(size - written))
+            if (rc <= 0) {
+                var err = SSL.SSL_get_error(ssl, <i32>rc)
+                if (err != SSL_ERROR_WANT_WRITE!) {
+                    errno! = ECONNRESET!
+                    TRC!( "BIO_get_ssl failed: " << getSslError())
+                    return null
+                }
+
+                if (!wait(timeout, State.AE_WRITABLE)) {
+                    TRC!( "Waiting for socket to be writable failed")
+                    return null
+                }
+                continue
+            }
+
+            written += rc
+        }
+        return written
+    }
+
+    func sendFile(fd: i32, offset: u64, count: u64, timeout: u64 = 0): u64? {
+        // Sendfile not supported for SSL
+        const len = ((count + (SysConfPageSize - 1)) & ~(SysConfPageSize - 1)) + SysConfPageSize;
+        var ptr  = vmem.mmap(null,
+                             len,
+                             PROT_READ!,
+                             MAP_PRIVATE!,
+                             fd,
+                             <i64>offset)
+        if (ptr == ((-1 as u64) !: ^void)) {
+            TRC!("mmap(" << fd << ") failed: " << strerr())
+            return null
+        }
+
+        var ret = sendBuffer(ptr, count, timeout);
+        vmem.munmap(ptr, len)
+        return ret
+    }
+
+    func receive(buf: ^void, size: u64, timeout: u64 = 0): u64? {
+        var ssl: ^TYPES.ssl_st = null;
+        BIO_get_ssl!(bio, ptrof ssl)
+        if (ssl == null) {
+            ERR!( "BIO_get_ssl failed: " << getSslError())
+            return null
+        }
+
+        var nRead = 0 as u64
+        var p = buf !: ^u8;
+        while (nRead < size) {
+            var rc = BIO.BIO_read(bio, ptroff!(p + nRead), <i32>(size - nRead));
+            if (rc < 0) {
+                var err = SSL.SSL_get_error(ssl, <i32>rc);
+                if (err != SSL_ERROR_WANT_READ!) {
+                    ERR!( "BIO_get_ssl failed: " << getSslError())
+                    errno! = ECONNRESET!
+                    return null
+                }
+
+                if (nRead > 0)
+                    return nRead // Return what we have read so far
+
+                if (!wait(timeout, State.AE_READABLE)) {
+                    TRC!( f"Waiting for socket to be readable timed out")
+                    return null
+                }
+                continue
+            }
+            else if (rc == 0)
+                return nRead
+            nRead += rc
+        }
+
+        return nRead
+    }
+
+    func `deinit`() {
+        if (bio != null) {
+            SSL.BIO_ssl_shutdown(bio)
+            BIO.BIO_free_all(bio);
+            bio = null
+        }
+    }
+}

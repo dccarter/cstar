@@ -9,16 +9,17 @@ import { Path } from "stdlib/path.cxy"
 import { Request, Response, Server, Method, Status, SendFile } from "./http.cxy"
 
 import "unistd.h" as unistd
-import "stdlib.h" as stdlib
 import "sys/mman.h" as vmem
 
 ##if (defined MACOS) {
 import "sys/fcntl.h" as fcntl
 import "sys/syslimits.h" as limits // for PATH_MAX! macro)
+import "_stdlib.h" as stdlib
 }
 else {
 import "fcntl.h" as fcntl
 import "linux/limits.h" as limits // for PATH_MAX! macro
+import "stdlib.h" as stdlib
 }
 
 #if (defined MACOS) {
@@ -34,10 +35,10 @@ macro StatField(X) mk_ident!("st_", X!, "tim")
 
 @json
 pub struct Config {
-    compressMin = 2048:u64;
+    compressMin = 2048 as u64;
     enableSendFile = false;
-    cacheExpires = 86400:i64;
-    mappedMin = 2048:u64;
+    cacheExpires = 86400 as i64;
+    mappedMin = 2048 as u64;
     root = String("./www/");
     route = String(CXY_FILE_SERVER_ROUTE!);
     allowRange = true;
@@ -47,14 +48,14 @@ struct CachedFile {
     fd: i32 = -1;
     data: ^void = null;
     path: String = null;
-    len = 0:u64;
-    size = 0:u64;
+    len = 0 as u64;
+    size = 0 as u64;
     lastMod: time_t = 0;
     lastAccess: time_t = 0;
     useFd = false;
     isMapped = false;
     valid = false;
-    flags = 0:u8;
+    flags = 0 as u8;
 
     func `init`() {}
 
@@ -92,7 +93,7 @@ struct MimeConfig {
     allowCompress = false;
     allowCaching = true;
     allowRange = true;
-    cacheExpires = -1:i64;
+    cacheExpires = -1 as i64;
 }
 
 struct MimeType {
@@ -134,7 +135,7 @@ pub class FileServer {
                 path = __copy!(rootAlias)
             }
 
-            var idx = path.rIndexOf('.':char)
+            var idx = path.rIndexOf('.' as char)
             if (!idx) {
                 var aliasedPath = this.redirects.[path]
                 if (!aliasedPath) {
@@ -143,7 +144,7 @@ pub class FileServer {
                 }
                 var tmp = *aliasedPath;
                 path = __copy!(tmp)
-                idx =  path.rIndexOf('.':char)
+                idx =  path.rIndexOf('.' as char)
             }
             var pathOpt = this.fileExists(&path);
             if (!pathOpt) {
@@ -246,7 +247,7 @@ pub class FileServer {
     }
 
     func alias(src: String, dst: String) : void {
-        if (!dst.rIndexOf('.':char)) {
+        if (!dst.rIndexOf('.' as char)) {
             ERR!( "redirecting '" << src << "' to unsupported file format: '" << dst << "'" )
             assert!(false)
         }
@@ -327,7 +328,7 @@ pub class FileServer {
             return buildRangeResponse(resp, *rng, cf);
         }
         else {
-            if (config.enableSendFile)
+            if (cf.useFd)
                 resp.chunk(SendFile(FileDescriptor(cf.fd), cf.len))
             else
                 resp.chunk(__string(cf.data !: string, cf.len))
@@ -340,17 +341,17 @@ pub class FileServer {
         rng: &const String,
         cf: &CachedFile
     ) : Status {
-        var i = 0:i64;
-        var j = 0:i64;
+        var i = 0 as i64;
+        var j = 0 as i64;
         var s = rng.__str();
         var ranges = Vector[(i64, i64)]();
         while (i < s.size()) {
             // Skip white-space
-            while(s.[i] == ' ':char) i++;
+            while(s.[i] == ' ' as char) i++;
             var start = s.toi[i64]();
             var end: i64;
             s = s.substr(j)
-            var tmp = s.indexOf('-':char);
+            var tmp = s.indexOf('-' as char);
             if (tmp) {
                 i = <i64> *tmp
                 s = s.substr(i+1)
@@ -368,7 +369,7 @@ pub class FileServer {
             }
             ranges.push((start, end))
 
-            tmp = s.indexOf(',':char)
+            tmp = s.indexOf(',' as char)
             if (tmp) {
                 i = (<i64> *tmp + 1)
             }
@@ -377,7 +378,7 @@ pub class FileServer {
         // depending on the number of requested ranges, build Response
         if (ranges.size() == 1) {
             var rng = ranges.[0];
-            if (config.enableSendFile)
+            if (cf.useFd)
                 resp.chunk(SendFile(FileDescriptor(cf.fd), rng.0, rng.1))
             else
                 resp.chunk(__string(cf.data !: string, cf.len).substr(rng.0, rng.1))
@@ -497,7 +498,7 @@ pub class FileServer {
             var total = s.st_size;
             total += SysConfPageSize - (total % SysConfPageSize)
             cf.data = vmem.mmap(null, total, PROT_READ!, MAP_SHARED!, cf.fd, 0)
-            if (cf.data == ((-1:u64) !: ^void)) {
+            if (cf.data == ((-1 as u64) !: ^void)) {
                 WRN!("mapping static resource (" << cf.fd << ") of size " << total << " failed: " << errno!);
                 return false;
             }
@@ -507,7 +508,7 @@ pub class FileServer {
         else {
             // read file
             var total = s.st_size + 8;
-            var nread = 0:u64;
+            var nread = 0 as u64;
             var toread = s.st_size;
             var b = malloc(total) !: ^char;
              while (nread < toread) {

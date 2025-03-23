@@ -53,6 +53,11 @@
     case astException:                                                         \
         MODE##VisitManyNodes(visitor, node->exception.params);                 \
         break;                                                                 \
+    case astTupleXform:                                                        \
+        MODE##Visit(visitor, node->xForm.target);                              \
+        MODE##Visit(visitor, node->xForm.cond);                                \
+        MODE##Visit(visitor, node->xForm.xForm);                               \
+        break;                                                                 \
     case astProgram:                                                           \
         MODE##VisitManyNodes(visitor, node->program.top);                      \
         MODE##VisitManyNodes(visitor, node->program.decls);                    \

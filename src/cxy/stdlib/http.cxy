@@ -7,13 +7,11 @@ import { Vector } from "./vector.cxy"
 import { HashMap } from "./hash.cxy"
 import { Trie } from "./trie.cxy"
 
-import { Address } from "./net.cxy"
-import { TcpSocket, TcpListener, BufferedSocketOutputStream } from "./tcp.cxy"
+import { Address, BufferedSocketOutputStream } from "./net.cxy"
+import { TcpSocket, TcpListener } from "./tcp.cxy"
 import { Thread } from "./thread.cxy"
 
-@__cc "native/http/api.c"
-@__cc "native/http/http.c"
-@__cc "native/http/llhttp.c"
+import "./native/http/index.cxy"
 
 ##if (defined MACOS) {
     import "_ctype.h" as ctype
@@ -30,13 +28,21 @@ import "native/http/llhttp.h" as parser
 pub exception HttpError(msg: String) => msg == null? "" : msg.str()
 
 pub enum Method : u32 {
+    @str("DELETE")
     Delete,
+    @str("GET")
     Get,
+    @str("HEAD")
     Head,
+    @str("POST")
     Post,
+    @str("PUT")
     Put,
+    @str("CONNECT")
     Connect,
+    @str("OPTIONS")
     Options,
+    @str("TRACE")
     Trace,
     Unknown
 }
@@ -92,29 +98,30 @@ pub func methodFromString(method: __string) {
     var maybe = (Method.Unknown, "");
 
     switch(x) {
-        case 'D':char => maybe = (Method.Delete, "DELETE")
-        case 'G':char => maybe = (Method.Get, "GET")
-        case 'H':char => maybe = (Method.Head, "HEAD")
-        case 'P':char => {
-            if (toupper(method.[1]) == 'O':char)
+        case 'D' as char => maybe = (Method.Delete, "DELETE")
+        case 'G' as char => maybe = (Method.Get, "GET")
+        case 'H' as char => maybe = (Method.Head, "HEAD")
+        case 'P' as char => {
+            if (toupper(method.[1]) == 'O' as char)
                 maybe = (Method.Post, "POST")
             else
                 maybe = (Method.Put, "PUT")
         }
-        case 'C':char => maybe = (Method.Connect, "CONNECT")
-        case 'O':char => maybe = (Method.Options, "OPTIONS")
-        case 'T':char => maybe = (Method.Trace, "TRACE")
-        default  => return (Method.Unknown, 0:u64)
+        case 'C' as char => maybe = (Method.Connect, "CONNECT")
+        case 'O' as char => maybe = (Method.Options, "OPTIONS")
+        case 'T' as char => maybe = (Method.Trace, "TRACE")
+        default  => return (Method.Unknown, 0 as u64)
     }
 
     var str = __string(maybe.1);
     if (method.size() < str.size())
-        return (Method.Unknown, 0:u64)
+        return (Method.Unknown, 0 as u64)
 
+    method = method.substr(0, <i64>str.size())
     if (EqualsCase{}(&method, &str))
         return (maybe.0, str.size())
 
-    return (Method.Unknown, 0:u64)
+    return (Method.Unknown, 0 as u64)
 }
 
 pub func statusText(status: Status) {
@@ -227,7 +234,7 @@ pub func methodName(method: Method) {
     }
 }
 
-type HeaderMap = HashMap[String, String, HashCase, EqualsCase];
+pub type HeaderMap = HashMap[String, String, HashCase, EqualsCase];
 pub var CONTENT_LENGTH_S = String("Content-Length");
 pub var CONTENT_LENGTH_CS = __string("Content-Length");
 pub var DATE_S = String("Date");
@@ -343,7 +350,7 @@ pub class Response {
             return _body.size()
         if (_chunks == null)
             return 0
-        var sz = 0:u64;
+        var sz = 0 as u64;
         for (const chunk, _: _chunks) {
             match (chunk) {
                 case string as s => sz += len!(s)
@@ -400,6 +407,7 @@ pub class Request {
     - _s2: String = null;
     - _isComplete = false;
     - _parser: ^parser.llhttp_t = null;
+    - _middlewareContexts: ^void = null;
     - _route: &Route
 
     @inline
@@ -430,14 +438,14 @@ pub class Request {
     @[prop, inline]
     const func method() {
         switch(_parser.method) {
-            case 0:u8 /* HTTP_DELETE */ => return Method.Delete
-            case 1:u8 /* HTTP_GET */ => return Method.Get
-            case 2:u8 /* HTTP_HEAD */ => return Method.Head
-            case 3:u8 /* HTTP_POST */ => return Method.Post
-            case 4:u8 /* HTTP_PUT */ => return Method.Put
-            case 5:u8 /* HTTP_CONNECT */ => return Method.Connect
-            case 6:u8 /* HTTP_OPTIONS */ => return Method.Options
-            case 7:u8 /* HTTP_TRACE */ => return Method.Trace
+            case 0 as u8 /* HTTP_DELETE */ => return Method.Delete
+            case 1 as u8 /* HTTP_GET */ => return Method.Get
+            case 2 as u8 /* HTTP_HEAD */ => return Method.Head
+            case 3 as u8 /* HTTP_POST */ => return Method.Post
+            case 4 as u8 /* HTTP_PUT */ => return Method.Put
+            case 5 as u8 /* HTTP_CONNECT */ => return Method.Connect
+            case 6 as u8 /* HTTP_OPTIONS */ => return Method.Options
+            case 7 as u8 /* HTTP_TRACE */ => return Method.Trace
             default => return Method.Unknown
         }
     }
@@ -479,6 +487,9 @@ pub class Request {
         _uri = it
     }
 
+    @[inline, prop]
+    const func middlewareContexts() => _middlewareContexts
+
     func clear() {
         _headers.clear()
         _params.clear()
@@ -507,7 +518,7 @@ pub class Request {
 func requestParserOnMessageBegin(p: ^parser.llhttp_t) {
     var req = p.data !: Request;
     req.clear()
-    return 0:i32
+    return 0 as i32
 }
 
 func requestParserOnUrl(p: ^parser.llhttp_t, at: ^const char, len: u64) {
@@ -518,7 +529,7 @@ func requestParserOnUrl(p: ^parser.llhttp_t, at: ^const char, len: u64) {
     else {
         req._path << __string(at !: string, len)
     }
-    return 0:i32
+    return 0 as i32
 }
 
 func requestParserOnHeaderField(p: ^parser.llhttp_t, at: ^const char, len: u64) {
@@ -536,7 +547,7 @@ func requestParserOnHeaderField(p: ^parser.llhttp_t, at: ^const char, len: u64) 
     else {
         req._s1 << __string(at !: string, len)
     }
-    return 0:i32
+    return 0 as i32
 }
 
 func requestParserOnHeaderValue(p: ^parser.llhttp_t, at: ^const char, len: u64) {
@@ -548,7 +559,7 @@ func requestParserOnHeaderValue(p: ^parser.llhttp_t, at: ^const char, len: u64) 
     else {
         req._s2 << __string(at !: string, len)
     }
-    return 0:i32
+    return 0 as i32
 }
 
 func requestParserOnHeadersComplete(p: ^parser.llhttp_t) {
@@ -597,13 +608,13 @@ pub struct RouteAttrs {
 
 class Route {
     - prefix: __string
-    - handler: Lambda[HandlerFn]
+    - handler: lambda_of!(#HandlerFn)
     - params: Vector[__string]
     - _methods: u32
     - _attrs = RouteAttrs{};
 
     func `init`(methods: u32, prefix: __string, fn: HandlerFn, params: Vector[__string]) {
-        handler = Lambda[HandlerFn](fn)
+        handler = &&fn
         this.prefix = prefix
         this.params = &&params
         _methods = methods
@@ -634,7 +645,7 @@ class Route {
     const func `str`(os: &OutputStream) { os << "route: " << prefix }
 
     @inline
-    const func isMethodSupported(method: Method) => (_methods & (1:u32 << (<u32>method))) != 0
+    const func isMethodSupported(method: Method) => (_methods & (1 as u32 << (<u32>method))) != 0
 
     @inline
     const func attrs() => &_attrs
@@ -649,13 +660,13 @@ class Router {
     }
 
     - func add(methods: u32, path: string, idx: i64, fn: HandlerFn) {
-        assert!(path.[idx] == '/':char)
+        assert!(path.[idx] == '/' as char)
         var i = idx;
-        while (path.[i] != '\0':char && path.[i] != '{':char) {
+        while (path.[i] !=  '\0'as char && path.[i] != '{' as char) {
             i++
         }
 
-        if (path.[i] == '{':char)
+        if (path.[i] == '{' as char)
             i--;
         var prefix = __string(path, i).substr(idx);
         var params = Vector[__string]();
@@ -667,13 +678,13 @@ class Router {
 
     func add(path: string, fn: HandlerFn) {
         var methods = Method.Get;
-        var idx = 0:i64;
-        if (path.[0] != '/':char) {
+        var idx = 0 as i64;
+        if (path.[0] != '/' as char) {
             var parsedMethod = methodFromString(path);
             assert!(parsedMethod.0 != .Unknown)
             methods = parsedMethod.0
             idx = <i64>parsedMethod.1;
-            while (path.[idx] == ' ':char)
+            while (path.[idx] == ' ' as char)
                 idx++
         }
 
@@ -745,13 +756,13 @@ class Router {
 
     - func parseParams(params: &Vector[__string], path: string, idx: i64) : void {
         var s = path !: ^const char;
-        while (path.[idx] == '/':char) {
+        while (path.[idx] == '/' as char) {
             idx++
-            assert!(path.[idx++] == '{':char)
+            assert!(path.[idx++] == '{' as char)
             var i = idx;
-            while (path.[i] != '\0':char && path.[i] != '}':char)
+            while (path.[i] !=  '\0'as char && path.[i] != '}' as char)
                 i++
-            assert!(path.[i] == '}':char)
+            assert!(path.[i] == '}' as char)
             var name = __string(ptroff!(s + idx) !: string, i - idx);
             idx = i + 1
             params.push(name)
@@ -760,21 +771,21 @@ class Router {
 
     - func parseRouteArgs(req: &Request, params: &Vector[__string], path: __string) : u64 | Status {
         var p = path.data();
-        var idx = 0:u64;
+        var idx = 0 as u64;
         for (var i: 0..params.size()) {
-            if (p.[idx++] != '/':char) {
+            if (p.[idx++] != '/' as char) {
                 TRC!("bad request: route missing parameters")
                 return Status.BadRequest
             }
             var j = idx;
-            while (p.[j] != '\0':char && p.[j] != '/':char && p.[j] != '?':char)
+            while (p.[j] !=  '\0' as char && p.[j] != '/' as char && p.[j] != '?' as char)
                 j++;
             var value = __string(ptroff!(p + idx) !: string, j - idx);
             idx = j;
             req.param(<__string>params.[<i32>i], value)
         }
 
-        if (p.[idx] != '\0':char && p.[idx] != '?':char) {
+        if (p.[idx] !=  '\0'as char && p.[idx] != '?' as char) {
             TRC!("bad request: too many path params: " << path)
             return Status.BadRequest
         }
@@ -787,11 +798,36 @@ class Router {
 pub struct Config {
     - address = Address("0.0.0.0", 8100);
     - serverName = String("cxy");
-    - hstsEnable = 5000:u64;
-    - keepAliveTime = 5000:i64;
+    - hstsEnable = 5000 as u64;
+    - keepAliveTime = 5000 as i64;
+}
+
+pub struct Dependencies[T] {
+    type TDeps = `T as M,i => &M.Context`;
+    contexts: TDeps;
+
+    @inline func `init`(){}
+
+    - func init[Mws, Contexts](ctxs: &Contexts) {
+        #const WithContexts = #`Mws as U,i => U, has_type!(U, :Context)`
+        #for (const i: 0..T.membersCount) {
+            #const Mw = typeat!(#T, i);
+            #const idx = indexof!(#WithContexts, #Mw);
+            require!(idx >= 0, "Dependency {t} must exist in list of middlewares {t} with contexts",
+                     #WithContexts, #Mw)
+            contexts.#{i} = &ctxs.#{idx}
+        }
+    }
+
+    func context[M]() {
+        #const idx = indexof!(#T, #M);
+        require!(idx >= 0, "Middleware {t} is not in the list of dependencies {t}", #M, #T)
+        return contexts.#{idx}
+    }
 }
 
 pub class Connection[Middlewares] {
+    type Contexts = `Middlewares as T, i => T.Context, has_type!(#T, :Context)`
     @static
     - LOG_TAG = "HTTP_CONNECTION";
     - sock: TcpSocket
@@ -843,14 +879,41 @@ pub class Connection[Middlewares] {
 
     - func invokeRouteHandler(route: &Route) : void {
         req.route(route)
+        var ctxs: Contexts = null;
+        @unused var deps: `Middlewares as T,i => Dependencies[T.Deps], has_type!(#T, :Deps)` = null;
+        #const j = 0;
         #for (const i: 0..Middlewares.membersCount) {
             // invoke middlewares
-            mws.#{i}.before(&req, &resp)
-            defer mws.#{i}.after(&req, &resp)
+            #const M = typeat!(#Middlewares, i);
+            #if (has_type!(#M, :Deps)) {
+                deps.#{j}.init[Middlewares](&ctxs)
+                #if (has_type!(#M, :Context)) {
+                    #const idx = indexof!(#Contexts, M.Context);
+                    ctxs.#{idx} = M.Context()
+                    mws.#{i}.before(&req, &resp, &ctxs.#{idx}, &deps.#{j})
+                    defer mws.#{i}.after(&req, &resp, &ctxs.#{idx}, &deps.#{j})
+                }
+                else {
+                    mws.#{i}.before(&req, &resp, &deps.#{j})
+                    defer mws.#{i}.after(&req, &resp, &deps.#{j})
+                }
+                #{j += 1}
+            }
+            else #if (has_type!(#M, :Context)) {
+                #const idx = indexof!(#Contexts, M.Context);
+                ctxs.#{idx} = M.Context()
+                mws.#{i}.before(&req, &resp, &ctxs.#{idx})
+                defer mws.#{i}.after(&req, &resp, &ctxs.#{idx})
+            }
+            else {
+                mws.#{i}.before(&req, &resp)
+                defer mws.#{i}.after(&req, &resp)
+            }
             if (resp.isComplete())
                 return;
         }
         // handle route
+        req._middlewareContexts = ptrof ctxs
         route(&req, &resp)
     }
 
@@ -920,6 +983,8 @@ pub class Connection[Middlewares] {
 
 pub class Server[Middlewares] {
     require!(Middlewares.isTuple, "requires a tuple of middlewares")
+    type MwsWithContexts = `Middlewares as T, i => T, has_type!(#T, :Context)`
+    type Contexts = `MwsWithContexts as T, i => T.Context, has_type!(#T, :Context)`
     @static
     - LOG_TAG = "HTTP_SERVER";
     - mws: Middlewares
@@ -932,16 +997,54 @@ pub class Server[Middlewares] {
         #for (const i: 0..Middlewares.membersCount) {
             #const M = typeat!(#Middlewares, #{i});
             require!(M.isClass, "A middleware must be a class type")
-            require!(has_member!(#M, "before", #func(_: &const Request, _: &Response) -> void),
-                     "middle {t} must implement `before` handler of type {t}",
-                     #M, #func(_: &const Request, _: &Response) -> void)
-            require!(has_member!(#M, "after", #func(_: &const Request, _: &Response) -> void),
-                                 "middle {t} must implement `after` handler of type {t}",
-                                 #M, #func(_: &const Request, _: &Response) -> void)
-
             require!(has_member!(#M, "op__init", #func() -> void),
                                  "middle {t} must implement a default constructor",
                                  #M)
+            #const Others = #`Middlewares as T,j => T, j != i`;
+            require!(indexof!(#Others, #M) < 0, "Middleware `{t}` duplicated in list `{t}`",
+                     #M, #Middlewares)
+            #if (has_type!(#M, :Deps)) {
+                // Validate middleware dependencies
+                #const Deps = M.Deps;
+                #for(const j: 0..Deps.membersCount) {
+                    #const Dep =  typeat!(#Deps, j);
+                    require!(has_type!(#Dep, :Context), "Middle {t} dependency {t} must have a Context type",
+                             #M, #Dep)
+                    #const idx = indexof!(#Middlewares, #Dep);
+                    require!(idx >= 0, "Dependency {t} is not in the list of middlewares `{t}",
+                             #Dep, #Middlewares)
+                    require!(idx < i, "Dependency {t} must come before current middleware", #Dep)
+                }
+                #const DepsCtxs = Dependencies[Deps];
+                #if (has_type!(#M, :Context)) {
+                    #const Func = #func(_: &const Request, _: &Response, _: &M.Context, _: DepsCtxs) -> void;
+                    require!(has_member!(#M, "before", #Func),
+                             "middle {t} must implement `before` handler of type {t}", #M, #Func)
+                    require!(has_member!(#M, "after", #Func),
+                             "middle {t} must implement `after` handler of type {t}", #M, #Func)
+                }
+                else {
+                    #const Func = #func(_: &const Request, _: &Response, _: &DepsCtxs) -> void;
+                    require!(has_member!(#M, "before", #Func),
+                             "middle {t} must implement `before` handler of type {t}", #M, #Func)
+                    require!(has_member!(#M, "after", #Func),
+                             "middle {t} must implement `after` handler of type {t}", #M, #Func)
+                }
+            }
+            else #if (has_type!(#M, :Context)) {
+                #const Func = #func(_: &const Request, _: &Response, _: &M.Context) -> void;
+                require!(has_member!(#M, "before", #Func),
+                      "middle {t} must implement `before` handler of type {t}", #M, #Func)
+                require!(has_member!(#M, "after", #Func),
+                      "middle {t} must implement `after` handler of type {t}", #M, #Func)
+            }
+            else {
+                #const Func = #func(_: &const Request, _: &Response) -> void;
+                require!(has_member!(#M, "before", #Func),
+                      "middle {t} must implement `before` handler of type {t}", #M, #Func)
+                require!(has_member!(#M, "after", #Func),
+                      "middle {t} must implement `after` handler of type {t}", #M, #Func)
+            }
             mws.#{i} = #{M}()
         }
         // initialize other variables
@@ -955,6 +1058,14 @@ pub class Server[Middlewares] {
         #const idx = indexof!(#Middlewares, #M);
         require!(idx >= 0, "type '{t}' is not a middleware, middlewares: {t}", #M, #Middlewares)
         return mws.#{idx}
+    }
+
+    @inline
+    func context[M](req: &const Request) {
+        #const idx = indexof!(#MwsWithContexts, #M);
+        require!(idx >= 0, "type '{t}' is not a middleware or does not have a context", #M, #Middlewares)
+        var ctxs = req.middlewareContexts() !: ^Contexts
+        return ctxs.#{idx}
     }
 
     func listen(): !void {

@@ -460,7 +460,7 @@ static inline AstNode *parseChar(Parser *P)
     AstNode *node = newAstNode(
         P, tok, &(AstNode){.tag = astCharLit, .charLiteral.value = tok->cVal});
 
-    if (match(P, tokColon)) {
+    if (match(P, tokAs)) {
         AstNode *type = parseType(P);
         return newAstNode(
             P,
@@ -487,7 +487,7 @@ static inline AstNode *parseInteger(Parser *P, bool isNegative)
         node->intLiteral.value = -tok.iVal;
     }
 
-    if (match(P, tokColon)) {
+    if (match(P, tokAs)) {
         type = parseType(P);
         return newAstNode(
             P,
@@ -507,7 +507,7 @@ static inline AstNode *parseFloat(Parser *P, bool isNegative)
         tok,
         &(AstNode){.tag = astFloatLit,
                    .floatLiteral.value = isNegative ? -tok->fVal : tok->fVal});
-    if (match(P, tokColon)) {
+    if (match(P, tokAs)) {
         AstNode *type = parseType(P);
         return newAstNode(
             P,
@@ -681,6 +681,7 @@ static AstNode *indexExpr(Parser *P, AstNode *operand)
 
 static AstNode *postfix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
 {
+    const Token first = *current(P);
     AstNode *operand = parsePrimary(P, true);
     while (true) {
         switch (current(P)->tag) {
@@ -689,6 +690,32 @@ static AstNode *postfix(Parser *P, AstNode *(parsePrimary)(Parser *, bool))
             break;
         case tokDot: {
             const Token tok = *advance(P);
+            bool isBuiltin = match(P, tokHash) != NULL;
+            operand = member(P, &tok, operand);
+            operand->flags |= (isBuiltin ? flgBuiltin : flgNone);
+            continue;
+        }
+        case tokBAndDot: {
+            const Token tok = *advance(P);
+            operand = newAstNode(
+                P,
+                &first,
+                &(AstNode){
+                    .tag = astCallExpr,
+                    .callExpr = {
+                        .callee = newAstNode(
+                            P,
+                            &first,
+                            &(AstNode){
+                                .tag = astMemberExpr,
+                                .memberExpr = {
+                                    .target = operand,
+                                    .member = newAstNode(
+                                        P,
+                                        &tok,
+                                        &(AstNode){.tag = astIdentifier,
+                                                   .ident.value =
+                                                       S_Redirect})}})}});
             bool isBuiltin = match(P, tokHash) != NULL;
             operand = member(P, &tok, operand);
             operand->flags |= (isBuiltin ? flgBuiltin : flgNone);
@@ -1388,12 +1415,12 @@ static AstNode *assemblyOutput(Parser *P)
     Token tok = *consume0(P, tokStringLiteral);
     cstring constraint = getTokenString(P, &tok, true);
     if (constraint[0] != '=' || constraint[1] == '\0') {
-        parserError(
-            P,
-            &tok.fileLoc,
-            "unexpected inline assembly output constraints, expecting "
-            "constraint to start with '=' followed by a character, got \"{s}\"",
-            (FormatArg[]){{.s = constraint}});
+        parserError(P,
+                    &tok.fileLoc,
+                    "unexpected inline assembly output constraints, expecting "
+                    "constraint to start with '=' followed by a character, got "
+                    "\"{s}\"",
+                    (FormatArg[]){{.s = constraint}});
     }
 
     consume0(P, tokLParen);
@@ -2145,6 +2172,9 @@ static OperatorOverload operatorOverload(Parser *P)
         op = (OperatorOverload){.f = opCallOverload, .s = S_CallOverload};
         consume0(P, tokRParen);
     }
+    else if (match(P, tokBAndDot)) {
+        op = (OperatorOverload){.f = opRedirect, .s = S_Redirect};
+    }
     else if (match(P, tokIdent)) {
         Token ident = *previous(P);
         cstring name = getTokenString(P, &ident, false);
@@ -2638,6 +2668,96 @@ static AstNode *statement(Parser *P, bool exprOnly)
     return stmt;
 }
 
+static AstNode *xFormType(Parser *P)
+{
+    // `#T as _, t => (cond, )? &t.Context`
+    Token tok = *consume0(P, tokQuote);
+    AstNode *tupleType = parseType(P);
+    consume0(P, tokAs);
+    Token *varToken = consume0(P, tokIdent);
+    AstNode *args =
+        newAstNode(P,
+                   varToken,
+                   &(AstNode){.tag = astVarDecl,
+                              .flags = flgComptime,
+                              .varDecl = {
+                                  .name = getTokenString(P, varToken, false),
+                              }});
+    if (match(P, tokComma)) {
+        varToken = consume0(P, tokIdent);
+        args->next = newAstNode(
+            P,
+            varToken,
+            &(AstNode){.tag = astVarDecl,
+                       .flags = flgComptime,
+                       .varDecl = {
+                           .name = getTokenString(P, varToken, false),
+                       }});
+    }
+    consume0(P, tokFatArrow);
+    AstNode *xForm = parseType(P);
+    AstNode *cond = NULL;
+    if (match(P, tokComma)) {
+        cond = expression(P, false);
+        cond->flags |= flgComptime;
+    }
+    consume0(P, tokQuote);
+
+    return newAstNode(P,
+                      &tok,
+                      &(AstNode){.tag = astTupleXform,
+                                 .flags = flgComptime,
+                                 .xForm = {.target = tupleType,
+                                           .args = args,
+                                           .cond = cond,
+                                           .xForm = xForm}});
+}
+
+static AstNode *xFormExpr(Parser *P)
+{
+    // `expr : T, i => xform (,cond)?`
+    Token tok = *consume0(P, tokQuote);
+    AstNode *expr = expression(P, true);
+    consume0(P, tokColon);
+    Token *varToken = consume0(P, tokIdent);
+    AstNode *args =
+        newAstNode(P,
+                   varToken,
+                   &(AstNode){.tag = astVarDecl,
+                              .flags = flgComptime,
+                              .varDecl = {
+                                  .name = getTokenString(P, varToken, false),
+                              }});
+    if (match(P, tokComma)) {
+        varToken = consume0(P, tokIdent);
+        args->next = newAstNode(
+            P,
+            varToken,
+            &(AstNode){.tag = astVarDecl,
+                       .flags = flgComptime,
+                       .varDecl = {
+                           .name = getTokenString(P, varToken, false),
+                       }});
+    }
+    consume0(P, tokFatArrow);
+    AstNode *xForm = expression(P, true);
+    AstNode *cond = NULL;
+    if (match(P, tokComma)) {
+        cond = expression(P, false);
+        cond->flags |= flgComptime;
+    }
+    consume0(P, tokQuote);
+
+    return newAstNode(P,
+                      &tok,
+                      &(AstNode){.tag = astTupleXform,
+                                 .flags = flgComptime,
+                                 .xForm = {.target = expr,
+                                           .args = args,
+                                           .cond = cond,
+                                           .xForm = xForm}});
+}
+
 static AstNode *parseTypeImpl(Parser *P)
 {
     AstNode *type;
@@ -2695,6 +2815,9 @@ static AstNode *parseTypeImpl(Parser *P)
             advance(P);
             type =
                 makeAstNode(P->memPool, &loc, &(AstNode){.tag = astAutoType});
+            break;
+        case tokQuote:
+            type = xFormType(P);
             break;
         default:
             reportUnexpectedToken(P, "a type");
@@ -3448,9 +3571,25 @@ static AstNode *parseTopLevelDecl(Parser *P)
     }
 
     Token tok = *consume0(P, tokCBuild);
-    Token srcToken = *consume0(P, tokStringLiteral);
-    cstring src = getTokenString(P, &srcToken, true);
-    addNativeSourceFile(P->cc, tok.fileLoc.fileName, src);
+    cstring choice = NULL;
+    if (match(P, tokColon)) {
+        Token choiceToken = *consume0(P, tokIdent);
+        choice = getTokenString(P, &choiceToken, false);
+    }
+    Token itemToken = *consume0(P, tokStringLiteral);
+    cstring item = getTokenString(P, &itemToken, true);
+    if (choice == NULL || choice == S_src)
+        addNativeSourceFile(P->cc, tok.fileLoc.fileName, item);
+    else if (choice == S_clib) {
+        addLinkLibrary(P->cc, item);
+    }
+    else {
+        parserFail(
+            P,
+            &tok.fileLoc,
+            "Unsupported c-code token '{s}', user either `:clib` or `:src`",
+            (FormatArg[]){{.s = choice}});
+    }
     return NULL;
 }
 

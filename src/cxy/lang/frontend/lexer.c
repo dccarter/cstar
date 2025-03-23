@@ -403,6 +403,8 @@ Token advanceLexer(Lexer *lexer)
                 return makeToken(lexer, &begin, tokLAnd);
             if (acceptChar(lexer, '='))
                 return makeToken(lexer, &begin, tokBAndEqual);
+            if (acceptChar(lexer, '.'))
+                return makeToken(lexer, &begin, tokBAndDot);
             return makeToken(lexer, &begin, tokBAnd);
         }
 

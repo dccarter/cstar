@@ -368,6 +368,7 @@ void initEvalVisitor(AstVisitor *visitor, EvalContext *ctx)
         [astTupleType] = evalTypeDecl,
         [astArrayType] = evalTypeDecl,
         [astRef] = evalRef,
+        [astTupleXform] = evalXformType,
         [astIdentifier] = astVisitSkip,
         [astTypeRef] = astVisitSkip,
         [astList] = astVisitSkip,

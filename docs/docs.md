@@ -34,7 +34,7 @@ can be bound to a desired type using the `:<type>` operator.
 'a'
 '\n' // escaped character
 '☺️' // wide character
-'!':char // bound to type char
+'! ' as char // bound to type char
 ```
 
 ### Integers
@@ -48,7 +48,7 @@ fit the integer literal. If a specific type is desired, the literal can be bound
 0o77 // octal
 0xaf // hex
 
-100:i64 // Bound to type i64
+100 as i64 // Bound to type i64
 ```
 
 ### Float Literals
@@ -60,7 +60,7 @@ to the type.
 0.00    // float
 1e10    // exponential
 1e-10   // exponential
-1.32:f32  // bound to f32
+1.32 as f32  // bound to f32
 ```
 
 ### String Literals
@@ -179,7 +179,7 @@ func show(nums: [i32]) {
 }
 
 // Uses array literals (discussed in expressions section) to initialize an array
-var a:[i32, 3] = [ 0:i32, 1, 2] ;
+var a:[i32, 3] = [ 0 as i32, 1, 2] ;
 // Compiler will create a slice of the array
 show(a)
 
@@ -215,7 +215,7 @@ memory address other variables.
 * Arrays and strings are considered pointer types
 
 ```c
-var x = 100:u32;
+var x = 100 as u32;
 // getting the address of a variable
 var y: ^u32 = ptrof x;
 var s = "hello";
@@ -282,7 +282,7 @@ A tagged union is a list of types seperated by the `|` character that a variable
   value stored on the union variable.
 
 ```c
-var a: i32|string = 10:i32;
+var a: i32|string = 10 as i32;
 a = "Hello World";
 
 var b = <string>a; // Ok since string is in the union i32|string

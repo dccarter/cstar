@@ -1,7 +1,7 @@
 test "__bswap" {
-    ok!(__bswap64(0xff00000000000000:u64) == 0x00000000000000ff:u64)
-    ok!(__bswap32(0xff000000:u32) == 0x000000ff:u32)
-    ok!(__bswap16(0xff00:u16) == 0x00ff:u16)
+    ok!(__bswap64(0xff00000000000000 as u64) == 0x00000000000000ff as u64)
+    ok!(__bswap32(0xff000000 as u32) == 0x000000ff as u32)
+    ok!(__bswap16(0xff00 as u16) == 0x00ff as u16)
 }
 
 test "min/max" {
@@ -16,14 +16,14 @@ test "min/max" {
 
 test "String::(indexOf/rIndexOf)" {
     var s = String("Hello World");
-    var idx = s.indexOf('C':char);
+    var idx = s.indexOf('C' as char);
     ok!(!idx)
 
-    idx = s.indexOf('o':char);
+    idx = s.indexOf('o' as char);
     ok!(!!idx)
     ok!(*idx == 4)
 
-    idx = s.rIndexOf('o':char);
+    idx = s.rIndexOf('o' as char);
     ok!(!!idx)
     ok!(*idx == 7)
 }

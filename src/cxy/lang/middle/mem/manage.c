@@ -544,6 +544,12 @@ static void visitTupleExpr(AstVisitor *visitor, AstNode *node)
     AstNode *expr = node->tupleExpr.elements;
     for (; expr; expr = expr->next) {
         astVisit(visitor, expr);
+        if (nodeIs(expr, CastExpr)) {
+            AstNode *to = expr->castExpr.to, *from = expr->castExpr.expr;
+            if (isVoidPointer(to->type) && hasFlag(from->type, Closure))
+                expr = from;
+        }
+
         if (isLeftValueExpr(expr) && nodeNeedsMemMgmt(expr))
             transformToCopyExpr(ctx, expr, deepCloneAstNode(ctx->pool, expr));
     }

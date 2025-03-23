@@ -60,6 +60,7 @@ extern "C" {
     f(DivEqual, "/=")               \
     f(ModEqual, "%=")               \
     f(BAndEqual, "&=")              \
+    f(BAndDot,   "&.")              \
     f(BXorEqual, "^=")              \
     f(BOrEqual, "|=")               \
     f(Quote,    "`")                \

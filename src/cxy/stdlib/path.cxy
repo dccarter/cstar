@@ -1,6 +1,6 @@
 module path
 
-import { Stat, stat, fstat, lstat, IOError } from "stdlib/os.cxy"
+import { Stat, stat, fstat, lstat, getenv, IOError } from "stdlib/os.cxy"
 
 import "unistd.h" as unistd
 import "stdlib.h" as stdlib
@@ -79,7 +79,7 @@ pub struct Path {
 
     @inline
     const func exists() {
-        return unistd.access(path.str() !: ^const char, F_OK!) == 0:i32
+        return unistd.access(path.str() !: ^const char, F_OK!) == 0 as i32
     }
 
     @inline
@@ -105,6 +105,14 @@ pub struct Path {
 
     @inline
     const func size() => path.size()
+
+    const func name() {
+        var sep = path.__str().rfind(DIR_SEPARATOR!)
+        if (sep) {
+            return path.substr(*sep + 1)
+        }
+        return path.__str()
+    }
 }
 
 pub type PathLike = string | __string | String | Path
@@ -150,11 +158,11 @@ pub func cwd(): Path {
 }
 
 pub func homedir() {
-    var dir = stdlib.getenv("HOME" !: ^const char);
-    if (dir ==  null) {
-        dir = pwd.getpwuid(unistd.getuid()).pw_dir
+    var dir = getenv("HOME") catch "".s
+    if (dir.empty()) {
+        dir = __string(pwd.getpwuid(unistd.getuid()).pw_dir !: string)
     }
-    return Path(dir !: string)
+    return Path(dir)
 }
 
 pub func expand(path: PathLike) {
@@ -168,7 +176,7 @@ pub func expand(path: PathLike) {
         return &&ppath
 
     var i = 0;
-    while (spath.[i] == '~':char || spath.[i] == '/':char) i++;
+    while (spath.[i] == '~' as char || spath.[i] == '/' as char) i++;
     spath = spath.substr(i)
     if (spath.empty())
         return home
@@ -195,7 +203,7 @@ pub func exists(path: PathLike) {
     if (spath.empty())
         return false
 
-    return withNullTermination[bool](&spath, (p: ^const char) => unistd.access(p, F_OK!) == 0:i32)
+    return withNullTermination[bool](&spath, (p: ^const char) => unistd.access(p, F_OK!) == 0 as i32)
 }
 
 pub func isfile(path: PathLike) {
@@ -373,4 +381,19 @@ pub func remove(path: PathLike, recursive: bool = false): !void {
         if (status != 0)
             raise IOError(f"deleting file '${spath}' failed: ${strerr()}")
     }
+}
+
+pub func getFileSize(path: PathLike): !u64 {
+    var spath = cast[__string](&path);
+    var result = withNullTermination[bool|u64](&spath, (p: ^const char): bool|u64 => {
+        var s = Stat{};
+        if (stat(p !: string, ptrof s) != 0) {
+            return false
+        }
+        return <u64>s.st_size
+    })
+
+    if (result is #bool)
+        raise IOError(f"Getting file '${path}' size failed: ${strerr()}")
+    return result as u64
 }
