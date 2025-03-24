@@ -1,0 +1,29 @@
+when:
+  - event: pull_request
+  - event: push
+    branch: main
+
+steps:
+  - name: build
+    image: suilteam/cxyenv:latest
+    commands:
+      - >-
+        cmake -B $CI_WORKSPACE/build
+        -DCMAKE_BUILD_TYPE=Debug
+        -DLLVM_ROOT_DIR=`llvm-config --prefix`
+        -DCMAKE_C_COMPILER=/usr/bin/clang
+        -DCMAKE_CXX_COMPILER=/usr/bin/clang++
+      - cmake --build $CI_WORKSPACE/build --config Debug
+
+  - name: Compiler tests
+    image: suilteam/cxyenv:latest
+    directory: ./build
+    commands:
+      - export LLVM_MAJOR_VERSION=`llvm-config --version | cut -d '.' -f 1`
+      - FILE_CHECK=FileCheck-$LLVM_MAJOR_VERSION $CI_WORKSPACE/tests/runner.sh
+
+  - name: Stdlib tests
+    image: suilteam/cxyenv:latest
+    directory: ./build
+    commands:
+      - ctest --output-on-failure

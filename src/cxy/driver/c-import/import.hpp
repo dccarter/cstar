@@ -7,14 +7,12 @@
 #include "driver/driver.h"
 
 #include <clang/Basic/TargetInfo.h>
-#include <clang/Frontend/CompilerInstance.h>
 #include <llvm/ADT/DenseMap.h>
 
 #include <set>
 #include <unordered_map>
 
 namespace cxy {
-
 class CImporter {
 public:
     AstNode *find(clang::StringRef path)
@@ -29,7 +27,6 @@ public:
     }
 
 private:
-    llvm::DenseMap<clang::StringRef, AstNode *> modules{};
+    std::unordered_map<std::string_view, AstNode *> modules{};
 };
-
 } // namespace cxy

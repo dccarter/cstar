@@ -71,7 +71,7 @@ struct FileUpload {
     const func size(): !u64 => getFileSize(_path.str())
 
     @inline
-    const func `==`(other: &const This) => _name == other._name
+    const func `==`(other: &const This) => _name == &other._name
 }
 
 const CONTENT_DISPOSITION = "Content-Disposition: form-data; name=\"".s;
