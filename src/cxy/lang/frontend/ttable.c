@@ -1306,7 +1306,7 @@ const Type *promoteType(TypeTable *table, const Type *left, const Type *right)
             FLOAT_TYPE_LIST(f)
             if (isFloatType(right))
                 return left->size >= right->size ? left : right;
-            if (isIntegerType(right) || right->tag == prtChar)
+            if (isIntegerType(right) || right->primitive.id == prtChar)
                 return left;
 
 #undef f

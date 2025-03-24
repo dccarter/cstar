@@ -1,0 +1,7 @@
+import { fetch } from "stdlib/fetch.cxy"
+
+func main(): !void {
+    var resp = fetch("@POST https://httpbin.org/post")
+    if (resp.ok())
+        stdout << resp.body()
+}
