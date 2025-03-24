@@ -912,6 +912,19 @@ AstNode *importCHeader(CompilerDriver *driver,
     for_each<cstring>(options.cDefines, [&ci](auto define) {
         ci.getPreprocessorOpts().addMacroDef(&define[2]);
     });
+
+    if (importer->isAlpine) {
+        static auto defs = {
+            "__NEED_size_t",
+            "__NEED_time_t",
+            "__NEED_clock_t",
+            "__NEED_struct_timespec",
+        };
+        for (auto def : defs) {
+            ci.getPreprocessorOpts().addMacroDef(def);
+        }
+    }
+
     // prevent a warning that comes when importing C headers
     ci.getPreprocessorOpts().addMacroDef("__GNUC__=4");
 
@@ -992,7 +1005,9 @@ bool isCHeaderFile(cstring filePath)
 void initCImporter(struct CompilerDriver *driver)
 {
     csAssert0(driver->cImporter == nullptr);
-    driver->cImporter = new cxy::CImporter();
+    bool isAlpine = driver->options.operatingSystem &&
+                    strcmp(driver->options.operatingSystem, "__ALPINE__") == 0;
+    driver->cImporter = new cxy::CImporter(isAlpine);
 }
 
 void deinitCImporter(struct CompilerDriver *driver)

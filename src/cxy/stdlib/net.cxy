@@ -6,11 +6,15 @@ import "netdb.h" as netdb
 import "arpa/inet.h" as arpa
 import "netinet/in.h" as inet
 import "sys/socket.h" as socket
-import "sys/errno.h" as errno
 ##if (defined MACOS) {
+    import "sys/errno.h" as errno
     import "netinet6/in6.h" as inet6
 }
+else ##if (defined __ALPINE__) {
+    import "errno.h" as errno
+}
 else {
+    import "sys/errno.h" as errno
     import "bits/socket.h" as _socket
 }
 
@@ -22,14 +26,19 @@ import "native/dns/dns.h" as dns
 import { State } from "./coro.cxy"
 
 #if (defined MACOS) {
-type sockaddr = socket.sockaddr
-type sockaddr_in6 = inet6.sockaddr_in6
-macro INET6_ADDR_ANY inet6.in6addr_any
+    type sockaddr = socket.sockaddr
+    type sockaddr_in6 = inet6.sockaddr_in6
+    macro INET6_ADDR_ANY inet6.in6addr_any
+}
+else #if (defined __ALPINE__) {
+    type sockaddr = socket.sockaddr
+    type sockaddr_in6 = inet.sockaddr_in6
+    macro INET6_ADDR_ANY inet.in6addr_any
 }
 else {
-type sockaddr = _socket.sockaddr
-type sockaddr_in6 = inet.sockaddr_in6
-macro INET6_ADDR_ANY inet.in6addr_any
+    type sockaddr = _socket.sockaddr
+    type sockaddr_in6 = inet.sockaddr_in6
+    macro INET6_ADDR_ANY inet.in6addr_any
 }
 
 func htons(x: u16) : u16 {

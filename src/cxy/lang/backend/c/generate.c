@@ -2089,12 +2089,6 @@ bool compilerBackendMakeExecutable(CompilerDriver *driver)
                    {.s = dynArrayAt(const char **, &opts->libraries, i)}});
     }
 
-    HashtableIt it = newHashTableIt(&driver->linkLibraries, sizeof(cstring));
-    while (hashTableItHasNext(&it)) {
-        cstring *lib = hashTableItNext(&it);
-        format(&cmd, " -l{s}", (FormatArg[]){{.s = *lib}});
-    }
-
     for (int i = 0; i < opts->frameworkSearchPaths.size; i++) {
         format(&cmd,
                " -I{s}",
@@ -2111,13 +2105,20 @@ bool compilerBackendMakeExecutable(CompilerDriver *driver)
                 {.s = dynArrayAt(const char **, &opts->importSearchPaths, i)}});
     }
 
-    it = newHashTableIt(&driver->nativeSources, sizeof(cstring));
+    HashtableIt it = newHashTableIt(&driver->nativeSources, sizeof(cstring));
     while (hashTableItHasNext(&it)) {
         cstring *src = hashTableItNext(&it);
         format(&cmd, " {s}", (FormatArg[]){{.s = *src}});
     }
 
     format(&cmd, " {s}", (FormatArg[]){{.s = backend->filename}});
+
+    it = newHashTableIt(&driver->linkLibraries, sizeof(cstring));
+    while (hashTableItHasNext(&it)) {
+        cstring *lib = hashTableItNext(&it);
+        format(&cmd, " -l{s}", (FormatArg[]){{.s = *lib}});
+    }
+
     format(&cmd,
            " -o {s}/{s}",
            (FormatArg[]){{.s = opts->buildDir ?: "."},

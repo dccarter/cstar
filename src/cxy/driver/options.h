@@ -20,7 +20,7 @@ typedef enum { cmdDev, cmdBuild, cmdTest, cmdRun } Command;
     ff(CXY)
 
 typedef enum {
-#define ff(N) dmp##N,
+#define ff(N) dmp## N,
     DUMP_OPTIONS(ff)
     dmpCOUNT
 #undef ff
@@ -32,7 +32,7 @@ typedef enum {
     f(FULL)
 
 typedef enum {
-#define ff(N) dsm##N,
+#define ff(N) dsm## N,
     DRIVER_STATS_MODE(ff)
     dsmCOUNT
 #undef ff
@@ -77,6 +77,7 @@ typedef struct Options {
     cstring passes;
     DynArray loadPassPlugins;
     DumpStatsMode dsmMode;
+    cstring operatingSystem;
     union {
         struct {
             bool printIR;

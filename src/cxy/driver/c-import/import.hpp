@@ -15,6 +15,9 @@
 namespace cxy {
 class CImporter {
 public:
+    const bool isAlpine{false};
+    CImporter(bool isAlpine = false) : isAlpine(isAlpine) {}
+
     AstNode *find(clang::StringRef path)
     {
         auto module = modules.find(path);

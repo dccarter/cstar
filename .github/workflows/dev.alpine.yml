@@ -1,14 +1,19 @@
-name: Build cxy development environment
+name: Cxy Alpine Dev Image
 
 on:
   push:
-    tags: [ "release/dev/**" ]
+    tags: [ "v*.*.*" ]
+    branches:
+      - main
+    paths:
+      - docker/Dockerfile.alpine
+      - docker/Dockerfile.alpine.dev
 
 env:
-  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+  IMAGE_TAG: ${{ github.ref_name == 'main' && 'latest' || github.ref_name }}
 
 jobs:
-  build:
+  alpine-dev-image:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo
@@ -23,7 +28,6 @@ jobs:
       - name: Build and push to dockerhub
         uses: docker/build-push-action@v5
         with:
-          context:
-          file: docker/Dockerfile.dev
+          file: docker/Dockerfile.alpine.dev
           push: true
-          tags: suilteam/cxyenv:latest
+          tags: suilteam/cxy-dev:${{env.IMAGE_TAG}}-alpine

@@ -4,10 +4,15 @@ import { Address, Socket } from "./net.cxy"
 import { State } from "./coro.cxy"
 
 import "sys/socket.h" as socket
-import "sys/errno.h" as errno
 import "unistd.h" as unistd
 ##if (defined MACOS) {
+    import "sys/errno.h" as errno
     import "sys/fcntl.h" as fcntl
+}
+else ##if (defined __ALPINE__) {
+    import "errno.h" as errno
+    import "fcntl.h" as fcntl
+    import "sys/sendfile.h" as sf
 }
 else {
     import "fcntl.h" as fcntl
@@ -16,7 +21,9 @@ else {
 }
 
 #if (!defined MACOS) {
-    macro SOCK_STREAM _st.__socket_type.SOCK_STREAM
+    #if (!defined __ALPINE__) {
+        macro SOCK_STREAM _st.__socket_type.SOCK_STREAM
+    }
 
     @inline
     func Socket_sendfile(outFd: i32, inFd: i32, off: ^u64, count: u64) {

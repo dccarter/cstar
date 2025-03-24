@@ -13,8 +13,8 @@ import "openssl/err.h" as ERR
 import "openssl/crypto.h" as CRYPTO
 import "openssl/types.h" as TYPES
 
-@__cc:clib "ssl"
 @__cc:clib "crypto"
+@__cc:clib "ssl"
 
 @thread
 var initSslOnce = false;

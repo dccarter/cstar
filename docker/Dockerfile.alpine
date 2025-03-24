@@ -1,0 +1,7 @@
+FROM alpine:latest
+# Install packages
+RUN apk add --update cmake make llvm-dev clang-dev llvm19-static llvm19-gtest \
+    clang19-static rsync gdb openssl openssl-dev
+
+# Needed by cxy compiler
+ENV CXY_OS=__ALPINE__

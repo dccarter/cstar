@@ -10,36 +10,48 @@ import "native/nos.h" as nos
 @__cc "native/nos.c"
 
 ##if (defined MACOS) {
-import "sys/_types/_pid_t.h" as pid_t
-import "sys/fcntl.h" as fcntl
-import "copyfile.h" as copyfile
-import "_stdlib.h" as stdlib
+    import "sys/_types/_pid_t.h" as pid_t
+    import "sys/fcntl.h" as fcntl
+    import "copyfile.h" as copyfile
+    import "_stdlib.h" as stdlib
+}
+else ##if (defined __ALPINE__) {
+    import "fcntl.h" as fcntl
+    import "stdlib.h" as stdlib
+    import "bits/alltypes.h" as types
+    import "sys/sendfile.h" as sendfile
+    import "sys/syscall.h" as syscall
 }
 else {
-import "fcntl.h" as fcntl
-import "stdlib.h" as stdlib
-import "sys/types.h" as types
-import "sys/pidfd.h" as pidfd
-import "sys/sendfile.h" as sendfile
+    import "fcntl.h" as fcntl
+    import "stdlib.h" as stdlib
+    import "sys/types.h" as types
+    import "sys/sendfile.h" as sendfile
+    import "sys/pidfd.h" as pidfd
 }
 
 #if (defined MACOS) {
-pub type Pid = pid_t.pid_t
-macro S_ISREG(mode) =(((mode!) & S_IFMT!) == S_IFREG!)
+    pub type Pid = pid_t.pid_t
+    macro S_ISREG(mode) =(((mode!) & S_IFMT!) == S_IFREG!)
 
-macro COPYFILE_ACL	      =(1<<0)
-macro COPYFILE_STAT	      =(1<<1)
-macro COPYFILE_XATTR	  =(1<<2)
-macro COPYFILE_DATA	      =(1<<3)
-macro COPYFILE_SECURITY   =(COPYFILE_STAT! | COPYFILE_ACL!)
-macro COPYFILE_METADATA   =(COPYFILE_SECURITY! | COPYFILE_XATTR!)
-macro COPYFILE_ALL	      =(COPYFILE_METADATA! | COPYFILE_DATA!)
+    macro COPYFILE_ACL	      =(1<<0)
+    macro COPYFILE_STAT	      =(1<<1)
+    macro COPYFILE_XATTR	  =(1<<2)
+    macro COPYFILE_DATA	      =(1<<3)
+    macro COPYFILE_SECURITY   =(COPYFILE_STAT! | COPYFILE_ACL!)
+    macro COPYFILE_METADATA   =(COPYFILE_SECURITY! | COPYFILE_XATTR!)
+    macro COPYFILE_ALL	      =(COPYFILE_METADATA! | COPYFILE_DATA!)
+}
+else #if (defined __ALPINE__) {
+    pub type Pid = types.pid_t
+    macro S_ISREG(mode)  =(((mode!) & S_IFMT!) == S_IFREG!)
 }
 else {
-pub type Pid = types.pid_t
-macro __S_ISTYPE(mode, mask)	=(((mode!) & __S_IFMT!) == (mask!))
-macro S_ISREG(mode)  =__S_ISTYPE!(mode!, __S_IFREG!)
+    pub type Pid = types.pid_t
+    macro __S_ISTYPE(mode, mask)	=(((mode!) & __S_IFMT!) == (mask!))
+    macro S_ISREG(mode)  =__S_ISTYPE!(mode!, __S_IFREG!)
 }
+
 
 pub type Stat = nos.Stat
 
@@ -83,6 +95,23 @@ pub func setenv(name: string, value: string, overwrite: bool = false): !void {
 pub func unsetenv(name: string): !void {
     if (stdlib.unsetenv(name !: ^const char) != 0)
         raise OSError(f"unsetenv ${name} failed: ${strerr()}")
+}
+
+#if (defined __ALPINE__) {
+    macro PIDFD_NONBLOCK = O_NONBLOCK!
+    @inline
+    func pidfd_open(pid: Pid, flags: i32) {
+        var fd = unistd.syscall(SYS_pidfd_open!, pid) as i32
+        if (fd >= 0 && (flags & PIDFD_NONBLOCK!) != 0)
+            setNonblocking(fd)
+        return fd
+    }
+}
+else #if (!defined MACOS) {
+    @inline
+    func pidfd_open(pid: Pid, flags: i32) {
+        return pidfd.pidfd_open(pid, flags)
+    }
 }
 
 macro _W_INT(x)      *(<^i32>(ptrof x!))
@@ -548,7 +577,7 @@ pub struct Process {
             raise IOError("Process::waitAsync is not defined for MACOS yet")
         }
         else {
-            const pidFd = pidfd.pidfd_open(_pid, PIDFD_NONBLOCK!);
+            const pidFd = pidfd_open(_pid, PIDFD_NONBLOCK!);
             if (pidFd < 1) {
                 if (errno! == EINVAL!)
                     return -(<i32>EINVAL!)

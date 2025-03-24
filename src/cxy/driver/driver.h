@@ -52,6 +52,7 @@ typedef struct CompilerDriver {
     cstring sourceDir; // Root directory for source files (derived from first
                        // compile unit)
     u64 sourceDirLen;
+    cstring os;
     CompilerStats stats;
     Log *L;
     TypeTable *types;

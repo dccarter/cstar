@@ -3,7 +3,7 @@ services:
     container_name: "linux-dev"
     build:
       context: .
-      dockerfile: ./Dockerfile
+      dockerfile: ../docker/Dockerfile.alpine.dev
     volumes:
       - ..:/workspace:cached
     networks:

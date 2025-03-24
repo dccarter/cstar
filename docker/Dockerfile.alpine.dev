@@ -1,0 +1,9 @@
+FROM suilteam/cxy-base:alpine
+
+RUN apk add --update --no-cache openssh
+RUN echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config
+RUN adduser -h /home/dev -s /bin/sh -D dev
+RUN echo -n 'dev:dev123' | chpasswd
+ENTRYPOINT ["/entrypoint.sh"]
+EXPOSE 22
+COPY docker/entrypoint.sh /

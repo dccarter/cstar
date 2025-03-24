@@ -24,6 +24,7 @@ freely, subject to the following restrictions:
 
 #include "tinythread.h"
 #include <stdlib.h>
+#include <sys/types.h>
 
 /* Platform specific includes */
 #if defined(_TTHREAD_POSIX_)
@@ -647,7 +648,7 @@ int thrd_id(thrd_t thr, uint64_t *id)
 #elif defined(__APPLE__)
     return pthread_threadid_np(thr, id) == 0 ? thrd_success : thrd_error;
 #else
-    *id = thr;
+    *id = gettid();
     return thrd_success;
 #endif
 }

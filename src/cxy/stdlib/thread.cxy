@@ -6,7 +6,7 @@ import "native/thread/tinythread.h" as tinyThread
 
 pub exception ThreadError(msg: String) => msg == null? "" : msg.str()
 
-#if (defined MACOS) {
+#if (defined MACOS || defined __ALPINE__) {
 macro DEFAULT_TID null
 }
 else #if (defined UNIX) {

@@ -1,19 +1,22 @@
-name: Build image with latest cxy
+name: Cxy Ubuntu Dev Image
 
 on:
   push:
-    tags: [ "release/**" ]
+    tags: [ "v*.*.*" ]
+    branches:
+      - main
+    paths:
+      - docker/Dockerfile.ubuntu.dev
 
 env:
-  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+  IMAGE_TAG: ${{ github.ref_name == 'main' && 'latest' || github.ref_name }}
 
 jobs:
-  build:
+  ubuntu-image:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
-
       - name: Login to dockerhub
         uses: docker/login-action@v3
         with:
@@ -23,7 +26,6 @@ jobs:
       - name: Build and push to dockerhub
         uses: docker/build-push-action@v5
         with:
-          context:
-          file: docker/Dockerfile.cxy
+          file: docker/Dockerfile.ubuntu.dev
           push: true
-          tags: suilteam/cxy:latest
+          tags: suilteam/cxy-dev:${{env.IMAGE_TAG}}-ubuntu

@@ -285,6 +285,9 @@ static void initializeOptions(StrPool *strings, Options *options)
     options->frameworkSearchPaths = newDynArray(sizeof(char *));
     options->libraries = newDynArray(sizeof(char *));
     options->defines = newDynArray(sizeof(CompilerDefine));
+    options->operatingSystem = getenv("CXY_OS");
+    bool isAlpine = options->operatingSystem &&
+                    strcmp(options->operatingSystem, "__ALPINE__") == 0;
 #if 0 // ifdef __APPLE__
     pushOnDynArray(&options->defines, &(CompilerDefine){"MACOS", "1"});
     FormatState state = newFormatState(NULL, true);
@@ -315,6 +318,11 @@ static void initializeOptions(StrPool *strings, Options *options)
     const char *p = includeDirs;
     while (p && p[0] != '\0') {
         const char *end = strchr(p, '\n');
+        if (isAlpine && strstr(p, "fortify") != NULL) {
+            p = end ? end + 1 : NULL;
+            continue;
+        }
+
         if (end) {
             pushStringOnDynArray(&options->importSearchPaths,
                                  makeStringSized(strings, p, end - p));
@@ -336,6 +344,13 @@ static void initializeOptions(StrPool *strings, Options *options)
     pushStringOnDynArray(&options->cDefines, "-D_XOPEN_SOURCE=1");
     pushStringOnDynArray(&options->cDefines, "-D_DEFAULT_SOURCE");
     pushOnDynArray(&options->defines, &(CompilerDefine){"UNIX", "1"});
+    if (options->operatingSystem != NULL) {
+        pushOnDynArray(&options->defines,
+                       &(CompilerDefine){options->operatingSystem, "1"});
+        pushStringOnDynArray(
+            &options->cDefines,
+            makeStringConcat(strings, "-D", options->operatingSystem));
+    }
 #endif
 
 #endif

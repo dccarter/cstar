@@ -1,20 +1,6 @@
 
-import "stdlib/json.cxy"
-
-@json
-struct User {
-    name: String  = null;
-    age: i32 = 0;
-
-    func `init`(){}
-
-    const func `str`(os: OutputStream) {
-        os << "User{ " << name << ", " << age << "}"
-    }
-}
+import "bits/alltypes.h" as alltypes
 
 func main(): !void {
-    var j = "{\"name\": \"John\", \"age\": 100, \"loc\": {\"city\": \"Vancouver\", \"ids\": [100, 100.9000, null, false, true, \"\", {}]}}".S;
-    var user = json.fromString[User](&j);
-    println(user)
+    var x: alltypes.time_t;
 }

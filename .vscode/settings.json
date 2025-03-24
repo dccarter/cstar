@@ -1,5 +1,8 @@
 {
     "files.associations": {
+        "*.sqlbook": "sql",
+        "*.ndjson": "jsonl",
+        "*.dbclient-js": "javascript",
         "*.thin": "typescript",
         "type_traits": "c",
         "types.h": "c",
@@ -7,6 +10,9 @@
         "array": "cpp",
         "string": "cpp",
         "string_view": "cpp",
-        "vector": "cpp"
+        "vector": "cpp",
+        "time.h": "c",
+        "wait.h": "c",
+        "alltypes.h": "c"
     }
 }
