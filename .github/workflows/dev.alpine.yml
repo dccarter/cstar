@@ -8,6 +8,7 @@ on:
     paths:
       - docker/Dockerfile.alpine
       - docker/Dockerfile.alpine.dev
+  workflow_dispatch:
 
 env:
   IMAGE_TAG: ${{ github.ref_name == 'main' && 'latest' || github.ref_name }}

@@ -191,6 +191,14 @@ result=$?
 if [[ "${result}" -ne 0 ]] ; then
   buildFailure "Downloading cxy compiler failed..."
 fi
+[[ -n "${GIT_TAG}" ]] && {
+  # Checkout the git tag
+  (cd  ${WORKING_DIR}/compiler; git checkout ${GIT_TAG})
+  result=$?
+  if [[ "${result}" -ne 0 ]] ; then
+    buildFailure "Downloading cxy compiler failed..."
+  fi
+}
 
 echo -e "${Bgreen}3. Build downloaded compiler...${reset}"
 cmake -S ${WORKING_DIR}/compiler -B ${WORKING_DIR}/build -DCMAKE_BUILD_TYPE=Debug \

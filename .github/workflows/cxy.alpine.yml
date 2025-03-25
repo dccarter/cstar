@@ -5,6 +5,10 @@ on:
     tags: [ "v*.*.*" ]
     branches:
       - main
+    paths:
+      - docker/Dockerfile.alpine
+      - docker/Dockerfile.alpine.cxy
+  workflow_dispatch:
 
 env:
   IMAGE_TAG: ${{ github.ref_name == 'main' && 'latest' || github.ref_name }}
@@ -27,4 +31,6 @@ jobs:
         with:
           file: docker/Dockerfile.alpine.cxy
           push: true
-          tags: suilteam/cxy:${{env.IMAGE_TAG}}-alpine
+          tags: suilteam/cxy:${{ env.IMAGE_TAG }}-alpine
+          build-args: |
+            "RELEASE_TAG=${{ github.ref_name }}"

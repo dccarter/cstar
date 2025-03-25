@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - docker/Dockerfile.alpine
+  workflow_dispatch:
 
 jobs:
   alpine-base-image:

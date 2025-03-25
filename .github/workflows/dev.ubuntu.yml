@@ -2,11 +2,9 @@ name: Cxy Ubuntu Dev Image
 
 on:
   push:
-    tags: [ "v*.*.*" ]
-    branches:
-      - main
     paths:
       - docker/Dockerfile.ubuntu.dev
+  workflow_dispatch:
 
 env:
   IMAGE_TAG: ${{ github.ref_name == 'main' && 'latest' || github.ref_name }}

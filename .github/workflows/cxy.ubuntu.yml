@@ -5,6 +5,9 @@ on:
     tags: [ "v*.*.*" ]
     branches:
       - main
+    paths:
+      - docker/Dockerfile.ubuntu.cxy
+  workflow_dispatch:
 
 env:
   IMAGE_TAG: ${{ github.ref_name == 'main' && 'latest' || github.ref_name }}
@@ -26,4 +29,6 @@ jobs:
         with:
           file: docker/Dockerfile.ubuntu.cxy
           push: true
-          tags: suilteam/cxy:${{env.IMAGE_TAG}}-ubuntu
+          tags: suilteam/cxy:${{ env.IMAGE_TAG }}-ubuntu
+          build-args: |
+            "RELEASE_TAG=${{ github.ref_name }}"
