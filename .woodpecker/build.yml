@@ -3,9 +3,15 @@ when:
   - event: push
     branch: main
 
+matrix:
+  CXY_IMAGE:
+    - alpine
+    - ubuntu
+
 steps:
   - name: build
-    image: suilteam/cxyenv:latest
+    image: suilteam/cxy-dev:latest-${CXY_IMAGE}
+    pull: true
     commands:
       - >-
         cmake -B $CI_WORKSPACE/build
@@ -16,14 +22,14 @@ steps:
       - cmake --build $CI_WORKSPACE/build --config Debug
 
   - name: Compiler tests
-    image: suilteam/cxyenv:latest
+    image: suilteam/cxy-dev:latest-${CXY_IMAGE}
     directory: ./build
     commands:
       - export LLVM_MAJOR_VERSION=`llvm-config --version | cut -d '.' -f 1`
-      - FILE_CHECK=FileCheck-$LLVM_MAJOR_VERSION $CI_WORKSPACE/tests/runner.sh
+      - FILE_CHECK=`llvm-config --prefix`/bin/FileCheck $CI_WORKSPACE/tests/runner.sh
 
   - name: Stdlib tests
-    image: suilteam/cxyenv:latest
+    image: suilteam/cxy-dev:latest-${CXY_IMAGE}
     directory: ./build
     commands:
       - ctest --output-on-failure

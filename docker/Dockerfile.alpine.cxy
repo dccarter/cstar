@@ -1,6 +1,6 @@
 FROM suilteam/cxy-base:alpine
 
-RUN apk add --update --no-cache wget bash git
+RUN apk add --update --no-cache wget
 
 # Setup cxy environment variables
 ENV CXY_ROOT=/usr/local
