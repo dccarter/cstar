@@ -209,7 +209,7 @@ pub class TcpListener {
             var len = <u32> sizeof!(addr);
             var accepted = socket.accept(fd, addr.nativeAddr(), ptrof len);
             if (accepted >= 0) {
-                configureSocket(this.fd)
+                configureSocket(accepted)
                 return TcpSocket(accepted, addr)
             }
 
