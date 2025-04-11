@@ -15,25 +15,24 @@ pub struct OptionDesc {
 }
 
 pub struct Option[T] {
+    `isOption = true
     require!(
         T.isChar || (T.isString && T.isStruct) || T.isNumber || T.isBoolean,
-        "type of option must be a primitive type, to '{t}'",
+        "type of option must be a primitive type, unsupported type '{t}'",
         #T
     )
-
-    `isOption = true
 
     val: T
     desc: __string
 
-    func (def: T, desc: __string) {
+    func `init`(def: T, desc: __string) {
         this.val = val
         this.desc = desc
     }
 
     @inline
     func set(str: __string): !void {
-        val = str.parse[T]()
+        // val = str.parse[T]()
     }
 
     @inline
@@ -46,12 +45,14 @@ pub struct Option[T] {
 pub class Context {
     _options = HashMap[__string, __string]();
 
-    @inline func setOption(name: __string, value: __string) {
+    func `init`() {}
+
+    @inline func setOption(name: __string, value: __string) : !void{
         if (!(_options.[name] = value))
             raise BuildError(f"build option '${name}' already defined")
     }
 
-    func option(name: __string): !__string {
+    func option(name: __string): !&__string {
         var value = _options.[name]
         if (!value)
             raise BuildError(f"option with name '${name}' does not exist")
@@ -70,23 +71,24 @@ pub class Context {
     }
 
     func bindOptions[T](opts: &T): !void {
-        require(T.isStruct, "expecting a struct of options, got '{t}'", #T)
+        require!(T.isStruct, "expecting a struct of options, got '{t}'", #T)
         for (const name, value: _options) {
             bindOption(opts, name, value)
         }
     }
 }
 
+type TaskFn = func(ctx: &Context) -> !void;
 pub class Task {
     name: __string
-    - _run: Lambda[func(ctx: &Context) -> !void];
+    - _run: lambda_of!(TaskFn);
 
     func `init`(name: __string, run: func(ctx: &Context) -> !void) {
         this.name = name
-        this._run = run
+        this._run = &&run
     }
 
-    @inline func `()`(ctx: Context): !void {
+    @inline func `()`(ctx: &Context): !void {
         _run(ctx)
     }
 }
@@ -96,29 +98,29 @@ pub class Builder {
     - _tasks = HashMap[__string, Task]();
     - _options = HashMap[__string, OptionDesc]();
 
-    - func parseOptions(args: [string]) {
+    - func parseOptions(args: [string]): !void {
         for (const i: 0..args.size()) {
             const arg = __string(args.[i])
             if (arg.[0] != '-' as char || arg.[1] != 'D' as char)
                 continue
-            var name = arg
-            var value = __string();
             const idx = arg.indexOf('=' as char)
             if (idx)
                 raise BuildError(f"invalid build option '${arg}', expect -DOPTION=VALUE")
-            var name = arg.substr(0, *idx)
+            var name = arg.substr(0, <i64>*idx)
             if (!_options.contains(name))
                 raise BuildError(f"unknown build option '${name}'")
 
-            var value = arg.substr(*idx + 1)
+            var value = arg.substr(*idx + 1);
             _context.setOption(name, value)
         }
     }
 
-    func addTask(task: Task): !void {
-        if (_tasks.contains(task.name))
-            raise BuildError(f"task with name '${task.name}' already exist")
-        _tasks.[task.name] = &&task
+    func `init`() {}
+
+    func addTask(name: __string, task: TaskFn): !void {
+        if (_tasks.contains(name))
+            raise BuildError(f"task with name '${name}' already exist")
+        _tasks.[name] = Task(name, &&task)
     }
 
     func addOption(name: __string, desc: __string, def: __string): !void {
@@ -140,4 +142,15 @@ pub class Builder {
             }
         }
     }
+
+    func run(): !void {
+        for (const name,task : _tasks) {
+            println("running task ", name)
+            task(&_context)
+        }
+    }
 }
+
+
+macro task(name, BODY) builder.addTask(name!, (ctx: &build.Context): !void => { BODY! })
+macro options(OPTS) { opts = OPTS!; builder.addStaticOptions(&opts) }

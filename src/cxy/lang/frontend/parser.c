@@ -2394,17 +2394,23 @@ static AstNode *whileStatement(Parser *P)
     AstNode *cond = NULL;
 
     Token tok = *consume0(P, tokWhile);
-
-    consume0(P, tokLParen);
-    if (check(P, tokConst, tokVar)) {
-        cond = variable(P, false, false, true, false);
+    if (check(P, tokLBrace)) {
+        cond = newAstNode(
+            P, &tok, &(AstNode){.tag = astBoolLit, .boolLiteral.value = true});
+        body = statement(P, false);
     }
     else {
-        cond = expression(P, true);
+        consume0(P, tokLParen);
+        if (check(P, tokConst, tokVar)) {
+            cond = variable(P, false, false, true, false);
+        }
+        else {
+            cond = expression(P, true);
+        }
+        consume0(P, tokRParen);
+        if (!match(P, tokSemicolon))
+            body = statement(P, false);
     }
-    consume0(P, tokRParen);
-    if (!match(P, tokSemicolon))
-        body = statement(P, false);
 
     return newAstNode(P,
                       &tok,

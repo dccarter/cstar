@@ -364,7 +364,7 @@ pub async func getRemoteAddress(name: string, port: u16, mode: IPVersion = IPVer
     var ipv4 : ^netdb.addrinfo = null;
     var ipv6 : ^netdb.addrinfo = null;
     var it : ^netdb.addrinfo = null;
-    while (true) {
+    while {
         rc = dns.dns_ai_nextent(ptrof it, ai)
         if (rc == EAGAIN!) {
             var fd = dns.dns_ai_pollfd(ai);

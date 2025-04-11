@@ -21,7 +21,7 @@ macro LOG_TIME_FMT  "%Y-%m-%d %H:%M:%S";
     type tm = ctime.tm
     pub type time_t = _time_t.time_t
 }
-#if (defined __ALPINE__) {
+else #if (defined __ALPINE__) {
     type tm = ctime.tm
     pub type time_t = alltypes.time_t
 }

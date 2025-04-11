@@ -210,7 +210,7 @@ class CoroutineScheduler {
             }
         }
 
-        while (true) {
+        while {
             var coro = ready.pop();
             if (coro != null) {
                 counter++;

@@ -480,7 +480,7 @@ pub struct __string {
         return <T>strtod(s !: ^const char, ptrof ep);
     }
 
-    func indexOf(ch: char) : Optional[u64] {
+    const func indexOf(ch: char) : Optional[u64] {
         var i = 0 as u64;
         while (i < _size) {
             if (s.[i] == ch)
@@ -490,7 +490,7 @@ pub struct __string {
         return None[u64]()
     }
 
-    func rIndexOf(ch: char) : Optional[u64] {
+    const func rIndexOf(ch: char) : Optional[u64] {
         if (_size == 0)
             return None[u64]()
 

@@ -3,6 +3,10 @@
 **C-xy** (pronounced sexy) is a typed compiled programming language. `cxy` started as a compiler design learning
 project and personal hobby project. The language references code from different languages in the www
 
+### Playground
+
+Try `cxy` on this [playground](https://cxy-lang.suilteam.io/)
+
 ```c
 func main(args: [string]) {
     for (const arg, _: args) {
@@ -13,7 +17,7 @@ func main(args: [string]) {
 
 ### Key Language features
 
-`cxy` supports most features that would be supported on most
+`cxy` supports most features that would be supported by most
 object-oriented programming languages (see the `tests/lang` and
 `src/cxy/stdlib` directories for some of the supported features)
 
@@ -24,7 +28,7 @@ object-oriented programming languages (see the `tests/lang` and
 * Meta programming (generics and compile time evaluation).
 * Reference counting memory management.
 * Transpiles to readable `c` code.
-* Comes with an LLVM backend.
+* Comes with an LLVM backend (Deprecated)
 
 #### Building
 

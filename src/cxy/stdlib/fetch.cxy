@@ -666,7 +666,7 @@ pub func fetch(url: __string, builder: RequestBuilder = null): !Response {
         if (ret.0 == .Unknown)
             raise HttpError(f"Invalid fetch url '${url}', @METHOD in url is unknown")
         var i = <i64>ret.1
-        while (true) {
+        while {
             if (!isSpace!(methodName.[i]))
                 break
             i++

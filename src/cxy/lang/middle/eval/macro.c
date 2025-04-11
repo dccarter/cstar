@@ -1289,7 +1289,7 @@ static AstNode *makeCstrNode(AstVisitor *visitor,
     }
 
     args->type = makePointerType(
-        ctx->types, getPrimitiveType(ctx->types, prtI8), flgConst);
+        ctx->types, getPrimitiveType(ctx->types, prtCChar), flgConst);
     args->flags |= flgVisited;
     return args;
 }

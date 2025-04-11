@@ -84,7 +84,7 @@ pub class SslSocket: Socket {
     - bio: ^TYPES.bio_st = null;
 
     - func bioFlush(ssl: ^TYPES.ssl_st, timeout: u64) {
-        while (true) {
+        while {
             var rc = BIO_flush!(bio)
             if (rc >= 0)
                 return true
@@ -134,7 +134,7 @@ pub class SslSocket: Socket {
 
         BIO.BIO_push(bio, cbio)
 
-        while (true) {
+        while {
             var rc = BIO_do_handshake!(bio);
             if (rc <= 0) {
                 var err = SSL.SSL_get_error(ssl, <i32>rc);

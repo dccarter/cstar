@@ -330,7 +330,7 @@ pub class FileInputStream: InputStream {
 
     func readAsync(os: &OutputStream, timeout: u64 = 0): !void {
         var buf: [char, 4092] = []
-        while (true) {
+        while {
             var tmp = read(buf, 4092)
             if (!tmp) {
                 if (errno! == EAGAIN!) {
@@ -396,7 +396,7 @@ pub class FileInputStream: InputStream {
 
     func readAll(os: &OutputStream): !void {
         var buf: [char, 4092] = []
-        while (true) {
+        while {
             var tmp = read(buf, 4092)
             if (*tmp < 0)
                 raise IOError(f"reading command output failed: ${strerr()}")

@@ -1,6 +1,5 @@
 
-import "bits/alltypes.h" as alltypes
-
-func main(): !void {
-    var x: alltypes.time_t;
+func main(args: [string]): void {
+    for (const arg,_: args)
+        println(arg)
 }

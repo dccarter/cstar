@@ -317,7 +317,7 @@ pub func ls(
     defer dirent.closedir(d)
 
     var base = cast[Path](&path)
-    while (true) {
+    while {
         var tmp = nos.nos_readdir(d)
         if (tmp == null)
             break
