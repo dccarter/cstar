@@ -53,12 +53,12 @@ static void addDebugInfo(CodegenContext *ctx, const AstNode *node)
     if (node == NULL)
         return;
     FilePos pos = node->loc.begin;
-    if (ctx->debug.enabled && (pos.row != ctx->debug.pos.row)) {
-        format(getState(ctx),
-               "#line {u32} \"{s}\"\n",
-               (FormatArg[]){{.u32 = pos.row}, {.s = node->loc.fileName}});
-        ctx->debug.pos = pos;
-    }
+    if (pos.row == 0)
+        return;
+    format(getState(ctx),
+           "#line {u32} \"{s}\"\n",
+           (FormatArg[]){{.u32 = pos.row}, {.s = node->loc.fileName}});
+    ctx->debug.pos = pos;
 }
 
 static void generateMany(ConstAstVisitor *visitor,
@@ -182,7 +182,6 @@ static void generateEnumType(CodegenContext *ctx, const Type *type)
 
 static void generateClassType(CodegenContext *ctx, const Type *type)
 {
-    format(typeState(ctx), "// {u64}\n", (FormatArg[]){{.u64 = type->index}});
     format(typeState(ctx), "typedef struct ", NULL);
     generateCustomTypeName(ctx, typeState(ctx), type, "Class");
     format(typeState(ctx), " ", NULL);
@@ -1075,7 +1074,8 @@ static void visitFieldExpr(ConstAstVisitor *visitor, const AstNode *node)
     format(
         getState(ctx), ".{s} = ", (FormatArg[]){{.s = node->fieldExpr.name}});
     bool nullInit = nodeIs(node->fieldExpr.value, NullLit) &&
-                    (isTupleType(node->type) || isUnionType(node->type));
+                    (isTupleType(node->type) || isUnionType(node->type) ||
+                     isArrayType(node->type));
     if (nullInit)
         format(getState(ctx), " {{}", NULL);
     else
@@ -1691,7 +1691,6 @@ static void visitExternDecl(ConstAstVisitor *visitor, const AstNode *node)
     if (nodeIs(decl, FuncDecl)) {
         if (hasFlag(decl, Extern))
             decl->codegen = (void *)true;
-        addDebugInfo(ctx, decl);
 
         if (hasFlag(decl, Extern))
             format(getState(ctx), "extern ", NULL);
@@ -1715,7 +1714,6 @@ static void visitExternDecl(ConstAstVisitor *visitor, const AstNode *node)
 static void visitFuncDecl(ConstAstVisitor *visitor, const AstNode *node)
 {
     CodegenContext *ctx = getConstAstVisitorContext(visitor);
-    addDebugInfo(ctx, node);
     ((AstNode *)node)->codegen = (void *)true;
     if (hasFlag(node, Abstract))
         return;

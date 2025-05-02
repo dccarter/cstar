@@ -1,0 +1,45 @@
+
+func main(args: [string]) {
+    // Infinite loop, while without condition implies while(true)
+    // empty block allowed
+    while {}
+
+    // Condition expression or variable declaration allowed in while statement
+    while (true) {}
+
+    // All conditions must evaluate to a boolean expressiopns
+    while (var c = check()) {
+        // variable only available within the while block
+        println(c)
+    }
+
+    while (true) {
+        // nested while loops supported
+        while (var a = check()) {
+        }
+    }
+
+    // break; continue keywords
+    while (var c = check()) {
+        if (*c % 100) {
+            // use continue to jump to the next iteration
+            continue
+        }
+
+        var oops = false;
+        while (valid(c)) {
+            if (c == 50) {
+                oops = true
+                // Use break to break out of the current while loop, jumping to the next statement after
+                // the loop, i.e #1
+                break
+            }
+        }
+
+        // #1 Statement
+        if (oops) {
+            // Breaks out of the current loop, jumping into the next next statement
+            break
+        }
+    }
+}

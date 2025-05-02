@@ -450,8 +450,9 @@ static void shakeIfStmt(AstVisitor *visitor, AstNode *node)
     AstNode *cond = node->ifStmt.cond;
     if (nodeIs(cond, VarDecl)) {
         AstNode *var = duplicateAstNode(ctx->pool, cond);
-        var->varDecl.name = var->varDecl.names->ident.value;
-
+        cstring name = var->varDecl.names->ident.value;
+        var->varDecl.name = makeAnonymousVariable(ctx->strings, "_hd");
+        var->varDecl.names->ident.value = var->varDecl.name;
         astModifierAdd(&ctx->block, var);
 
         cond->tag = astPath;
@@ -465,6 +466,12 @@ static void shakeIfStmt(AstVisitor *visitor, AstNode *node)
                 &(AstNode){.tag = astBlockStmt,
                            .blockStmt = {.stmts = node->ifStmt.body}});
         }
+        node->ifStmt.body->blockStmt.stmts =
+            makeVarAlias(ctx->pool,
+                         &var->loc,
+                         name,
+                         var,
+                         node->ifStmt.body->blockStmt.stmts);
     }
     else {
         astVisit(visitor, cond);
@@ -497,31 +504,31 @@ static void shakeWhileStmt(AstVisitor *visitor, AstNode *node)
     ShakeAstContext *ctx = getAstVisitorContext(visitor);
     AstNode *cond = node->whileStmt.cond;
 
-    if (nodeIs(cond, VarDecl)) {
-        AstNode *var = duplicateAstNode(ctx->pool, cond);
-        var->varDecl.name = var->varDecl.names->ident.value;
-
-        astModifierAdd(&ctx->block, var);
-
-        cond->tag = astGroupExpr;
-        cond->groupExpr.expr = makeAstNode(
-            ctx->pool,
-            &cond->loc,
-            &(AstNode){.tag = astAssignExpr,
-                       .assignExpr = {.op = opAssign,
-                                      .lhs = makePathFromIdent(
-                                          ctx->pool, var->varDecl.names),
-                                      .rhs = var->varDecl.init}});
-        var->varDecl.init = NULL;
-
-        if (!nodeIs(node->whileStmt.body, BlockStmt)) {
-            node->whileStmt.body = makeAstNode(
-                ctx->pool,
-                &node->whileStmt.body->loc,
-                &(AstNode){.tag = astBlockStmt,
-                           .blockStmt = {.stmts = node->whileStmt.body}});
-        }
-    }
+    // if (nodeIs(cond, VarDecl)) {
+    //     AstNode *var = duplicateAstNode(ctx->pool, cond);
+    //     var->varDecl.name = var->varDecl.names->ident.value;
+    //
+    //     astModifierAdd(&ctx->block, var);
+    //
+    //     cond->tag = astGroupExpr;
+    //     cond->groupExpr.expr = makeAstNode(
+    //         ctx->pool,
+    //         &cond->loc,
+    //         &(AstNode){.tag = astAssignExpr,
+    //                    .assignExpr = {.op = opAssign,
+    //                                   .lhs = makePathFromIdent(
+    //                                       ctx->pool, var->varDecl.names),
+    //                                   .rhs = var->varDecl.init}});
+    //     var->varDecl.init = NULL;
+    //
+    //     if (!nodeIs(node->whileStmt.body, BlockStmt)) {
+    //         node->whileStmt.body = makeAstNode(
+    //             ctx->pool,
+    //             &node->whileStmt.body->loc,
+    //             &(AstNode){.tag = astBlockStmt,
+    //                        .blockStmt = {.stmts = node->whileStmt.body}});
+    //     }
+    // }
 
     if (!nodeIs(node->whileStmt.body, BlockStmt)) {
         node->whileStmt.body = makeAstNode(
@@ -531,6 +538,25 @@ static void shakeWhileStmt(AstVisitor *visitor, AstNode *node)
                        .blockStmt = {.stmts = node->whileStmt.body}});
     }
 
+    if (cond && !isLiteralExpr(cond)) {
+        // if (cond) { body} else { break }
+        node->whileStmt.body = makeBlockStmt(
+            ctx->pool,
+            &node->loc,
+            makeIfStmt(ctx->pool,
+                       &cond->loc,
+                       flgNone,
+                       cond,
+                       node->whileStmt.body,
+                       makeAstNode(ctx->pool,
+                                   builtinLoc(),
+                                   &(AstNode){.tag = astBreakStmt}),
+                       NULL),
+            NULL,
+            NULL);
+        node->whileStmt.cond =
+            makeBoolLiteral(ctx->pool, builtinLoc(), true, NULL, NULL);
+    }
     astVisit(visitor, node->whileStmt.body);
 }
 

@@ -1022,8 +1022,12 @@ static void visitStructExpr(AstVisitor *visitor, AstNode *node)
         field->fieldExpr.index = target->structField.index;
         const Type *left = unwrapType(target->type, NULL),
                    *right = unwrapType(field->fieldExpr.value->type, NULL);
-        if (left != right || typeIs(left, Func))
+        bool nullLit =
+            nodeIs(field->fieldExpr.value, NullLit) &&
+            (isArrayType(left) || isUnionType(left) || isTupleType(left));
+        if (!nullLit && (left != right || typeIs(left, Func))) {
             simplifyCastExpression(ctx, field->fieldExpr.value, left);
+        }
         astVisit(visitor, field->fieldExpr.value);
     }
 }

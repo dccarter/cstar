@@ -964,6 +964,22 @@ static void dumpVarDecl(ConstAstVisitor *visitor, const AstNode *node)
     }
 }
 
+static void dumpVarAlias(ConstAstVisitor *visitor, const AstNode *node)
+{
+    DumpContext *ctx = getConstAstVisitorContext(visitor);
+    format(ctx->state, "@alias ", NULL);
+    if (hasFlag(node, Const)) {
+        AddComptime();
+        printKeyword(ctx->state, "const");
+    }
+    else
+        printKeyword(ctx->state, "var");
+    format(ctx->state,
+           " {s} = {s}",
+           (FormatArg[]){{.s = node->varAlias.name},
+                         {.s = node->varAlias.var->_name}});
+}
+
 static void dumpFuncDeclWithParams(ConstAstVisitor *visitor,
                                    const AstNode *node,
                                    const AstNode *params)
@@ -1339,6 +1355,7 @@ AstNode *dumpCxySource(CompilerDriver *driver, AstNode *node, FILE *file)
         [astSwitchStmt] = dumpSwitchStmt,
         [astMatchStmt] = dumpMatchStmt,
         [astVarDecl] = dumpVarDecl,
+        [astVarAlias] = dumpVarAlias,
         [astTypeDecl] = dumpTypeDecl,
         [astFieldDecl] = dumpStructField,
         [astStructDecl] = dumpStructDecl,

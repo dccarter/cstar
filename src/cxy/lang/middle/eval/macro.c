@@ -90,7 +90,6 @@ static void staticLog(AstVisitor *visitor,
                          NULL);
             goto staticLogDone;
         }
-
         switch (it->tag) {
         case astStringLit:
             params[i] = (FormatArg){.s = it->stringLiteral.value};

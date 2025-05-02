@@ -1,0 +1,38 @@
+func main(args: [string]) {
+  while (true)
+  { }
+  
+  while (true)
+  { }
+  
+  while (var c = check())
+  {
+    println(c)
+  }
+  while (true)
+  {
+    while (var a = check())
+    { }
+    
+  }
+  while (var c = check())
+  {
+    if (*c % 100) {
+      continue
+    }
+    var oops = false
+    while (valid(c))
+    {
+      if (c == 50) {
+        oops = true
+        break
+      }
+    }
+    if (oops) {
+      break
+    }
+  }
+}
+
+[1;32m✓[1;37m Compilation success
+[0m

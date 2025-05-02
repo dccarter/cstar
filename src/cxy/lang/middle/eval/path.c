@@ -89,6 +89,10 @@ void evalPathEpilogue(AstVisitor *visitor,
         case typString:
             node->tag = astStringType;
             break;
+        case typLiteral:
+            node->tag = astLiteral;
+            node->literal.value = type->literal.value;
+            break;
         case typEnum:
         case typStruct:
         case typClass: {

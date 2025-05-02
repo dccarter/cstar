@@ -22,9 +22,11 @@
     case astFloatLit:                                                          \
     case astStringLit:                                                         \
     case astError:                                                             \
+    case astLiteral:                                                           \
     case astPrimitiveType:                                                     \
     case astImportEntity:                                                      \
     case astModuleDecl:                                                        \
+    case astVarAlias:                                                          \
     case astIdentifier:                                                        \
     case astDestructorRef:                                                     \
     case astExternDecl:                                                        \

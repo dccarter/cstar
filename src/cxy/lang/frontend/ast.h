@@ -62,6 +62,7 @@ struct StrPool;
     f(FuncDecl)                             \
     f(MacroDecl)                            \
     f(VarDecl)                              \
+    f(VarAlias)                             \
     f(TypeDecl)                             \
     f(ForwardDecl)                          \
     f(UnionDecl)                            \
@@ -132,6 +133,7 @@ struct StrPool;
     f(NodeArray)            \
     f(Exception)            \
     f(TupleXform)           \
+    f(Literal)              \
     CXY_LANG_AST_EXP_TAGS(f)    \
     CXY_LANG_AST_STMT_TAGS(f)   \
     CXY_LANG_AST_DECL_TAGS(f)   \
@@ -373,7 +375,10 @@ struct AstNode {
         } intLiteral;
 
         struct {
-            f64 value;
+            union {
+                f64 value;
+                u64 _bits;
+            };
         } floatLiteral;
 
         struct {
@@ -383,6 +388,10 @@ struct AstNode {
         struct {
             const char *value;
         } stringLiteral;
+
+        struct {
+            const AstNode *value;
+        } literal;
 
         struct {
             cstring name;
@@ -547,6 +556,11 @@ struct AstNode {
             AstNode *init;
             void *codegen;
         } varDecl;
+
+        struct {
+            cstring name;
+            AstNode *var;
+        } varAlias;
 
         struct {
             cstring _name;
@@ -1252,6 +1266,12 @@ AstNode *makeVarDecl(MemPool *pool,
                      AstNode *init,
                      AstNode *next,
                      const Type *type);
+
+AstNode *makeVarAlias(MemPool *pool,
+                      const FileLoc *loc,
+                      cstring name,
+                      AstNode *var,
+                      AstNode *next);
 
 AstNode *makeArrayTypeAstNode(MemPool *pool,
                               const FileLoc *loc,

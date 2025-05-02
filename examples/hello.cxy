@@ -1,5 +1,12 @@
-
-func main(args: [string]): void {
-    for (const arg,_: args)
-        println(arg)
+func get(x: u8): bool? {
+    return null
+}
+func main(): void {
+    for (const i: range(0, 10)) {
+        println(i)
+        if (i < 9)
+            continue
+        else
+            break
+    }
 }

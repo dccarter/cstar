@@ -30,6 +30,35 @@ static HashCode hashUnionMembers(HashCode hash,
     return hash;
 }
 
+static HashCode hashAstNode(HashCode hash, const AstNode *node)
+{
+    csAssert0(isLiteralExpr(node));
+    switch (node->tag) {
+    case astIntegerLit:
+        return hashUint64(hash, node->intLiteral.uValue);
+    case astBoolLit:
+        return hashUint8(hash, node->boolLiteral.value);
+    case astCharLit:
+        return hashUint32(hash, node->charLiteral.value);
+    case astFloatLit:
+        return hashUint64(hash, node->floatLiteral._bits);
+    case astStringLit:
+        return hashStr(hash, node->stringLiteral.value);
+    case astNullLit:
+        return hash;
+    case astTypedExpr:
+    case astCastExpr:
+        return hashAstNode(hash, node->castExpr.expr);
+    case astGroupExpr:
+        return hashAstNode(hash, node->groupExpr.expr);
+    case astUnaryExpr:
+        return hashAstNode(hash, node->unaryExpr.operand);
+    default:
+        csAssert0(false);
+    }
+    return hash;
+}
+
 static HashCode hashType(HashCode hash, const Type *type)
 {
     hash = hashUint32(hash, type->tag);
@@ -41,6 +70,9 @@ static HashCode hashType(HashCode hash, const Type *type)
     case typVoid:
     case typError:
     case typThis:
+        break;
+    case typLiteral:
+        hash = hashAstNode(hash, type->literal.value);
         break;
     case typPrimitive:
         hash = hashUint32(hash, type->primitive.id);
@@ -154,6 +186,30 @@ static bool compareUnionMembers(const UnionMember *left,
     return true;
 }
 
+static bool compareAstNodes(const AstNode *lhs, const AstNode *rhs)
+{
+    if (lhs->tag != rhs->tag)
+        return false;
+    switch (lhs->tag) {
+    case astNullLit:
+        return true;
+    case astCharLit:
+        return lhs->charLiteral.value == rhs->charLiteral.value;
+    case astBoolLit:
+        return lhs->boolLiteral.value == rhs->boolLiteral.value;
+    case astIntegerLit:
+        return lhs->intLiteral.isNegative == rhs->intLiteral.isNegative &&
+               lhs->intLiteral.uValue == rhs->intLiteral.uValue;
+    case astFloatLit:
+        return lhs->floatLiteral.value == rhs->floatLiteral.value;
+    case astStringLit:
+        return lhs->stringLiteral.value == rhs->stringLiteral.value;
+    default:
+        csAssert0(false);
+    }
+    return false;
+}
+
 bool compareFuncTypes(const Type *lhs, const Type *rhs, bool ignoreNames)
 {
     u64 lhsFlags = flgNone, rhsFlags = flgNone;
@@ -202,6 +258,8 @@ bool compareTypes(const Type *lhs, const Type *rhs)
     case typVoid:
     case typNull:
         break;
+    case typLiteral:
+        return compareAstNodes(left->literal.value, right->literal.value);
     case typPrimitive:
         return left->primitive.id == right->primitive.id;
     case typPointer:
@@ -714,6 +772,13 @@ const Type *makeContainerType(
     }
 
     return goi.s;
+}
+
+const Type *makeLiteralType(TypeTable *table, const AstNode *value)
+{
+    Type type = make(
+        Type, .tag = typLiteral, .name = NULL, .literal = {.value = value});
+    return getOrInsertType(table, &type).s;
 }
 
 const Type *getPrimitiveType(TypeTable *table, PrtId id)

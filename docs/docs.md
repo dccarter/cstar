@@ -39,7 +39,7 @@ can be bound to a desired type using the `:<type>` operator.
 
 ### Integers
 
-The default type for integer literals is evaluated based on smallest type that can
+The default type for integer literals is evaluated based on the smallest type that can
 fit the integer literal. If a specific type is desired, the literal can be bound to the type.
 
 ```c
@@ -88,7 +88,7 @@ Variables can be declared with the `var` (mutable) or `const` keyword (immutable
 * Initializer for `const` variables is required
 * Variable type is optional, if not specified, it will be inferred from
     * initializer if provided
-    * first assignment (variable can not be used before assignment)
+    * first assignment (variable cannot be used before assignment)
 * Multiple variable declarations supported
 
 ```c
@@ -148,7 +148,7 @@ string
 
 ### Arrays
 
-Arrays are similar to `c` arrays, denoted as `[Type, Size]` (e.g `[i32, 10]` is an array
+Arrays are similar to `c` arrays, denoted as `[Type, Size]` (e.g., `[i32, 10]` is an array
 of 10 integer types).
 
 * Arrays are enumerable and indexable
@@ -168,7 +168,7 @@ for (const x: a) {
 
 ### Slice
 
-Slice types are un-sized arrays denoted by the syntax `[Type]`, where the size is omitted.
+Slice types are unsized arrays denoted by the syntax `[Type]`, where the size is omitted.
 
 * Enumerable and indexable
 * Can be created from array types or via the `Slice` constructor
@@ -204,13 +204,13 @@ a.0 == 10; // true
 
 ### Pointers
 
-A pointer type is denoted by the `^` before the type name. Pointer type variable store the
-memory address other variables.
+A pointer type is denoted by the `^` before the type name. Pointer type variable stores the
+memory addresses other variables.
 
 * the `ptrof` operator can be used to get the pointer of a variable
 * just like in `c`, a `null` literal can be assigned to a pointer
 * Pointer addition arithmetic allowed via the `ptroff!` macro
-* Pointers can be re-typed, which is the same as casting but with more relaxed rules
+* Pointers can be re-type, which is the same as casting but with more relaxed rules
 * Pointers are indexable with the `.[]` operator
 * Arrays and strings are considered pointer types
 
@@ -229,8 +229,8 @@ var d = *c;
 
 ### References
 
-References are just like C pointers but only useful for structural types such as structs
-classes, tuples and unions.
+References are just like C pointers but only useful for structural types such as struct
+classes, tuples, and unions.
 
 * A reference type is denoted by the `&` character before the name of a type.
 * Reference type variable work just like normal types, the compiler will take care of
@@ -332,7 +332,7 @@ type Result[T] = Error | T
 
 `cxy` supports functions and external function declarations
 
-* Functions are private to the module by default, the can be made global by prefixing
+* Functions are private to the module by default, there can be made global by prefixing
   the declaration with `pub` keyword.
 * The return type of function is optional (deduced by compiler if not specified). If the
   function is called declaration or is recursive, its return type will be required.
@@ -380,8 +380,8 @@ func greet(fn: func(ms: string) -> void) {
 ### External Function Declaration
 
 * Prefixed with the `extern` keyword.
-* Extern functions do not have body since they are expected to be declared somewhere else (
-  likely in a c source file or librarty)
+* Extern functions do not have body since they are expected to be declared somewhere else (likely in a c source file
+  or library)
 * The function will need to be provided at link time, this can be as simply as linking against a
   library that provides one or authoring one on `c`.
 

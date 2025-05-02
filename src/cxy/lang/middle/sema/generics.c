@@ -10,6 +10,7 @@
 #include "lang/frontend/strings.h"
 
 #include "core/alloc.h"
+#include "lang/middle/eval/eval.h"
 
 static cstring pushGenericDeclNamespace(TypeTable *types, const AstNode *decl)
 {
@@ -304,6 +305,16 @@ const Type *resolveGenericDecl(AstVisitor *visitor,
 
     paramTypes = mallocOrDie(sizeof(Type *) * paramsCount);
     for (; arg; index++, arg = arg->next) {
+        if (!evaluate(visitor, arg))
+            return node->type = ERROR_TYPE(ctx);
+
+        if (isLiteralExpr(arg)) {
+            AstNode *value = deepCloneAstNode(ctx->pool, arg);
+            arg->tag = astLiteral;
+            clearAstBody(arg);
+            arg->literal.value = value;
+            arg->type = NULL;
+        }
         paramTypes[index] = maybeUnThisType(checkType(visitor, arg));
     }
 

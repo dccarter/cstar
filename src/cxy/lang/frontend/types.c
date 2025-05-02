@@ -86,6 +86,44 @@ static void printGenericType(FormatState *state, const Type *type)
     format(state, "]", NULL);
 }
 
+static void printLiteralType(FormatState *state, const AstNode *value, u64 idx)
+{
+    switch (value->tag) {
+    case astNullLit:
+        format(state, "Null", NULL);
+        break;
+    case astBoolLit:
+        format(
+            state, "Bool({b})", (FormatArg[]){{.b = value->boolLiteral.value}});
+        break;
+    case astCharLit:
+        format(state,
+               "Char({c})",
+               (FormatArg[]){{.u32 = value->charLiteral.value}});
+        break;
+    case astIntegerLit:
+        if (value->intLiteral.isNegative)
+            format(state,
+                   "Int(-{i64})",
+                   (FormatArg[]){{.i64 = value->intLiteral.value}});
+        else
+            format(state,
+                   "Int({u64})",
+                   (FormatArg[]){{.u64 = value->intLiteral.uValue}});
+        break;
+    case astFloatLit:
+        format(state,
+               "Float({f64})",
+               (FormatArg[]){{.f64 = value->floatLiteral.value}});
+        break;
+    case astStringLit:
+        format(state, "StringLit({i64})", (FormatArg[]){{.u64 = idx}});
+        break;
+    default:
+        unreachable("TODO");
+    }
+}
+
 bool isPrimitiveType(TokenTag tag)
 {
     switch (tag) {
@@ -990,6 +1028,9 @@ void printType_(FormatState *state, const Type *type, bool keyword)
     case typResult:
         printType_(state, type->result.target, keyword);
         format(state, "!", NULL);
+        break;
+    case typLiteral:
+        printLiteralType(state, type->literal.value, type->index);
         break;
     default:
         unreachable("TODO");

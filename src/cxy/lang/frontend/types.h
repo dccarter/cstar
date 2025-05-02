@@ -60,6 +60,7 @@ typedef enum {
 typedef enum {
     typError,
     typContainer,
+    typLiteral,
     typAuto,
     typVoid,
     typNull,
@@ -249,6 +250,10 @@ typedef struct Type {
             cstring *names;
             u64 namesCount;
         } container;
+
+        struct {
+            const AstNode *value;
+        } literal;
 
         struct {
             TypeMembersContainer *members;

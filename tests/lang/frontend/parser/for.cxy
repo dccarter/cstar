@@ -1,0 +1,30 @@
+
+func main(args: [string]) {
+    // Simple for loop with range expression (See range.cxy for range expressions)
+    for (const i: 0..10) {
+    }
+
+    // For loop with multiple variables
+    for (const i, j: get()) {
+    }
+
+    // For loop with multiple ignored variables
+    for (const _, j: get()) {
+    }
+
+    // Break/Continue in for loops
+    for (const _, j: get()) {
+        if (j  == 100)
+            break
+        if (j < 10)
+            continue
+        println(j)
+    }
+
+    // Nested for loops
+    for (const x: range(100, 80, -2)) {
+        for (var j: get(x)) {
+            println(j)
+        }
+    }
+}

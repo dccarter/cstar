@@ -718,7 +718,8 @@ static void checkField(AstVisitor *visitor, AstNode *node)
         return;
     }
 
-    if (value && !isTypeAssignableFrom(type, value)) {
+    const AstNode *tmp = node->structField.value;
+    if (!nodeIs(tmp, NullLit) && value && !isTypeAssignableFrom(type, value)) {
         logError(ctx->L,
                  &node->structField.value->loc,
                  "field initializer of type '{t}' not compatible with "
@@ -753,6 +754,9 @@ static void checkLiteral(AstVisitor *visitor, AstNode *node)
         break;
     case astStringLit:
         node->type = makeStringType(ctx->types);
+        break;
+    case astLiteral:
+        node->type = makeLiteralType(ctx->types, node->literal.value);
         break;
     default:
         unreachable("NOT LITERAL");
@@ -853,6 +857,7 @@ AstNode *checkAst(CompilerDriver *driver, AstNode *node)
         [astIntegerLit] = checkLiteral,
         [astFloatLit] = checkLiteral,
         [astStringLit] = checkLiteral,
+        [astLiteral] = checkLiteral,
         [astPrimitiveType] = checkBuiltinType,
         [astStringType] = checkBuiltinType,
         [astAutoType] = checkBuiltinType,

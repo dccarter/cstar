@@ -1168,6 +1168,21 @@ AstNode *makeVarDecl(MemPool *pool,
                         .init = init}});
 }
 
+AstNode *makeVarAlias(MemPool *pool,
+                      const FileLoc *loc,
+                      cstring name,
+                      AstNode *var,
+                      AstNode *next)
+{
+    return makeAstNode(pool,
+                       loc,
+                       &(AstNode){.tag = astVarAlias,
+                                  .flags = var->flags,
+                                  .type = var->type,
+                                  .next = next,
+                                  .varAlias = {.name = name, .var = var}});
+}
+
 AstNode *makeArrayTypeAstNode(MemPool *pool,
                               const FileLoc *loc,
                               u64 flags,
@@ -1840,6 +1855,7 @@ bool isTypeExpr(const AstNode *node)
     case astFuncDecl:
     case astTypeRef:
     case astGenericParam:
+    case astLiteral:
         return true;
     case astRef:
         return isTypeExpr(node->reference.target);

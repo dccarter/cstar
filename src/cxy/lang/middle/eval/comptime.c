@@ -130,9 +130,15 @@ static AstNode *getValue(EvalContext *ctx,
         if (node->annotation.value)
             return deepCloneAstNode(ctx->pool, node->annotation.value);
         return NULL;
+    case astLiteral:
+        return deepCloneAstNode(ctx->pool, node->literal.value);
     default:
-        return NULL;
+        break;
     }
+    const Type *type = resolveUnThisUnwrapType(node->type);
+    if (typeIs(type, Literal))
+        return deepCloneAstNode(ctx->pool, type->literal.value);
+    return NULL;
 }
 
 static AstNode *getMembers(EvalContext *ctx,
@@ -154,6 +160,9 @@ static AstNode *getMembers(EvalContext *ctx,
     case astTupleType:
         return comptimeWrapped(
             ctx, &node->loc, node->tupleType.elements, flgComptimeIterable);
+    case astUnionDecl:
+        return comptimeWrapped(
+            ctx, &node->loc, node->unionDecl.members, flgComptimeIterable);
     case astStructDecl:
     case astClassDecl:
         return comptimeWrapped(
@@ -270,7 +279,8 @@ static AstNode *getCallableType(EvalContext *ctx,
     const Type *type = resolveType(node->type ?: evalType(ctx, node));
     if (typeIs(type, Func))
         return makeTypeReferenceNode(ctx->pool, type, loc);
-    else if (typeIs(type, Tuple) && hasFlag(type, FuncTypeParam)) {
+
+    if (typeIs(type, Tuple) && hasFlag(type, FuncTypeParam)) {
         const Type *func = getTypeDecl(type->tuple.members[1])->type;
         func = makeFuncType(
             ctx->types,
@@ -770,7 +780,7 @@ static AstNode *isFuncTypeParam(EvalContext *ctx,
 
     const Type *type = node->type ?: evalType(ctx, node);
     type = resolveUnThisUnwrapType(type);
-    bool value = typeIs(type, Tuple) || hasFlag(type, FuncTypeParam);
+    bool value = typeIs(type, Tuple) && hasFlag(type, FuncTypeParam);
 
     return makeAstNode(
         ctx->pool,
@@ -807,6 +817,18 @@ static AstNode *isResultTypeComptime(EvalContext *ctx,
         ctx->pool,
         loc,
         &(AstNode){.tag = astBoolLit, .boolLiteral.value = value});
+}
+
+static AstNode *isLiteral(EvalContext *ctx,
+                          const FileLoc *loc,
+                          AstNode *node,
+                          attr(unused) AstNode *args)
+{
+    const Type *type = node->type ?: evalType(ctx, node);
+    return makeAstNode(ctx->pool,
+                       loc,
+                       &(AstNode){.tag = astBoolLit,
+                                  .boolLiteral.value = typeIs(type, Literal)});
 }
 
 static AstNode *hasDeinit(EvalContext *ctx,
@@ -935,6 +957,7 @@ static void initDefaultMembers(EvalContext *ctx)
     ADD_MEMBER("isFuncTypeParam", isFuncTypeParam);
     ADD_MEMBER("isAnonymousStruct", isAnonymousStruct);
     ADD_MEMBER("isResultType", isResultTypeComptime);
+    ADD_MEMBER("isLiteral", isLiteral);
     ADD_MEMBER("hasBase", hasBaseType);
     ADD_MEMBER("hasDeinit", hasDeinit);
     ADD_MEMBER("hasVoidReturnType", hasVoidReturnType);

@@ -182,6 +182,10 @@ void bindPath(AstVisitor *visitor, AstNode *node)
         AstNode *resolved = resolvePathBaseUpChain(visitor, node);
         if (resolved == NULL)
             return;
+        if (nodeIs(resolved, VarDecl) && resolved->_name != base->_name) {
+            // aliasing
+            base->_name = resolved->_name;
+        }
 
         if (hasFlag(resolved, Comptime) && !ctx->isComptimeContext) {
             logError(ctx->L,
@@ -395,6 +399,14 @@ void bindVarDecl(AstVisitor *visitor, AstNode *node)
         node->varDecl.init->parentScope = node;
     for (; name; name = name->next)
         defineDeclaration(ctx, name->ident.value, node);
+}
+
+void bindVarAlias(AstVisitor *visitor, AstNode *node)
+{
+    BindContext *ctx = getAstVisitorContext(visitor);
+    defineDeclaration(ctx, node->varAlias.name, node->varAlias.var);
+    // after binding, we are done with the node
+    node->tag = astNoop;
 }
 
 void bindTypeDecl(AstVisitor *visitor, AstNode *node)
@@ -810,6 +822,7 @@ void bindAstPhase2(CompilerDriver *driver, Env *env, AstNode *node)
         [astMacroDecl] = astVisitSkip,
         [astFuncParamDecl] = bindFuncParam,
         [astVarDecl] = bindVarDecl,
+        [astVarAlias] = bindVarAlias,
         [astTypeDecl] = bindTypeDecl,
         [astUnionDecl] = bindUnionDecl,
         [astEnumOptionDecl] = bindEnumOption,

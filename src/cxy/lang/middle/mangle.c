@@ -8,6 +8,39 @@
 #include <lang/frontend/flag.h>
 #include <lang/frontend/ttable.h>
 
+static void mangleAstNode(FormatState *state, const AstNode *node, u64 idx)
+{
+    switch (node->tag) {
+    case astNullLit:
+        format(state, "Ln_", NULL);
+        break;
+    case astBoolLit:
+        format(state, "Lb_{b}", (FormatArg[]){{.b = node->boolLiteral.value}});
+        break;
+    case astCharLit:
+        format(state, "Lc_{c}", (FormatArg[]){{.c = node->charLiteral.value}});
+        break;
+    case astIntegerLit:
+        if (node->intLiteral.isNegative)
+            format(state,
+                   "Li_{i64}",
+                   (FormatArg[]){{.i64 = node->intLiteral.value}});
+        else
+            format(state,
+                   "Lu_{u64}",
+                   (FormatArg[]){{.u64 = node->intLiteral.uValue}});
+        break;
+    case astFloatLit:
+        format(state, "Lf_{u64}", (FormatArg[]){{.c = idx}});
+        break;
+    case astStringLit:
+        format(state, "Ls_{u64}", (FormatArg[]){{.c = idx}});
+        break;
+    default:
+        unreachable("TODO");
+    }
+}
+
 static void mangleType(FormatState *state, const Type *type)
 {
     u64 flags = flgNone;
@@ -73,6 +106,9 @@ static void mangleType(FormatState *state, const Type *type)
     case typReference:
         append(state, "R", 1);
         mangleType(state, type->reference.referred);
+        break;
+    case typLiteral:
+        mangleAstNode(state, type->literal.value, type->index);
         break;
     default:
         append(state, "Z", 1);

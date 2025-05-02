@@ -63,6 +63,8 @@ const Type *getPrimitiveType(TypeTable *table, PrtId id);
 
 const Type *getAnySliceType(TypeTable *table);
 
+const Type *makeLiteralType(TypeTable *table, const AstNode *value);
+
 const Type *makeErrorType(TypeTable *table);
 
 const Type *makeAutoType(TypeTable *table);
