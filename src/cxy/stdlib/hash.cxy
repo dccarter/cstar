@@ -2,11 +2,11 @@ module hash
 
 import { Vector } from "stdlib/vector.cxy"
 
-macro HMAP_PRIMES_COUNT = 24 as u64
+macro HMAP_PRIMES_COUNT = 24`u64
 macro HMAP_LOAD_FACTOR = 0.9
 
 const HMAP_RIMES: [u64, HMAP_PRIMES_COUNT!] = [
-    0 as u64,     1,      5,      11,     23,      53,      101,     197,
+    0`u64,     1,      5,      11,     23,      53,      101,     197,
     389,   683,    1259,   2417,   4733,    9371,    18617,   37097,
     74093, 148073, 296099, 592019, 1100009, 2200013, 4400021, 8800019
 ];
@@ -98,7 +98,7 @@ pub class HashMap[K, V, Hasher = Hash[K], Cmp = Equals[K]] {
         }
 
         var i = Hasher{}(&item.key) % _capacity
-        var j = 0 as u64;
+        var j = 0`u64;
         item.hash = i + 1
         while {
             const h = _data.[i].hash

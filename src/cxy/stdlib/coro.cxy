@@ -106,7 +106,7 @@ func stackAlign(size: u64, align: u64) =>
 
 #if (! defined CORO_STACK_SIZE) {
     // 256kb stack by default
-    macro CORO_STACK_SIZE() 1024 as u64 * 1024 as u64
+    macro CORO_STACK_SIZE() 1024`u64 * 1024`u64
 }
 
 var stackSize = stackAlign(CORO_STACK_SIZE!, SysConfPageSize);
@@ -115,7 +115,7 @@ struct CachedStack {
     link: ^This
 }
 
-macro MAX_CACHED_STACKS 32 as u64
+macro MAX_CACHED_STACKS 32`u64
 
 class CoroutineScheduler {
     running: ^Coroutine = null; /* Currently running coroutine. */

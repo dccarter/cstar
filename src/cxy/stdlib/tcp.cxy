@@ -38,7 +38,7 @@ else {
     @inline
     func Socket_sendfile(outFd: i32, inFd: i32, off: ^u64, count: u64) {
         var size = <i64> count;
-        var status = socket.sendfile(inFd, outFd, <i64>*off, ptrof size, null, 0 as i32)
+        var status = socket.sendfile(inFd, outFd, <i64>*off, ptrof size, null, 0`i32)
         if (status == 0)
             *off = *off + size
         return status
@@ -64,7 +64,7 @@ pub class TcpSocket: Socket {
     }
 
     func `init`() {
-        super(-1 as i32, Address())
+        super(-1`i32, Address())
     }
 
     func receive(buffer: ^void, size: u64, timeout: u64 = 0): u64? {

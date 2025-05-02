@@ -71,7 +71,7 @@ struct ParamContainer {
 pub class Command {
     name: __string
     desc: __string
-    longestParam = 0 as u64;
+    longestParam = 0`u64;
     interactive = false;
     hasLocalFlags = false;
     params = ParamContainer{};
@@ -91,12 +91,12 @@ pub class Command {
         while (i < args.size()) {
             var full = args.[i++];
             var arg = __string(full);
-            if (arg.[0] != '-' as char) {
+            if (arg.[0] != '-'`char) {
                 positionals.push(arg)
                 continue
             }
             var val = __string();
-            var idx = arg.indexOf('=' as char);
+            var idx = arg.indexOf('='`char);
             if (idx) {
                 var index = *idx;
                 val = arg.substr(index + 1)
@@ -104,7 +104,7 @@ pub class Command {
             }
 
             var paramOpt = None[&Param]();
-            if (arg.[1] == '-' as char) {
+            if (arg.[1] == '-'`char) {
                 // skip the --
                 arg = arg.substr(2)
                 if (arg.empty()) {
@@ -135,7 +135,7 @@ pub class Command {
                     raise ParserError(f"value given to an option argument '${name}'")
             }
             else if (val.empty()) {
-                if (i >= args.size() || args.[i].[0] == '-' as char)
+                if (i >= args.size() || args.[i].[0] == '-'`char)
                     raise ParserError(f"argument '${arg}' is missing a value")
                 val = __string(args.[i++])
             }
@@ -276,7 +276,7 @@ pub class App {
     version: __string
     desc: __string
     defaultCmd: __string
-    longestParam = 0 as u64;
+    longestParam = 0`u64;
     longestCmd = 0 as u64;
     params = ParamContainer{};
     commands = HashMap[__string, Command]();

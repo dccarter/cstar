@@ -98,30 +98,30 @@ pub func methodFromString(method: __string) {
     var maybe = (Method.Unknown, "");
 
     switch(x) {
-        case 'D' as char => maybe = (Method.Delete, "DELETE")
-        case 'G' as char => maybe = (Method.Get, "GET")
-        case 'H' as char => maybe = (Method.Head, "HEAD")
-        case 'P' as char => {
-            if (toupper(method.[1]) == 'O' as char)
+        case 'D'`char => maybe = (Method.Delete, "DELETE")
+        case 'G'`char => maybe = (Method.Get, "GET")
+        case 'H'`char => maybe = (Method.Head, "HEAD")
+        case 'P'`char => {
+            if (toupper(method.[1]) == 'O'`char)
                 maybe = (Method.Post, "POST")
             else
                 maybe = (Method.Put, "PUT")
         }
-        case 'C' as char => maybe = (Method.Connect, "CONNECT")
-        case 'O' as char => maybe = (Method.Options, "OPTIONS")
-        case 'T' as char => maybe = (Method.Trace, "TRACE")
-        default  => return (Method.Unknown, 0 as u64)
+        case 'C'`char => maybe = (Method.Connect, "CONNECT")
+        case 'O'`char => maybe = (Method.Options, "OPTIONS")
+        case 'T'`char => maybe = (Method.Trace, "TRACE")
+        default  => return (Method.Unknown, 0`u64)
     }
 
     var str = __string(maybe.1);
     if (method.size() < str.size())
-        return (Method.Unknown, 0 as u64)
+        return (Method.Unknown, 0`u64)
 
     method = method.substr(0, <i64>str.size())
     if (EqualsCase{}(&method, &str))
         return (maybe.0, str.size())
 
-    return (Method.Unknown, 0 as u64)
+    return (Method.Unknown, 0`u64)
 }
 
 pub func statusText(status: Status) {
@@ -350,7 +350,7 @@ pub class Response {
             return _body.size()
         if (_chunks == null)
             return 0
-        var sz = 0 as u64;
+        var sz = 0`u64;
         for (const chunk, _: _chunks) {
             match (chunk) {
                 case string as s => sz += len!(s)
@@ -438,14 +438,14 @@ pub class Request {
     @[prop, inline]
     const func method() {
         switch(_parser.method) {
-            case 0 as u8 /* HTTP_DELETE */ => return Method.Delete
-            case 1 as u8 /* HTTP_GET */ => return Method.Get
-            case 2 as u8 /* HTTP_HEAD */ => return Method.Head
-            case 3 as u8 /* HTTP_POST */ => return Method.Post
-            case 4 as u8 /* HTTP_PUT */ => return Method.Put
-            case 5 as u8 /* HTTP_CONNECT */ => return Method.Connect
-            case 6 as u8 /* HTTP_OPTIONS */ => return Method.Options
-            case 7 as u8 /* HTTP_TRACE */ => return Method.Trace
+            case 0`u8 /* HTTP_DELETE */ => return Method.Delete
+            case 1`u8 /* HTTP_GET */ => return Method.Get
+            case 2`u8 /* HTTP_HEAD */ => return Method.Head
+            case 3`u8 /* HTTP_POST */ => return Method.Post
+            case 4`u8 /* HTTP_PUT */ => return Method.Put
+            case 5`u8 /* HTTP_CONNECT */ => return Method.Connect
+            case 6`u8 /* HTTP_OPTIONS */ => return Method.Options
+            case 7`u8 /* HTTP_TRACE */ => return Method.Trace
             default => return Method.Unknown
         }
     }
@@ -518,7 +518,7 @@ pub class Request {
 func requestParserOnMessageBegin(p: ^parser.llhttp_t) {
     var req = p.data !: Request;
     req.clear()
-    return 0 as i32
+    return 0`i32
 }
 
 func requestParserOnUrl(p: ^parser.llhttp_t, at: ^const char, len: u64) {
@@ -529,7 +529,7 @@ func requestParserOnUrl(p: ^parser.llhttp_t, at: ^const char, len: u64) {
     else {
         req._path << __string(at !: string, len)
     }
-    return 0 as i32
+    return 0`i32
 }
 
 func requestParserOnHeaderField(p: ^parser.llhttp_t, at: ^const char, len: u64) {
@@ -547,7 +547,7 @@ func requestParserOnHeaderField(p: ^parser.llhttp_t, at: ^const char, len: u64) 
     else {
         req._s1 << __string(at !: string, len)
     }
-    return 0 as i32
+    return 0`i32
 }
 
 func requestParserOnHeaderValue(p: ^parser.llhttp_t, at: ^const char, len: u64) {
@@ -559,7 +559,7 @@ func requestParserOnHeaderValue(p: ^parser.llhttp_t, at: ^const char, len: u64) 
     else {
         req._s2 << __string(at !: string, len)
     }
-    return 0 as i32
+    return 0`i32
 }
 
 func requestParserOnHeadersComplete(p: ^parser.llhttp_t) {
@@ -645,7 +645,7 @@ class Route {
     const func `str`(os: &OutputStream) { os << "route: " << prefix }
 
     @inline
-    const func isMethodSupported(method: Method) => (_methods & (1 as u32 << (<u32>method))) != 0
+    const func isMethodSupported(method: Method) => (_methods & (1`u32 << (<u32>method))) != 0
 
     @inline
     const func attrs() => &_attrs
@@ -660,13 +660,13 @@ class Router {
     }
 
     - func add(methods: u32, path: string, idx: i64, fn: HandlerFn) {
-        assert!(path.[idx] == '/' as char)
+        assert!(path.[idx] == '/'`char)
         var i = idx;
-        while (path.[i] !=  '\0'as char && path.[i] != '{' as char) {
+        while (path.[i] !=  '\0'as char && path.[i] != '{'`char) {
             i++
         }
 
-        if (path.[i] == '{' as char)
+        if (path.[i] == '{'`char)
             i--;
         var prefix = __string(path, i).substr(idx);
         var params = Vector[__string]();
@@ -678,13 +678,13 @@ class Router {
 
     func add(path: string, fn: HandlerFn) {
         var methods = Method.Get;
-        var idx = 0 as i64;
-        if (path.[0] != '/' as char) {
+        var idx = 0`i64;
+        if (path.[0] != '/'`char) {
             var parsedMethod = methodFromString(path);
             assert!(parsedMethod.0 != .Unknown)
             methods = parsedMethod.0
             idx = <i64>parsedMethod.1;
-            while (path.[idx] == ' ' as char)
+            while (path.[idx] == ' '`char)
                 idx++
         }
 
@@ -756,13 +756,13 @@ class Router {
 
     - func parseParams(params: &Vector[__string], path: string, idx: i64) : void {
         var s = path !: ^const char;
-        while (path.[idx] == '/' as char) {
+        while (path.[idx] == '/'`char) {
             idx++
-            assert!(path.[idx++] == '{' as char)
+            assert!(path.[idx++] == '{'`char)
             var i = idx;
-            while (path.[i] !=  '\0'as char && path.[i] != '}' as char)
+            while (path.[i] !=  '\0'as char && path.[i] != '}'`char)
                 i++
-            assert!(path.[i] == '}' as char)
+            assert!(path.[i] == '}'`char)
             var name = __string(ptroff!(s + idx) !: string, i - idx);
             idx = i + 1
             params.push(name)
@@ -771,21 +771,21 @@ class Router {
 
     - func parseRouteArgs(req: &Request, params: &Vector[__string], path: __string) : u64 | Status {
         var p = path.data();
-        var idx = 0 as u64;
+        var idx = 0`u64;
         for (var i: 0..params.size()) {
-            if (p.[idx++] != '/' as char) {
+            if (p.[idx++] != '/'`char) {
                 TRC!("bad request: route missing parameters")
                 return Status.BadRequest
             }
             var j = idx;
-            while (p.[j] !=  '\0' as char && p.[j] != '/' as char && p.[j] != '?' as char)
+            while (p.[j] !=  '\0'`char && p.[j] != '/'`char && p.[j] != '?'`char)
                 j++;
             var value = __string(ptroff!(p + idx) !: string, j - idx);
             idx = j;
             req.param(<__string>params.[<i32>i], value)
         }
 
-        if (p.[idx] !=  '\0'as char && p.[idx] != '?' as char) {
+        if (p.[idx] !=  '\0'as char && p.[idx] != '?'`char) {
             TRC!("bad request: too many path params: " << path)
             return Status.BadRequest
         }
@@ -798,8 +798,8 @@ class Router {
 pub struct Config {
     - address = Address("0.0.0.0", 8100);
     - serverName = String("cxy");
-    - hstsEnable = 5000 as u64;
-    - keepAliveTime = 5000 as i64;
+    - hstsEnable = 5000`u64;
+    - keepAliveTime = 5000`i64;
 }
 
 pub struct Dependencies[T] {

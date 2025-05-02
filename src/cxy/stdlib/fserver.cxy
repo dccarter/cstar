@@ -35,10 +35,10 @@ macro StatField(X) mk_ident!("st_", X!, "tim")
 
 @json
 pub struct Config {
-    compressMin = 2048 as u64;
+    compressMin = 2048`u64;
     enableSendFile = false;
-    cacheExpires = 86400 as i64;
-    mappedMin = 2048 as u64;
+    cacheExpires = 86400`i64;
+    mappedMin = 2048`u64;
     root = String("./www/");
     route = String(CXY_FILE_SERVER_ROUTE!);
     allowRange = true;
@@ -48,14 +48,14 @@ struct CachedFile {
     fd: i32 = -1;
     data: ^void = null;
     path: String = null;
-    len = 0 as u64;
-    size = 0 as u64;
+    len = 0`u64;
+    size = 0`u64;
     lastMod: time_t = 0;
     lastAccess: time_t = 0;
     useFd = false;
     isMapped = false;
     valid = false;
-    flags = 0 as u8;
+    flags = 0`u8;
 
     func `init`() {}
 
@@ -93,7 +93,7 @@ struct MimeConfig {
     allowCompress = false;
     allowCaching = true;
     allowRange = true;
-    cacheExpires = -1 as i64;
+    cacheExpires = -1`i64;
 }
 
 struct MimeType {
@@ -135,7 +135,7 @@ pub class FileServer {
                 path = __copy!(rootAlias)
             }
 
-            var idx = path.rIndexOf('.' as char)
+            var idx = path.rIndexOf('.'`char)
             if (!idx) {
                 var aliasedPath = this.redirects.[path]
                 if (!aliasedPath) {
@@ -144,7 +144,7 @@ pub class FileServer {
                 }
                 var tmp = *aliasedPath;
                 path = __copy!(tmp)
-                idx =  path.rIndexOf('.' as char)
+                idx =  path.rIndexOf('.'`char)
             }
             var pathOpt = this.fileExists(&path);
             if (!pathOpt) {
@@ -247,7 +247,7 @@ pub class FileServer {
     }
 
     func alias(src: String, dst: String) : void {
-        if (!dst.rIndexOf('.' as char)) {
+        if (!dst.rIndexOf('.'`char)) {
             ERR!( "redirecting '" << src << "' to unsupported file format: '" << dst << "'" )
             assert!(false)
         }
@@ -341,8 +341,8 @@ pub class FileServer {
         rng: &const String,
         cf: &CachedFile
     ) : Status {
-        var i = 0 as i64;
-        var j = 0 as i64;
+        var i = 0`i64;
+        var j = 0`i64;
         var s = rng.__str();
         var ranges = Vector[(i64, i64)]();
         while (i < s.size()) {

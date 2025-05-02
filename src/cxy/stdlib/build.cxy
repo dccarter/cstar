@@ -1,5 +1,5 @@
 /**
- * This module will be used as the build system for cxy
+ * This module will be used`the build system for cxy
  */
 module build
 
@@ -101,9 +101,9 @@ pub class Builder {
     - func parseOptions(args: [string]): !void {
         for (const i: 0..args.size()) {
             const arg = __string(args.[i])
-            if (arg.[0] != '-' as char || arg.[1] != 'D' as char)
+            if (arg.[0] != '-'`char || arg.[1] != 'D'`char)
                 continue
-            const idx = arg.indexOf('=' as char)
+            const idx = arg.indexOf('='`char)
             if (idx)
                 raise BuildError(f"invalid build option '${arg}', expect -DOPTION=VALUE")
             var name = arg.substr(0, <i64>*idx)

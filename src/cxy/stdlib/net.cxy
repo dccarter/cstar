@@ -121,7 +121,7 @@ func ntohll(x: u64) : u64 {
 
 // This macro is defined in netinet/in.h, redefining
 // C macros defined with casts cannot be imported
-macro INADDR_ANY 0x00000000 as u32
+macro INADDR_ANY 0x00000000`u32
 
 var cxy_DNS_conf: ^dns.dns_resolv_conf = null;
 var cxy_DNS_hosts: ^dns.dns_hosts = null;
@@ -250,7 +250,7 @@ pub struct Address {
 }
 
 pub func getLocalAddress(name: string, port: u16, mode: IPVersion = IPVersion.Any) {
-    if (name.[0] == '\0' as char)
+    if (name.[0] == '\0'`char)
         return Address(port, mode);
 
     var addr = Address(name, port, mode);

@@ -2,11 +2,6 @@ func get(x: u8): bool? {
     return null
 }
 func main(): void {
-    for (const i: range(0, 10)) {
-        println(i)
-        if (i < 9)
-            continue
-        else
-            break
-    }
+    var s = "Hello World";
+    var cs: ^const char = s;
 }

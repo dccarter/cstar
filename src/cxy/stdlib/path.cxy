@@ -79,7 +79,7 @@ pub struct Path {
 
     @inline
     const func exists() {
-        return unistd.access(path.str() !: ^const char, F_OK!) == 0 as i32
+        return unistd.access(path.str() !: ^const char, F_OK!) == 0`i32
     }
 
     @inline

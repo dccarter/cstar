@@ -460,7 +460,7 @@ static inline AstNode *parseChar(Parser *P)
     AstNode *node = newAstNode(
         P, tok, &(AstNode){.tag = astCharLit, .charLiteral.value = tok->cVal});
 
-    if (match(P, tokAs)) {
+    if (match(P, tokQuote)) {
         AstNode *type = parseType(P);
         return newAstNode(
             P,
@@ -487,7 +487,7 @@ static inline AstNode *parseInteger(Parser *P, bool isNegative)
         node->intLiteral.value = -tok.iVal;
     }
 
-    if (match(P, tokAs)) {
+    if (match(P, tokQuote)) {
         type = parseType(P);
         return newAstNode(
             P,
@@ -507,7 +507,7 @@ static inline AstNode *parseFloat(Parser *P, bool isNegative)
         tok,
         &(AstNode){.tag = astFloatLit,
                    .floatLiteral.value = isNegative ? -tok->fVal : tok->fVal});
-    if (match(P, tokAs)) {
+    if (match(P, tokQuote)) {
         AstNode *type = parseType(P);
         return newAstNode(
             P,

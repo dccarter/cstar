@@ -124,7 +124,7 @@ pub enum Seek {
 }
 
 pub struct FileDescriptor {
-    fd = -1 as i32;
+    fd = -1`i32;
     - closeAfter = false;
     func `init`(fd: i32, closeAfter: bool = false) {
         this.fd = fd
@@ -179,7 +179,7 @@ pub func open(
 }
 
 pub struct TempFile {
-    fd = -1 as i32;
+    fd = -1`i32;
     path: String = null;
 
     func `init`(fd: i32, path: String) {
@@ -258,7 +258,7 @@ pub func copy[Src, Dest](dst: &const Dest, src: &const Src): !void {
     }
     else #if (defined UNIX) {
         const size = srcFd.size()
-        var copied = 0 as i64
+        var copied = 0`i64
         while (copied < size) {
             var numWritten = sendfile.sendfile(dstFd.fd, srcFd.fd, ptrof copied, size-copied);
             if (numWritten == -1 || numWritten == 0) {
@@ -382,7 +382,7 @@ pub class FileInputStream: InputStream {
             return &&s
 
         var buf = s.reserve(st.st_size);
-        var nRead = 0 as u64;
+        var nRead = 0`u64;
         while (nRead < st.st_size) {
             var p = ptroff!(buf + nRead)
             var tmp = read(p, st.st_size - nRead)
@@ -466,7 +466,7 @@ pub class FileOutputStream : OutputStream {
     func write(buf: ^const void, size: u64) => append(buf, size)
 
     func writeAsync(buf: ^const void, size: u64, timeout: u64 = 0): !u64 {
-        var numWritten = 0 as u64;
+        var numWritten = 0`u64;
         while (numWritten < size) {
             var p = ptroff!((buf !: ^char) + numWritten)
             var tmp = append(p, size - numWritten)
@@ -552,7 +552,7 @@ pub struct Process {
     }
 
     const func isExited() {
-        var status = 0 as i32
+        var status = 0`i32
         const ret = syswait.waitpid(_pid, ptrof status, WNOHANG!);
         if (ret < 0)
             return true
@@ -560,7 +560,7 @@ pub struct Process {
     }
 
     func wait(): !i32 {
-        var status = 0 as i32;
+        var status = 0`i32;
         const ret = syswait.waitpid(_pid, ptrof status, 0)
         if (ret < 0)
             raise IOError(f"wait for pid ${_pid} failed: ${strerr()}")
@@ -568,7 +568,7 @@ pub struct Process {
         if (WIFEXITED!(status)) {
             return WEXITSTATUS!(status)
         }
-        return -1 as i32
+        return -1`i32
     }
 
     func waitAsync(): !i32 {
@@ -585,7 +585,7 @@ pub struct Process {
             }
 
             defer unistd.close(pidFd)
-            var status = 0 as i32;
+            var status = 0`i32;
             var ret = syswait.waitpid(_pid, ptrof status, WNOHANG!);
             if (ret < 0)
                 raise IOError(f"wait for pid ${_pid} failed: ${strerr()}")
@@ -599,7 +599,7 @@ pub struct Process {
             if (WIFEXITED!(status)) {
                 return WEXITSTATUS!(status)
             }
-            return -1 as i32
+            return -1`i32
         }
     }
 }

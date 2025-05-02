@@ -50,7 +50,7 @@ pub struct Time {
     }
 
     const func format(fmt: string, os: &OutputStream) {
-        if (fmt.[0] != '\0' as char) {
+        if (fmt.[0] != '\0'`char) {
             var buf: [char, 512] = [];
             var sz = ctime.strftime(buf, 512, fmt !: ^const char, ptrof _tm);
             os.append(buf, sz)

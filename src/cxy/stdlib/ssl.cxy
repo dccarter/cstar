@@ -170,7 +170,7 @@ pub class SslSocket: Socket {
                 return null
         }
 
-        var written = 0 as u64
+        var written = 0`u64
         var p = buf !: ^u8
         while (written < size) {
             var rc = BIO.BIO_write(bio, ptroff!(p + written), <i32>(size - written))
@@ -203,7 +203,7 @@ pub class SslSocket: Socket {
                              MAP_PRIVATE!,
                              fd,
                              <i64>offset)
-        if (ptr == ((-1 as u64) !: ^void)) {
+        if (ptr == ((-1`u64) !: ^void)) {
             TRC!("mmap(" << fd << ") failed: " << strerr())
             return null
         }
@@ -221,7 +221,7 @@ pub class SslSocket: Socket {
             return null
         }
 
-        var nRead = 0 as u64
+        var nRead = 0`u64
         var p = buf !: ^u8;
         while (nRead < size) {
             var rc = BIO.BIO_read(bio, ptroff!(p + nRead), <i32>(size - nRead));

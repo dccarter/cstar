@@ -25,7 +25,7 @@ struct FixedWidth {
 
     @inline
     const func `str`(os: &OutputStream) {
-        os << s.substr(0 as u64, <i64>min(count, s.size()))
+        os << s.substr(0`u64, <i64>min(count, s.size()))
         if (s.size() < count)
             os << Repeat( ' ', count - s.size() )
     }

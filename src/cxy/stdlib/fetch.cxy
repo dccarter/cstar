@@ -25,15 +25,15 @@ func urlEncode(os: &OutputStream, url: __string) {
     const hex = "0123456789abcdef"
     var p = url.data() !: ^const u8;
     for (var i: 0..url.size()) {
-        if (   ('a' as char <= url.[i] && url.[i] <= 'z' as char)
-            || ('A' as char <= url.[i] && url.[i] <= 'Z' as char)
-            || ('0' as char <= url.[i] && url.[i] <= '9' as char)
+        if (   ('a'`char <= url.[i] && url.[i] <= 'z'`char)
+            || ('A'`char <= url.[i] && url.[i] <= 'Z'`char)
+            || ('0'`char <= url.[i] && url.[i] <= '9'`char)
            )
         {
             os << url.[i];
         }
         else {
-            os << '%' as char
+            os << '%'`char
             os << hex.[p.[i] >> 4]
             os << hex.[p.[i] & 0xF];
         }
@@ -170,7 +170,7 @@ pub class Form {
     }
 
     - const func multipartEncodeSize(): !u64 {
-        var size = 0 as u64
+        var size = 0`u64
         for (const item: _data) {
             size += (
                 2 /*--*/
@@ -215,7 +215,7 @@ pub class Form {
 
     - const func size(): !u64 {
         if (_data.empty() && _uploads.empty())
-            return 0 as u64
+            return 0`u64
         if (_encoding == .UrlEncode)
             return urlEncodedSize()
         else
@@ -311,7 +311,7 @@ pub class Request {
            return _form&.size()
         if (_sendFile)
             return _sendFile&.count
-        return 0 as u64
+        return 0`u64
     }
 
     const func encodeHeaders(os: &BufferedSocketOutputStream) {
@@ -419,7 +419,7 @@ pub class Response {
     func onBodyPart(buf: ^const char, len: u64): i32 {
         if (_writer != null) {
             // Write the body to the writer
-            return _writer(buf, len)? (-1 as i32) : 0
+            return _writer(buf, len)? (-1`i32) : 0
         }
         else if (_body == null) {
             _body = String(buf, len)
@@ -488,7 +488,7 @@ func responseParserOnHeaderField(p: ^parser.llhttp_t, at: ^const char, len: u64)
     else {
         resp._s1 << __string(at !: string, len)
     }
-    return 0 as i32
+    return 0`i32
 }
 
 func responseParserOnHeaderValue(p: ^parser.llhttp_t, at: ^const char, len: u64) {
@@ -500,7 +500,7 @@ func responseParserOnHeaderValue(p: ^parser.llhttp_t, at: ^const char, len: u64)
     else {
         resp._s2 << __string(at !: string, len)
     }
-    return 0 as i32
+    return 0`i32
 }
 
 func responseParserOnHeadersComplete(p: ^parser.llhttp_t) {
@@ -536,9 +536,9 @@ const HTTP_PARSER_SETTINGS = parser.llhttp_settings_t{
 type RequestBuilder = func(req: &Request) -> !void
 
 class Session {
-    - _port = 80 as u16;
+    - _port = 80`u16;
     - _headers = HeaderMap();
-    - _timeout = 20000 as u64; /* 20 sec */
+    - _timeout = 20000`u64; /* 20 sec */
     - _addr = Address();
     - _proto = __string("http");
     - _sock: Socket = null;
@@ -636,14 +636,14 @@ class Session {
         var idx = url.find("://")
         var host = url;
         var proto = "http".s
-        var port  = 80 as u16
+        var port  = 80`u16
 
         if (idx) {
             proto = url.substr(0, <i64>*idx)
             host = url.substr(*idx + 3)
         }
 
-        idx = host.rIndexOf(':' as char)
+        idx = host.rIndexOf(':'`char)
         if (idx) {
             port = host.substr(*idx + 1).toi[u16]()
             host = host.substr(0, <i64>*idx)
@@ -660,7 +660,7 @@ class Session {
 
 pub func fetch(url: __string, builder: RequestBuilder = null): !Response {
     var method = Method.Get
-    if (!url.empty() && url.[0] == '@' as char) {
+    if (!url.empty() && url.[0] == '@'`char) {
         var methodName = url.substr(1)
         var ret = methodFromString(methodName)
         if (ret.0 == .Unknown)
@@ -679,7 +679,7 @@ pub func fetch(url: __string, builder: RequestBuilder = null): !Response {
     var resource = "/".s
     if (idx) {
         var stem = url.substr(*idx + 3)
-        var idx2 = stem.indexOf('/' as char)
+        var idx2 = stem.indexOf('/'`char)
         if (idx2) {
             resource = stem.substr(*idx2)
             url = url.substr(0, <i64>(3 + *idx + *idx2))
